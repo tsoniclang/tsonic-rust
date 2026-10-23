@@ -1,5 +1,5 @@
 import type { Node } from "@tsonic/tsts";
-import type { TargetTypeRef } from "../types/model.js";
+import type { RustTargetGenericArgument, TargetTypeRef } from "../types/model.js";
 import type { RustProjectTypeDefinition, RustProjectInstanceContract } from "../types/project-types.js";
 import type { RustProjectCallableAdapter } from "./project-callable-adapters.js";
 import type { RustProjectDowncastRoute } from "../types/project-types.js";
@@ -124,7 +124,7 @@ export interface RustProjectDispatchEmission {
     readonly virtualDeadCode: RustDeadCodeDisposition | undefined; readonly exactDeadCode: RustDeadCodeDisposition | undefined }[];
   readonly methodWrites: readonly { readonly property: RustProjectMethodPropertyEmission; readonly slot: string; readonly deadCode: RustDeadCodeDisposition | undefined }[];
   readonly projectSupers: readonly TargetTypeRef[];
-  readonly structuralSupers: readonly TargetTypeRef[];
+  readonly structuralSupers: readonly { readonly carrier: TargetTypeRef; readonly genericArguments: readonly RustTargetGenericArgument[] }[];
 }
 
 export interface RustProjectPolymorphicEmission {

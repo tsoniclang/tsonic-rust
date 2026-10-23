@@ -42,6 +42,9 @@ import type { RustNativeCallableGenericContext, RustNativeCallableGenericInput }
 import type { RustNativeGenericProducer } from "../program/records/native-generics.js";
 import { rustNodeInCatchingTryBody } from "../errors/catching-try.js";
 import { rustProgramErrorTargetType } from "../../target-model/types/carriers/js.js";
+import type { TargetSourceProgram } from "@tsonic/target-api/source";
+import { rustLifetimeKey } from "../../target-model/lifetimes/index.js";
+import { selectRustNativeFutureEnvironmentRetention } from "../../policy/ownership/retained-storage.js";
 
 export type RustNativeCallableOrigins =
   | { readonly kind: "resolved"; readonly inputs: readonly RustNativeCallableInput[];
@@ -121,10 +124,17 @@ export function createRustNativeCallableInputPlan(input: {
       if (input.ast.is.IsParameterDeclaration(capture.declaration)) nativeRetainedParameters.add(capture.declaration);
     }
   }
-  // A parameter retained natively, or retained by a nominal record result (stored in that record's concrete field type),
-  // keeps its concrete callable carrier.
-  const keepsConcreteCarrier = (parameter: Node): boolean =>
-    nativeRetainedParameters.has(parameter) || input.ownedRetainedParameter(parameter);
+  const concreteParameters = new Set<Node>();
+  for (const parameter of input.nativeNodes) {
+    if (!input.ast.is.IsParameterDeclaration(parameter)) continue;
+    const owner = input.ast.parent(parameter);
+    if (owner === undefined || sourceCallableValueParameters(input.ast, owner,
+      input.storage.source.semantics.forNode(owner))?.includes(parameter) !== true) continue;
+    if (!nativeRetainedParameters.has(parameter) && input.ownedRetainedParameter(parameter))
+      nativeRetainedParameters.add(parameter);
+    if (!input.declaresGenericInputs(owner) || nativeRetainedParameters.has(parameter)) concreteParameters.add(parameter);
+  }
+  const keepsConcreteCarrier = (parameter: Node): boolean => nativeRetainedParameters.has(parameter);
   const bindings = new Map<Node, SourceStorageBindings | null>();
   const inputs = new Map<Node, Map<SourceStorageSubject, RustNativeCallableInput>>();
   const captures = new Map<Node, Set<RustNativeCallableInput>>();
@@ -261,11 +271,7 @@ export function createRustNativeCallableInputPlan(input: {
   const declarationInputs = new Map([...inputs].map(([owner, members]) => [owner, Object.freeze([...members.values()])]));
   const declarationCaptures = new Map([...captures].map(([owner, members]) => [owner, Object.freeze([...members])]));
   const emptyInputs: readonly RustNativeCallableInput[] = Object.freeze([]);
-  const isConcreteCallableParameter = (parameter: Node): boolean => {
-    const owner = input.ast.parent(parameter);
-    return owner !== undefined && sourceCallableValueParameters(input.ast, owner, input.storage.source.semantics.forNode(owner))?.includes(parameter) === true &&
-      (!input.declaresGenericInputs(owner) || keepsConcreteCarrier(parameter));
-  };
+  const isConcreteCallableParameter = (parameter: Node): boolean => concreteParameters.has(parameter);
   return Object.freeze({ bindingsFor, originsFor, isConcreteCallableParameter,
     isNativeRetainedParameter: keepsConcreteCarrier, inputs: selectedInputs, protocols: definitions,
     calls: Object.freeze([...calls.values()]), callFor: (node: Node) => calls.get(node),
@@ -281,6 +287,7 @@ export function createRustNativeCallableInputPlan(input: {
 }
 
 export function analyzeRustNativeCallableGenerics(input: {
+  readonly source: Pick<TargetSourceProgram, "semantics">;
   readonly lifetimes: RustLifetimeIndex;
   readonly producer: RustNativeGenericProducer;
   readonly ast: AstReader;
@@ -307,7 +314,13 @@ export function analyzeRustNativeCallableGenerics(input: {
         message: "Callable type parameters require exact valid Rust target names.", evidence: ["target.capability=rust.backend.generics"] });
       continue;
     }
+    const environment = input.nativeStorage.futureEnvironmentFor(declaration);
+    if (environment.kind === "unresolved") {
+      diagnostics.push(emissionDiagnostic(declaration, environment.reason));
+      continue;
+    }
     const retained = input.records.retainedEnvironment.get(declaration);
+    let implicitLifetimes = rustCallableImplicitLifetimeParameters(declaration, input.ast, input.records);
     let retention: RustNativeCallableGenericContext["retention"];
     if (retained !== undefined) {
       const carriers: TargetTypeRef[] = [];
@@ -340,13 +353,35 @@ export function analyzeRustNativeCallableGenerics(input: {
         source.push(generator.yieldType, generator.returnType, generator.nextType);
         body.push(generator.yieldType, generator.returnType, generator.nextType);
       }
-      retention = Object.freeze({ lifetime: retained.lifetime, source: Object.freeze(source), body: Object.freeze(body) });
-    }
-    const implicitLifetimes = rustCallableImplicitLifetimeParameters(declaration, input.ast, input.records);
-    const environment = input.nativeStorage.futureEnvironmentFor(declaration);
-    if (environment.kind === "unresolved") {
-      diagnostics.push(emissionDiagnostic(declaration, environment.reason));
-      continue;
+      let retainEnvironment = true;
+      if (asynchronous?.kind === "native-future") {
+        const parameters = sourceCallableValueParameters(input.ast, declaration, input.source.semantics.forNode(declaration));
+        if (parameters === undefined || parameters.some(parameter => parameter === undefined))
+          failTargetAnalysisInvariant("tsonic-rust", "An admitted native Future requires its complete checked value parameter inventory.", declaration);
+        const physicalInputs = parameters.map(parameter => input.nativeStorage.parameterFor(parameter));
+        const output = input.nativeStorage.returnFor(declaration);
+        const effects = input.records.errorEffects.get(declaration);
+        if (physicalInputs.some(selected => selected.kind === "unresolved") || output.kind === "unresolved" || effects === undefined)
+          failTargetAnalysisInvariant("tsonic-rust", "An admitted native Future requires its completed physical inputs, output and native error effects.", declaration);
+        const captures = input.records.closureCapture.get(declaration);
+        retainEnvironment = selectRustNativeFutureEnvironmentRetention({ lifetime: retained.lifetime,
+          taskScope: retained.inputs.some(selected => selected.kind === "native-task-scope"),
+          carriers: [...source, ...body, ...physicalInputs.map(selected => {
+            if (selected.kind === "unresolved")
+              failTargetAnalysisInvariant("tsonic-rust", "A completed native Future input requires its selected physical carrier.", declaration);
+            return selected.carrier;
+          }), output.carrier, ...effects.nativeErrors.map(error => error.errorType),
+            ...effects.localErrors ? [rustProgramErrorTargetType()] : [],
+            ...environment.inputs.map(selected => selected.carrier), ...environment.captures.map(selected => selected.carrier),
+            ...captures?.captures.map(capture => capture.carrier) ?? [],
+            ...captures?.receiverFields.map(capture => capture.carrier) ?? [],
+            ...captures?.receivers.map(capture => capture.carrier) ?? []],
+        });
+      }
+      if (retainEnvironment)
+        retention = Object.freeze({ lifetime: retained.lifetime, source: Object.freeze(source), body: Object.freeze(body) });
+      else implicitLifetimes = Object.freeze(implicitLifetimes.filter(parameter =>
+        parameter.kind !== "lifetime" || rustLifetimeKey(parameter.lifetime) !== rustLifetimeKey(retained.lifetime)));
     }
     const callableInputs = [...input.native.inputsFor(declaration), ...input.native.capturesFor(declaration)];
     const inputs = [...new Map([...callableInputs, ...environment.inputs, ...environment.captures]

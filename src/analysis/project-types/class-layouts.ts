@@ -253,7 +253,8 @@ export function analyzeRustProjectClassLayouts(program: Omit<RustAnalysisProgram
   }
   for (const root of roots) analyzeRustProjectRootEmission(program, root.definition, root.carrier, producer, methodRequest);
   for (const definition of members.keys()) if (program.projectTypes.isPolymorphic(definition))
-    analyzeRustProjectDispatchEmission(program, definition, reachability, producer);
+    issues.push(...analyzeRustProjectDispatchEmission(program, definition, reachability, producer));
+  if (issues.length !== 0) return Object.freeze(issues);
   for (const definition of members.keys()) if (program.projectTypes.isPolymorphic(definition))
     analyzeRustProjectPolymorphicEmission(program, definition, reachability, producer);
   return Object.freeze(issues);

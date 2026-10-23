@@ -32,14 +32,15 @@ export function rustNativeArgumentBorrowsRead(argument: Node, reference: Node,
 }
 
 export function analyzeRustReadUses(ast: AstReader, nodes: readonly Node[], records: RustAnalysisRecords,
-  definitions: RustTypeDefinitions): ReadonlyMap<Node, RustReadUse> {
+  definitions: RustTypeDefinitions, ownsExternalArgument: (argument: Node) => boolean): ReadonlyMap<Node, RustReadUse> {
   const uses = new Map<Node, RustReadUse>();
   // A borrowed provider input whose argument is first converted by value (`&JsValue::from(handle)`) consumes the
   // argument's own read, so a later read of the same storage needs its clone.
   const argumentConsumed = (source: { readonly kind: string; readonly sourceIndex?: number }, argumentsList: readonly (Node | undefined)[] | undefined): boolean => {
     const argument = source.kind === "argument" && source.sourceIndex !== undefined ? argumentsList?.[source.sourceIndex] : undefined;
     const conversion = argument === undefined ? undefined : records.contextualValueConversion.get(argument)?.conversion;
-    return conversion !== undefined && rustContextualRuntimeConversionContract(conversion, definitions)?.sourceMode === "value";
+    return argument !== undefined && ownsExternalArgument(argument) || conversion !== undefined &&
+      rustContextualRuntimeConversionContract(conversion, definitions)?.sourceMode === "value";
   };
   for (const node of nodes) {
     const operation = records.targetOperation.get(node);

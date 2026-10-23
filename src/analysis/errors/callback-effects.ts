@@ -5,7 +5,7 @@ import type { RustPreparedDeferredCheckedCall } from "../../target-model/records
 import type { RustErrorEffectsFact } from "../../target-model/records/error-effects.js";
 import type { RustEffectsWorkBudget } from "./effects-work-budget.js";
 import { rustCallbackProtocol } from "../../policy/operations/members/callbacks.js";
-import { rustErrorEffectsAreFallible } from "./error-effects.js";
+import { mergeRustErrorEffects, rustErrorEffectsAreFallible, rustLocalErrorEffects, rustPureErrorEffects } from "./error-effects.js";
 
 interface CallbackValueAnalysis {
   readonly fallible: boolean;
@@ -36,9 +36,6 @@ export function createRustCallbackEffectAnalysis(input: {
     }
     return current;
   };
-  const callbackExpressionIsFallible = (
-    pending: { readonly request: import("../../policy/model/contracts.js").RustCheckedCallSelectionInput; readonly prepared: RustPreparedDeferredCheckedCall },
-  ): boolean => callbackValueAnalysis(callbackExpression(pending), new Set())?.fallible === true;
   const callbackValueAnalysis = (
     expression: Node | undefined,
     resolving: Set<Node>,
@@ -96,11 +93,14 @@ export function createRustCallbackEffectAnalysis(input: {
       resolving.delete(value);
     }
   };
-  const preparedCallbackOperationIsFallible = (node: Node): boolean => {
+  const preparedCallbackOperationEffects = (node: Node): RustErrorEffectsFact | undefined => {
     const pending = walk.preparedCallbackCalls.get(node);
-    return pending !== undefined && (
-      pending.prepared.template.isFallible || callbackExpressionIsFallible(pending)
-    );
+    if (pending === undefined) return rustPureErrorEffects;
+    const callback = callbackValueAnalysis(callbackExpression(pending), new Set());
+    return callback === undefined ? undefined : mergeRustErrorEffects([
+      pending.prepared.template.isFallible ? rustLocalErrorEffects : rustPureErrorEffects,
+      callback.implementationEffects,
+    ]);
   };
-  return Object.freeze({ callbackExpression, callbackValueExpression, callbackValueAnalysis, preparedCallbackOperationIsFallible });
+  return Object.freeze({ callbackExpression, callbackValueExpression, callbackValueAnalysis, preparedCallbackOperationEffects });
 }

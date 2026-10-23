@@ -46,7 +46,7 @@ import type { RustStructuralShapePlanRegistry } from "../objects/shapes/structur
 import { createRustGenericCallableCompletionPlan, type RustGenericCallableCompletionInput, type RustGenericCallableCompletionPlan } from "./generic-completions.js";
 import { createRustPhysicalCallableLifecycle, type RustPhysicalCallableLifecycle, type RustPhysicalCallableEmissionRequest } from "./physical-lifecycle.js";
 import { type RustPhysicalCallableStorage } from "../../target-model/records/native-storage.js";
-import { prepareRustProjectCallableFieldStorage, type RustProjectCallableFieldStorage } from "./project-field-storage.js";
+import { prepareRustProjectCallableFieldStorage, type RustProjectCallableFieldStorage, type RustProjectCallableFieldStorageConstruction } from "./project-field-storage.js";
 import type { RustGenericCallableFlowProducer } from "../program/records/generic-callable-flow.js";
 import type { RustErrorRegionRecords } from "../../target-model/records/error-regions.js";
 import { createRustStructuralMethodStorage } from "./structural-method-storage.js";
@@ -348,7 +348,7 @@ function createRustCallableValueLifecycle(input: RustCallableValuePlanInput,
     boundSubjectFor: (subject, carrier, bindings) => nativeStorageQueries.boundSubjectFor(subject, carrier, bindings) });
   physicalCarrierFor = physical.carrierFor;
   let parameterStorage: RustNativeStoragePlan | undefined;
-  let projectFieldStorage: RustProjectCallableFieldStorage | undefined;
+  let projectFieldStorage: RustProjectCallableFieldStorageConstruction | undefined;
   const nativeStorage: RustNativeStorageConstruction = Object.freeze({ ...nativeStorageQueries,
     parameterFor(parameter: Node) {
       if (parameterStorage === undefined) failTargetAnalysisInvariant("tsonic-rust", "Native parameter storage requires completed intrinsic effects and constructor ABI selection.");
@@ -453,15 +453,21 @@ function createRustCallableValueLifecycle(input: RustCallableValuePlanInput,
     seal(late: RustCallableValueSealInput): TargetStageResult<RustCallableValuePlan> {
       if (sealResult !== undefined) return sealResult;
       if (physicalLifecycle === undefined || selectedPlan === undefined || frameConstruction === undefined ||
-        emissionRequests === undefined || sourceOccurrences === undefined)
+        emissionRequests === undefined || sourceOccurrences === undefined || projectFieldStorage === undefined)
         failTargetAnalysisInvariant("tsonic-rust", "Physical callable publication requires completed source-selected families and effects.");
       const publication = physicalLifecycle.complete(physical);
       if (publication.kind === "rejected") {
         sealResult = rejectedTargetStage(publication.diagnostics);
         return sealResult;
       }
+      const fields = projectFieldStorage.seal();
+      if (fields.kind === "rejected") {
+        sealResult = fields;
+        return fields;
+      }
       const frames = frameConstruction.sealCounters(late.constructions);
-      const nativeGenericContexts = analyzeRustNativeCallableGenerics({ ast: input.ast, lifetimes: input.lifetimes, records: input.records, producer: late.nativeGenerics,
+      const nativeGenericContexts = analyzeRustNativeCallableGenerics({ source: input.sourceStorage.source,
+        ast: input.ast, lifetimes: input.lifetimes, records: input.records, producer: late.nativeGenerics,
         native, nativeStorage: publication.value.nativeStorage, nativeProducers: publication.value.nativeProducers,
         nativeGenericProducers: selectedPlan.nativeGenericProducers, retainedCallableInputs: late.retainedCallableInputs,
         declarationGenericRequirements: late.declarationGenericRequirements });
@@ -489,7 +495,7 @@ function createRustCallableValueLifecycle(input: RustCallableValuePlanInput,
         isConcreteCallableParameter: native.isConcreteCallableParameter,
         isNativeRetainedParameter: native.isNativeRetainedParameter });
       publishedPlan = Object.freeze({ ...selectedPlan, ...publication.value, native: nativeInputs, frames,
-        emissionContexts: emission.value.contexts });
+        projectFieldStorage: fields.value, emissionContexts: emission.value.contexts });
       sealResult = resolvedTargetStage(publishedPlan);
       return sealResult;
     },

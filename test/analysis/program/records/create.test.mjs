@@ -539,6 +539,7 @@ test("selected calls preserve exact checker evidence while accepting equivalent 
   const modelRequiredRecords = [];
   const subject = {};
   const sourceSignature = {};
+  const sourceParameter = {};
   const selectedType = {};
   const member = {
     id: "acme.run",
@@ -550,6 +551,7 @@ test("selected calls preserve exact checker evidence while accepting equivalent 
   };
   const first = {
     member,
+    nativeParameterDeclarations: [sourceParameter],
     sourceSignature,
     sourceArgumentBindings: [{
       sourceArgumentIndex: 0,
@@ -578,6 +580,13 @@ test("selected calls preserve exact checker evidence while accepting equivalent 
     candidate => admitFamily(candidate, "selectedCall", subject, {
       ...equivalent,
       sourceArgumentBindings: [{ ...equivalent.sourceArgumentBindings[0], selectedArgumentType: {} }],
+    }),
+    /Conflicting Rust semantic plan/u,
+  );
+  assertRustInheritedRecordConflict("selectedCall", subject, model.selectedCall.get(subject),
+    candidate => admitFamily(candidate, "selectedCall", subject, {
+      ...equivalent,
+      nativeParameterDeclarations: [{}],
     }),
     /Conflicting Rust semantic plan/u,
   );

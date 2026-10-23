@@ -6,7 +6,7 @@ import { collectRustLexicalCaptures } from "../callables/closures.js";
 import { allocateRustGeneratedName } from "../../target-model/names/generated.js";
 import { rustSnakeCaseIdentifier } from "../../target-model/names/identifiers.js";
 import { Node_Initializer, sourceClassFieldIsTypeOnly } from "@tsonic/target-api/source";
-import { isRustCopyCarrier } from "../../policy/constraints/native-traits.js";
+import { selectRustClassEnvironmentStorage } from "../../policy/ownership/retained-storage.js";
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
 
 import { rustClassConstructorInstance } from "../../target-model/types/carriers/class-constructors.js";
@@ -105,12 +105,11 @@ export function selectRustClassEnvironment(walk: RustFactWalk, declaration: Node
     if (selfReference) return { kind: "unresolved", reason: "Self-referencing static initialization requires an exact staged class-evaluation contract." };
   }
   const constructorIdentity = constructorValue && requiresConstructorIdentity(walk, declaration);
-  const copy = !constructorIdentity && staticFields.length === 0 && captures.every(capture => capture.storage === "value" && isRustCopyCarrier(capture.carrier));
+  const storage = selectRustClassEnvironmentStorage({ constructorIdentity, staticFields, captures });
   const ownParameters = new Set((walk.context.sourceLifetimes.contractFor(declaration)?.parameters ?? []).map(parameter => parameter.declaration));
   const genericParameterIndexes = Object.freeze(definition.genericParameters.flatMap((parameter, index) => ownParameters.has(parameter.declaration) ? [] : [index]));
   return { kind: "available", environment: Object.freeze({ declaration, carrier: projectTypes.openCarrier(definition), genericParameterIndexes,
-    storage: !constructorIdentity && (copy || staticFields.length === 0 && captures.length === 1 && captures[0]!.storage === "location") ? "value" : "shared",
-    copy, constructorValue, constructorIdentity, evaluatedConstructorValue: walk.context.classValues.evaluatesConstructorValue(declaration),
+    ...storage, constructorValue, constructorIdentity, evaluatedConstructorValue: walk.context.classValues.evaluatesConstructorValue(declaration),
     consumers: Object.freeze(consumers),
     initializationUsesEnvironment: consumers.some(member => ast.kindName(member) === "KindConstructor" ||
       ast.kindName(member) === "KindPropertyDeclaration" && !ast.hasModifierKind(member, "static")),

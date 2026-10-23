@@ -45,8 +45,13 @@ export function rustSourceFunctionValueCarrier(
       rustGenericCallableTargetType(quantified.map(rustTypeParameterFromSourceContract),
         parameters.map(parameter => parameter.parameterCarrier), result, origin, environment), context);
   }
-  return rustHigherRankedNativeFunctionCarrier(walk, declaration, parameters, result) ?? rustCallableTargetType(
-    parameters.map(parameter => parameter.parameterCarrier), result, { kind: "static" });
+  const quantifiedCarrier = rustHigherRankedNativeFunctionCarrier(walk, declaration, parameters, result);
+  if (quantifiedCarrier !== undefined) return quantifiedCarrier;
+  const context = rustResolutionContext(walk, declaration);
+  const environment = resolveRustCallableEnvironment(declaration, context, walk.operationOptions, new Set());
+  const lifetime = environment === undefined ? undefined : rustRetainedValueLifetime(declaration, environment, walk);
+  return lifetime === undefined ? undefined
+    : rustCallableTargetType(parameters.map(parameter => parameter.parameterCarrier), result, lifetime);
 }
 
 // The variable a callable expression initializes (through parentheses and type assertions): its self binding.

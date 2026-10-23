@@ -91,6 +91,7 @@ export function createRustNativeStorageJoins(context: RustNativeStorageJoinConte
     if (!step(depth)) return undefined;
     if (visited.has(type)) return false;
     visited.add(type);
+    if (type.kind === "closure" || type.kind === "function-pointer") return false;
     if (rustCallableProtocol(type) !== undefined || rustGenericCallableValue(type) !== undefined || isRustNativeFutureCarrier(type)) return true;
     const variants = input.definitions.sourceUnionVariants(type);
     const shape = rustStructuralObjectCarrierValue(type);
@@ -109,7 +110,7 @@ export function createRustNativeStorageJoins(context: RustNativeStorageJoinConte
           }
         } else if (field.storage === "stored" && field.nativeMethod !== true) children.push(sourceField.type);
       }
-    } else if (type.kind !== "function-pointer") children.push(...rustTargetTypeChildren(type));
+    } else children.push(...rustTargetTypeChildren(type));
     for (const child of [...children, ...(variants?.map(variant => variant.carrier) ?? [])]) {
       const selected = containsCallable(child, depth + 1, visited);
       if (selected !== false) return selected;

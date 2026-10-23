@@ -5,7 +5,7 @@ import { rustCallableSpecialization } from "../../declarations/callables/generic
 import { rustProjectDispatchTraitName, rustProjectDispatchTraitType, rustProjectRepresentationGenerics } from "./names.js";
 import { rustProjectObjectDispatchField, rustProjectObjectIdentityField } from "../project-objects.js";
 import { rustProjectCloneImplementation } from "../project-wrapper-traits.js";
-import type { RustItem, RustTraitFunction, RustType } from "../../../target-ast/syntax/nodes.js";
+import type { RustGenericArgument, RustItem, RustTraitFunction, RustType } from "../../../target-ast/syntax/nodes.js";
 import { emptyRustGenerics } from "../../../target-ast/syntax/nodes.js";
 import { rustSelfParameter } from "../../declarations/callables/self-parameter.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
@@ -23,6 +23,7 @@ import { checkedProjectProjectionSignature } from "../checked-project-projection
 import { rustProjectTypeParameterContext } from "../../names/type-parameters.js";
 import { rustProjectErrorSuperTraits } from "./project-errors.js";
 import { failRustPlannerInvariant } from "../../diagnostics.js";
+import { rustTargetGenericArgumentToAstInContext } from "../../types/render.js";
 
 export function projectIdentityImplementations(
   definition: RustProjectTypeDefinition,
@@ -204,7 +205,13 @@ export function planProjectDispatchTrait(
   const superTraits = [{ kind: "named" as const, path: "rt::ObjectIdentityCarrier" },
     ...rustProjectErrorSuperTraits(definition, context),
     ...selected.projectSupers.map(carrier => rustProjectDispatchTraitType(carrier, context)),
-    ...selected.structuralSupers.map(carrier => rustStructuralDispatchType(carrier, context))];
+    ...selected.structuralSupers.map(supertrait => {
+      const type = rustStructuralDispatchType(supertrait.carrier, context);
+      const genericArguments = supertrait.genericArguments.map(argument => rustTargetGenericArgumentToAstInContext(argument, context));
+      if (type?.kind !== "named" || genericArguments.some(argument => argument === undefined))
+        failRustPlannerInvariant("An admitted structural supertrait requires its exact rendered native arguments.", definition.declaration);
+      return { ...type, genericArguments: genericArguments as readonly RustGenericArgument[] };
+    })];
   if (superTraits.some(type => type === undefined))
     failRustPlannerInvariant("An admitted native dispatch trait requires its exact native supertraits.", definition.declaration);
   return { kind: "trait", name: rustProjectDispatchTraitName(definition),

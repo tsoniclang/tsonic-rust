@@ -4,14 +4,58 @@ import { createTargetSourceProgram, sourceProjectFiles } from "@tsonic/target-ap
 import { createSourceStorageQuery } from "@tsonic/target-api/analysis";
 import { createRustSession, checkRustSession } from "../../helpers/rust-session.mjs";
 import { createRustRetainedEnvironmentQueries } from "../../../dist/analysis/callables/retained-environment-shapes.js";
-import { closeRustRetainedParameter, rustRetainedEnvironment } from "../../../dist/analysis/callables/retained-values.js";
-import { rustHasOpenOwnedStorage } from "../../../dist/policy/ownership/retained-storage.js";
+import { closeRustRetainedParameter, rustRetainedEnvironment, rustRetainedValueLifetime } from "../../../dist/analysis/callables/retained-values.js";
+import { rustHasOpenOwnedStorage, selectRustClassEnvironmentStorage,
+  selectRustNativeFutureEnvironmentRetention } from "../../../dist/policy/ownership/retained-storage.js";
 import { emptyRustLifetimeIndex } from "../../../dist/target-model/lifetimes/index.js";
 import { rustCallableProtocol, rustCallableTargetType } from "../../../dist/target-model/types/carriers/callables.js";
 import { rustStructuralObjectTargetType, rustStructuralObjectCarrierValue } from "../../../dist/target-model/types/carriers/source-types.js";
 import { rustGenericCallableTargetType } from "../../../dist/target-model/types/carriers/generic-callables.js";
 import { rustFrameCallableTargetType } from "../../../dist/target-model/types/carriers/frame-callables.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
+import { createRustRecordFixture } from "../../helpers/records.mjs";
+
+test("native Future retention follows exact complete physical environment references, not a generic value's name", () => {
+  const environment = { kind: "parameter", identity: "retained:actual", name: "environment" };
+  const unrelated = { kind: "parameter", identity: "retained:other", name: "environment" };
+  const value = { kind: "type-parameter", identity: "source:Value", name: "Value" };
+  const reference = lifetime => ({ kind: "reference", mutable: false, referent: value, lifetime });
+  for (const [name, carriers, taskScope, expected] of [
+    ["owned generic input and output", [value, value], false, false],
+    ["unrelated same-spelled lifetime", [reference(unrelated)], false, false],
+    ["borrowed input", [reference(environment), value], false, true],
+    ["borrowed output", [value, reference(environment)], false, true],
+    ["native error payload", [value, { kind: "tuple", elements: [reference(environment)] }], false, true],
+    ["captured native callable", [rustCallableTargetType([], value, environment)], false, true],
+    ["unresolved physical elision", [reference({ kind: "placeholder" })], false, true],
+    ["retained native task scope", [value], true, true],
+  ]) {
+    assert.equal(selectRustNativeFutureEnvironmentRetention({ lifetime: environment, carriers, taskScope }), expected,
+      `${name}: remove only a proven-unused native-Future environment, never assert generic static storage`);
+  }
+});
+
+test("class environment native storage has one policy owner over the gathered source facts", () => {
+  const integer = { kind: "source-primitive", name: "int32" };
+  const text = { kind: "target-named", id: "rust.std.String" };
+  const capture = (storage, carrier) => Object.freeze({ storage, carrier });
+  for (const [name, captures, staticFields, constructorIdentity, storage, copy] of [
+    ["empty value", [], [], false, "value", true],
+    ["one copied value", [capture("value", integer)], [], false, "value", true],
+    ["two copied values", [capture("value", integer), capture("value", integer)], [], false, "value", true],
+    ["owned non-Copy value", [capture("value", text)], [], false, "shared", false],
+    ["one existing location", [capture("location", text)], [], false, "value", false],
+    ["two existing locations", [capture("location", text), capture("location", text)], [], false, "shared", false],
+    ["cell ownership", [capture("cell", integer)], [], false, "shared", false],
+    ["class static state", [capture("value", integer)], [{}], false, "shared", false],
+    ["observable constructor identity", [], [], true, "shared", false],
+  ]) {
+    const selected = selectRustClassEnvironmentStorage({ captures, staticFields, constructorIdentity });
+    assert.equal(selected.storage, storage, `${name}: native physical environment representation`);
+    assert.equal(selected.copy, copy, `${name}: native Copy contract`);
+    assert.equal(Object.isFrozen(selected), true, `${name}: one immutable policy decision`);
+  }
+});
 
 test("complete source capture carriers preserve the canonical generic and frame environment normalization", () => {
   const captured = { kind: "type-parameter", identity: "captured:value", name: "Captured" };
@@ -47,12 +91,53 @@ function fixture(text, configure = input => input, maximumSteps) {
   return { ...input, queries, declarations };
 }
 
+test("closed captured callable storage keeps its proven native lifetime through nested owned carriers", () => {
+  const current = fixture("export function make() { return () => 1; }");
+  const declaration = current.sourceStorage.nodes.find(node => current.source.ast.is.IsArrowFunction(node));
+  assert.equal(declaration !== undefined, true, "the checked source owns the captured callable occurrence");
+  const integer = { kind: "source-primitive", name: "int32" };
+  const stored = rustCallableTargetType([], integer, { kind: "static" });
+  const context = { source: current.source, ast: current.source.ast,
+    sourceLifetimes: current.sourceLifetimes, retainedEnvironments: current.queries,
+    records: createRustRecordFixture() };
+  for (const [name, captures] of [
+    ["direct", [stored]],
+    ["tuple", [{ kind: "tuple", elements: [integer, stored] }]],
+    ["array", [{ kind: "array", element: stored }]],
+    ["nested", [{ kind: "tuple", elements: [{ kind: "array", element: stored }] }]],
+  ]) {
+    const lifetime = rustRetainedValueLifetime(declaration, captures, { context });
+    assert.equal(lifetime?.kind === "static", true, `${name}: owned closed storage never invents an output elision`);
+  }
+});
+
 const suspended = `
 export async function outer(callback: () => number, unused: () => number): Promise<number> {
   function helper(): number { return callback(); }
   return helper();
 }
 `;
+
+test("unfinished retained input evidence stays retryable without changing its finite work budget", () => {
+  let complete = false;
+  const current = fixture(suspended, input => ({ ...input,
+    source: { ...input.source, navigation: { ...input.source.navigation,
+      parameterUseSummary(parameter) { return complete ? input.source.navigation.parameterUseSummary(parameter) : undefined; },
+    } },
+  }));
+  const owner = current.declarations.get("outer");
+  assert.equal(current.queries.suspendedParametersFor(owner) === undefined, true,
+    "unfinished checked uses cannot publish an empty native capture inventory");
+  assert.equal(current.queries.environmentFor(owner).kind, "unresolved",
+    "an unfinished input prevents retained environment publication");
+  complete = true;
+  const parameters = current.source.ast.parameters(owner);
+  const retained = current.queries.suspendedParametersFor(owner);
+  assert.equal(retained?.length, 1, "the same declaration consumes the now-complete checked use inventory");
+  assert.equal(retained[0] === parameters[0], true, "only the actually captured callback is retained");
+  assert.equal(current.queries.environmentFor(owner).kind, "selected",
+    "a prior unresolved query cannot poison the final native environment");
+});
 
 test("suspended retention uses checked nested-function capture evidence and excludes unused parameters", () => {
   const { source, queries, declarations } = fixture(suspended);

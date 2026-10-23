@@ -330,6 +330,7 @@ export function analyzeRustAnalysisProgram(
   if (borrowEffects.kind === "rejected") return rejectedTargetStage(borrowEffects.diagnostics);
   const ownership = analyzeRustReadOwnership({ storage: context.sourceStorage, nativeNodes: context.nativeNodes, records,
     flow: ownershipFlow.flow, borrowEffects: borrowEffects.effects, borrowEffectsInput, definitions: context.typeDefinitions,
+    ownsExternalArgument: projectConstructions.ownsExternalArgument,
     genericRequirements: declarationGenericRequirements.index, genericCallables: context.callableValues.generic,
     capturesFor, invocationTransfersCapture: owner => {
       const selected = lexicalFunctions.forDeclaration(owner);

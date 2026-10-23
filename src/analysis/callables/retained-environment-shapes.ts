@@ -20,7 +20,7 @@ export function createRustRetainedEnvironmentQueries(
   const { ast, navigation } = input.source;
   const storage = input.sourceStorage;
   const environments = new Map<Node, RustRetainedEnvironmentSelection>();
-  const suspended = new Map<Node, readonly Node[] | undefined>();
+  const suspended = new Map<Node, readonly Node[]>();
   const lexical = new Map<Node, RustRetainedLexicalSelection>();
   const taskOwners = new Set(input.nativeTasks.owners);
   const callableRetention = createSourceCallableRetentionQuery({ source: input.source, storage,
@@ -32,18 +32,19 @@ export function createRustRetainedEnvironmentQueries(
     Object.freeze({ kind: "unresolved" as const, reason });
   const none = Object.freeze({ kind: "none" as const });
   const suspendedParametersFor = (declaration: Node): readonly Node[] | undefined => {
-    if (suspended.has(declaration)) return suspended.get(declaration);
-    if (!step()) { suspended.set(declaration, undefined); return undefined; }
+    const cached = suspended.get(declaration);
+    if (cached !== undefined) return cached;
+    if (!step()) return undefined;
     const retained: Node[] = [];
     const parameters = sourceCallableValueParameters(ast, declaration, input.source.semantics.forNode(declaration));
-    if (parameters === undefined) { suspended.set(declaration, undefined); return undefined; }
+    if (parameters === undefined) return undefined;
     for (const parameter of parameters) {
-      if (!step() || parameter === undefined) { suspended.set(declaration, undefined); return undefined; }
+      if (!step() || parameter === undefined) return undefined;
       const uses = navigation.parameterUseSummary(parameter);
-      if (uses === undefined) { suspended.set(declaration, undefined); return undefined; }
+      if (uses === undefined) return undefined;
       let used = false;
       for (const use of uses.uses) {
-        if (!step()) { suspended.set(declaration, undefined); return undefined; }
+        if (!step()) return undefined;
         if (use.kind !== "type-only" && use.role !== "type-only") used = true;
       }
       if (used) retained.push(parameter);
@@ -62,7 +63,7 @@ export function createRustRetainedEnvironmentQueries(
       return initializer === undefined ? [] : [initializer];
     }), body];
     const selected = sourceLexicalEnvironment(declaration, roots, ast, navigation, "source");
-    lexical.set(declaration, selected);
+    if (selected.kind !== "unresolved") lexical.set(declaration, selected);
     return selected;
   };
   const ownership = new Map<Node, ReturnType<RustRetainedEnvironmentQueries["inputsFor"]>>();
@@ -85,7 +86,7 @@ export function createRustRetainedEnvironmentQueries(
       : Object.freeze({ kind: "resolved" as const,
         ownership: (retention === undefined ? returnsNominalRecord(declaration)
           : retention.retention === "retained") ? "owned" as const : "borrowed" as const });
-    ownership.set(declaration, selected);
+    if (selected.kind !== "unresolved") ownership.set(declaration, selected);
     return selected;
   };
   const isSuspended = (declaration: Node): boolean => ast.hasModifierKind(declaration, "async") ||
@@ -269,7 +270,7 @@ export function createRustRetainedEnvironmentQueries(
     const cached = environments.get(declaration);
     if (cached !== undefined) return cached;
     const selected = select(declaration);
-    environments.set(declaration, selected);
+    if (selected.kind !== "unresolved") environments.set(declaration, selected);
     return selected;
   } });
 }

@@ -59,7 +59,8 @@ export function planExpressionInner(node: Node, context: RustPlanContext, result
     case "KindTrueKeyword": return { kind: "bool-literal", value: true };
     case "KindFalseKeyword": return { kind: "bool-literal", value: false };
     case "KindThisExpression":
-    case "KindThisKeyword": return planRustValueRead(node, { kind: "path", path: "self" }, context);
+    case "KindThisKeyword": return access === "value"
+      ? planRustValueRead(node, { kind: "path", path: "self" }, context) : { kind: "path", path: "self" };
     case "KindNullKeyword": {
       if (syntax?.kind !== "absence") failRustPlannerInvariant("An admitted null literal requires its one native absence form.", node);
       return planRustAbsentValue(syntax.carrier, context);
