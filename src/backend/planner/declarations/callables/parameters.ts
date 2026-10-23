@@ -23,11 +23,11 @@ export interface RustCallableParameterPlan {
   readonly prelude: readonly RustParameterPrelude[];
 }
 
-export function planRustCallableParameters(callable: Node, context: RustPlanContext, syntheticNames: RustSyntheticNameState): RustCallableParameterPlan {
+export function planRustCallableParameters(parameters: readonly Node[], context: RustPlanContext, syntheticNames: RustSyntheticNameState): RustCallableParameterPlan {
   const params: RustFunctionParam[] = [];
   const prelude: RustParameterPrelude[] = [];
-  for (const parameter of context.input.program.source.ast.parameters(callable)) {
-    if (parameter === undefined) failRustPlannerInvariant("An admitted callable requires its dense checked parameter list.", callable);
+  for (const parameter of parameters) {
+    if (parameter === undefined) failRustPlannerInvariant("An admitted callable requires its dense checked parameter list.");
     const selected = context.input.program.records.callableParameter.get(parameter);
     if (selected === undefined) failRustPlannerInvariant("An admitted callable parameter requires its sealed native emission record.", parameter);
     const parameterType = rustParameterTypeFromCarrierInContext(selected.carrier, context);

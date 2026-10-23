@@ -48,7 +48,9 @@ function planRustFunctionParameters(
   const syntheticNames = createRustSyntheticNameState(ast, node, []);
   const environment = planRustLexicalFunctionEnvironment(node, { ...inputContext, syntheticNames });
   if (environment === undefined) failRustPlannerInvariant("An admitted callable requires its complete native function plan.", node);
-  const parameterPlan = planRustCallableParameters(node, environment.context, syntheticNames);
+  const declaration = inputContext.input.program.records.callableDeclaration.get(node);
+  if (declaration === undefined) failRustPlannerInvariant("An admitted callable requires its sealed checked value parameters.", node);
+  const parameterPlan = planRustCallableParameters(declaration.parameters, environment.context, syntheticNames);
   if (parameterPlan === undefined) failRustPlannerInvariant("An admitted callable requires its complete native function plan.", node);
   const leading = planRustCallableLeadingParameters(node, environment.context);
   if (leading === undefined) failRustPlannerInvariant("An admitted callable requires its complete native function plan.", node);
@@ -340,7 +342,7 @@ function planRustFunctionItem(
   }, callableErrorBoundary, adapterContext);
   if (adapterReturn === undefined || adapterBody === undefined) failRustPlannerInvariant("An admitted callable requires its complete native function plan.", node);
   const helper: Extract<RustItem, { readonly kind: "function" }> = { kind: "function", name, visibility,
-    ...(deadCode === undefined ? {} : { deadCode }),
+    ...(emission.promiseObjectDeadCode === undefined ? {} : { deadCode: emission.promiseObjectDeadCode }),
     ...(declarationAttributes.length === 0 ? {} : { attrs: declarationAttributes }),
     ...(isUnsafe ? { isUnsafe: true } : {}),
     generics: adapterGenerics.finalizeGenerics(), params: adapterParameters.params,

@@ -263,7 +263,7 @@ function planConstructor(
   );
   const parameterPlan = member === undefined
     ? { params: [], prelude: [] } satisfies RustCallableParameterPlan
-    : planRustCallableParameters(member, context, syntheticNames);
+    : planRustCallableParameters(selected.constructorParameters, context, syntheticNames);
   if (parameterPlan === undefined) {
     failRustPlannerInvariant("An admitted native class requires its complete syntax and native storage plan.", classDeclaration);
   }

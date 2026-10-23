@@ -143,7 +143,9 @@ export function projectCallableShape(
   for (const [identity, carrier] of arguments_ ?? []) substitutions.set(identity, carrier);
   const selectedContext = { ...context, typeParameterSubstitutions: substitutions };
   const syntheticNames = createRustSyntheticNameState(context.input.program.source.ast, member, []);
-  const parameters = planRustCallableParameters(member, selectedContext, syntheticNames);
+  const declaration = context.input.program.records.callableDeclaration.get(member);
+  if (declaration === undefined) failRustPlannerInvariant("An admitted project callable requires its sealed checked value parameters.", member);
+  const parameters = planRustCallableParameters(declaration.parameters, selectedContext, syntheticNames);
   const returnType = selected.omitReturn ? undefined : rustReturnTypeFromCarrierInContext(selected.returnCarrier, selectedContext);
   const errorType = selected.errorCarrier === undefined ? undefined : rustTypeFromCarrierInContext(selected.errorCarrier, selectedContext);
   if (parameters === undefined || !selected.omitReturn && returnType === undefined || selected.fallible && errorType === undefined)

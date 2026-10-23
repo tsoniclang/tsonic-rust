@@ -51,9 +51,11 @@ export function planRustConstructionLayers(
         lifetimeSubstitutions: new Map([...context.lifetimeSubstitutions ?? [],
           ...baseBindings.lifetimes]),
       };
+      const nativeBase = context.input.program.records.nativeClass.get(base.definition.declaration);
+      if (nativeBase === undefined) failRustPlannerInvariant("An admitted native base layer requires its sealed class parameters.", base.definition.declaration);
       const baseParameters = base.constructor === undefined
         ? planRustImplicitConstructorParameters(base.signature, baseStorage.carrier, baseContext)
-        : planRustCallableParameters(base.constructor, baseContext, syntheticNames);
+        : planRustCallableParameters(nativeBase.constructorParameters, baseContext, syntheticNames);
       const argumentsPlan = layer.baseCall === undefined
         ? { arguments: parameterPlan.params.map(parameter => ({ kind: "path" as const, path: parameter.name })), statements: [] }
         : planRustSelectedSourceCallArguments(layer.baseCall, layerContext);
