@@ -150,6 +150,24 @@ export function analyzeRustConstructionWriteLiveness(
         .filter((field): field is Node => field !== undefined && plan.localFieldDeclarations.has(field)));
       const projectionFor = (expression: Node) => plan.emission.preparations.get(expression)?.projections
         .find(projection => projection.expression.node === expression);
+      const plainWrites = new Map<Node, Node>();
+      for (const point of graph.points) {
+        if (!liveness.reachable.has(point.id) || point.operation.kind !== "write-location") continue;
+        const target = point.operation.location;
+        if (!rustLivenessReadEmitted(source, records, target, graph.declaration, graph.declaration) ||
+          plan.emission.preparations.get(target)?.retainsFrame !== false) continue;
+        const projection = projectionFor(target);
+        if (projection?.kind !== "local" || projection.expression.kind !== "field") continue;
+        if (projection.storage === "value") {
+          plainWrites.set(target, projection.declaration);
+          continue;
+        }
+        if (projection.storage !== "frame") continue;
+        const binding = records.frameBindingDeclaration.get(projection.declaration);
+        if (binding === undefined) failTargetAnalysisInvariant("tsonic-rust",
+          "Construction write liveness requires its admitted native frame binding.", target);
+        if (binding.storage === "value" && binding.initialization === "ready") plainWrites.set(target, projection.declaration);
+      }
       const solution = solveSourceFlow<ReadonlySet<Node>>(graph, {
         direction: "backward",
         boundary: new Map([[graph.exit, completedFields]]),
@@ -172,10 +190,8 @@ export function analyzeRustConstructionWriteLiveness(
           const live = copyConstructionLiveFields(input, work);
           for (const field of readsAfter.get(point.id) ?? []) { work.step(); live.add(field); }
           if (point.operation.kind === "write-location") {
-            const target = point.operation.location;
-            const projection = rustLivenessReadEmitted(source, records, target, graph.declaration, graph.declaration) ? projectionFor(target) : undefined;
-            if (projection?.kind === "local" && projection.storage === "value" &&
-              plan.emission.preparations.get(point.operation.location)?.retainsFrame === false) live.delete(projection.declaration);
+            const field = plainWrites.get(point.operation.location);
+            if (field !== undefined) live.delete(field);
           }
           if (point.source !== undefined && rustLivenessReadEmitted(source, records, point.source, graph.declaration, graph.declaration)) {
             const projection = projectionFor(point.source);
@@ -198,8 +214,7 @@ export function analyzeRustConstructionWriteLiveness(
         const projection = projectionFor(target);
         if (projection?.expression.kind !== "field" || projection.expression.declaration === undefined) continue;
         const field = projection.expression.declaration;
-        const preparation = plan.emission.preparations.get(target)!;
-        const unobserved = projection.kind === "local" && projection.storage === "value" && !preparation.retainsFrame &&
+        const unobserved = plainWrites.has(target) &&
           !solution.after.get(point.id)?.has(field) && !readsAfter.get(point.id)?.has(field) &&
           !completion.observed(target, field, graph.declaration, false) && !completion.repeated(target, field, graph.declaration);
         writesBySource.set(target, (writesBySource.get(target) ?? true) && unobserved);
