@@ -12,7 +12,7 @@ export function resolveRustGeneratorBodyErrorType(
 ): RustType {
   const outward = context.input.program.records.callableReturn.get(declaration)?.outward;
   const physical = outward === undefined ? undefined : getRustGeneratorProtocol(outward)?.physical;
-  if (physical === undefined) failRustPlannerInvariant("An admitted generator requires its selected physical error and reentry protocol.", declaration);
+  if (physical === undefined) failRustPlannerInvariant("An admitted generator requires its selected physical error protocol.", declaration);
   return rustTypeFromCarrierInContext(physical.errorCarrier, context)
     ?? failRustPlannerInvariant("An admitted generator requires its renderable selected native error carrier.", declaration);
 }
