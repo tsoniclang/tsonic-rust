@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { acmeTestingPackage, compileRust } from "../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
+import { sourceEnclosingCallable } from "@tsonic/target-api/source";
 
 test("compiler provider array entries preserve initialized live storage and iterator aliases", { timeout: 300_000 }, () => {
   const { result } = compileRust({
@@ -51,5 +52,23 @@ main();
 ` },
   });
   assert.deepEqual(result.diagnostics, []);
+  const program = result.program;
+  assert.equal(program !== undefined, true, "the actual generic entries source publishes its sealed records");
+  const ast = program.source.ast;
+  let binding;
+  const visit = node => {
+    if (ast.is.IsBindingElement(node) && ast.text(ast.name(node)) === "value") {
+      const owner = sourceEnclosingCallable(node, ast);
+      if (owner !== undefined && ast.text(ast.name(owner)) === "countPresent") binding = node;
+    }
+    ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+  };
+  program.sourceFiles.forEach(visit);
+  assert.equal(binding !== undefined, true, "the original unused destructuring leaf retains its authored identity");
+  assert.equal(program.records.bindingLiveness.get(binding)?.unused, true,
+    "only the comparison read erased by the native selector disappears from liveness");
+  const output = result.artifacts.filter(artifact => artifact.path.endsWith(".rs")).map(artifact => artifact.text).join("\n");
+  assert.match(output, /#\[expect\(unused_variables, reason = "authored binding drop scope"\)\]\s*let value: T = binding_element\.1\.clone\(\);/u,
+    "the exact unused leaf keeps its selected clone, binding and native Drop scope");
   validateGeneratedProject("compiler-provider-array-entries", result.artifacts, { run: true });
 });

@@ -12,6 +12,7 @@ import { rustOptionDefaultValue } from "../expressions/option-default.js";
 import { planRustCheckedSourceOptional } from "../expressions/optional-storage.js";
 import { rustBindingStorageForDeclaration } from "../expressions/typed-locations.js";
 import { planRustLocalBindingStorage } from "./local-storage.js";
+import { rustBindingLivenessAttributes } from "./liveness.js";
 
 export type RustBindingExpressionPlanner = (node: Node, context: RustPlanContext) => RustExpr | undefined;
 
@@ -45,9 +46,12 @@ export function planRustBindingPattern(
       const storage = planRustLocalBindingStorage(element, bindingName, fact.bindingCarrier, bindingType, normalized, location, context);
       if (storage === undefined) failRustPlannerInvariant("An admitted binding leaf requires its native storage initialization.", element);
       if (storage.kind === "store") statements.push(storage.statement);
-      else statements.push({ kind: "let", name: bindingName,
-        mutable: location?.iterationScope !== undefined || location === undefined && context.input.program.records.mutatedBinding.get(element) !== undefined,
-        ...(storage.type === undefined ? {} : { type: storage.type }), init: storage.value });
+      else {
+        const mutable = location?.iterationScope !== undefined || location === undefined && context.input.program.records.mutatedBinding.get(element) !== undefined;
+        statements.push({ kind: "let", name: bindingName, mutable,
+          attrs: rustBindingLivenessAttributes(element, mutable, context),
+          ...(storage.type === undefined ? {} : { type: storage.type }), init: storage.value });
+      }
       continue;
     }
     if (nameKind !== KindArrayBindingPattern && nameKind !== KindObjectBindingPattern)
