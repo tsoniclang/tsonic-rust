@@ -87,7 +87,9 @@ for (const [surface, surfaces] of [["native", []], ["js", ["js"]]]) {
       assert.equal(compilation.observed.filter(row => row.kind === "KindNumericLiteral")
         .every(row => row.source?.kind === "source-primitive" && row.source.name === "float64"), true,
       "native producer stays f64");
-      assert.equal(compilation.text.includes("_f64"), true, "source syntax pins the native source precision");
+      const nativeToken = token === "1e40" ? "1e+40" : token === "-1e40" ? "-1e+40" : token === "-0" ? "-0.0" : token;
+      assert.equal(compilation.text.includes(`let pending: f64 = ${nativeToken};`), true,
+        "the exact authored token is pinned by its native f64 storage annotation");
     });
   }
 
@@ -132,7 +134,8 @@ for (const [surface, surfaces] of [["native", []], ["js", ["js"]]]) {
     test(`${surface}: ${synthetic ? "checked" : "authored"} wide comparison keeps rejected float32 candidate unused`, () => {
       const compilation = compile("export function compare(pending: float32): boolean { return pending < 1e40; }", surfaces, synthetic);
       assertAccepted(compilation);
-      assert.equal(compilation.text.includes("1e+40_f64"), true, "wider selected operation is retained");
+      assert.equal(compilation.text.includes(synthetic ? "1e+40_f64" : "(pending as f64) < 1e+40"), true,
+        "the selected f64 operation pins the exact wide operand without a rejected f32 retarget");
       assert.equal(compilation.observed.some(row => row.contextual?.conversion?.id === "native-f64-to-f32"), false,
         "unused narrowing candidate is not admitted");
     });

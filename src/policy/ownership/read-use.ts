@@ -95,7 +95,7 @@ export function selectRustOperationReadUses(ast: AstReader, node: Node, input: {
     const key = ElementAccessExpression_ArgumentExpression(ast, node);
     select(receiver, "shared", key === undefined ? [] : [key], 0, true);
     select(key, "shared");
-  } else if (operation?.kind === "source-field") select(receiver, "shared");
+  } else if (operation?.kind === "source-field" || operation?.kind === "builtin-error-property") select(receiver, "shared");
   for (const argument of input.address?.arguments ?? []) {
     if (argument.input === "raw-ref" || argument.input === "raw-owner-ref") select(argument.expression, "shared");
   }

@@ -166,12 +166,17 @@ export function analyzeRustBinaryEmission(program: Omit<RustAnalysisProgram, "re
     const concatParts: Node[] | undefined = fact.kind === "string-concat" ? [] : undefined;
     if (concatParts !== undefined) parts(node, concatParts);
     const comparison = fact.kind === "operator-token" && (fact.operator === "==" || fact.operator === "!=");
+    const shared = (operand: Node): boolean => {
+      const selected = program.ownership.reads.get(operand)?.value;
+      return selected?.kind === "borrow" && !selected.mutable;
+    };
     const literal = (node: Node): string | undefined => {
       const value = program.records.literalValue.get(node);
       return value?.form === "string" || value?.form === "template" ? value.text : undefined;
     };
     producer.publish(node, { fact, left, right, leftUnit: isRustUnitCarrier(leftCarrier), rightUnit: isRustUnitCarrier(rightCarrier),
-      leftNever: isRustNeverCarrier(leftCarrier), leftShared: comparison && fact.leftConversion === undefined, rightShared: comparison && fact.rightConversion === undefined,
+      leftNever: isRustNeverCarrier(leftCarrier), leftShared: comparison && fact.leftConversion === undefined && shared(left),
+      rightShared: comparison && fact.rightConversion === undefined && shared(right),
       int32Remainder: program.numericRepresentations.int32Remainder.get(node),
       compound: (fact.kind === "operator-token" || fact.kind === "operator-call") && fact.operator !== "=" && isRustAssignmentOperator(fact.operator),
       operator: fact.kind === "operator-token" && isRustBinaryOperator(fact.operator) ? fact.operator : undefined,
