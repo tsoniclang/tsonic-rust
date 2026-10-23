@@ -34,9 +34,15 @@ test("authored generic binders retain independent identities across modules and 
   assert.doesNotMatch(generated, /\b(?:identity|pair)<T[0-9]+\b/u);
   assert.match(generated, /fn pair<T: Clone>\(value: T\)/u);
   assert.match(generated, /let record_left = value\.clone\(\);\s*let record_right = value;/u);
-  const native = validateGeneratedProject("authored-generic-binders", [...result.artifacts, {
-    path: "tests/storage_cost.rs",
-    text: `use authored_generic_binders::pair;
+  const implementationPath = "src/other.rs";
+  assert.equal(result.artifacts.filter(artifact => artifact.path === implementationPath).length, 1,
+    "the native cost control is attached to the actual implementation module once");
+  const native = validateGeneratedProject("authored-generic-binders", result.artifacts.map(artifact =>
+    artifact.path !== implementationPath ? artifact : { ...artifact,
+    text: `${artifactText(result, implementationPath)}
+#[cfg(test)]
+mod storage_cost {
+use super::pair;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 static CLONES: AtomicUsize = AtomicUsize::new(0);
@@ -65,8 +71,9 @@ fn record_storage_clones_once_and_moves_the_last_value() {
     drop(record);
     assert_eq!(DROPS.load(Ordering::SeqCst), 2);
 }
+}
 `,
-  }], { run: true });
+  }), { run: true });
   assert.equal(native.status, 0, native.stderr || native.stdout);
 });
 

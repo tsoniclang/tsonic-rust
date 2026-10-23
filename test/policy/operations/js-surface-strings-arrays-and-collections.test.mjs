@@ -438,7 +438,7 @@ export function update(): void {
   assertNoTargetDiagnostics(result.diagnostics);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /let dense: js_abi::JsArray<i32> = js_abi::JsArray::from_dense\(vec!\[1, 2, 3\]\);/u);
-  assert.match(text, /let inferred: js_abi::JsArray<f64> = js_abi::JsArray::from_dense/u);
+  assert.match(text, /let inferred: js_abi::JsArray<f64> =\s*js_abi::JsArray::from_dense/u);
   assert.match(text, /inferred\.set_number\(3\.0, 4\.0\);/u);
 });
 

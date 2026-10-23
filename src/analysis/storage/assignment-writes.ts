@@ -158,7 +158,7 @@ export function analyzeRustAssignmentWrites(input: {
       (receiverKind === "KindThisExpression" || receiverKind === "KindThisKeyword");
     requireRustRecord(input.required, "assignmentWrite", node, "native assignment write", "analyzeRustAssignmentWrites");
     let valueResult: import("../../target-model/records/assignment-writes.js").RustAssignmentWriteCompletion["valueResult"];
-    if (assignment.operator === "=" && sourceExpressionResultDisposition(ast, node).kind !== "discarded") {
+    if (selected?.kind !== "nullish-assignment" && assignment.operator === "=" && sourceExpressionResultDisposition(ast, node).kind !== "discarded") {
       const carrier = rustValueCarrierBeforeContextualConversion(records, value);
       if (carrier === undefined || !rustTargetTypeRefEquals(carrier, records.runtimeCarrier.get(node)?.carrier)) {
         issues.push({ code: "RUST_MISSING_TARGET_FACT", category: "error", source: "tsonic-rust", sourceNode: node,
