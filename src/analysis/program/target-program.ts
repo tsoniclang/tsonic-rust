@@ -195,7 +195,7 @@ export function analyzeRustAnalysisProgram(
       const accessor = records.sourceAccessorEffects.get(node);
       return records.sourceCallEffects.get(node)?.invocation === "fallible" ||
         accessor?.read === "fallible" || accessor?.write === "fallible" ||
-        rustTargetOperationIsFallible(records.targetOperation.get(node), context.structuralShapes,
+        rustTargetOperationIsFallible(records.targetOperation.get(node), context.structuralShapes.completed,
           context.projectFieldDispatch, context.frozenDataWrites, context.typeDefinitions);
     },
   });
@@ -286,7 +286,7 @@ export function analyzeRustAnalysisProgram(
     context.sourceLifetimes,
     context.typeFamilies,
     context.projectTypes,
-    context.structuralShapes,
+    context.structuralShapes.completed,
     context.typeDefinitions,
     ownershipFlow.flow,
     objectRepresentations,
@@ -324,7 +324,7 @@ export function analyzeRustAnalysisProgram(
     sourceFacts: context.source.sourceFacts,
     ast: context.ast, nodes: context.nativeNodes, records, navigation: context.source.navigation,
     projectTypes: context.projectTypes, objectRepresentations, frozenDataWrites: context.frozenDataWrites,
-    structuralShapes: context.structuralShapes,
+    structuralShapes: context.structuralShapes.completed,
   };
   const borrowEffects = analyzeRustBorrowEffects(borrowEffectsInput);
   if (borrowEffects.kind === "rejected") return rejectedTargetStage(borrowEffects.diagnostics);
@@ -368,7 +368,7 @@ export function analyzeRustAnalysisProgram(
     sourceTypes: sourceStage.sourceTypes,
     sourceLifetimes: context.sourceLifetimes, requirements: declarationGenericRequirements, retentionIssues, families: context.typeFamilies, jsEnabled: context.jsEnabled,
     evidence: { genericCallables: context.callableValues.generic, frameCallables: context.callableValues.selected.frames,
-      classValues, objectRepresentations, structuralShapes: context.structuralShapes, projectTypes: context.projectTypes, records } });
+      classValues, objectRepresentations, structuralShapes: context.structuralShapes.completed, projectTypes: context.projectTypes, records } });
   if (retentionIssues.length !== 0 || promiseResults.diagnostics.length > 0) {
     return rejectedTargetStage([...retentionIssues.map(issue => ({ code: "RUST_CALLABLE_VALUE_NOT_CLOSED", category: "error" as const,
       source: "tsonic-rust", message: issue.message, sourceNode: issue.subject,
@@ -396,7 +396,7 @@ export function analyzeRustAnalysisProgram(
     safetyApplications: context.safetyApplications,
     components: sourcePackageComponents,
     ownership: ownership.ownership, projectTypes, projectFieldDispatch: context.projectFieldDispatch,
-    structuralShapes: context.structuralShapes, frozenDataWrites: context.frozenDataWrites,
+    structuralShapes: context.structuralShapes.completed, frozenDataWrites: context.frozenDataWrites,
     countedLoops: analyzeRustCountedLoopRepresentations({ ast: context.ast, nativeNodes: context.nativeNodes,
       navigation: context.source.navigation, records: finalRecords, borrowedElementReads }) });
   if (statementCompletions.kind === "rejected") return rejectedTargetStage(statementCompletions.diagnostics);
