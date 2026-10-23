@@ -7,12 +7,15 @@ import { rustSourceErrorTargetType } from "../../../../dist/target-model/types/c
 import { rustJsErrorTargetType, rustProgramErrorTargetType, rustSourceTypeCarrier, rustStringTargetType } from "../../../../dist/target-model/types/index.js";
 import { selectRustFlowReadProjection } from "../../../../dist/policy/conversions/value-carrier-reconciliation.js";
 import { rustTargetTypeRefEquals } from "../../../../dist/target-model/types/equality.js";
+import { planRustProgramErrorModule } from "../../../../dist/backend/planner/program/errors.js";
+import { analyzeRust } from "../../../helpers/rust-session.mjs";
+import { sourcePackageGraphFixture } from "../../../../../tsonic/test/fixtures/source-package-graph.mjs";
 
 const named = path => ({ kind: "named", path });
 const rows = [
   { name: "HttpError", type: named("crate::http::HttpError"), source: "error" },
   { name: "Unrelated", type: named("crate::large::Unrelated"), source: "thrown" },
-  { name: "DependencyError", type: named("dependency::program::TsonicError"), sourceErrorType: named("dependency::program::SourceError"), writableSourceErrorType: named("dependency::program::WritableSourceError"), source: "external" },
+  { name: "DependencyError", type: named("dependency::program::TsonicError"), sourceErrorType: named("dependency::program::SourceError"), writableSourceErrorType: named("dependency::program::WritableSourceError"), source: "external", transport: "package" },
 ];
 
 test("one physical enum specializes unrelated payloads to the native uninhabited type", () => {
@@ -112,15 +115,68 @@ test("base observations borrow real project Error storage but never unrelated th
   assert.deepEqual(message.arms.find(arm => arm.pattern.path === "ErrorTransport::Unrelated").expression.arms, []);
 });
 
-test("closed transport rejects missing external specialization and conflicting variant identities", () => {
-  assert.equal(planRustErrorTransport([{ ...rows[2], sourceErrorType: undefined }]), undefined);
-  assert.equal(planRustErrorTransport([{ ...rows[2], writableSourceErrorType: undefined }]), undefined);
-  assert.equal(planRustErrorTransport([{ ...rows[2], sourceErrorType: { kind: "unit" } }]), undefined);
-  assert.equal(planRustErrorTransport([rows[0], { ...rows[1], name: rows[0].name }]), undefined);
-  for (const name of ["Runtime", "SourceCreated", "Suppressed"]) assert.equal(planRustErrorTransport([{ ...rows[0], name }]), undefined);
+test("admitted transport keeps unrelated native payloads free of formatting bounds", () => {
   const plan = planRustErrorTransport(rows);
   assert.equal(plan.generics.parameters.every(parameter => parameter.bounds.length === 0), true,
     "internal transport representation requires no unrelated formatting bounds");
+});
+
+test("source-package producers publish named public Error views and preserve external payload identity", () => {
+  const { program } = analyzeRust({
+    surfaces: ["js"],
+    sourcePackages: sourcePackageGraphFixture(["index.ts"], {
+      "@acme/errors": { files: ["index.ts"], dependencies: [] },
+    }),
+    files: {
+      "node_modules/@acme/errors/package.json": JSON.stringify({
+        name: "@acme/errors", version: "1.0.0", type: "module", exports: { ".": "./index.ts" },
+      }),
+      "node_modules/@acme/errors/index.ts": `
+export class DependencyFailure extends Error {}
+export function fail(error: DependencyFailure): never { throw error; }
+`,
+      "index.ts": `
+import { DependencyFailure, fail } from "@acme/errors";
+export class LocalFailure extends Error {}
+export function failLocal(error: LocalFailure): never { throw error; }
+export function forward(error: DependencyFailure): never { return fail(error); }
+export function update(error: Error): string { error.message = "updated"; return error.message; }
+`,
+    },
+  });
+  const packages = program.records.sourcePackageErrors.get();
+  assert.equal(packages !== undefined, true, "the real source-package error producer publishes its domain plan");
+  const root = packages.domainsByComponentId.get("source-package-component:root");
+  assert.equal(root !== undefined, true, "the authored package owns its local and external error union");
+  assert.equal(root.externalErrors.length, 1, "the dependency contributes one exact external error owner");
+  const external = root.externalErrors[0];
+  const model = planRustProgramErrorModule({ program }, root);
+  assert.equal(model !== undefined, true, "the admitted source-package domain renders its actual module");
+  for (const [view, field] of [
+    ["SourceError", "sourceErrorTypePath"],
+    ["WritableSourceError", "writableSourceErrorTypePath"],
+  ]) {
+    assert.equal(external[field], `${external.crateName}::program::${view}`, view);
+    const declaration = model.items.find(item => item.kind === "struct" && item.name === view);
+    assert.equal(declaration !== undefined, true, `${view} is a public named view, never a unit specialization`);
+    assert.equal(declaration.visibility, "public", view);
+    assert.equal(declaration.generics.parameters.length, 0, `${view} is nongeneric at the public boundary`);
+    const payload = declaration.fields[0].type.genericArguments.map(argument => argument.type);
+    assert.equal(payload.some(type => type.kind === "named" && type.path === external[field]), true,
+      `${view} preserves the producer's exact dependency view path`);
+    const admission = model.items.find(item => item.kind === "impl" && item.target.path === view &&
+      item.trait?.path === "core::convert::TryFrom" && item.trait.genericArguments[0].type.path === "TsonicError");
+    assert.equal(admission !== undefined, true, `${view} has one exact native admission`);
+    const boundary = admission.members.find(member => member.name === "try_from").body.statements[0].expr;
+    const branch = boundary.arms.find(arm => arm.pattern.path === `ErrorTransport::${external.variant}`).expression;
+    assert.equal(branch.expression.path, `${external[field]}::try_from`, `${view} admits the original dependency value`);
+    assert.equal(branch.expression.args[0].path, "error", `${view} does not replace or copy the input payload`);
+    const rejected = branch.arms.find(arm => arm.pattern.path === "Err");
+    assert.equal(rejected.expression.path, "Err", `${view} keeps a rejected value in its native error result`);
+    assert.equal(rejected.expression.args[0].path, `ErrorTransport::${external.variant}`, view);
+    assert.equal(rejected.expression.args[0].args[0].path, rejected.pattern.elements[0].name,
+      `${view} returns the identical rejected payload, without allocation or conversion`);
+  }
 });
 
 test("flow projection verifies exact Error-only admission instead of a global availability flag", () => {
