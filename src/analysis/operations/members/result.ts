@@ -35,14 +35,17 @@ export function selectedMemberReceiverCarrier(
   options: RustOperationsProviderOptions,
 ): TargetTypeRef | undefined {
   const receiver = asNode(request.receiver, context);
-  const resolvedSourceCarrier = resolveRustTargetTypeRef(
-    request.receiver,
-    context,
-    options,
-  );
   if (receiver === undefined) {
     return undefined;
   }
+  const selectedOperation = context.records.targetOperation.get(receiver);
+  const preparedOperation = context.records.preparedOperationResult.get(receiver);
+  const physicalOperation = selectedOperation === undefined
+    ? preparedOperation?.resultCarrier
+    : rustTargetOperationResultCarrier(selectedOperation);
+  const resolvedSourceCarrier = selectedOperation !== undefined || preparedOperation !== undefined
+    ? physicalOperation
+    : resolveRustTargetTypeRef(request.receiver, context, options);
   const receiverKind = context.ast.kindName(receiver);
   const containingThisDefinition = receiverKind === "KindThisExpression" ||
       receiverKind === "KindThisKeyword"
@@ -194,13 +197,8 @@ export function selectedMemberReceiverCarrier(
       ? selectedCarrier
       : undefined;
   }
-  const selectedOperation = context.records.targetOperation.get(receiver);
-  const preparedOperation = context.records.preparedOperationResult.get(receiver);
-  const selectedOperationResult = selectedOperation === undefined
-    ? preparedOperation?.resultCarrier
-    : rustTargetOperationResultCarrier(selectedOperation);
-  if (request.optionalChain !== true && selectedOperationResult !== undefined &&
-    rustTargetTypeRefEquals(sourceCarrier, selectedOperationResult)) {
+  if (request.optionalChain !== true && physicalOperation !== undefined &&
+    rustTargetTypeRefEquals(sourceCarrier, physicalOperation)) {
     return sourceCarrier;
   }
   const declaredCarrier = optionElement ?? sourceCarrier;

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { analyzeRust } from "../../helpers/rust-session.mjs";
+import { analyzeRust, compileRust, rustSourceText } from "../../helpers/rust-session.mjs";
 
 const cases = [
   ["then reads the incoming value", "if ((marker = step()) > 0) { use(marker); return 1; } else { return 0; }", false],
@@ -65,3 +65,45 @@ export function inspect(marker: number, ready: boolean): number { use(marker); $
     "the source flow owner decides observation across the actual control-flow successors before sealing");
   assert.equal(nodes.filter(node => node === call).length, 1, "the effect is never duplicated");
 }
+
+for (const [label, declaration, body, after, expectedUnused, expectedCounted] of [
+  ["native unused counter", "let index: int32 = 0", "total += 1;", "", true, true],
+  ["number unused counter", "let index: number = 0", "total += 1;", "", true, true],
+  ["body read", "let index: int32 = 0", "total += index;", "", false, true],
+  ["captured counter", "let index: int32 = 0", "const read = (): int32 => index; total += read();", "", false, false],
+  ["source var observed later", "var index: int32 = 0", "total += 1;", "total += index;", false, false],
+]) test(`counted-loop liveness retains only emitted reads: ${label}`, () => {
+  const source = `
+import type { int32 } from "@tsonic/core/types.js";
+export function inspect(count: int32): int32 {
+  let total: int32 = 0;
+  for (${declaration}; index < count; index++) { ${body} }
+  ${after}
+  return total;
+}
+`;
+  const { program } = analyzeRust({ files: { "index.ts": source } });
+  const ast = program.source.ast;
+  const nodes = [];
+  const visit = node => { nodes.push(node); ast.forEachChild(node, child => { if (child !== undefined) visit(child); }); };
+  program.sourceFiles.forEach(visit);
+  const loop = nodes.find(node => ast.is.IsForStatement(node));
+  const counter = nodes.find(node => ast.is.IsVariableDeclaration(node) && ast.text(ast.name(node)) === "index");
+  assert.equal(counter !== undefined && loop !== undefined, true, `${label}: retain the exact checked source binding and loop`);
+  const counted = program.records.countedLoop.get(loop);
+  assert.equal(counted !== undefined, expectedCounted, `${label}: use the existing counted-loop owner's actual selection`);
+  if (counted !== undefined) assert.equal(counted.counterDeclaration === counter, true, `${label}: no other binding is erased`);
+  const liveness = program.records.bindingLiveness.get(counter);
+  assert.equal(liveness !== undefined, true, `${label}: liveness is complete before publication`);
+  assert.equal(liveness.unused, expectedUnused, `${label}: captures, body reads and after-loop reads stay observable`);
+  const count = nodes.find(node => ast.is.IsParameter(node) && ast.text(ast.name(node)) === "count");
+  assert.equal(program.records.bindingLiveness.get(count)?.unused, false, `${label}: the actual bound is still evaluated`);
+  if (expectedUnused) {
+    const { result } = compileRust({ files: { "index.ts": source } });
+    assert.equal(result.diagnostics.length, 0, `${label}: the same source is admitted for native emission`);
+    const output = rustSourceText(result.artifacts);
+    assert.match(output, /for _ in /, `${label}: the unobserved counter needs no native binding`);
+    assert.doesNotMatch(output, /let index\s*=/, `${label}: no unused float-counter conversion is emitted`);
+    assert.match(output, /total/, `${label}: the loop body and its writes remain`);
+  }
+});

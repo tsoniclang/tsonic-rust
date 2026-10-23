@@ -33,3 +33,30 @@ test("discarded exact unit expressions disappear without erasing effects, bindin
   assert.equal(JSON.stringify(finalizeRustSourceStyle(selected)) === JSON.stringify(selected), true,
     "normalization is idempotent");
 });
+
+test("return bindings retain their native statement temporary and local drop boundaries", () => {
+  const owner = { kind: "let", name: "owner", mutable: false, init: { kind: "call", path: "make_owner", args: [] } };
+  const borrowed = { kind: "method-call", receiver: { kind: "field", receiver: path("owner"), name: "value" },
+    method: "borrow", args: [] };
+  for (const [label, value] of [
+    ["borrow guard dereference", { kind: "dereference", pointer: borrowed }],
+    ["opaque native call", { kind: "call", path: "observe", args: [path("owner")] }],
+    ["native method call", borrowed],
+    ["native field", { kind: "field", receiver: path("owner"), name: "value" }],
+    ["untyped path", path("owner")],
+  ]) {
+    const statements = [owner, { kind: "let", name: "returned", mutable: false, init: value },
+      { kind: "tail", expr: path("returned") }];
+    const normalized = finalize(statements);
+    const actual = normalized.items[0].body.statements;
+    assert.equal(actual.length, 3, `${label}: no unproved temporary-scope change`);
+    assert.equal(actual[0].name, "owner", `${label}: the receiver is evaluated once before its read`);
+    assert.equal(actual[1].kind, "let", `${label}: the read completes at its original semicolon`);
+    assert.equal(actual[1].name, "returned", `${label}: the result is bound before its owner's drop`);
+    assert.equal(actual[2].expr.kind, "path", `${label}: the tail is the already evaluated result`);
+    assert.equal(actual[2].expr.path, "returned", `${label}: no call, borrow or field is evaluated again at the tail`);
+    assert.equal(JSON.stringify(actual) === JSON.stringify(statements), true, `${label}: retain the complete native drop order`);
+    assert.equal(JSON.stringify(finalizeRustSourceStyle(normalized)) === JSON.stringify(normalized), true,
+      `${label}: preserving scope boundaries is idempotent`);
+  }
+});
