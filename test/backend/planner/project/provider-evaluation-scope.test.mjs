@@ -13,6 +13,7 @@ import { planRustProviderEvaluationScope } from "../../../../dist/backend/planne
 import { selectRustProviderSourceOccurrence } from "../../../../dist/analysis/operations/provider-source-inputs.js";
 import { analyzeRustProviderEvaluation } from "../../../../dist/analysis/storage/provider-evaluation.js";
 import { createRustProviderEvaluationProducer } from "../../../../dist/analysis/program/records/provider-evaluation.js";
+import { analyzeRustProviderMutableEmission } from "../../../../dist/analysis/storage/provider-mutable-emission.js";
 
 test("provider evaluation retains exact existing borrows across readonly representation changes", () => {
   const { program } = analyzeRust({ surfaces: ["js"], files: { "index.ts": `
@@ -93,11 +94,27 @@ export function observed(): number { return target(first(), second()); }
     const fact = { kind: "provider-operation", operationId: "fixture::consume", resultCarrier: number, abi };
     const occurrence = selectRustProviderSourceOccurrence(node, fact, undefined, argumentsList);
     assert.equal(occurrence !== undefined, true, `${label}: exact original source slots are admitted before rendering`);
-    const physicalEmissionContexts = Object.freeze({ ...program.physicalEmissionContexts,
-      sourceFor: (subject, operation) => subject === node && operation === fact ? occurrence : undefined });
-    const context = { input: { program: { ...program, physicalEmissionContexts } }, sourceFile: ast.getSourceFile(node), diagnostics: [],
+    const producer = createRustProviderEvaluationProducer(() => undefined);
+    const admission = { ...program, physicalEmissionContexts: {
+      ...program.physicalEmissionContexts, sourceOccurrences: [occurrence],
+    } };
+    const mutableIssues = analyzeRustProviderMutableEmission(admission, [], producer);
+    assert.equal(mutableIssues.length, 0, `${label}: the existing native storage owner proves no mutable target inputs`);
+    const issues = analyzeRustProviderEvaluation(admission, producer);
+    assert.equal(issues.length, 0, `${label}: the actual pre-seal owner admits this source schedule`);
+    const records = createRustRecordFixture({ ...producer.records,
+      typeEmission: { get: selected => selected === carrier
+        ? { discard: label === "future" ? "drop" : "unit" }
+        : program.records.typeEmission.get(selected) },
+    }, program.records);
+    const context = { input: { program: { ...program, records } }, sourceFile: ast.getSourceFile(node), diagnostics: [],
       expressionOverrides: new Map([[argumentsList[0], { expression, carrier, valueForm: "value" }],
         [argumentsList[1], { expression: { kind: "call", path: "fixture::value", args: [] }, carrier: number, valueForm: "value" }]]) };
+    assert.throws(() => planRustProviderEvaluationScope({ ...context, input: { program } }, fact, node, undefined,
+      argumentsList, planExpression, () => undefined),
+    error => error.diagnostic?.code === "TSONIC_INTERNAL_PLANNER_INVARIANT" &&
+      error.message === "An admitted provider operation requires its exact source evaluation plan.",
+    `${label}: a new operation cannot reuse another fact's sealed evaluation record`);
     const selected = planRustProviderEvaluationScope(context, fact, node, undefined, argumentsList, planExpression, () => undefined);
     assert.equal(selected.kind, "selected", `${label}: exact source scheduling`);
     assert.equal(selected.steps[0].kind, "effect", `${label}: no blind named value binding`);

@@ -80,10 +80,14 @@ export function analyzeRustNativeComparisons(program: Omit<RustAnalysisProgram, 
     const right = BinaryExpression_Right(ast, node);
     if (left === undefined || right === undefined) continue;
     let selected: RustNativeComparison = { kind: "ordinary" };
-    if (operation.operator === "&" && operation.leftConversion === undefined && operation.rightConversion === undefined &&
-      isRustIntegerCarrier(operation.resultCarrier) && isRustSignedNumericCarrier(operation.resultCarrier)) {
-      if (program.records.literalValue.get(right)?.integer === -1n) selected = { kind: "integer-identity", operand: "left" };
-      else if (program.records.literalValue.get(left)?.integer === -1n) selected = { kind: "integer-identity", operand: "right" };
+    if (operation.operator === "&" && isRustIntegerCarrier(operation.resultCarrier) && isRustSignedNumericCarrier(operation.resultCarrier)) {
+      const exactMask = (operand: Node): boolean => {
+        if (program.records.literalValue.get(operand)?.integer !== -1n) return false;
+        const effects = program.sourceNavigation.expressionEffects(operand);
+        return !effects.invokes && !effects.mutates && !effects.suspends && !effects.mayThrow;
+      };
+      if (operation.rightConversion === undefined && exactMask(right)) selected = { kind: "integer-identity", operand: "left" };
+      else if (operation.leftConversion === undefined && exactMask(left)) selected = { kind: "integer-identity", operand: "right" };
     }
     if (selected.kind === "ordinary" && operation.leftConversion === undefined && operation.rightConversion === undefined) {
       const leftInteger = program.records.literalValue.get(left)?.integer;

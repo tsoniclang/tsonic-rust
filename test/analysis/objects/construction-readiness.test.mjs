@@ -130,3 +130,29 @@ export class Value {
   assert.equal(Object.hasOwn(construction, "unpublishedMutations"), false, `${name}: the superseded raw mutation set is absent`);
   assert.equal(Object.hasOwn(construction, "unpublishedAccesses"), false, `${name}: the superseded raw access set is absent`);
 });
+
+for (const [label, field, rewrite, kind] of [
+  ["immutable Copy capture", "readonly value = 1;", "", "copy"],
+  ["immutable shared capture", 'readonly value = "initial";', "", "shared"],
+  ["mutable Copy capture", "value = 1;", "this.value = 2;", "cell"],
+  ["mutable non-Copy capture", 'value = "initial";', 'this.value = "updated";', "borrow-cell"],
+]) test(`construction locals preserve their admitted captured storage: ${label}`, () => {
+  const { program } = analyzeRust({ files: { "index.ts": `
+export class Value {
+  ${field}
+  readonly reader = () => this.value;
+  constructor() { ${rewrite} }
+}
+` } });
+  const ast = program.source.ast;
+  const definition = program.projectTypes.definitions.find(entry => ast.text(ast.name(entry.declaration)) === "Value");
+  assert.equal(definition !== undefined, true, `${label}: the checked owner is retained`);
+  const construction = program.records.classConstruction.get(definition.declaration);
+  assert.equal(construction !== undefined, true, `${label}: construction is admitted`);
+  const declaration = construction.fields.find(entry => ast.text(ast.name(entry.declaration)) === "value")?.declaration;
+  assert.equal(declaration !== undefined, true, `${label}: one exact authored captured field`);
+  assert.equal(program.records.capturedFieldStorage.get(declaration)?.storage.kind, kind,
+    `${label}: native capture representation is selected independently of local syntax`);
+  assert.equal(construction.mutableFieldLocals.has(declaration), false,
+    `${label}: unchanged native bindings and interior mutation need no mutable owner binding`);
+});
