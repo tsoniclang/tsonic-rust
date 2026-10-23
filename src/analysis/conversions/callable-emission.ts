@@ -136,9 +136,15 @@ export function analyzeRustCallableEmission(program: Omit<RustAnalysisProgram, "
   }
   const structuralAdapter = (node: Node, adapter: RustCallableValueAdapter): void => {
     if (adapter.kind === "option-some" || adapter.kind === "option-map") structuralAdapter(node, adapter.element);
-    else if (adapter.kind === "conversion" && adapter.conversion.kind === "callable-adapter")
-      contract(node, adapter.conversion, rustNativeCallablePhysicalSource(adapter.sourceCarrier,
-        { kind: "selected", carrier: adapter.sourceCarrier, inputs: [], erased: true }));
+    else if (adapter.kind === "conversion" && adapter.conversion.kind === "callable-adapter") {
+      const physical = rustNativeCallablePhysicalSource(adapter.sourceCarrier,
+        { kind: "selected", carrier: adapter.sourceCarrier, inputs: [], erased: true });
+      if (physical === undefined)
+        failTargetAnalysisInvariant("tsonic-rust", "An admitted structural callable adapter requires its exact physical source.", node);
+      if (producer.records.callableOperand.get(node, adapter.conversion.source) === undefined)
+        producer.operand(node, adapter.conversion.source, Object.freeze({ physical, inline: undefined }));
+      contract(node, adapter.conversion, physical);
+    }
   };
   const views = new Set(program.classValues.instanceViewImplementations.flatMap(selected =>
     program.records.structuralViewImplementations.get(selected.declaration, selected.ownerFileName) ?? []));

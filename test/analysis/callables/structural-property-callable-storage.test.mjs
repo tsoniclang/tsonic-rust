@@ -5,6 +5,7 @@ import { analyzeRustAnalysisProgram } from "../../../dist/analysis/program/targe
 import { rustCallableProtocol } from "../../../dist/target-model/types/carriers/callables.js";
 import { rustCallablePhysicalSignature } from "../../../dist/target-model/conversions/callable-physical.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
+import { rustInfallibleTargetId } from "../../../dist/target-model/types/carriers/source-types.js";
 
 function source(order) {
   const closed = "function closed(): View<string> { return new Box<string>(); }";
@@ -63,7 +64,7 @@ for (const surfaces of [[], ["js"]]) {
           const adapter = member.readAdapter;
           const source = adapter === undefined ? undefined : rustCallablePhysicalSignature(adapter.sourceCarrier);
           assert.equal(source?.parameters.length, 1, "the view reads the class field's actual one-argument physical callable");
-          assert.equal(source.error.kind === "target-named" && source.error.id === "rust.core.convert.Infallible", true,
+          assert.equal(source.error.kind === "target-named" && source.error.id === rustInfallibleTargetId, true,
             "the field's real infallible invocation error is not replaced by the getter error");
           assert.equal(rustCallableProtocol(adapter.targetCarrier)?.parameters.length, 2,
             "one adapter supplies the fixed getter ABI and ignores the extra argument");
@@ -71,6 +72,10 @@ for (const surfaces of [[], ["js"]]) {
             "the view has one canonical callable adapter, not a logical read fallback");
           assert.equal(program.records.callableContract.get(member.declaration, adapter.conversion) !== undefined, true,
             "the physical source adapter is fully planned before publication");
+          const operand = program.records.callableOperand.get(member.declaration, adapter.conversion.source);
+          assert.equal(operand?.physical.erased, true, "the same synthetic physical source owns its erased operand record");
+          assert.equal(rustTargetTypeRefEquals(operand?.physical.carrier, adapter.sourceCarrier), true,
+            "the operand and conversion contract name the identical physical field carrier");
           assert.equal(program.records.carrierRead.get(adapter.sourceCarrier)?.clone, true,
             "the exact physical field read has sealed native read evidence");
         }
