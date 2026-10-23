@@ -39,6 +39,47 @@ import { rustUnionPayloadAdmission } from "../../policy/conversions/union-inject
 import { rustAbsenceTargetType } from "../../target-model/types/carriers/native.js";
 import { requireRustRecord } from "../program/records/required-records.js";
 import { rustSourceCallableReturnFactEquals } from "../../target-model/records/equality.js";
+import type { TargetSourceProgram } from "@tsonic/target-api/source";
+import type { RustProgramRecords } from "../../target-model/records/program.js";
+import type { RustLifetimeIndex } from "../../target-model/lifetimes/index.js";
+import type { SourceCallableNativeContract, SourceCallableSourceContract } from "../../target-model/records/source-callable-contract.js";
+import type { RustImplicitConstructorParameter } from "../../target-model/records/construction.js";
+
+export function createRustSourceCallableContract(input: {
+  readonly source: TargetSourceProgram;
+  readonly records: RustProgramRecords;
+  readonly sourceLifetimes: RustLifetimeIndex;
+}, declaration: Node, returnType: TargetTypeRef): SourceCallableSourceContract | undefined {
+  const parameters = sourceCallableValueParameters(input.source.ast, declaration, input.source.semantics.forNode(declaration));
+  if (parameters === undefined) return undefined;
+  const nativeParameters: SourceCallableSourceContract["nativeParameters"][number][] = [];
+  for (const parameter of parameters) {
+    const selected = input.records.sourceParameterAbi.get(parameter);
+    const formal = input.records.callableParameter.get(parameter);
+    if (selected === undefined || formal === undefined) return undefined;
+    nativeParameters.push(Object.freeze({ sourceParameter: parameter,
+      targetParameter: Object.freeze({ ...selected, parameterCarrier: formal.carrier }) }));
+  }
+  const sourceReturn = input.records.sourceCallableReturn.get(declaration);
+  if (sourceReturn === undefined && !input.source.ast.is.IsConstructorDeclaration(declaration)) return undefined;
+  return Object.freeze({ kind: "source", sourceDeclaration: declaration,
+    parameters: Object.freeze([...parameters]), nativeParameters: Object.freeze(nativeParameters), returnType,
+    nativeSignature: Object.freeze({ genericParameters: Object.freeze([
+      ...(input.sourceLifetimes.contractFor(declaration)?.parameters ?? []),
+      ...(input.records.nativeGenerics.get(declaration)?.implicitLifetimes ?? []),
+    ]), sourceReturn }) });
+}
+
+export function createRustNativeConstructorContract(input: {
+  readonly parameters: readonly RustImplicitConstructorParameter[];
+  readonly sourceDeclaration: Node | undefined;
+  readonly returnType: TargetTypeRef;
+}): SourceCallableNativeContract {
+  return Object.freeze({ kind: "native", ...(input.sourceDeclaration === undefined ? {} : { sourceDeclaration: input.sourceDeclaration }),
+    nativeParameters: Object.freeze(input.parameters.map(parameter => Object.freeze({ sourceParameter: parameter.declaration,
+      targetParameter: Object.freeze({ name: parameter.name, type: parameter.carrier, passingMode: "by-value" as const }) }))),
+    returnType: input.returnType, nativeSignature: Object.freeze({ genericParameters: Object.freeze([]) }) });
+}
 
 export function selectedSourceCallableReturn(walk: RustFactWalk, declaration: Node): Type | undefined {
   const semantics = walk.context.semanticsFor(declaration);

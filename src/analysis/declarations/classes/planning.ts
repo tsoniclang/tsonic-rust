@@ -1,7 +1,7 @@
 import type { Node } from "@tsonic/tsts";
 import { failTargetAnalysisInvariant, type TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import { Node_Initializer, sourceClassFieldIsTypeOnly, sourceObjectMemberDeclarations, sourceParameterIsProperty,
-  sourceCallableValueParameters, type TargetSourceProgram } from "@tsonic/target-api/source";
+  type TargetSourceProgram } from "@tsonic/target-api/source";
 import type { RustAnalysisProgram } from "../../program/model.js";
 import type { RustReachability } from "../../../target-model/records/reachability.js";
 import type { RustClassEmissionProducer } from "../../program/records/class-emission.js";
@@ -14,6 +14,7 @@ import { rustTargetGenericReferences } from "../../../target-model/types/carrier
 import { rustLifetimeKey } from "../../../target-model/lifetimes/index.js";
 import { rustLocationTargetType } from "../../../target-model/types/index.js";
 import { isRustCopyCarrier } from "../../../policy/constraints/native-traits.js";
+import { createRustNativeConstructorContract, createRustSourceCallableContract } from "../../callables/source-callable-abi.js";
 
 export function analyzeRustClassEmission(input: {
   readonly program: Omit<RustAnalysisProgram, "reachability">;
@@ -121,12 +122,17 @@ export function analyzeRustClassEmission(input: {
     if (implemented.length > 1 || constructors.length !== 0 && implemented.length !== 1)
       failTargetAnalysisInvariant("tsonic-rust", "An admitted class requires one exact implemented constructor.", declaration);
     const constructor = implemented[0];
-    const constructorParameters = constructor === undefined ? Object.freeze([])
-      : sourceCallableValueParameters(ast, constructor, input.source.semantics.forNode(constructor));
-    if (constructorParameters === undefined) failTargetAnalysisInvariant("tsonic-rust",
-      "An admitted class constructor requires its exact checked value parameters.", constructor);
-    for (const parameter of constructorParameters) if (program.records.callableParameter.get(parameter) === undefined)
-      failTargetAnalysisInvariant("tsonic-rust", "An admitted class constructor requires its complete native formal parameter ABI.", parameter);
+    const classCarrier = program.projectTypes.openCarrier(definition);
+    const constructorContract = constructor === undefined ? (() => {
+      const signature = program.projectTypes.constructorsForDefinition(definition)[0];
+      const parameters = signature === undefined ? undefined : program.records.implicitConstructorParameters.get(signature, classCarrier);
+      if (signature === undefined || parameters === undefined) failTargetAnalysisInvariant("tsonic-rust",
+        "An admitted implicit constructor requires its actual selected native signature and parameter ABI.", declaration);
+      return createRustNativeConstructorContract({ parameters, sourceDeclaration: signature.declaration, returnType: classCarrier });
+    })() : createRustSourceCallableContract({ source: input.source, records: program.records,
+      sourceLifetimes: program.sourceLifetimes }, constructor, classCarrier);
+    if (constructorContract === undefined) failTargetAnalysisInvariant("tsonic-rust",
+      "An admitted class constructor requires its exact checked native callable contract.", constructor);
     const requirements = program.declarationGenericRequirements.contractFor(declaration);
     if (requirements === undefined) failTargetAnalysisInvariant("tsonic-rust", "An admitted class requires its finalized native generic contract.", declaration);
     const typeIdentities = new Set(definition.genericParameters.flatMap(parameter => parameter.kind === "type" ? [parameter.identity] : []));
@@ -140,10 +146,10 @@ export function analyzeRustClassEmission(input: {
     input.producer.classDeclaration(declaration, { kind: polymorphic ? "polymorphic" : "ordinary", name, definition,
       abstract: ast.hasModifierKind(declaration, "abstract"),
       constructorEnvironment: environment?.instancesUseEnvironment || environment?.initializationUsesEnvironment ? environment : undefined,
-      carrier: program.projectTypes.openCarrier(definition), representation, publiclyReachable,
+      carrier: classCarrier, representation, publiclyReachable,
       visibility: ast.hasModifierKind(declaration, "export") || publiclyReachable ? "public" : "crate",
       explicitWrapperTraits: representation.kind !== "value" && (typeIdentities.size !== 0 || hasStorageParameters),
-      fields: Object.freeze(fields), constructor, constructorParameters, methods: Object.freeze(methods), accessors: Object.freeze(accessors),
+      fields: Object.freeze(fields), constructor, constructorContract, methods: Object.freeze(methods), accessors: Object.freeze(accessors),
       constructorVisibility: constructor === undefined || !ast.hasModifierKind(constructor, "private") && !ast.hasModifierKind(constructor, "protected") ? "public" : "private",
       constructorDeadCode: publiclyReachable ? undefined : constructor === undefined
         ? reachability.invokedProjectConstructors.has(declaration) ? undefined : "generated-retained-constructor"

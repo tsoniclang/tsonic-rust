@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import { failTargetAnalysisInvariant, type TargetDiagnostic } from "@tsonic/target-api/artifacts";
-import { sourceCallableValueParameters, type TargetSourceProgram } from "@tsonic/target-api/source";
+import { type TargetSourceProgram } from "@tsonic/target-api/source";
 import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustProjectClassProducer } from "../program/records/project-classes.js";
 import type { RustProjectTypeDefinition } from "../../target-model/types/project-types.js";
@@ -9,6 +9,7 @@ import { rustCallableInvocationResult } from "../../policy/types/callables/retur
 import { rustCallableProtocol } from "../../target-model/types/carriers/callables.js";
 import { selectRustProjectCallableSignature } from "../../policy/types/objects/project-dispatch-callables.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
+import { createRustSourceCallableContract } from "../callables/source-callable-abi.js";
 
 export function closeRustProjectCallableContracts(
   program: Omit<RustAnalysisProgram, "reachability">,
@@ -49,9 +50,6 @@ export function closeRustProjectCallableContracts(
     return physical ?? logical;
   };
   for (const member of callableDeclarations) {
-    const parameters = sourceCallableValueParameters(ast, member, source.semantics.forNode(member));
-    if (parameters === undefined || parameters.some(parameter => program.records.callableParameter.get(parameter) === undefined))
-      failTargetAnalysisInvariant("tsonic-rust", "An admitted project callable requires its exact checked source value parameters and native formal ABI.", member);
     const asynchronous = program.records.asyncFunction.get(member);
     const typeParameters = ast.typeParameters(member).map(parameter => {
       const selected = program.sourceLifetimes.parameterFor(parameter);
@@ -78,7 +76,13 @@ export function closeRustProjectCallableContracts(
       issues.push({ code: "RUST_UNSUPPORTED_AST", category: "error", source: "tsonic-rust", sourceNode: member,
         message: `Polymorphic project methods require an exact object-safe native invocation ABI. Node kind: ${ast.kindName(member)}.`,
         evidence: ["target.capability=rust.backend.project-dispatch-object-safety"] });
-    } else producer.callable(member, Object.freeze({ ...signature, parameters: Object.freeze([...parameters]) }));
+    } else {
+      const contract = createRustSourceCallableContract({ source, records: program.records,
+        sourceLifetimes: program.sourceLifetimes }, member, signature.returnCarrier);
+      if (contract === undefined) failTargetAnalysisInvariant("tsonic-rust",
+        "An admitted project callable requires its exact checked source value parameters and native formal ABI.", member);
+      producer.callable(member, Object.freeze({ ...signature, contract }));
+    }
   }
   return Object.freeze(issues);
 }

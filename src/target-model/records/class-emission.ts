@@ -6,6 +6,7 @@ import type { RustNamedClassEnvironment } from "./class-values.js";
 import type { RustFrameCallableBinding, RustFrameCallableDefinition } from "./frame-callables.js";
 import type { RustCapturedFieldStorage } from "../types/field-storage.js";
 import type { RustDeadCodeDisposition } from "./native-liveness.js";
+import type { SourceCallableContract } from "./source-callable-contract.js";
 
 export interface RustNativeClassField {
   readonly declaration: Node;
@@ -33,7 +34,7 @@ export interface RustNativeClassEmission {
   readonly explicitWrapperTraits: boolean;
   readonly fields: readonly RustNativeClassField[];
   readonly constructor: Node | undefined;
-  readonly constructorParameters: readonly Node[];
+  readonly constructorContract: SourceCallableContract;
   readonly constructorDeadCode: RustDeadCodeDisposition | undefined;
   readonly constructorVisibility: "public" | "private";
   readonly methods: readonly Node[];

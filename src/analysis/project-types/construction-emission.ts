@@ -5,6 +5,7 @@ import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustConstructionProducer } from "../program/records/construction.js";
 import type { RustConstructionPreparationSelection, RustConstructionProjection } from "../../target-model/records/construction.js";
 import type { RustProjectConstructorSignature } from "../../target-model/types/project-types.js";
+import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
 import { rustTargetIdentifier, isValidRustIdentifier } from "../../target-model/names/identifiers.js";
 import { rustSourceOptionalTargetType, rustStringTargetType } from "../../target-model/types/index.js";
@@ -19,6 +20,22 @@ export function analyzeRustConstructionEmission(input: {
   const parameterRequests = new WeakMap<RustProjectConstructorSignature, Set<string>>();
   const inherited = new Set<RustProjectConstructorSignature>();
   const externalCalls = new Set<Node>();
+  const parametersFor = (signature: RustProjectConstructorSignature, receiver: TargetTypeRef): void => {
+    const key = closedMetadataKey(receiver);
+    let requests = parameterRequests.get(signature);
+    if (requests === undefined) { requests = new Set(); parameterRequests.set(signature, requests); }
+    if (requests.has(key)) return;
+    requests.add(key);
+    const parameters = signature.parameters.map(parameter => {
+      const abi = program.records.sourceParameterAbi.get(parameter.parameterDeclaration);
+      const carrier = abi === undefined ? undefined : program.projectTypes.instantiateMemberCarrier(parameter.parameterDeclaration, receiver, abi.parameterCarrier);
+      const name = rustTargetIdentifier(parameter.parameterName);
+      if (carrier === undefined || !isValidRustIdentifier(name)) failTargetAnalysisInvariant("tsonic-rust",
+        "An inherited effective constructor parameter requires its exact instantiated native ABI and authored name.", parameter.parameterDeclaration);
+      return Object.freeze({ declaration: parameter.parameterDeclaration, carrier, name });
+    });
+    input.producer.parameters(signature, receiver, Object.freeze(parameters));
+  };
   for (const definition of program.projectTypes.definitions) {
     const base = program.projectTypes.externalBaseForDefinition(definition);
     if (base !== undefined) input.producer.externalBase(definition, base);
@@ -28,6 +45,8 @@ export function analyzeRustConstructionEmission(input: {
   for (const definition of program.projectTypes.definitions) {
     if (definition.kind !== "class") continue;
     if (program.records.classDeclaration.get(definition.declaration) === undefined) continue;
+    for (const signature of program.projectTypes.constructorsForDefinition(definition))
+      if (signature.implicit) parametersFor(signature, program.projectTypes.openCarrier(definition));
     // An abstract class is never constructed itself; its layers are prepared within each concrete subclass, and the
     // emission contexts request no constructor layer for it.
     if (program.source.ast.hasModifierKind(definition.declaration, "abstract")) continue;
@@ -44,20 +63,7 @@ export function analyzeRustConstructionEmission(input: {
       if (layer.constructor === undefined) {
         const relation = program.projectTypes.relationship(rootCarrier, layer.definition);
         if (relation.kind !== "related") failTargetAnalysisInvariant("tsonic-rust", "An inherited construction layer requires its exact native generic relationship.", layer.definition.declaration);
-        const key = closedMetadataKey(relation.targetType);
-        let requests = parameterRequests.get(layer.signature);
-        if (requests === undefined) { requests = new Set(); parameterRequests.set(layer.signature, requests); }
-        if (!requests.has(key)) {
-          requests.add(key);
-          const parameters = layer.signature.parameters.map(parameter => {
-            const abi = program.records.sourceParameterAbi.get(parameter.parameterDeclaration);
-            const carrier = abi === undefined ? undefined : program.projectTypes.instantiateMemberCarrier(parameter.parameterDeclaration, relation.targetType, abi.parameterCarrier);
-            const name = rustTargetIdentifier(parameter.parameterName);
-            if (carrier === undefined || !isValidRustIdentifier(name)) failTargetAnalysisInvariant("tsonic-rust", "An inherited effective constructor parameter requires its exact instantiated native ABI and authored name.", parameter.parameterDeclaration);
-            return Object.freeze({ declaration: parameter.parameterDeclaration, carrier, name });
-          });
-          input.producer.parameters(layer.signature, relation.targetType, Object.freeze(parameters));
-        }
+        parametersFor(layer.signature, relation.targetType);
       }
       const base = program.projectTypes.externalBaseForDefinition(layer.definition);
       if (base === undefined) continue;
