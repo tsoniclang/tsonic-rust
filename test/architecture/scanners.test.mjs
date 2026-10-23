@@ -577,7 +577,17 @@ test("optional chains consume exact TSTS evidence through one finalized Option f
   );
   assert.match(semantics, /selectedMemberReceiverCarrier\(request, context, options\)/u);
   assert.match(semantics, /selectRustOptionalChain\(\{/u);
-  assert.match(semantics, /sourceGuardCarrier = resolveRustTargetTypeRef\(\s*request\.receiver,/u);
+  const receiverOwner = semantics.slice(semantics.indexOf("function memberReceiverSourceCarrier("),
+    semantics.indexOf("export function selectedMemberReceiverCarrier("));
+  assert.match(receiverOwner, /records\.selectedOperation\.get\(receiver\)/u);
+  assert.match(receiverOwner, /return \{ carrier: selected\.resultType, physical: true \}/u);
+  assert.match(receiverOwner, /records\.preparedOperationResult\.get\(receiver\)/u);
+  assert.match(receiverOwner, /return \{ carrier: prepared\.resultCarrier, physical: true \}/u);
+  assert.match(receiverOwner, /return \{ carrier: resolveRustTargetTypeRef\(request\.receiver, context, options\), physical: false \}/u);
+  assert.doesNotMatch(receiverOwner, /rustOption(?:Element|Value)Carrier|rustTargetOperationResultCarrier/u);
+  assert.match(semantics, /sourceReceiverCarrier = receiver === undefined \? undefined\s*: memberReceiverSourceCarrier\(request, receiver, context, options\)\.carrier/u);
+  assert.match(semantics, /sourceGuardCarrier = sourceReceiverCarrier/u);
+  assert.match(semantics, /selectedGuardCarrier = operationReceiverCarrier/u);
   assert.doesNotMatch(semantics, /sourceReceiverDeclaration/u);
   assert.match(semantics, /request\.optionalChain/u);
   assert.match(semantics, /selectedMemberReceiverCarrier\(request, context, options\)/u);

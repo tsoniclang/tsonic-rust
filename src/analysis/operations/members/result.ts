@@ -35,9 +35,9 @@ function memberReceiverSourceCarrier(
   context: RustOperationAnalysisContext,
   options: RustOperationsProviderOptions,
 ): { readonly carrier: TargetTypeRef | undefined; readonly physical: boolean } {
-  const selected = context.records.targetOperation.get(receiver);
+  const selected = context.records.selectedOperation.get(receiver);
   if (selected !== undefined) {
-    return { carrier: rustTargetOperationResultCarrier(selected), physical: true };
+    return { carrier: selected.resultType, physical: true };
   }
   const prepared = context.records.preparedOperationResult.get(receiver);
   if (prepared !== undefined) {
