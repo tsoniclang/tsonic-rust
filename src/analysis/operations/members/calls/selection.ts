@@ -235,7 +235,7 @@ export function resolveRustCheckedCall(
       return rejectSelectedOperation(
         request.source.call,
         context,
-        "RUST_GENERATOR_SOURCE_CALL_NOT_CLOSED",
+        generator.code,
         generator.message,
       );
     }

@@ -11,6 +11,9 @@ import { rustTypeGenericArguments } from "../../target-model/types/generic-argum
 
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import type { RustNativeCallableProducerPlan } from "../../target-model/records/native-producers.js";
+import { getRustGeneratorProtocol } from "../../target-model/types/carriers/callables.js";
+import { rustGeneratorStorageTargetType } from "../../policy/types/callables/generators.js";
+import { rustPlaceholderLifetime } from "../../target-model/lifetimes/index.js";
 
 export interface RustNativeOutwardResults {
   returnFor(declaration: Node): TargetTypeRef | undefined;
@@ -34,6 +37,18 @@ export function createRustNativeOutwardResults(input: {
       if (source === undefined) return undefined;
       const physical = input.returnCarrierFor(declaration);
       if (physical === undefined) return undefined;
+      const generator = input.records.generator.get(declaration);
+      if (generator !== undefined) {
+        const protocol = getRustGeneratorProtocol(physical);
+        const error = input.producers.errorFor(declaration, "body");
+        if (protocol?.kind !== generator.kind || error === undefined) return undefined;
+        if (mode === "body") return rustNativeFutureOutputType({ identity: `${producer.identity}:body`,
+          output: rustNamedTargetType("rust.core.Result", "Result", rustTypeGenericArguments([protocol.returnType, error])),
+          captures: producer.environment });
+        const lifetime = generator.storage.kind === "lifetime" ? generator.storage.lifetime
+          : generator.storage.kind === "receiver" ? rustPlaceholderLifetime : undefined;
+        return rustGeneratorStorageTargetType(protocol, lifetime, error);
+      }
       const asynchronous = input.records.asyncFunction.get(declaration);
       if (mode === "body" && asynchronous === undefined) return undefined;
       if (mode !== "return" && asynchronous !== undefined) {
