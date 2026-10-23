@@ -18,6 +18,7 @@ import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../target
 import { selectRustProjectProjection } from "../types/project/project-projections.js";
 import { rustGenericCallableSignaturesMatch } from "./generic-callable.js";
 import { selectRustCallableConversion } from "./callable.js";
+import { rustCallableConversionSource } from "../../target-model/conversions/callable-physical.js";
 import { isRustMutableJsErrorCarrier, isRustSourceErrorCarrier, isRustReadonlySourceErrorCarrier, isRustRetainedErrorCarrier } from "../../target-model/types/carriers/source-error.js";
 import { isRustClosedValueCarrier } from "../../target-model/types/carriers/closed-value-kind.js";
 import { selectRustProjectUnionMapping } from "../types/project/project-union-mappings.js";
@@ -177,7 +178,7 @@ export function rustCallableTargetForSourceLifetime(sourceCarrier: TargetTypeRef
     return changed ? rustStructuralObjectTargetType(targetObject.ownerFileName, fields, targetObject.representation,
       targetObject.construction, targetObject.bases) : targetCarrier;
   }
-  const sourceCallable = rustCallableProtocol(sourceCarrier);
+  const sourceCallable = rustCallableConversionSource(sourceCarrier);
   const targetCallable = rustCallableProtocol(targetCarrier);
   return targetCarrier.kind === "target-named" && targetCarrier.id === rustCallableTargetId &&
     targetCallable?.lifetime?.kind === "placeholder" && sourceCallable?.lifetime !== undefined &&

@@ -15,7 +15,7 @@ import { rustCallableConversionMatches } from "./callable.js";
 import { type RustValueConversionContract } from "../../target-model/conversions/contracts.js";
 import { rustValueConversionContract } from "./contracts.js";
 
-import { rustCallablePhysicalSignature, type RustCallablePhysicalConversion, type RustCallablePhysicalSignature, type RustCallablePhysicalValueConversion } from "../../target-model/conversions/callable-physical.js";
+import { rustCallableConversionSource, rustCallablePhysicalSignature, type RustCallablePhysicalConversion, type RustCallablePhysicalSignature, type RustCallablePhysicalValueConversion } from "../../target-model/conversions/callable-physical.js";
 export function rustCallableConversionPhysical(
   conversion: RustCallableConversion,
   source: RustCallablePhysicalSignature,
@@ -30,7 +30,7 @@ export function rustCallableConversionPhysical(
       !hasExactObjectKeys(actual, ["parameters", "result", "error"]) || !isDenseDataArray(actual.parameters) ||
       !actual.parameters.every(isRustTargetTypeRef) || !isRustTargetTypeRef(actual.result) || !isRustTargetTypeRef(actual.error) ||
       !rustCallableConversionMatches(logical, logical.source, logical.target, definitions)) return undefined;
-    const source = rustCallableProtocol(logical.source)!;
+    const source = rustCallableConversionSource(logical.source)!;
     const target = rustCallableProtocol(logical.target) ?? rustClosureProtocol(logical.target);
     if (target === undefined || source.parameters.length !== actual.parameters.length) return undefined;
     const errorContract = logical.error === undefined ? undefined : rustValueConversionContract(logical.error, definitions);
@@ -41,9 +41,11 @@ export function rustCallableConversionPhysical(
       ? errorContract : undefined;
     // A provider callback (a fallible native closure) carries the runtime error; an invoked callable whose error is
     // uninhabited is adapted by eliminating that error.
-    const eliminated = errorPlan === undefined && logical.target.kind === "closure" && rustUninhabitedError(actual.error);
+    const targetError = "error" in target ? target.error : logical.target.kind === "closure" ? rustRuntimeErrorTargetType() : undefined;
+    const eliminated = errorPlan === undefined && targetError !== undefined &&
+      !rustTargetTypeRefEquals(actual.error, targetError) && rustUninhabitedError(actual.error);
     const errors: RustNativeErrorSource<TargetTypeRef>[] = [{ identity: "invoke", variant: "Error0",
-      errorType: eliminated ? rustRuntimeErrorTargetType() : errorPlan?.target ?? actual.error }];
+      errorType: eliminated ? targetError! : errorPlan?.target ?? actual.error }];
     const parameters: TargetTypeRef[] = [...target.parameters];
     const arguments_: RustCallablePhysicalValueConversion[] = [];
     for (const [index, parameter] of logical.parameters.entries()) {
