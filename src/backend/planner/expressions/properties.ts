@@ -20,7 +20,7 @@ import { planRustReceiverAlias } from "../objects/polymorphism/receiver-aliases.
 import { planOptionalChainExpression } from "./optional-chains.js";
 import { rustOperationFact } from "./fundamentals.js";
 import { finishProviderOperationExpression, planProviderOperationExpression } from "./conversions.js";
-import { planExpression } from "./entry.js";
+import { planExpression, rustValueProjectionFor } from "./entry.js";
 import { planRustSharedReceiver } from "./typed-locations.js";
 import { planRustSourceUnionFieldProjection, readRustUnionField } from "./unions.js";
 import { planRustBuiltinErrorProperty } from "./builtin-errors.js";
@@ -78,7 +78,14 @@ function planSourceFieldRead(node: Node, fact: Extract<RustTargetOperationFact, 
     return location.bindings.length === 0 ? location.read : rustValueBlock(location.bindings, location.read);
   }
   const receiverNode = Node_Expression(context.input.program.source.ast, node);
-  const location = receiverNode === undefined ? undefined : context.valueFieldLocations?.get(receiverNode) ??
+  const projection = receiverNode === undefined ? undefined
+    : rustValueProjectionFor(receiverNode, context.expressionOverrides?.get(receiverNode)?.carrier, context);
+  const identityReceiver = receiverNode !== undefined && projection !== undefined && !projection.exits &&
+    projection.flow === undefined && projection.upcast === undefined && projection.downcast === undefined &&
+    projection.object === undefined && projection.option === undefined &&
+    (projection.contextual === undefined || projection.contextualIdentity) &&
+    context.input.program.records.callableJoinWrite.get(receiverNode) === undefined;
+  const location = !identityReceiver ? undefined : context.valueFieldLocations?.get(receiverNode) ??
     (rustSourceFieldHasValueReceiver(receiverNode, context) ? planRustValueFieldLocation(receiverNode, context, "read") : undefined);
   if (location?.withRead !== undefined && fact.dispatch === undefined && fact.valueSemantics.kind === "stored" &&
     rustStoredObjectFieldSupportsBorrowedRead(fact.storage, fact.receiverCarrier, fact.storageIndex, context)) {

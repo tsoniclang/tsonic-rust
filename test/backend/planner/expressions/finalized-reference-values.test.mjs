@@ -69,8 +69,31 @@ test("stabilized native inputs preserve their exact shared, exclusive and by-val
     else assert.equal(value.kind === "reference" && value.expr === bound && (value.mutable === true) === (input.mode === "mut-ref"), true,
       `${input.mode}: the bound value, not the original place or parameter ABI, determines reference syntax`);
   }
-  const borrowed = inputs.find(({ input, slot }) => input.mode === "ref" && program.records.providerReference.get(slot.node, input));
-  assert.equal(borrowed !== undefined, true, "the real unchanged reference parameter retains its pass-through evidence");
+  const shared = inputs.filter(({ input }) => input.mode === "ref");
+  assert.equal(shared.length, 1, "the native Vector reader has one actual shared input");
+  assert.equal(program.records.sourceParameterAbi.get(shared[0].slot.node)?.mode, "value",
+    "a native provider's reference input does not invent a borrowed source parameter ABI");
+  assert.equal(program.records.providerReference.get(shared[0].slot.node, shared[0].input), false,
+    "the owned Vector source must be borrowed rather than falsely reused as an existing reference");
+});
+
+test("an actual readonly String parameter preserves its admitted non-stabilized reference", () => {
+  const { program } = analyzeRust({ surfaces: ["js"], files: { "index.ts": `
+    export function read(value: string): number { return value.indexOf("x"); }
+    console.log(read("x"));
+  ` } });
+  const inputs = program.physicalEmissionContexts.sourceOccurrences
+    .filter(occurrence => occurrence.operation.abi.operationKind === "method")
+    .flatMap(occurrence => occurrence.inputs)
+    .filter(({ input }) => input.source.kind === "receiver");
+  assert.equal(inputs.length, 1, "one actual checked readonly String receiver supplies the inverse");
+  const borrowed = inputs[0];
+  assert.equal(borrowed.input.mode, "ref", "the provider accepts the exact native shared String input");
+  assert.equal(borrowed.input.conversion.kind, "identity", "no conversion replaces the original borrowed String");
+  assert.equal(program.records.sourceParameterAbi.get(borrowed.slot.node)?.mode, "ref",
+    "the real source parameter has the native reference ABI before planning");
+  assert.equal(program.records.providerReference.get(borrowed.slot.node, borrowed.input), true,
+    "the canonical producer admits unchanged native reference pass-through");
   const reference = { kind: "reference", expr: { kind: "path", path: "actual_reference_parameter" } };
   const context = rustSourceFilePlanContext(program, borrowed.slot.node);
   assert.equal(applyFinalizedRustArgumentMode(context, borrowed.slot.node, reference, borrowed.input, true) === reference, true,
