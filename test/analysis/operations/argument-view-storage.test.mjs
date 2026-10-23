@@ -39,6 +39,8 @@ for (const [label, text, expected] of [
     assert.equal(selected.length, 3, "both wrappers and their original storage read are covered");
     for (const node of selected) {
       const view = program.records.argumentView.get(node);
+      assert.equal(program.records.readOwnership.get(node)?.source.kind, "borrow",
+        "the finalized native source conversion selects a borrow before storage views are sealed");
       assert.equal(view?.borrowedStorage, expected, "the physical source form is selected before sealing");
       assert.equal(Object.isFrozen(view), true, "the selected argument view is immutable");
     }

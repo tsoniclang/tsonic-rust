@@ -6,6 +6,8 @@ import { analyzeRust } from "../../../helpers/rust-session.mjs";
 import { planRustValueFieldLocation } from "../../../../dist/backend/planner/objects/value-fields.js";
 import { createRustSyntheticNameState } from "../../../../dist/backend/planner/names/synthetic.js";
 import { rustSourcePrimitiveTargetType } from "../../../../dist/target-model/types/index.js";
+import { analyzeRustStoredFields } from "../../../../dist/analysis/storage/stored-fields.js";
+import { createRustStoredFieldProducer } from "../../../../dist/analysis/program/records/stored-fields.js";
 
 test("prepared native field locations retain exact storage and reject copied or mismatched roots", () => {
   const { program } = analyzeRust({ files: { "index.ts": `
@@ -47,13 +49,23 @@ export function run(): number { const value = new Value(4); return value.count; 
       { ...override, valueForm: "value" },
       { ...override, valueForm: "shared-reference" },
       { ...override, carrier: rustSourcePrimitiveTargetType("bool") },
+      { ...override, storageForm: "borrow-guard" },
     ]) {
       const rejected = context(changed);
       assert.equal(planRustValueFieldLocation(node, rejected, "write") === undefined, true, changed.valueForm);
-      assert.equal(rejected.diagnostics.some(row => row.code === "RUST_MISSING_TARGET_FACT"), true);
+      assert.equal(rejected.diagnostics.length, 0, "an inapplicable native location is not a second source rejection");
     }
     const missing = context(override, createRustRecordFixture({
-selectedOperation: { get: () => undefined }}, program.records));
+admittedField: { get: () => undefined }}, program.records));
     assert.equal(planRustValueFieldLocation(node, missing, "write") === undefined, true, "selected property evidence is required");
+    assert.equal(missing.diagnostics.length, 0);
+    const missingSelected = { ...program, records: createRustRecordFixture({
+      selectedOperation: { get: subject => subject === node ? undefined : program.records.selectedOperation.get(subject) },
+    }, program.records) };
+    assert.throws(() => analyzeRustStoredFields(missingSelected, [node], createRustStoredFieldProducer(() => {})),
+      error => error?.diagnostic?.code === "TSONIC_INTERNAL_ANALYSIS_INVARIANT" &&
+        error.diagnostic.sourceNode === node && error.diagnostic.message ===
+          "A source field requires its exact selected native operation and optional result correspondence.",
+      "the original missing-selected-property case is rejected at its actual pre-seal owner");
   }
 });

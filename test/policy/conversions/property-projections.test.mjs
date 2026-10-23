@@ -10,6 +10,9 @@ import { rustStructuralObjectTargetType } from "../../../dist/target-model/types
 import { planRustPropertyValueProjection } from "../../../dist/backend/planner/expressions/property-value-projection.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 import { fakeAstReader, fakeSourceFile, fakeStatement } from "../../helpers/fake-compile-input.mjs";
+import { rustProgramWithTypeEmissions } from "../../helpers/plan-context.mjs";
+import { analyzeRustPropertyValueProjection } from "../../../dist/analysis/conversions/property-value-projection.js";
+import { createRustPropertyValueProjectionProducer } from "../../../dist/analysis/program/records/property-value-projection.js";
 
 function fixture() {
   const scalar = rustSourcePrimitiveTargetType("uint64");
@@ -72,6 +75,7 @@ test("property planning rejects absent or carrier-conflicting sealed native read
     storage: "structural-object", storageIndex: 0, valueSemantics: { kind: "stored" } };
   const projection = { source: input.source, conversion: input.conversion, reads: [read] };
   const fact = { conversion: input.conversion, cases: [projection] };
+  const base = rustProgramWithTypeEmissions([], { surfaces: ["js"] });
   for (const selected of [
     undefined,
     { ...fact, cases: [] },
@@ -80,11 +84,28 @@ test("property planning rejects absent or carrier-conflicting sealed native read
     { ...fact, cases: [{ ...projection, reads: [{ ...read, resultCarrier: rustSourcePrimitiveTargetType("int64") }] }] },
     { ...fact, cases: [{ ...projection, reads: [{ ...read, receiverCarrier: input.scalar }] }] },
   ]) {
-    const context = { input: { program: { source: { ast: fakeAstReader([sourceFile]) },
-      records: createRustRecordFixture({ propertyProjection: { get: () => selected } }) } }, sourceFile,
-      syntheticNames: { reserved: new Set(), nextSuffixByBase: new Map() }, diagnostics: [] };
-    assert.equal(planRustPropertyValueProjection(contract, { kind: "path", path: "input" }, context, node,
-      () => assert.fail("conflicting native reads must reject before conversion planning")) === undefined, true);
-    assert.equal(context.diagnostics.length, 1, "conflicting evidence rejects before native construction");
+    const producer = createRustPropertyValueProjectionProducer(() => {});
+    const program = { ...base, source: { ...base.source, ast: fakeAstReader([sourceFile]) },
+      records: createRustRecordFixture({ propertyProjection: { get: subject => subject === node ? selected : undefined } }, base.records) };
+    const issues = analyzeRustPropertyValueProjection(program, [node], producer);
+    if (selected === undefined || selected.cases.length === 0) {
+      assert.equal(issues.length, 0, "an absent raw demand publishes no projection");
+      assert.equal(producer.records.propertyValueProjection.get(node, input.source) === undefined, true);
+      const context = { input: { program: { ...program, records: { ...program.records, ...producer.records } } }, sourceFile,
+        syntheticNames: { reserved: new Set(), nextSuffixByBase: new Map() }, diagnostics: [] };
+      assert.throws(() => planRustPropertyValueProjection(contract, { kind: "path", path: "input" }, context, node,
+        () => assert.fail("missing native reads must reject before conversion planning")),
+      error => error?.diagnostic?.code === "TSONIC_INTERNAL_PLANNER_INVARIANT" &&
+        error.diagnostic.sourceNode === node && error.diagnostic.message ===
+          "An admitted native property projection requires its sealed member reads and native bindings.");
+      assert.equal(context.diagnostics.length, 0, "missing sealed evidence is not a second source rejection");
+    } else {
+      assert.equal(issues.length, 1, "the pre-seal owner rejects conflicting native reads exactly once");
+      assert.equal(issues[0].code, "RUST_MISSING_TARGET_FACT");
+      assert.equal(issues[0].sourceNode === node, true, "the identical original source demand is rejected");
+      if (selected.cases.length === 1)
+        assert.equal(producer.records.propertyValueProjection.get(node, input.source) === undefined, true,
+          "a conflicting native read is never admitted");
+    }
   }
 });

@@ -58,7 +58,8 @@ test("source-call validation rejects stale or forged result correspondence", () 
   assert.equal(matches({ ...fact, resultCarrier: base }), false);
   assert.equal(matches({ ...fact, resultProjection: { ...projection, extra: true } }), false);
   assert.equal(matches(fact, { ...selected, sourceResultProjection: { ...projection, projection: { ...route, slot: "unrelated" } } }), false);
-  assert.equal(sourceCallSelectedMemberMatches(fact, selected, base, carrier => carrier, undefined,
+  assert.equal(sourceCallSelectedMemberMatches(fact, selected, base, carrier => carrier,
+    { ...projectTypes, definitionForCarrier: () => undefined },
     [], emptyRustTypeDefinitions, new Map()), false);
 });
 

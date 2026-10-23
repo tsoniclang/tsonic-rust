@@ -1,8 +1,8 @@
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
-import { rustValueConversionContract } from "../../conversions/contracts.js";
 import type { RustFinalizedSourceInput } from "../../../target-model/records/finalized-operation.js";
 
 export function rustProviderInputBorrowMode(input: RustFinalizedSourceInput): "ref" | "mut-ref" | undefined {
+  if (input.sharedConversion) return "ref";
   if (input.conversion.kind === "identity") {
     if (input.mode !== "value") return input.mode;
     return input.sourceCarrier.kind === "reference" && !input.sourceCarrier.mutable &&
@@ -11,12 +11,5 @@ export function rustProviderInputBorrowMode(input: RustFinalizedSourceInput): "r
       rustTargetTypeRefEquals(input.sourceCarrier, input.conversion.targetCarrier) &&
       rustTargetTypeRefEquals(input.sourceCarrier, input.parameterCarrier) ? "ref" : undefined;
   }
-  if (input.conversion.kind !== "semantic" || input.mode !== "value") return undefined;
-  const contract = rustValueConversionContract(input.conversion.conversion);
-  return contract?.category === "ownership" && contract.sourceMode === "ref" &&
-    !contract.fallible && !input.conversion.fallible &&
-    rustTargetTypeRefEquals(contract.source, input.sourceCarrier) &&
-    rustTargetTypeRefEquals(contract.source, input.conversion.sourceCarrier) &&
-    rustTargetTypeRefEquals(contract.target, input.conversion.targetCarrier) &&
-    rustTargetTypeRefEquals(contract.target, input.parameterCarrier) ? contract.sourceMode : undefined;
+  return undefined;
 }

@@ -33,7 +33,7 @@ for (const surfaces of [[], ["js"]]) {
     const selected = new Map();
     const visit = node => {
       const emission = program.records.binaryEmission.get(node);
-      if (emission?.operator === "==") {
+      if (emission?.operator === "==" && program.source.ast.is.IsIdentifier(emission.left)) {
         const subject = program.source.ast.text(emission.left);
         if (subject === "value" || subject === "left") selected.set(subject, emission);
       }

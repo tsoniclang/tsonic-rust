@@ -10,6 +10,7 @@ import { planExpression } from "./entry.js";
 import { lowerNestedRustValueConversion } from "./value-conversions.js";
 import { planRustOperatorCallExpression } from "./binary.js";
 import { negateRustPlannedBooleanExpression } from "./fundamentals.js";
+import { rustValueBlock, type RustValueBlockEntry } from "../../target-ast/syntax/value-block.js";
 
 export function planRustUnionEquality(node: Node,
   _fact: Extract<RustTargetOperationFact, { readonly kind: "union-equality" }>, context: RustPlanContext): RustExpr {
@@ -19,19 +20,26 @@ export function planRustUnionEquality(node: Node,
     ?? failRustPlannerInvariant("An admitted union equality requires its selected native operand reads.", node);
   const fact = selected.fact;
   const { left: leftNode, right: rightNode } = emission;
-  if (context.syntheticNames === undefined)
+  const names = context.syntheticNames;
+  if (names === undefined)
     failRustPlannerInvariant("An admitted union equality requires its source operands and native binding scope.", node);
-  const operand = (subject: Node, shared: boolean): RustExpr => {
+  const bindings: RustValueBlockEntry[] = [];
+  const bindOperands = !emission.leftShared || !emission.rightShared;
+  const operand = (subject: Node, shared: boolean, name: string): RustExpr => {
     const value = planExpression(subject, context, "value", shared ? "shared-reference" : "value")
       ?? failRustPlannerInvariant("An admitted union equality requires its native operand.", subject);
-    return shared ? value : { kind: "reference", expr: value };
+    if (!bindOperands) return value;
+    const binding = allocateRustSyntheticName(names, name);
+    bindings.push({ name: binding, value });
+    const captured: RustExpr = { kind: "path", path: binding };
+    return shared ? captured : { kind: "reference", expr: captured };
   };
-  const left = operand(leftNode, emission.leftShared);
-  const right = operand(rightNode, emission.rightShared);
+  const left = operand(leftNode, emission.leftShared, "comparison_left");
+  const right = operand(rightNode, emission.rightShared, "comparison_right");
   const arms: Extract<RustExpr, { readonly kind: "match" }>["arms"][number][] = [];
   for (const arm of selected.arms) {
-    const leftName = allocateRustSyntheticName(context.syntheticNames, "left");
-    const rightName = allocateRustSyntheticName(context.syntheticNames, "right");
+    const leftName = allocateRustSyntheticName(names, "left");
+    const rightName = allocateRustSyntheticName(names, "right");
     const leftPattern = planEqualityPattern(arm.left, leftName, context);
     const rightPattern = planEqualityPattern(arm.right, rightName, context);
     const operand = (side: RustUnionEqualityOperand, name: string): RustExpr => side.value.kind === "constant"
@@ -68,7 +76,8 @@ export function planRustUnionEquality(node: Node,
     if (!fact.exhaustive) arms.push({ pattern: { kind: "wildcard" }, expression: { kind: "bool-literal", value: false } });
     result = { kind: "match", expression: input, arms };
   }
-  return fact.negated ? negateRustPlannedBooleanExpression(node, result, context) : result;
+  const comparison = fact.negated ? negateRustPlannedBooleanExpression(node, result, context) : result;
+  return bindings.length === 0 ? comparison : rustValueBlock(bindings, comparison);
 }
 
 function planEqualityPattern(side: RustUnionEqualityOperand, name: string, context: RustPlanContext): RustPattern {

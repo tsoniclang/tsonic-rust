@@ -1,8 +1,8 @@
 import { type Node, type SourceFile, type Type } from "@tsonic/tsts";
 import { rustCallableTargetForSourceLifetime } from "../../policy/conversions/value-carrier-reconciliation.js";
 import { rustProgramNodeIsOutsideNativeCode } from "../control-flow/compile-time-statements.js";
-import { isSourceCallableBodyBoundary, sourceBoundTypeRelationship, KindOmittedExpression, Node_Expression, type SourceLiteralValue } from "@tsonic/target-api/source";
-import { type TargetDiagnostic, failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
+import { isSourceCallableBodyBoundary, sourceBoundTypeRelationship, sourceSequenceInputChoice, sourceSequenceInputIsEmpty, KindOmittedExpression, Node_Expression, type SourceLiteralValue } from "@tsonic/target-api/source";
+import { type TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import { type RustAnalysisProgram } from "../program/model.js";
 import { type RustArrayLiteralProducer } from "../program/records/array-literals.js";
 import { type RustBorrowedSequenceEmission } from "../../target-model/records/array-literals.js";
@@ -26,17 +26,28 @@ import { rustBorrowedSequenceElementCandidates, selectRustBorrowedSequenceInput 
 import { collectRustArrayElementStorageDemands } from "../storage/array-storage.js";
 import { selectRustInferredNumericArrayElement } from "../../policy/types/collections/array-elements.js";
 import { selectRustArrayElementStorage } from "../../policy/types/collections/array-storage.js";
+import { hasExactObjectKeys, isClosedMetadata, isDenseDataArray } from "../../target-model/metadata/closed-data.js";
+import { rustEffectiveValueCarrier } from "../conversions/value-carrier-queries.js";
 
 export function analyzeRustArrayLiterals(program: Omit<RustAnalysisProgram, "reachability">,
   nodes: readonly Node[], producer: RustArrayLiteralProducer): readonly TargetDiagnostic[] {
   const issues: TargetDiagnostic[] = [];
+  const refuse = (node: Node): void => {
+    issues.push({ code: "RUST_MISSING_TARGET_FACT", category: "error", source: "tsonic-rust", sourceNode: node,
+      message: `Array construction requires exact source contributions, native storage and element conversions. Node kind: ${program.source.ast.kindName(node)}.`,
+      evidence: ["target.capability=rust.backend.array-literal"] });
+  };
   for (const node of nodes) {
     if (rustProgramNodeIsOutsideNativeCode(program, node)) continue;
     const literal = program.records.targetOperation.get(node);
     if (literal?.kind !== "array-literal") continue;
+    if (!arrayLiteralMatchesSource(program, node, literal)) { refuse(node); continue; }
     let owner: Node | undefined = program.source.ast.parent(node);
     while (owner !== undefined && !isSourceCallableBodyBoundary(program.source.ast, owner)) owner = program.source.ast.parent(owner);
     const body = owner !== undefined && program.records.callableDeclaration.get(owner)?.nativeBody !== undefined ? true : undefined;
+    const pending: { readonly input: import("../../target-model/records/borrowed-sequences.js").RustBorrowedSequenceInput;
+      readonly inputs: RustBorrowedSequenceEmission["inputs"] }[] = [];
+    let valid = true;
     for (const contribution of literal.contributions) {
       if (contribution.kind !== "spread" || producer.records.borrowedSequenceEmission.get(contribution.input, literal.elementCarrier) !== undefined) continue;
       const branches: RustBorrowedSequenceEmission["inputs"][number][] = [];
@@ -44,23 +55,63 @@ export function analyzeRustArrayLiterals(program: Omit<RustAnalysisProgram, "rea
         if (input.kind === "empty") { branches.push(Object.freeze({ kind: "empty" })); continue; }
         const contract = rustValueConversionContract(input.conversion, program.typeDefinitions);
         if (contract?.lowering !== "rest-sequence" || !rustTargetTypeRefEquals(contract.source, input.presentCarrier) ||
-          !rustTargetTypeRefEquals(contract.target, rustVecTargetType(literal.elementCarrier)))
-          failTargetAnalysisInvariant("tsonic-rust", "An admitted source array spread requires its exact native element conversion.", input.expression);
+          !rustTargetTypeRefEquals(contract.target, rustVecTargetType(literal.elementCarrier))) {
+          refuse(node); valid = false; break;
+        }
         const clone = contract.cloneSources.every(carrier => owner === undefined ? program.records.carrierRead.get(carrier)?.clone === true
           : program.records.carrierClone.get(carrier, owner, body) === true);
         if (!clone) {
           issues.push({ code: "RUST_MISSING_TARGET_FACT", category: "error", source: "tsonic-rust", sourceNode: node,
             message: `Borrowed sequence selection lost its exact native presence, storage or element conversion. Node kind: ${program.source.ast.kindName(node)}.`,
             evidence: ["target.capability=rust.backend.borrowed-sequence"] });
-          continue;
+          valid = false; break;
         }
         branches.push(Object.freeze({ kind: "sequence", expression: input.expression, optional: input.optional, contract,
           mode: input.optional || contract.collection === "js-array" || input.presentCarrier.kind === "reference" ? "shared-receiver" : "shared-reference" }));
       }
-      producer.borrowed(contribution.input, literal.elementCarrier, { inputs: Object.freeze(branches) });
+      if (!valid) break;
+      pending.push({ input: contribution.input, inputs: Object.freeze(branches) });
     }
+    if (valid) for (const input of pending) producer.borrowed(input.input, literal.elementCarrier, { inputs: input.inputs });
   }
   return Object.freeze(issues);
+}
+
+function arrayLiteralMatchesSource(program: Omit<RustAnalysisProgram, "reachability">, node: Node,
+  literal: Extract<RustTargetOperationFact, { readonly kind: "array-literal" }>): boolean {
+  const { ast } = program.source;
+  const sources = ast.elements(node);
+  if (!hasExactObjectKeys(literal, ["kind", "operationId", "lane", "elementCarrier", "resultCarrier", "length", "contributions"]) ||
+    !isDenseDataArray(literal.contributions) || literal.contributions.length !== sources.length || literal.length !== sources.length ||
+    (literal.lane !== "native" && literal.lane !== "js") ||
+    literal.operationId !== `tsonic.rust.js.array-literal.${literal.lane}` ||
+    !rustTargetTypeRefEquals(literal.resultCarrier, rustArrayLiteralCarrier(literal.elementCarrier, literal.lane)) ||
+    !rustTargetTypeRefEquals(literal.resultCarrier, program.records.runtimeCarrier.get(node)?.carrier)) return false;
+  return literal.contributions.every((contribution, index) => {
+    const source = sources[index];
+    if (contribution === undefined || source === undefined || ast.kindName(source) === KindOmittedExpression) return false;
+    if (hasExactObjectKeys(contribution, ["kind", "carrier"])) return contribution.kind === "value" &&
+      !ast.is.IsSpreadElement(source) && rustTargetTypeRefEquals(contribution.carrier, rustEffectiveValueCarrier(program.records, source));
+    if (!hasExactObjectKeys(contribution, ["kind", "input"]) || contribution.kind !== "spread" || !ast.is.IsSpreadElement(source)) return false;
+    const input = contribution.input;
+    const operand = Node_Expression(ast, source);
+    if (input === undefined || !hasExactObjectKeys(input, ["expression", "controlNodes", "inputs"]) || input.expression !== operand ||
+      !isDenseDataArray(input.controlNodes) || !isDenseDataArray(input.inputs) || operand === undefined) return false;
+    const choice = sourceSequenceInputChoice(ast, operand);
+    if (choice === undefined || input.inputs.length !== choice.inputs.length || input.controlNodes.length !== choice.controlNodes.length ||
+      !input.controlNodes.every((control, position) => control === choice.controlNodes[position])) return false;
+    return input.inputs.every((branch, position) => {
+      const expression = choice.inputs[position];
+      if (branch === undefined || expression === undefined) return false;
+      if (hasExactObjectKeys(branch, ["kind", "expression"])) return branch.kind === "empty" &&
+        branch.expression === expression && sourceSequenceInputIsEmpty(ast, expression);
+      if (!hasExactObjectKeys(branch, ["kind", "expression", "carrier", "presentCarrier", "optional", "conversion"]) ||
+        branch.kind !== "sequence" || branch.expression !== expression || sourceSequenceInputIsEmpty(ast, expression) ||
+        !rustTargetTypeRefEquals(branch.carrier, rustEffectiveValueCarrier(program.records, expression)) || !isClosedMetadata(branch.conversion)) return false;
+      const optional = rustOptionElementCarrier(branch.carrier);
+      return branch.optional === (optional !== undefined) && rustTargetTypeRefEquals(branch.presentCarrier, optional ?? branch.carrier);
+    });
+  });
 }
 
 export function resolveArrayLiteralCarrier(

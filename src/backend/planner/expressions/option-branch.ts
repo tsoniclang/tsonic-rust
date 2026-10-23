@@ -39,11 +39,13 @@ export function planRustOptionBranch(option: RustExpr, carrier: TargetTypeRef, p
     failRustPlannerInvariant("An admitted optional branch requires its native storage and name scope.", context.callableDeclaration ?? context.sourceFile);
   const storedName = allocateRustSyntheticName(context.syntheticNames, "optional_storage");
   const stored: RustExpr = { kind: "path", path: storedName };
+  const payload = planRustOptionalStorageOperation(carrier, "into_present", [stored], context);
   return rustValueBlock([{ name: storedName, value: option }], {
     kind: "conditional",
     condition: planRustOptionalStorageOperation(carrier, "is_absent", [{ kind: "reference", expr: stored }], context),
     whenTrue: absent,
-    whenFalse: rustValueBlock([{ name: presentName, value: planRustOptionalStorageOperation(carrier, "into_present", [stored], context) }], present),
+    whenFalse: present.kind === "path" && present.path === presentName && (present.genericArguments?.length ?? 0) === 0
+      ? payload : rustValueBlock([{ name: presentName, value: payload }], present),
   });
 }
 

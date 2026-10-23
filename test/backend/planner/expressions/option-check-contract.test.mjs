@@ -5,10 +5,15 @@ import test from "node:test";
 import { analyzeRust } from "../../../helpers/rust-session.mjs";
 
 import { planBinaryExpression } from "../../../../dist/backend/planner/expressions/binary.js";
-import { planOptionalChainExpression } from "../../../../dist/backend/planner/expressions/optional-chains.js";
 import { createRustSyntheticNameState } from "../../../../dist/backend/planner/names/synthetic.js";
+import { analyzeRustBinaryEmission } from "../../../../dist/analysis/operations/binary-emission.js";
+import { createRustBinaryEmissionProducer } from "../../../../dist/analysis/program/records/expression-binary.js";
+import { analyzeRustOptionalChainEmission } from "../../../../dist/analysis/operations/optional-chains.js";
+import { createRustOptionalChainEmissionProducer } from "../../../../dist/analysis/program/records/optional-chain-emission.js";
+import { analyzeRustNullishCoalescing } from "../../../../dist/analysis/operations/nullish-coalescing.js";
+import { createRustNullishCoalescingProducer } from "../../../../dist/analysis/program/records/nullish-coalescing.js";
 
-test("sealed option checks reject missing, duplicate, unordered and impossible nullish depths", () => {
+test("option-check admission rejects missing, duplicate, unordered and impossible nullish depths", () => {
   const { program } = analyzeRust({ surfaces: ["js"], files: { "index.ts": `
 export function missing(values: (number | undefined)[]): boolean {
   return values[0] === undefined;
@@ -39,26 +44,23 @@ export function missing(values: (number | undefined)[]): boolean {
   assert.ok(planBinaryExpression(node, valid));
   assertNoTargetDiagnostics(valid.diagnostics);
   for (const nullishDepths of [undefined, [], [-1], [0.5], [NaN], [Infinity], [2], [0, 0], [1, 0]]) {
-    const selected = context(createRustRecordFixture({
+    const records = createRustRecordFixture({
 targetOperation: { get: (subject) => subject === node
-    ? { ...fact, nullishDepths } : program.records.targetOperation.get(subject) }}, program.records));
-    let failure;
-    try {
-      planBinaryExpression(node, selected);
-    } catch (error) {
-      failure = error;
-    }
-    assert.equal(failure?.diagnostic?.code, "TSONIC_INTERNAL_PLANNER_INVARIANT");
-    assert.equal(failure.diagnostic.source, "tsonic-rust");
-    assert.equal(failure.diagnostic.category, "error");
-    assert.equal(failure.diagnostic.message,
-      "Option nullish depths must be ordered, unique and contained in the exact operand carrier.");
-    assert.equal(failure.diagnostic.sourceNode === node, true, "the exact option-check identity");
-    assert.equal(selected.diagnostics.length, 0, "no source rejection for malformed producer depths");
+    ? { ...fact, nullishDepths } : program.records.targetOperation.get(subject) }}, program.records);
+    const producer = createRustBinaryEmissionProducer(() => {});
+    const issues = analyzeRustBinaryEmission({ ...program, records }, [node], producer);
+    assert.equal(issues.length, 1, "malformed producer depths reject exactly once before sealing");
+    assert.equal(issues[0].code, "RUST_MISSING_TARGET_FACT");
+    assert.equal(issues[0].source, "tsonic-rust");
+    assert.equal(issues[0].category, "error");
+    assert.equal(issues[0].message,
+      "Option nullish depths must be ordered, unique and contained in the exact operand carrier. Node kind: KindBinaryExpression.");
+    assert.equal(issues[0].sourceNode === node, true, "the exact option-check identity");
+    assert.equal(producer.records.binaryEmission.get(node) === undefined, true, "no invalid depths reach the planner");
   }
 });
 
-test("sealed optional chains reject missing, altered and impossible guard depths", () => {
+test("optional-chain admission rejects missing, altered and impossible guard depths", () => {
   const { program } = analyzeRust({ surfaces: ["js"], files: { "index.ts": `
 export function read(values: (string | undefined)[]): void {
   const length = values[0]?.length;
@@ -80,19 +82,18 @@ export function read(values: (string | undefined)[]): void {
     const records = createRustRecordFixture({
 optionalChain: { get: (subject) => subject === node
     ? { ...fact, guardDepth } : program.records.optionalChain.get(subject) }}, program.records);
-    const context = { input: { program: { ...program, records } }, diagnostics: [],
-      sourceFile: ast.getSourceFile(node) };
-    const result = planOptionalChainExpression(node, context, "property", () => {
-      assert.fail("invalid guard cannot reach inner operation planning");
-    });
-    assert.equal(result, undefined);
-    assert.equal(context.diagnostics.length, 1);
-    assert.equal(context.diagnostics[0].code, "RUST_MISSING_TARGET_FACT");
-    assert.ok(context.diagnostics[0].evidence.includes("target.capability=rust.backend.optional-chain-contract"));
+    const producer = createRustOptionalChainEmissionProducer(() => {});
+    const issues = analyzeRustOptionalChainEmission({ ...program, records }, [node], producer);
+    assert.equal(issues.length, 1);
+    assert.equal(issues[0].code, "RUST_MISSING_TARGET_FACT");
+    assert.ok(issues[0].evidence.includes("target.capability=rust.backend.optional-chain-contract"));
+    assert.equal(issues[0].sourceNode === node, true, "the guard rejection retains its checked subject");
+    assert.equal(producer.records.optionalChainEmission.get(node) === undefined, true,
+      "invalid guards never reach inner operation planning");
   }
 });
 
-test("sealed coalescing rejects missing and inconsistent source Option depths", () => {
+test("coalescing admission rejects missing and inconsistent source Option depths", () => {
   const { program } = analyzeRust({ surfaces: ["js"], files: { "index.ts": `
 export function read(values: (string | undefined)[]): string {
   return values[0] ?? "missing";
@@ -131,12 +132,15 @@ export function read(values: (string | undefined)[]): string {
     { leftConversion: { kind: "numeric-promotion", source: "int32", target: "int64" } },
   ];
   for (const mutation of mutations) {
-    const selected = context(createRustRecordFixture({
+    const records = createRustRecordFixture({
 targetOperation: { get: (subject) => subject === node
-    ? { ...fact, ...mutation } : program.records.targetOperation.get(subject) }}, program.records));
-    assert.equal(planBinaryExpression(node, selected), undefined);
-    assert.equal(selected.diagnostics.length, 1);
-    assert.equal(selected.diagnostics[0].code, "RUST_MISSING_TARGET_FACT");
-    assert.ok(selected.diagnostics[0].evidence.includes("target.capability=rust.backend.option-coalesce-depth"));
+    ? { ...fact, ...mutation } : program.records.targetOperation.get(subject) }}, program.records);
+    const producer = createRustNullishCoalescingProducer(() => {});
+    const issues = analyzeRustNullishCoalescing({ ...program, records }, [node], producer);
+    assert.equal(issues.length, 1);
+    assert.equal(issues[0].code, "RUST_MISSING_TARGET_FACT");
+    assert.ok(issues[0].evidence.includes("target.capability=rust.backend.option-coalesce-depth"));
+    assert.equal(issues[0].sourceNode === node, true, "the original coalescing expression owns its rejection");
+    assert.equal(producer.records.nullishCoalescing.get(node) === undefined, true, "invalid coalescing never reaches rendering");
   }
 });

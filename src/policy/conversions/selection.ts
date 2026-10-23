@@ -97,7 +97,8 @@ export function selectRustSourceValueConversion(
   }
   if (targetOptionElement !== undefined && sourceOptionElement === undefined && !isRustAbsenceCarrier(source)) {
     const elementConversion = selectRustSourceValueConversion(source, targetOptionElement, definitions, nextAncestors);
-    if (elementConversion !== undefined && elementConversion.kind !== "option-map" && elementConversion.kind !== "option-some") {
+    if (elementConversion !== undefined && elementConversion.kind !== "option-map" && elementConversion.kind !== "option-some" &&
+      optionalPayloadConversionRetainsNativeLifetime(elementConversion, definitions)) {
       return { kind: "option-some", source, element: targetOptionElement, elementConversion };
     }
   }
@@ -108,7 +109,7 @@ export function selectRustSourceValueConversion(
       definitions, nextAncestors,
     );
     if (elementConversion === undefined || elementConversion.kind === "option-map" ||
-      elementConversion.kind === "option-some") {
+      elementConversion.kind === "option-some" || !optionalPayloadConversionRetainsNativeLifetime(elementConversion, definitions)) {
       return undefined;
     }
     return { kind: "option-map", elementConversion };
@@ -274,6 +275,11 @@ export function selectRustSourceAssertionConversion(
   if (nativeFloat !== undefined) return nativeFloat;
   const conversion = selectRustSourceValueConversion(source, target, definitions);
   return conversion ?? selectRustExactIntegerConversion(source, target);
+}
+
+function optionalPayloadConversionRetainsNativeLifetime(conversion: RustValueConversion, definitions: RustTypeDefinitions): boolean {
+  const contract = rustValueConversionContract(conversion, definitions);
+  return contract !== undefined && (contract.sourceMode !== "ref" || contract.target.kind !== "reference" || contract.source.kind === "reference");
 }
 
 export function selectRustUnionFoldConversion(

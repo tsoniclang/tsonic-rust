@@ -1,10 +1,12 @@
 import type { Node } from "@tsonic/tsts";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
+import { sourceTransparentExpressionOperand } from "@tsonic/target-api/source";
 import type { RustAnalysisProgram } from "../program/model.js";
+import type { RustProjectConstructionPlan } from "./construction-plan.js";
 import type { RustConstructionProducer } from "../program/records/construction.js";
 import type { RustConstructionPreparationSelection, RustConstructionProjection } from "../../target-model/records/construction.js";
-import type { RustProjectConstructorSignature } from "../../target-model/types/project-types.js";
+import type { RustProjectConstructorSignature, RustProjectTypeDefinition } from "../../target-model/types/project-types.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
 import { rustTargetIdentifier, isValidRustIdentifier } from "../../target-model/names/identifiers.js";
@@ -107,17 +109,33 @@ export function analyzeRustConstructionEmission(input: {
       preparations.set(point.node, Object.freeze({ ...selected, projections: Object.freeze(projections) }));
     }
     const declarations = [...new Set(plan.layers.flatMap(layer => layer.fields.map(field => field.declaration)))];
-    const mutableFieldLocals = new Set(declarations.filter(declaration => {
+    const localFieldDeclarations = new Set(plan.fields.filter(field => {
+      const binding = program.records.frameBindingDeclaration.get(field.declaration);
+      const deferred = binding !== undefined ? binding.initialization === "deferred"
+        : program.records.capturedFieldStorage.get(field.declaration)?.storage.initialization === "deferred";
+      return !deferred && !plan.layerHasEarlyReturn(field.owner) &&
+        (field.initializer !== undefined || field.externallyInitialized);
+    }).map(field => field.declaration));
+    const mutableInLayer = (declaration: Node, layer: RustProjectTypeDefinition | undefined): boolean => {
       const binding = program.records.frameBindingDeclaration.get(declaration);
-      if (binding !== undefined) return binding.storage === "value" && plan.mutatesUnpublishedField(declaration);
+      if (binding !== undefined) return binding.storage === "value" && plan.mutatesUnpublishedField(declaration, layer);
       if (program.records.capturedFieldStorage.get(declaration) !== undefined) return false;
-      if (plan.mutatesUnpublishedField(declaration)) return true;
-      if (!plan.accessesUnpublishedField(declaration)) return false;
+      if (plan.mutatesUnpublishedField(declaration, layer)) return true;
+      if (!plan.accessesUnpublishedField(declaration, layer)) return false;
       const dispatch = program.records.projectFieldDispatch.get(declaration);
       if (dispatch === undefined) failTargetAnalysisInvariant("tsonic-rust",
         "An accessed construction field requires its exact native content-mutation disposition.", declaration);
       return dispatch.mutableContent;
-    }));
+    };
+    const mutableFieldLocals = new Map<RustProjectTypeDefinition | undefined, ReadonlySet<Node>>();
+    mutableFieldLocals.set(undefined, new Set(plan.fields.filter(field => mutableInLayer(field.declaration,
+      localFieldDeclarations.has(field.declaration) ? field.owner : undefined)).map(field => field.declaration)));
+    for (const [index, layer] of plan.layers.entries()) {
+      const next = plan.layers[index + 1];
+      mutableFieldLocals.set(layer.definition, new Set(next === undefined ? [] : plan.fields
+        .filter(field => localFieldDeclarations.has(field.declaration) && mutableInLayer(field.declaration, next.definition))
+        .map(field => field.declaration)));
+    }
     input.producer.classDeclaration(definition.declaration, { definition, layers: plan.layers, fields: plan.fields, expressions: plan.expressions,
       points: new Map(plan.points.map(point => [point.node, point])),
       returns: new Map(plan.points.flatMap(point => {
@@ -126,14 +144,82 @@ export function analyzeRustConstructionEmission(input: {
       })),
       earlyReturnLayers: new Set(plan.layers.filter(layer => plan.layerHasEarlyReturn(layer.definition)).map(layer => layer.definition)),
       completingLayers: new Set(plan.layers.filter(layer => plan.layerCompletes(layer.definition)).map(layer => layer.definition)),
-      mutableFieldLocals,
+      localFieldDeclarations, mutableFieldLocals,
       unobservedInitializers: new Set(plan.fields.filter(field => (field.initializer !== undefined || field.externallyInitialized) &&
         !plan.observesInitialValue(field.declaration)).map(field => field.declaration)),
       physicalDeclarations: new Map(declarations.map(declaration => [declaration, program.objectRepresentations.receiverCaptures.storageDeclaration(declaration)])),
       retainedFieldIdentities: new Set(plan.fields.filter(field => program.frozenDataWrites.capturesFieldIdentity(field.declaration)).map(field => field.declaration)),
       retainedReferenceIdentities: retainedReferences,
-      completesNormally: plan.completesNormally, publishesReceiver: plan.publishesReceiver, mutatesPublishedFields: plan.mutatesPublishedFields,
+      completesNormally: plan.completesNormally, publishesReceiver: plan.publishesReceiver,
+      mutableReceiver: constructionReceiverNeedsMutableBinding(program, plan, preparations),
       emission: Object.freeze({ frame: plan.emission.frame, exposure: plan.emission.exposure, preparations }) });
   }
   return Object.freeze(issues);
+}
+
+function constructionReceiverNeedsMutableBinding(program: Omit<RustAnalysisProgram, "reachability">,
+  plan: RustProjectConstructionPlan, preparations: ReadonlyMap<Node, RustConstructionPreparationSelection>): boolean {
+  if (!plan.publishesReceiver) return false;
+  const representation = program.objectRepresentations.representationFor(plan.definition);
+  if (representation === undefined) failTargetAnalysisInvariant("tsonic-rust",
+    "A published construction receiver requires its exact native representation.", plan.definition.declaration);
+  if (representation.kind !== "value") return false;
+  const { ast } = program.source;
+  for (const preparation of preparations.values()) for (const projection of preparation.projections) {
+    if (projection.kind !== "receiver") continue;
+    const expression = projection.expression;
+    const operation = program.records.targetOperation.get(expression.node);
+    if (expression.kind !== "receiver" && (operation?.kind !== "source-field" || operation.storage !== "project-object" ||
+      operation.valueSemantics.kind !== "stored" || operation.declaration === undefined ||
+      program.objectRepresentations.receiverCaptures.storageDeclaration(operation.declaration) !== expression.declaration))
+      failTargetAnalysisInvariant("tsonic-rust", "A published construction field requires its exact admitted physical declaration.", expression.node);
+    if (expression.declaration !== undefined &&
+      (program.records.frameBindingDeclaration.get(expression.declaration) !== undefined ||
+        program.records.capturedFieldStorage.get(expression.declaration) !== undefined)) continue;
+    if (expression.kind !== "receiver" && operation?.kind === "source-field" && operation.accessMode !== "read") {
+      const storage = program.records.storedField.get(operation.storage, operation.receiverCarrier, operation.storageIndex);
+      if (storage === undefined) failTargetAnalysisInvariant("tsonic-rust",
+        "A published construction field write requires its admitted native storage.", expression.node);
+      if (storage.path !== undefined && storage.dispatch === undefined) return true;
+      if (storage.dispatch?.plan.write === undefined) failTargetAnalysisInvariant("tsonic-rust",
+        "A published construction field write requires its exact native write role.", expression.node);
+    }
+    const read = program.ownership.reads.get(expression.node)?.source;
+    if (read === undefined && (expression.kind === "receiver" || operation?.kind === "source-field" && operation.accessMode !== "write"))
+      failTargetAnalysisInvariant("tsonic-rust", "A published construction expression requires its exact native use role.", expression.node);
+    if (read?.kind === "borrow" && read.mutable) return true;
+    if (expression.kind !== "receiver") continue;
+    let receiver = expression.node;
+    let parent = ast.parent(receiver);
+    while (parent !== undefined && sourceTransparentExpressionOperand(ast, parent) === receiver) {
+      receiver = parent;
+      parent = ast.parent(receiver);
+    }
+    if (parent === undefined) continue;
+    const selectedReceiver = program.records.accessorReceiver.get(parent);
+    if (selectedReceiver?.receiver !== receiver) continue;
+    if (!selectedReceiver.value) failTargetAnalysisInvariant("tsonic-rust",
+      "A value construction accessor requires its actual native receiver representation.", parent);
+    const accessor = program.records.targetOperation.get(parent);
+    if (accessor?.kind !== "source-accessor" || accessor.receiver.kind !== "instance")
+      failTargetAnalysisInvariant("tsonic-rust", "A native construction accessor requires its selected instance operation.", parent);
+    const methods: Node[] = [];
+    if (accessor.accessMode !== "write") {
+      if (accessor.read === undefined) failTargetAnalysisInvariant("tsonic-rust",
+        "A native construction accessor read requires its admitted declaration.", parent);
+      methods.push(accessor.read.declaration);
+    }
+    if (accessor.accessMode !== "read") {
+      if (accessor.write === undefined) failTargetAnalysisInvariant("tsonic-rust",
+        "A native construction accessor write requires its admitted declaration.", parent);
+      methods.push(accessor.write.declaration);
+    }
+    for (const method of methods) {
+      const mode = program.records.selfMode.get(method);
+      if (mode === undefined) failTargetAnalysisInvariant("tsonic-rust",
+        "A native construction accessor requires its exact admitted self ABI.", parent);
+      if (mode.mode === "mut-ref") return true;
+    }
+  }
+  return false;
 }

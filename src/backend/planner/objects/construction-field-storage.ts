@@ -1,6 +1,7 @@
 import type { Node } from "@tsonic/tsts";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustAdmittedConstruction } from "../../../target-model/records/construction.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import type { RustValueFieldLocation } from "./value-fields.js";
@@ -22,9 +23,11 @@ export interface RustConstructionFieldStorage {
 export function rustConstructionFieldStorage(
   declaration: Node, carrier: TargetTypeRef, context: RustPlanContext, plan: RustAdmittedConstruction,
 ): RustConstructionFieldStorage {
+  const mutable = (plan.mutableFieldLocals.get(undefined)
+    ?? failRustPlannerInvariant("An admitted construction requires its exact initial native binding mutability.", declaration)).has(declaration);
   const binding = context.input.program.records.frameBindingDeclaration.get(declaration);
   if (binding !== undefined) return {
-    deferred: binding.initialization === "deferred", mutable: plan.mutableFieldLocals.has(declaration), retainedFieldOwner: false,
+    deferred: binding.initialization === "deferred", mutable, retainedFieldOwner: false,
     create: value => createRustFrameBindingValue(binding, value),
     createDeferred: () => ({ kind: "call", path: "core::cell::OnceCell::new", args: [] }),
     initialize: (owner, value) => initializeRustFrameBindingValue(binding, owner, value),
@@ -33,7 +36,7 @@ export function rustConstructionFieldStorage(
   };
   const storage = rustCapturedFieldStorage(declaration, context);
   return {
-    deferred: storage?.initialization === "deferred", mutable: plan.mutableFieldLocals.has(declaration), retainedFieldOwner: storage !== undefined,
+    deferred: storage?.initialization === "deferred", mutable, retainedFieldOwner: storage !== undefined,
     create: value => createRustCapturedField(storage, value),
     createDeferred: () => storage?.initialization === "deferred" ? createRustDeferredFieldOwner() : undefined,
     initialize: (owner, value) => initializeRustCapturedField(storage, owner, value),

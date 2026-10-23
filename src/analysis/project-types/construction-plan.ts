@@ -38,7 +38,6 @@ export interface RustProjectConstructionPlan extends RustConstructionPointQuerie
   readonly fields: readonly RustConstructionField[];
   readonly issues: readonly RustConstructionIssue[];
   readonly publishesReceiver: boolean;
-  readonly mutatesPublishedFields: boolean;
   readonly emission: RustConstructionEmissionPlan;
 }
 
@@ -185,8 +184,7 @@ export function analyzeRustProjectConstructions(input: RustConstructionAnalysisI
       mutatesUnpublishedField: readiness.mutatesUnpublishedField,
       accessesUnpublishedField: readiness.accessesUnpublishedField,
       observesInitialValue: readiness.observesInitialValue,
-      expressionsWithin: readiness.expressionsWithin, publishesReceiver: readiness.publishesReceiver,
-      mutatesPublishedFields: readiness.mutatesPublishedFields }));
+      expressionsWithin: readiness.expressionsWithin, publishesReceiver: readiness.publishesReceiver }));
   }
   return Object.freeze({ forDefinition: (definition: RustProjectTypeDefinition) => plans.get(definition),
     externalInitializationForCall: (call: Node) => externalInitializations.get(call),

@@ -15,6 +15,8 @@ import { validateValueConversion } from "../../../dist/providers/packages/valida
 import { rustJsIntlGroupingTargetId } from "../../../dist/target-model/types/carriers/source-types.js";
 import { fakeAstReader, fakeSourceFile, fakeStatement } from "../../helpers/fake-compile-input.mjs";
 import { visitConversionContract } from "../../../dist/analysis/reachability/generated-item-usage-helpers.js";
+import { selectRustUnionMappingEmission, selectRustUnionProjectionEmission } from "../../../dist/policy/conversions/union-mappings.js";
+import { rustProgramPlanContext, rustProgramWithTypeEmissions } from "../../helpers/plan-context.mjs";
 
 test("union mappings require complete exact coverage and reject forged or numeric-changing arms", () => {
   const integer = rustSourcePrimitiveTargetType("int64");
@@ -67,10 +69,10 @@ test("union mappings require complete exact coverage and reject forged or numeri
   assert.equal(validateRustFinalizedOperationAbi(abi), false);
   const node = fakeStatement({ kindName: "Identifier", pos: 0, end: 5 });
   const sourceFile = fakeSourceFile({ fileName: "/src/index.ts", text: "value", statements: [node] });
-  const context = { input: { program: { source: { ast: fakeAstReader([sourceFile]) }, typeDefinitions: definitions,
-    names: { nameForSourceType: (_file, name) => name }, configuration: { edition: "2024" } } },
-    sourceFile, diagnostics: [], moduleName: "index", moduleNameByFileName: new Map([["/src/index.ts", "index"]]),
-    externalCrateNameByFileName: new Map() };
+  const context = rustProgramPlanContext(rustProgramWithTypeEmissions([narrow, wide, wrong, string, integer, boolean], {
+    source: 'import type { int64, float64 } from "@tsonic/core/types.js";\ntype Narrow = string | int64;\ntype Wide = int64 | boolean | string;\ntype Wrong = string | float64;\nexport function probe(): void {}\n',
+    typeDefinitions: definitions,
+  }), { sourceFile });
   const expression = { kind: "call", path: "next", args: [] };
   for (const source of [wide, rustOptionTargetType(wide)]) {
     for (const target of [string, rustOptionTargetType(string)]) {
@@ -84,19 +86,23 @@ test("union mappings require complete exact coverage and reject forged or numeri
       assert.equal(projection.kind, "union-project");
       assert.equal(selected.variant.name, "Variant2");
       assert.equal(rustValueConversionContract(projection, definitions).lowering, "union-project");
-      const planned = planRustUnionProjection(node, expression, source, target, "move", context);
+      const emission = selectRustUnionProjectionEmission(source, target, definitions);
+      assert.equal(emission !== undefined, true, "the exact native projection is admitted before rendering");
+      const planned = planRustUnionProjection(node, expression, emission, "move", context);
       assert.equal(planned.kind, "match");
       assert.equal(planned.expression, expression);
       assert.equal(planned.arms.at(-1).expression.kind, "unreachable");
       assert.equal(planned.arms.length, target === string ? 2 : 3);
-      const borrowed = planRustUnionProjection(node, expression, source, target, "shared-reference", context);
       if (target === string) {
+        const borrowed = planRustUnionProjection(node, expression, emission, "shared-reference", context);
         assert.deepEqual(borrowed.expression, { kind: "reference", expr: expression });
         assert.equal(borrowed.arms[0].expression.kind, "path");
-        const cloned = planRustUnionProjection(node, expression, source, target, "clone", context);
+        const cloned = planRustUnionProjection(node, expression, emission, "clone", context);
         assert.equal(cloned.arms[0].expression.method, "clone");
       } else {
-        assert.equal(borrowed, undefined);
+        assert.throws(() => planRustUnionProjection(node, expression, emission, "shared-reference", context),
+          error => error?.diagnostic?.code === "TSONIC_INTERNAL_PLANNER_INVARIANT" &&
+            error.diagnostic.message === "An admitted native union projection requires its exact type, presence and read contract.");
       }
       assert.deepEqual(substituteRustValueConversion(projection, new Map()), projection);
     }
@@ -106,7 +112,9 @@ test("union mappings require complete exact coverage and reject forged or numeri
     assert.equal(rustValueConversionContract({ kind: "union-project", source: wide, target }, definitions), undefined);
   }
   for (const owned of [false, true]) {
-    const planned = planRustUnionMapping(node, expression, wide, narrow, narrowing, "target", owned, true, true, context);
+    const emission = selectRustUnionMappingEmission(wide, narrow, narrowing, "target", true, true, definitions);
+    assert.equal(emission !== undefined, true, "all narrowed native arms are admitted before rendering");
+    const planned = planRustUnionMapping(node, expression, emission, owned, context);
     assert.equal(planned.kind, "match");
     assert.deepEqual(planned.expression, owned ? expression : { kind: "reference", expr: expression });
     assert.deepEqual(planned.arms[2], { pattern: { kind: "path", path: "None" }, expression: { kind: "path", path: "None" } });
@@ -119,11 +127,13 @@ test("union mappings require complete exact coverage and reject forged or numeri
     widening.map((arm, index) => index === 0 ? { ...arm, target: [{ union: wide, variant: { kind: "payload", name: "Missing" } }] } : arm),
     widening.map((arm, index) => index === 0 ? { ...arm, carrier: boolean } : arm)]) {
     assert.equal(rustValueConversionContract({ ...conversion, arms }, definitions), undefined);
-    assert.equal(planRustUnionMapping(node, expression, narrow, wide, arms, "source", true, false, false, context), undefined);
+    assert.equal(selectRustUnionMappingEmission(narrow, wide, arms, "source", false, false, definitions), undefined,
+      "the same malformed arms are refused by the sole admission selector");
     assert.equal(validateRustFinalizedOperationAbi({ ...abi, targetArguments: [{ ...abi.targetArguments[0],
       conversion: { ...abi.targetArguments[0].conversion, conversion: { ...conversion, arms } } }] }, definitions), false);
   }
-  assert.equal(planRustUnionMapping(node, expression, wide, narrow, narrowing, "target", true, false, true, context), undefined);
+  assert.equal(selectRustUnionMappingEmission(wide, narrow, narrowing, "target", false, true, definitions), undefined,
+    "absence cannot be manufactured by native mapping admission");
 });
 
 test("unit variants preserve their native constant and reject broader payloads or malformed metadata", () => {
