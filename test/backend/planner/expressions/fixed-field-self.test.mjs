@@ -184,7 +184,7 @@ test("ordinary and lexical recursive callables do not inherit field-self evidenc
 
 test("field self overrides preserve unrelated storage and clone only owned value reads", () => {
   const unrelated = {};
-  const existing = { expression: { kind: "path", path: "other" }, carrier: stringCarrier, valueForm: "storage" };
+  const existing = { expression: { kind: "path", path: "other" }, carrier: stringCarrier, valueForm: "storage", storageForm: "plain" };
   const overrides = new Map([[unrelated, existing]]);
   const locations = new Map([[unrelated, {}]]);
   const owner = { kind: "path", path: "recursive" };

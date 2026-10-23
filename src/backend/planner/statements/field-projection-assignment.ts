@@ -36,7 +36,7 @@ export function planRustFieldProjectionAssignment(
   const overrides = new Map(context.expressionOverrides ?? []);
   for (const override of projection.overrides) overrides.set(override.node, override.value);
   const mutate = (storage: RustExpr): RustExpr | undefined => {
-    overrides.set(field.expression, { expression: storage, carrier: field.fact.resultCarrier, valueForm: "storage" });
+    overrides.set(field.expression, { expression: storage, carrier: field.fact.resultCarrier, valueForm: "storage", storageForm: "plain" });
     const selected = planRustDirectStorage(left, { ...context, expressionOverrides: overrides }, projection.inputOverrides);
     const takenValue: RustExpr = !dispatched
       ? { kind: "path", path: valueName }

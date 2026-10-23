@@ -23,11 +23,10 @@ export function planRustBorrowedElementRead(
   const overrides = new Map(context.expressionOverrides ?? []);
   const append = context.input.program.records.borrowedElementAppend.get(node);
   if (append === undefined) failRustPlannerInvariant("An admitted borrowed element requires its selected consumption mode.", node);
-  overrides.set(read.receiver, {
-    expression: append ? { kind: "reference", expr: { kind: "path", path: elementName } }
-      : { kind: "dereference", pointer: { kind: "path", path: elementName } },
-    carrier: rustStringTargetType(), valueForm: append ? "shared-reference" : "storage",
-  });
+  const element: RustExpr = { kind: "dereference", pointer: { kind: "path", path: elementName } };
+  overrides.set(read.receiver, append
+    ? { expression: { kind: "reference", expr: element }, carrier: rustStringTargetType(), valueForm: "shared-reference" }
+    : { expression: element, carrier: rustStringTargetType(), valueForm: "storage", storageForm: "borrow-guard" });
   const body = planRead(node, { ...context, expressionOverrides: overrides });
   return body === undefined ? undefined : rustValueBlock(bindings, body);
 }
@@ -43,7 +42,7 @@ export function planRustBorrowedElementLocal(
   const overrides = new Map(context.expressionOverrides ?? []);
   for (const reference of local.references) overrides.set(reference, {
     expression: { kind: "dereference", pointer: { kind: "path", path: name } },
-    carrier: rustStringTargetType(), valueForm: "storage",
+    carrier: rustStringTargetType(), valueForm: "storage", storageForm: "borrow-guard",
   });
   return {
     statements: bindings.map(binding => ({ kind: "let", name: binding.name, mutable: false, init: binding.value })),

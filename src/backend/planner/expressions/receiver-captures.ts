@@ -19,7 +19,7 @@ export function rustRecursiveReceiverFieldContext(
 ): RustPlanContext {
   const overrides = new Map(context.expressionOverrides ?? []);
   for (const reference of field.references) overrides.set(reference, {
-    expression: owner, carrier: field.carrier, valueForm: "storage",
+    expression: owner, carrier: field.carrier, valueForm: "storage", storageForm: "plain",
   });
   return { ...context, expressionOverrides: overrides };
 }
@@ -73,7 +73,7 @@ export function rustCapturedReceiverContext(
     const carrier = substituteRustTargetGenerics(capture.carrier, context.typeParameterSubstitutions ?? new Map(),
       context.lifetimeSubstitutions ?? new Map());
     for (const reference of capture.references) overrides.set(reference, {
-      expression: ownerFor(index), carrier, valueForm: "storage",
+      expression: ownerFor(index), carrier, valueForm: "storage", storageForm: "plain",
     });
   }
   return { ...context, expressionOverrides: overrides, projectDispatchRoot: undefined };

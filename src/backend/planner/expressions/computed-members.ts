@@ -39,7 +39,7 @@ export function prepareRustComputedMemberEvaluation(node: Node, context: RustPla
       expression: evaluation.receiver,
       carrier: effectivePlannedExpressionCarrier(fact.receiver, context)
         ?? failRustPlannerInvariant("An admitted computed accessor requires its native receiver carrier.", fact.receiver),
-      valueForm: "storage",
+      valueForm: "storage", storageForm: "plain",
     });
     return { bindings: [...evaluation.bindings, { name: keyName, value: evaluatedKey }], context: { ...context, expressionOverrides: overrides } };
   }

@@ -56,7 +56,7 @@ test("direct storage preserves exact lexical value overrides and selected captur
   const { node, declaration, carrier, context } = fixture("location");
   const expression = { kind: "path", path: "selected_value" };
   assert.equal(selected(node, { ...context, expressionOverrides: new Map([[node, {
-    expression, carrier, valueForm: "storage",
+    expression, carrier, valueForm: "storage", storageForm: "plain",
   }]]) }) === expression, true, "a lexical storage override owns its physical expression");
   for (const valueForm of ["owned", "shared-reference"]) {
     assert.equal(selected(node, { ...context, expressionOverrides: new Map([[node, {

@@ -32,7 +32,7 @@ export function run(): number { const value = new Value(4); return value.count; 
       syntheticNames: createRustSyntheticNameState(ast, node, []),
       expressionOverrides: new Map([[node, override]]),
     });
-    const override = { expression: storage, carrier: fact.resultCarrier, valueForm: "storage" };
+    const override = { expression: storage, carrier: fact.resultCarrier, valueForm: "storage", storageForm: "plain" };
     for (const access of ["read", "write"]) {
       const accepted = context(override);
       const location = planRustValueFieldLocation(node, accepted, access);

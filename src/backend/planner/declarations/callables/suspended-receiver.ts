@@ -16,7 +16,7 @@ export function planRustSuspendedReceiver(
   const name = allocateRustSyntheticName(context.syntheticNames, "receiver");
   const overrides = new Map(context.expressionOverrides);
   const override: RustEffectiveExpressionOverride = {
-    expression: { kind: "path", path: name }, carrier: receiver.carrier, valueForm: "storage",
+    expression: { kind: "path", path: name }, carrier: receiver.carrier, valueForm: "storage", storageForm: "plain",
   };
   for (const node of receiver.occurrences) overrides.set(node, override);
   return {

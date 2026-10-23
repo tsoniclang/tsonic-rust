@@ -36,7 +36,7 @@ export function planCompoundAssignmentExpression(node: Node, context: RustPlanCo
     if (operand.storage === "direct-identifier") {
       const expression = planRustDirectStorage(operand.node, context)
         ?? failRustPlannerInvariant("An admitted assignment storage operand requires its native place.", operand.node);
-      overrides.set(operand.node, { expression, carrier: operand.carrier, valueForm: "storage" });
+      overrides.set(operand.node, { expression, carrier: operand.carrier, valueForm: "storage", storageForm: "plain" });
       continue;
     }
     const storage = operand.storage === "direct" ? planRustDirectStorage(operand.node, context) : undefined;
