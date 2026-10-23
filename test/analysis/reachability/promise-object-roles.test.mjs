@@ -42,6 +42,7 @@ test("public package Promise adapters remain externally usable without a local c
 for (const live of [true, false]) {
   test(`generated union-method edges retain both Promise adapters only for ${live ? "live" : "dead"} calls`, () => {
     const { program } = analyzeRust({ surfaces: ["js"], target: { id: "rust", options: { outputType: "bin" } }, files: { "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
 class Left { async value(): Promise<int32> { return 1; } }
 class Right { async value(): Promise<int32> { return 2; } }
 function select(flag: boolean): Left | Right { return flag ? new Left() : new Right(); }
