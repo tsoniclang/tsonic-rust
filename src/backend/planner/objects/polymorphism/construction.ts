@@ -7,6 +7,7 @@ import { emptyRustGenerics } from "../../../target-ast/syntax/nodes.js";
 import { failRustPlannerInvariant } from "../../diagnostics.js";
 import { createRustSyntheticNameState } from "../../names/synthetic.js";
 import { planRustConstructionBody } from "../../declarations/classes/construction-body.js";
+import { requireRustConstructorContract } from "../../declarations/classes/constructor-contracts.js";
 import { planRustCallableParameters } from "../../declarations/callables/parameters.js";
 import { rustClassEnvironmentContext, rustClassEnvironmentParameter } from "../class-environments.js";
 import { rustErrorBoundaryForDeclaration, type RustPlanContext } from "../../program/plan-context.js";
@@ -43,7 +44,7 @@ export function planProjectClassConstructor(
   }
   const parameterPlan = constructor === undefined
     ? planRustImplicitConstructorParameters(selected.signature, native.carrier, context)
-    : planRustCallableParameters(native.constructorContract, context, syntheticNames);
+    : planRustCallableParameters(requireRustConstructorContract(native), context, syntheticNames);
   if (parameterPlan === undefined) failRustPlannerInvariant("An admitted native constructor requires its sealed parameters, environment and body.", definition.declaration);
   const environment = native.constructorEnvironment;
   const environmentParameter = environment === undefined ? undefined

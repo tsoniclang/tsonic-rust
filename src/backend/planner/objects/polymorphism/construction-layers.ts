@@ -3,6 +3,7 @@ import type { RustStmt } from "../../../target-ast/syntax/nodes.js";
 import { planRustCallableParameterPrelude, planRustCallableParameters,
   type RustCallableParameterPlan } from "../../declarations/callables/parameters.js";
 import type { RustConstructionBody } from "../../declarations/classes/construction-body.js";
+import { requireRustConstructorContract } from "../../declarations/classes/constructor-contracts.js";
 import { planExpression, planRustSelectedSourceCallArguments } from "../../expressions/index.js";
 import { failRustPlannerInvariant } from "../../diagnostics.js";
 import { allocateRustSyntheticName } from "../../names/synthetic.js";
@@ -55,7 +56,7 @@ export function planRustConstructionLayers(
       if (nativeBase === undefined) failRustPlannerInvariant("An admitted native base layer requires its sealed class parameters.", base.definition.declaration);
       const baseParameters = base.constructor === undefined
         ? planRustImplicitConstructorParameters(base.signature, baseStorage.carrier, baseContext)
-        : planRustCallableParameters(nativeBase.constructorContract, baseContext, syntheticNames);
+        : planRustCallableParameters(requireRustConstructorContract(nativeBase), baseContext, syntheticNames);
       const argumentsPlan = layer.baseCall === undefined
         ? { arguments: parameterPlan.params.map(parameter => ({ kind: "path" as const, path: parameter.name })), statements: [] }
         : planRustSelectedSourceCallArguments(layer.baseCall, layerContext);
