@@ -7,7 +7,7 @@ import { analyzeRustLiteralEmission } from "../../../../dist/analysis/operations
 import { createRustLiteralEmissionProducer } from "../../../../dist/analysis/program/records/literal-emission.js";
 import { planNumericLiteralWithCarrier, planBigIntLiteral } from "../../../../dist/backend/planner/expressions/literal-conversions.js";
 import { rustSourcePrimitiveTargetType } from "../../../../dist/target-model/types/index.js";
-import { fakeAstReader, fakeSourceFile, fakeStatement } from "../../../helpers/fake-compile-input.mjs";
+import { fakeAstReader, fakeCompileInput, fakeSourceFile, fakeStatement } from "../../../helpers/fake-compile-input.mjs";
 
 // Literal recipes are sealed by analyzeRustLiteralEmission for the literal's contextual carrier; the planner reads
 // the sealed recipe. Analysis refusals are the context's diagnostics.
@@ -27,9 +27,10 @@ function contextFor(text, kindName, carrier, provenance = "authored", sealedLite
     valueRead: { get: candidate => candidate === node ? { contextualInput: carrier } : undefined } }),
   literalValue: sealedLiteralValues ? literalValues.literalValue : { get: () => undefined } };
   const producer = createRustLiteralEmissionProducer(() => {});
-  const issues = analyzeRustLiteralEmission({ source: { ast: literals }, records,
-    safetyApplications: { operationForExpression: () => undefined } }, [node], producer);
-  return { node, context: { input: { program: { source: { ast: literals },
+  const source = { ...fakeCompileInput({ sourceFiles: [sourceFile] }).source, ast: literals };
+  const issues = analyzeRustLiteralEmission({ source, records, physicalEmissionContexts: { sourceOccurrences: [] },
+    safetyApplications: { operationForExpression: () => undefined } }, [node], producer, source);
+  return { node, context: { input: { program: { source,
     records: { ...records, literalEmission: producer.records.literalEmission } } }, sourceFile, diagnostics: [...issues] } };
 }
 

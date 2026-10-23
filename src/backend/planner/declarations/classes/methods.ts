@@ -299,6 +299,7 @@ function planProjectPromiseObjectMethod(
   const name = options?.targetName ?? emission.name;
   if (name === undefined) failRustPlannerInvariant("An admitted native method requires its complete syntax plan.", member);
   return { kind: "function", name, visibility: emission.visibility,
+    ...(callable.promiseObjectDeadCode === undefined ? {} : { deadCode: callable.promiseObjectDeadCode }),
     ...(isUnsafe ? { isUnsafe: true } : {}), ...(attrs.length === 0 ? {} : { attrs }),
     ...(isStatic ? {} : { selfParam: rustSelfParameter(selfMode!.mode) }),
     generics: genericPlan.finalizeGenerics(), params, returnType,
