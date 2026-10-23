@@ -261,7 +261,7 @@ function planConstructor(
     member ?? classDeclaration,
     [],
   );
-  const parameterPlan = planRustCallableParameters(requireRustConstructorContract(selected), context, syntheticNames);
+  const parameterPlan = planRustCallableParameters(requireRustConstructorContract(selected), context, syntheticNames, "source-body");
   if (parameterPlan === undefined) {
     failRustPlannerInvariant("An admitted native class requires its complete syntax and native storage plan.", classDeclaration);
   }

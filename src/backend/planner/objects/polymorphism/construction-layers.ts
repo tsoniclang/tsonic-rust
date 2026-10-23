@@ -56,7 +56,7 @@ export function planRustConstructionLayers(
       if (nativeBase === undefined) failRustPlannerInvariant("An admitted native base layer requires its sealed class parameters.", base.definition.declaration);
       const baseParameters = base.constructor === undefined
         ? planRustImplicitConstructorParameters(base.signature, baseStorage.carrier, baseContext)
-        : planRustCallableParameters(requireRustConstructorContract(nativeBase), baseContext, syntheticNames);
+        : planRustCallableParameters(requireRustConstructorContract(nativeBase), baseContext, syntheticNames, "source-body");
       const argumentsPlan = layer.baseCall === undefined
         ? { arguments: parameterPlan.params.map(parameter => ({ kind: "path" as const, path: parameter.name })), statements: [] }
         : planRustSelectedSourceCallArguments(layer.baseCall, layerContext);

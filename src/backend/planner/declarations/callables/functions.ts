@@ -44,6 +44,7 @@ export interface RustFunctionItemPlan {
 function planRustFunctionParameters(
   node: Node,
   inputContext: RustPlanContext,
+  use: Parameters<typeof planRustCallableParameters>[3],
 ) {
   const { ast } = inputContext.input.program.source;
   const syntheticNames = createRustSyntheticNameState(ast, node, []);
@@ -51,7 +52,7 @@ function planRustFunctionParameters(
   if (environment === undefined) failRustPlannerInvariant("An admitted callable requires its complete native function plan.", node);
   const declaration = inputContext.input.program.records.callableDeclaration.get(node);
   if (declaration === undefined) failRustPlannerInvariant("An admitted callable requires its sealed checked value parameters.", node);
-  const parameterPlan = planRustCallableParameters(declaration.contract, environment.context, syntheticNames);
+  const parameterPlan = planRustCallableParameters(declaration.contract, environment.context, syntheticNames, use);
   if (parameterPlan === undefined) failRustPlannerInvariant("An admitted callable requires its complete native function plan.", node);
   const leading = planRustCallableLeadingParameters(node, environment.context);
   if (leading === undefined) failRustPlannerInvariant("An admitted callable requires its complete native function plan.", node);
@@ -185,7 +186,7 @@ function planRustFunctionItem(
   if (genericPlan.preservesExplicitLifetimes) {
     declarationAttributes.push(rustLintAttributes.needlessLifetimes);
   }
-  const parameters = planRustFunctionParameters(node, context);
+  const parameters = planRustFunctionParameters(node, context, "source-body");
   if (parameters === undefined) failRustPlannerInvariant("An admitted callable requires its complete native function plan.", node);
   const { params, parameterPlan, syntheticNames } = parameters;
   context = parameters.context;
@@ -335,7 +336,7 @@ function planRustFunctionItem(
     return Object.freeze({ item, helper: undefined });
   const adapterGenerics = planRustCallableGenerics(node, functionContext, specialization, lexical?.genericParameters);
   if (adapterGenerics === undefined) failRustPlannerInvariant("An admitted callable requires its complete native function plan.", node);
-  const adapterParameters = planRustFunctionParameters(node, adapterGenerics.context);
+  const adapterParameters = planRustFunctionParameters(node, adapterGenerics.context, "signature");
   if (adapterParameters === undefined) failRustPlannerInvariant("An admitted callable requires its complete native function plan.", node);
   const adapterContext = adapterParameters.context;
   if (asyncFact?.kind !== "js-promise") failRustPlannerInvariant("An admitted Promise object adapter requires its selected async contract.", node);
