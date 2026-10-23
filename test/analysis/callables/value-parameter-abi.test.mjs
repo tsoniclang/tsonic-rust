@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { createTargetSourceProgram } from "@tsonic/target-api/source";
 import { analyzeRust } from "../../helpers/rust-session.mjs";
 
 for (const surfaces of [[], ["js"]]) {
@@ -10,7 +11,7 @@ for (const surfaces of [[], ["js"]]) {
     ["ordinary first value", "export function source(thisValue: number, label: string): number { return thisValue + label.length; } console.log(source(7, 'x'));", 2],
   ]) {
     test(`${label} ${name} publishes only checked native value parameters`, () => {
-      const { program } = analyzeRust({ surfaces, files: { "index.ts": text } });
+      const { source, program } = analyzeRust({ surfaces, files: { "index.ts": text } });
       assert.equal(program !== undefined, true, "the actual checked program is admitted");
       const { ast } = program.source;
       let declaration;
@@ -20,7 +21,7 @@ for (const surfaces of [[], ["js"]]) {
       };
       program.sourceFiles.forEach(visit);
       assert.equal(declaration !== undefined, true, "the original callable exists");
-      const checked = program.source.semantics.forNode(declaration).types.declarationSignatureInfo(declaration);
+      const checked = createTargetSourceProgram(source).semantics.forNode(declaration).types.declarationSignatureInfo(declaration);
       const pseudo = checked.thisParameter?.declaration;
       const emission = program.records.callableDeclaration.get(declaration);
       assert.equal(emission.parameters.length, expected, "the native value vector has no phantom receiver slot");

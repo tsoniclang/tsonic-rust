@@ -41,7 +41,7 @@ import { rustRuntimeErrorTargetType } from "../../target-model/types/carriers/ru
 import { rustJsRejectionErrorIdentity } from "../../target-model/records/error-effects.js";
 
 export interface RustAnalyzedErrorRegions extends Pick<RustErrorRegionRecords, "get" | "sourceFor" | "producerError"> {
-  lifecycleFor(root: RustInitializerSelection, owner: RustPhysicalErrorOwner): TargetStageResult<RustLifecycleErrorSelection>;
+  lifecycleFor(initializers: readonly RustInitializerSelection[], owner: RustPhysicalErrorOwner): TargetStageResult<RustLifecycleErrorSelection>;
   taskCompletionFor(node: Node): RustAwaitSelection<RustAwaitValueLeafFact> | undefined;
   complete(initialization: RustInitializationErrorRecords): RustErrorRegionRecords;
 }
@@ -256,7 +256,7 @@ export function analyzeRustErrorRegions(input: RustErrorTypeContext & {
     },
   });
   return diagnostics.length > 0 ? rejectedTargetStage(diagnostics) : resolvedTargetStage(Object.freeze({ ...reads,
-    lifecycleFor(root: RustInitializerSelection, owner: RustPhysicalErrorOwner): TargetStageResult<RustLifecycleErrorSelection> {
+    lifecycleFor(initializers: readonly RustInitializerSelection[], owner: RustPhysicalErrorOwner): TargetStageResult<RustLifecycleErrorSelection> {
       if (closed || lifecycleSelected) failTargetAnalysisInvariant("tsonic-rust", "The lifecycle error carrier has one selecting analysis owner before the error catalog seal.");
       lifecycleSelected = true;
       const file = input.sourceFiles.find(candidate => input.components.componentForFile(input.ast.getFileName(candidate))?.componentId === input.components.rootComponentId);
@@ -271,7 +271,9 @@ export function analyzeRustErrorRegions(input: RustErrorTypeContext & {
         const selected = sourceRegionFor(spawn.node, edge);
         if (selected !== undefined) pending.set(edge, selected);
       }
-      const rootLocal = root.error.kind === "package" || root.error.kind === "native" && root.error.sources.some(source => source.kind === "package") ||
+      const modules = new Map(initializers.flatMap(initializer => initializer.modules.map(module => [module.sourceFile, module] as const)));
+      const rootLocal = [...modules.values()].some(module => module.region.kind === "package" && module.region.localOwner !== undefined &&
+        closedMetadataKey(module.region.localOwner) === closedMetadataKey(owner)) ||
         input.binaryHooks.some(hook => hook.isFallible === true && hook.errorBoundary !== "provider-native") ||
         [...pending.values()].some(selected => selected.operand.localOwner !== undefined &&
           closedMetadataKey(selected.operand.localOwner) === closedMetadataKey(owner));
@@ -289,14 +291,14 @@ export function analyzeRustErrorRegions(input: RustErrorTypeContext & {
         native.set(identity, carrier);
         inspectCarrier(carrier);
       };
-      if (root.error.kind === "native") for (const source of root.error.sources) {
-        if (source.kind !== "module") continue;
-        const module = root.modules.find(candidate => candidate.sourceFile === source.sourceFile);
-        const carrier = module === undefined ? undefined : rustNativeErrorJoinTargetType(module.region.fileName,
+      for (const module of modules.values()) {
+        if (module.region.kind === "infallible" || module.region.kind === "package" && module.region.localOwner !== undefined &&
+          closedMetadataKey(module.region.localOwner) === closedMetadataKey(owner)) continue;
+        const carrier = rustNativeErrorJoinTargetType(module.region.fileName,
           [...module.region.localOwner === undefined ? [] : [rustProgramErrorTargetType(module.region.localOwner)],
             ...module.region.sources.map(selected => selected.errorType)]);
-        if (carrier === undefined) reject(source.sourceFile, "A native initializer requires its exact selected module error region.");
-        else add(source.identity, carrier, source.sourceFile);
+        if (carrier === undefined) reject(module.sourceFile, "A native initializer requires its exact selected module error region.");
+        else add(module.identity, carrier, module.sourceFile);
       }
       for (const [edge, selected] of pending) {
         const sourceOwner = selected.operand.localOwner;
