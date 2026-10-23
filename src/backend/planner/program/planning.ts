@@ -22,7 +22,7 @@ import { planRustBinaryHookCallPlan } from "./binary-hook-contexts.js";
 import { rustErrorBoundaryOperandType } from "../types/error-boundary.js";
 import { rustTypeFromCarrier } from "../types/carrier-syntax.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
-import { qualifyRustCrateType } from "../../target-ast/syntax/type-paths.js";
+import { qualifyRustReferenceType } from "../../target-ast/syntax/type-paths.js";
 import type { RustBinaryHookCallPlan } from "./binary-hook-contexts.js";
 import type {
   RustPlannedArtifact,
@@ -35,7 +35,7 @@ import {
 import {
   planRustSourcePackageErrors,
 } from "./source-package-errors.js";
-import { createRustSourcePackageTypeRenderingContext, planRustSourcePackageComponents } from "./source-package-components.js";
+import { createRustSourcePackageTypeRenderingContext, planRustSourcePackageComponents, rustSourcePackageReferenceScope } from "./source-package-components.js";
 import {
   materializeRustSourcePackageCrateArtifacts,
   planRustSourcePackageCargo,
@@ -218,7 +218,8 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
     typeRenderingContextFor(rootComponentPlan));
   if (selectedLifecycleError === undefined)
     failRustPlannerInvariant("An admitted binary lifecycle requires its exact sealed native error carrier.", entrySourceFile);
-  const lifecycleErrorType = qualifyRustCrateType(selectedLifecycleError, emission.configuration.crateName);
+  const binaryReferences = rustSourcePackageReferenceScope(typeRenderingContextFor(rootComponentPlan), emission.configuration.crateName);
+  const lifecycleErrorType = qualifyRustReferenceType(selectedLifecycleError, binaryReferences);
   const rootArtifacts = materializeRustSourcePackageCrateArtifacts(
     input,
     rootCrateContent,
@@ -293,7 +294,8 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
       if (hook.errorBoundary !== "provider-native") return rustErrorBoundaryOperandType(hook.errorBoundary, lifecycleErrorType);
       const providerErrorType = rustTypeFromCarrier(hook.errorCarrier);
       if (providerErrorType === undefined) failRustPlannerInvariant(`An admitted binary hook '${hook.path}' requires its renderable provider error type.`);
-      return rustErrorBoundaryOperandType(hook.errorBoundary, lifecycleErrorType, providerErrorType);
+      return rustErrorBoundaryOperandType(hook.errorBoundary, lifecycleErrorType,
+        qualifyRustReferenceType(providerErrorType, binaryReferences));
     };
     const executor = binaryExecution.kind === "native" ? binaryExecution.executor : undefined;
     const hookCalls = new Map<(typeof activeHooks)[number], RustBinaryHookCallPlan>();

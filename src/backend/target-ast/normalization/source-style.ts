@@ -278,7 +278,7 @@ function foldRustDirectLateInitializations(statements: readonly RustStmt[]): rea
     }
     folded.push(...run.filter(declaration => !foldedNames.has(declaration.name)), ...initialized);
   }
-  return foldRustLetAndReturn(foldRustConditionalLateInitializations(folded));
+  return foldRustConditionalLateInitializations(folded);
 }
 
 // `let x: T;` followed by an `if` whose every branch ends by assigning x is `let x: T = if c { … } else { … };`
@@ -348,16 +348,6 @@ function rustSyntaxReferencesPath(value: unknown, path: string): boolean {
   if (node.kind === "path" && node.path === path) return true;
   if (node.kind === "let" && node.name === path) return true;
   return Object.values(value).some(entry => rustSyntaxReferencesPath(entry, path));
-}
-
-// A block ending in `let x = value; x` is the value itself (clippy::let_and_return). Only an unannotated, unattributed,
-// immutable binding is folded, so no coercion site or lint expectation is lost.
-function foldRustLetAndReturn(statements: readonly RustStmt[]): readonly RustStmt[] {
-  const last = statements[statements.length - 1];
-  const binding = statements[statements.length - 2];
-  if (last?.kind !== "tail" || last.expr.kind !== "path" || binding?.kind !== "let" || binding.name !== last.expr.path ||
-    binding.init === undefined || binding.type !== undefined || binding.mutable || (binding.attrs?.length ?? 0) !== 0) return statements;
-  return [...statements.slice(0, -2), { kind: "tail", expr: binding.init }];
 }
 
 // A unit literal used as a statement (`();` or `let _ = ();`) has no effect by construction; it is dropped as

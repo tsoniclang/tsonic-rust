@@ -7,6 +7,7 @@ import { finalizeProviderOperationFromSubjects } from "../members/conversions.js
 import { isRustCopyCarrier } from "../../../policy/constraints/native-traits.js";
 import { rustFixedArrayCarrierValue, rustSourcePrimitiveTargetType, rustTargetConstInteger } from "../../../target-model/types/index.js";
 import { selectRustNativeIndex } from "../../../policy/operations/collections/native-indices.js";
+import { selectRustFixedArrayElementPlan, selectRustFixedArrayPropertyPlan } from "../../../policy/operations/collections/fixed-arrays.js";
 
 import { selectTsonicFixedArrayFromSource } from "@tsonic/source-core/facts";
 import { sourceIntegerLiteralValue } from "@tsonic/target-api/source";
@@ -14,7 +15,6 @@ import { selectedValueCarrier } from "../selected-values.js";
 import type { RustCheckedElementSelectionInput, RustCheckedOperationSelectionResult, RustCheckedPropertySelectionInput, RustPolicySelection } from "../../../policy/model/contracts.js";
 
 import type { RustOperationsProviderOptions } from "../members/model.js";
-import type { RustProviderOperationTemplate } from "../../../target-model/operations/model.js";
 
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
@@ -58,21 +58,8 @@ export function selectRustFixedArrayLengthProperty(
       "The selected FixedArray.length access requires a source fixed-array fact whose exact extent agrees with its receiver carrier.",
     );
   }
-  const resultCarrier = rustSourcePrimitiveTargetType("native-uint");
-  const template: RustProviderOperationTemplate = {
-    kind: "provider-operation",
-    operationId: "tsonic.rust.fixed-array.length",
-    operationKind: "property",
-    target: { form: "receiver-method", name: "len", emptyTestMethod: "is_empty" },
-    resultCarrier,
-    parameterCarriers: [],
-    evaluation: "pure",
-    isAsync: false,
-    isFallible: false,
-    errorBoundary: "none",
-  };
   const fact = finalizeProviderOperationFromSubjects(
-    template,
+    selectRustFixedArrayPropertyPlan(),
     request.receiver,
     [],
     context,
@@ -143,11 +130,8 @@ export function selectRustFixedArrayElementAccess(
         "Fixed-array element access requires an exact ordinal within the finalized bounds and consistent source evidence.",
       );
     }
-    return acceptRustMemberOperation(request, "indexer", {
-      kind: "fixed-index",
-      operationId: "tsonic.rust.fixed-array.index",
-      index,
-    }, context, options, elementProvenance(request), fixedArray.element);
+    return acceptRustMemberOperation(request, "indexer", selectRustFixedArrayElementPlan(fixedArray.element, index),
+      context, options, elementProvenance(request), fixedArray.element);
   }
   if (!isRustCopyCarrier(fixedArray.element)) {
     return rejectSelectedOperation(
@@ -180,23 +164,8 @@ export function selectRustFixedArrayElementAccess(
       "Dynamic fixed-array element access requires an exact native integer index carrier; source carriers are not reconstructed from their spelling.",
     );
   }
-  const template: RustProviderOperationTemplate = {
-    kind: "provider-operation",
-    operationId: "tsonic.rust.fixed-array.dynamic-index",
-    operationKind: "indexer",
-    target: {
-      form: "index",
-      ...(selection.conversion === undefined ? {} : { indexConversion: selection.conversion }),
-    },
-    resultCarrier: fixedArray.element,
-    parameterCarriers: [selection.carrier],
-    evaluation: "pure",
-    isAsync: false,
-    isFallible: false,
-    errorBoundary: "none",
-  };
   const fact = finalizeProviderOperationFromSubjects(
-    template,
+    selectRustFixedArrayElementPlan(fixedArray.element, selection),
     request.receiver,
     [request.argument],
     context,

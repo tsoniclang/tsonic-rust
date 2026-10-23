@@ -19,6 +19,7 @@ import { rustStrTargetType, rustOptionTargetType, rustSourceOptionalTargetType }
 import { rustValueConversionContract } from "../../../dist/policy/conversions/contracts.js";
 import { substituteRustValueConversion } from "../../../dist/target-model/conversions/substitution.js";
 import { rustProviderSourceArgumentMode } from "../../../dist/policy/types/callables/provider-argument-shape.js";
+import { createTargetSourceProgram } from "@tsonic/target-api/source";
 
 const bool = { kind: "source-primitive", name: "bool" };
 const float64 = { kind: "source-primitive", name: "float64" };
@@ -31,6 +32,34 @@ const sourceNullish = { kind: "target-named", id: "rust.native.absence" };
 const unit = { kind: "tuple", elements: [] };
 const usize = { kind: "source-primitive", name: "native-uint" };
 const typeArgument = (type) => ({ kind: "type", type });
+
+test("selected native calls publish the original receiver expression without inventing receiverless origins", () => {
+  const { program, source } = analyzeRust({ surfaces: ["js"], files: { "index.ts": `
+export function observed(value: string): boolean { return value.includes("a") && Number.isFinite(parseInt("1")); }
+` } });
+  const { ast } = program.source;
+  const checkedSource = createTargetSourceProgram(source);
+  const pending = program.records.sourceArtifacts.get().map(artifact => artifact.sourceFile);
+  let calls = 0;
+  let receiverless = 0;
+  while (pending.length !== 0) {
+    const node = pending.pop();
+    const operation = program.records.targetOperation.get(node);
+    if (ast.is.IsCallExpression(node) && operation?.kind === "provider-operation") {
+      const selected = program.records.selectedOperation.get(node);
+      const checked = checkedSource.semantics.forNode(node).operations.call(node);
+      assert.equal(checked !== undefined, true, "the actual checked source owns the call correspondence");
+      assert.equal(selected?.provenance?.sourceExpression === node, true, "selected operation keeps its checked call origin");
+      assert.equal(selected.provenance.sourceReceiver === checked.sourceReceiver?.expression, true,
+        "selected operation keeps the exact original checked receiver without source syntax guessing");
+      if (checked.sourceReceiver === undefined) receiverless++;
+      calls++;
+    }
+    pending.push(...ast.children(node));
+  }
+  assert.equal(calls, 3, "runtime, compile-time and receiverless positions retain their actual provenance");
+  assert.equal(receiverless, 1, "a genuinely receiverless native call has no fabricated receiver origin");
+});
 
 test("a real closed Vector.add ABI owns exact binary-trait admission", () => {
   const { program } = analyzeRust({ packages: [acmeVectorsPackage()], files: { "index.ts": `
@@ -455,6 +484,8 @@ test("provider String-to-str inputs retain exact zero-copy source and destinatio
     },
     mode: "value",
     parameterCarrier: borrowedStr,
+    sharedConversion: true,
+    elementView: "value",
   });
   assert.equal(validateRustFinalizedOperationAbi(abi), true);
   for (const source of [int32, bool, borrowedStr]) {
@@ -518,6 +549,8 @@ test("provider methods finalize receiver, source order, passing modes, conversio
     },
     mode: "value",
     parameterCarrier: usize,
+    sharedConversion: false,
+    elementView: "value",
   });
   assert.deepEqual(abi.result, {
     kind: "sync",

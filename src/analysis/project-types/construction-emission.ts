@@ -107,6 +107,17 @@ export function analyzeRustConstructionEmission(input: {
       preparations.set(point.node, Object.freeze({ ...selected, projections: Object.freeze(projections) }));
     }
     const declarations = [...new Set(plan.layers.flatMap(layer => layer.fields.map(field => field.declaration)))];
+    const mutableFieldLocals = new Set(declarations.filter(declaration => {
+      const binding = program.records.frameBindingDeclaration.get(declaration);
+      if (binding !== undefined) return binding.storage === "value" && plan.mutatesUnpublishedField(declaration);
+      if (program.records.capturedFieldStorage.get(declaration) !== undefined) return false;
+      if (plan.mutatesUnpublishedField(declaration)) return true;
+      if (!plan.accessesUnpublishedField(declaration)) return false;
+      const dispatch = program.records.projectFieldDispatch.get(declaration);
+      if (dispatch === undefined) failTargetAnalysisInvariant("tsonic-rust",
+        "An accessed construction field requires its exact native content-mutation disposition.", declaration);
+      return dispatch.mutableContent;
+    }));
     input.producer.classDeclaration(definition.declaration, { definition, layers: plan.layers, fields: plan.fields, expressions: plan.expressions,
       points: new Map(plan.points.map(point => [point.node, point])),
       returns: new Map(plan.points.flatMap(point => {
@@ -115,8 +126,7 @@ export function analyzeRustConstructionEmission(input: {
       })),
       earlyReturnLayers: new Set(plan.layers.filter(layer => plan.layerHasEarlyReturn(layer.definition)).map(layer => layer.definition)),
       completingLayers: new Set(plan.layers.filter(layer => plan.layerCompletes(layer.definition)).map(layer => layer.definition)),
-      unpublishedMutations: new Set(declarations.filter(declaration => plan.mutatesUnpublishedField(declaration))),
-      unpublishedAccesses: new Set(declarations.filter(declaration => plan.accessesUnpublishedField(declaration))),
+      mutableFieldLocals,
       unobservedInitializers: new Set(plan.fields.filter(field => (field.initializer !== undefined || field.externallyInitialized) &&
         !plan.observesInitialValue(field.declaration)).map(field => field.declaration)),
       physicalDeclarations: new Map(declarations.map(declaration => [declaration, program.objectRepresentations.receiverCaptures.storageDeclaration(declaration)])),
