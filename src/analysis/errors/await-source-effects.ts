@@ -1,5 +1,5 @@
 import type { Node } from "@tsonic/tsts";
-import { sourceEnclosingCallable } from "@tsonic/target-api/source";
+import { asSourceNode, sourceEnclosingCallable } from "@tsonic/target-api/source";
 import type { RustFactWalk } from "../program/walk.js";
 
 import type { RustErrorEffectsFact } from "../../target-model/records/error-effects.js";
@@ -12,6 +12,8 @@ import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { snapshotClosedMetadata } from "../../target-model/metadata/closed-data.js";
 import type { RustSourceErrorEffectSelection } from "./source-error-effects.js";
 import type { RustEffectsWorkBudget } from "./effects-work-budget.js";
+import { selectRustGeneratorSourceErrors } from "./generator-source-effects.js";
+import { rustGeneratorSourceInvocationKind } from "../../policy/operations/source-profiles/generator-source-profile.js";
 
 export interface RustAwaitSourceErrorSelection extends RustAwaitSourceErrorBranch {
   readonly invocation: Node;
@@ -40,6 +42,15 @@ export function selectRustAwaitSourceErrors(
     if (producer.subject.kind !== "value" || producer.subject.projection.length !== 0) continue;
     const invocation = producer.subject.node;
     const operation = records.targetOperation.get(invocation);
+    if (operation?.kind === "provider-operation" && rustGeneratorSourceInvocationKind(operation.operationId) === "async") {
+      const receiver = asSourceNode(records.selectedOperation.get(invocation)?.provenance?.sourceReceiver, ast);
+      const edge = receiver === undefined ? undefined
+        : selectRustGeneratorSourceErrors(walk, receiver, effectsFor, selection, budget);
+      const carrier = branches.length === 1 ? branches[0] : undefined;
+      if (edge === undefined || carrier === undefined) return undefined;
+      selected.push(Object.freeze({ invocation, carrier: snapshotClosedMetadata(carrier), edge }));
+      continue;
+    }
     if (operation?.kind !== "source-call" || callableValues.native.callFor(invocation) !== undefined) continue;
     const implementations = storage.invocationImplementationsFor(invocation, producer.bindings);
     if (implementations.kind !== "resolved" || !implementations.exact || implementations.nodes.length === 0) return undefined;

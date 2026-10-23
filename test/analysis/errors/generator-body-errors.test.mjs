@@ -4,6 +4,7 @@ import { analyzeRustErrorEffects } from "../../helpers/rust-error-analysis.mjs";
 import { selectRustProducerError } from "../../../dist/analysis/callables/producer-errors.js";
 import { rustProducerErrorReference } from "../../../dist/target-model/types/carriers/producer-errors.js";
 import { rustInfallibleTargetId } from "../../../dist/target-model/types/carriers/source-types.js";
+import { Node_Expression } from "@tsonic/target-api/source";
 
 for (const asynchronous of [false, true]) {
   test(`${asynchronous ? "async" : "sync"} generator body errors never become creation errors`, () => {
@@ -40,4 +41,49 @@ test("an ordinary synchronous function cannot fabricate a deferred body error ch
   assert.equal(reference !== undefined, true, "the reference identifies the actual source producer");
   assert.equal(selectRustProducerError(reference, { producers, records: context.records,
     definitions: context.typeDefinitions }) === undefined, true, "only a genuine suspended body owns deferred body errors");
+});
+
+for (const [name, invocation, asynchronous] of [
+  ["synchronous resume", "const iterator = values(); iterator.next();", false],
+  ["synchronous iteration", "for (const value of values()) { void value; }", false],
+  ["asynchronous resume", "const iterator = values(); await iterator.next();", true],
+  ["asynchronous iteration", "for await (const value of values()) { void value; }", true],
+]) {
+  test(`${name} consumes the original generator body error instead of executing it at creation`, () => {
+    const context = analyzeRustErrorEffects(`
+${asynchronous ? "async " : ""}function* values(): ${asynchronous ? "AsyncGenerator" : "Generator"}<number, void, unknown> {
+  yield 1;
+  throw new Error("body");
+}
+export ${asynchronous ? "async " : ""}function consume(): ${asynchronous ? "Promise<void>" : "void"} { ${invocation} }
+`, { surfaces: [] });
+    const nodes = context.sourceStorage.nodes;
+    const named = name => nodes.find(node => context.ast.is.IsFunctionDeclaration(node) &&
+      context.ast.text(context.ast.name(node)) === name);
+    const generator = named("values");
+    const consumer = named("consume");
+    const creation = nodes.find(node => context.ast.is.IsCallExpression(node) &&
+      context.ast.text(Node_Expression(context.ast, node)) === "values");
+    assert.equal(context.records.sourceCallEffects.get(creation)?.invocation, "infallible",
+      "the actual generator creation does not execute the body");
+    assert.equal(context.records.errorEffects.get(consumer)?.localErrors, true,
+      "the actual consuming activation receives the authored body failure");
+    const executed = nodes.flatMap(node => context.records.sourceErrorEffects.get(node)?.edges ?? [])
+      .filter(edge => edge.declaration === generator);
+    assert.equal(executed.length, 1, "one exact original body correspondence reaches the consumer");
+    assert.equal(executed[0].effects.localErrors, true, "the source error is not replaced by an infallible or invented carrier");
+    assert.equal(Object.isFrozen(executed[0]), true, "the body error edge is sealed data");
+  });
+}
+
+test("an infallible generator resume still publishes its physical Result elimination correspondence", () => {
+  const context = analyzeRustErrorEffects(`function* values(): Generator<number, void, unknown> { yield 1; }
+export function consume(): void { values().next(); }`, { surfaces: [] });
+  const generator = context.sourceStorage.nodes.find(node => context.ast.is.IsFunctionDeclaration(node) &&
+    context.ast.text(context.ast.name(node)) === "values");
+  const edges = context.sourceStorage.nodes.flatMap(node => context.records.sourceErrorEffects.get(node)?.edges ?? [])
+    .filter(edge => edge.declaration === generator);
+  assert.equal(edges.length, 1, "the required physical Result path is present even without an inhabited error");
+  assert.equal(edges[0].effects.localErrors, false, "the native body remains actually infallible");
+  assert.equal(edges[0].effects.nativeErrors.length, 0, "no default runtime error channel is added");
 });

@@ -6,6 +6,7 @@ import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustProviderFormProducer } from "../program/records/provider-forms.js";
 import type { RustProviderFormEmission } from "../../target-model/records/provider-forms.js";
 import { isRustFinalizedSourceInput } from "../../target-model/operations/finalized-inputs.js";
+import { rustGeneratorSourceInvocationKind } from "../../policy/operations/source-profiles/generator-source-profile.js";
 
 export function analyzeRustProviderForms(program: Omit<RustAnalysisProgram, "reachability">, nodes: readonly Node[],
   producer: RustProviderFormProducer): readonly TargetDiagnostic[] {
@@ -25,6 +26,18 @@ export function analyzeRustProviderForms(program: Omit<RustAnalysisProgram, "rea
     const bodies: (true | undefined)[] = native === undefined ? [undefined]
       : program.promiseBodies.objects.has(owner!) ? [undefined, true] : [true];
     let worker: RustProviderFormEmission["worker"];
+    let nativeResult: RustProviderFormEmission["nativeResult"];
+    const operation = program.records.targetOperation.get(node);
+    if (operation?.kind === "provider-operation" && rustGeneratorSourceInvocationKind(operation.operationId) === "sync") {
+      const edges = program.records.sourceErrorEffects.get(node)?.edges;
+      nativeResult = edges?.length === 1 ? edges[0] : undefined;
+      if (nativeResult === undefined || program.records.generator.get(nativeResult.declaration) === undefined) {
+        issues.push({ code: "RUST_GENERATOR_BODY_ERRORS_NOT_CLOSED", category: "error", source: "tsonic-rust", sourceNode: node,
+          message: "A generator resume result requires its exact admitted body error correspondence before rendering.",
+          evidence: ["target.capability=rust.generator.exact-body-errors"] });
+        continue;
+      }
+    }
     if (form.form === "source-module-construction") {
       const construction = program.sourceModuleConstructions.construction(node);
       if (construction === undefined || construction.sourceArgumentIndex !== form.sourceArgumentIndex ||
@@ -56,7 +69,7 @@ export function analyzeRustProviderForms(program: Omit<RustAnalysisProgram, "rea
           continue;
         }
       }
-      producer.publish(node, abi, body, { read, worker });
+      producer.publish(node, abi, body, { read, worker, nativeResult });
     }
   }
   return Object.freeze(issues);

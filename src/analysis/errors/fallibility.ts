@@ -52,6 +52,9 @@ import { createRustEffectsWorkBudget, defaultRustEffectsWorkLimit, type RustEffe
 
 import type { RustAwaitSourceErrorBranch } from "../../target-model/records/await-source-error-effects.js";
 import { selectRustAwaitSourceErrors } from "./await-source-effects.js";
+import { selectRustGeneratorSourceErrors } from "./generator-source-effects.js";
+import { rustGeneratorSourceInvocationKind } from "../../policy/operations/source-profiles/generator-source-profile.js";
+import { getRustGeneratorProtocol } from "../../target-model/types/carriers/callables.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { requireRustRecord } from "../program/records/required-records.js";
 import type { SourceNativeTaskGraph } from "@tsonic/target-api/analysis";
@@ -222,6 +225,12 @@ function collectFallibilityFacts(
   };
   const operationIsFallible = (node: Node): boolean => {
     const operation = walk.context.records.targetOperation.get(node);
+    const generatorOperand = operation?.kind === "iteration" && operation.iterationKind !== "for-in"
+      ? Node_Expression(ast, node) : undefined;
+    const generatorOperation = operation?.kind === "provider-operation"
+      ? rustGeneratorSourceInvocationKind(operation.operationId) !== undefined
+      : generatorOperand !== undefined && getRustGeneratorProtocol(
+        walk.context.records.runtimeCarrier.get(generatorOperand)?.carrier) !== undefined;
     const bindingProjection = walk.context.records.bindingProjection.get(node);
     const contextualConversion = walk.context.records.contextualValueConversion.get(node);
     const projection = bindingProjection?.projection;
@@ -241,7 +250,8 @@ function collectFallibilityFacts(
               bindingProjection.sourceCarrier,
               field.sourceStorageIndex,
             )));
-    return walk.context.callableValues.native.callFor(node) === undefined && rustTargetOperationIsFallible(
+    return walk.context.callableValues.native.callFor(node) === undefined &&
+      !generatorOperation && rustTargetOperationIsFallible(
       operation,
       walk.context.structuralShapes,
       walk.context.projectFieldDispatch,
@@ -364,6 +374,26 @@ function collectFallibilityFacts(
       }
       for (const declaration of selectedAccessorDeclarations(node)) {
         if (!appendDeclaration(declaration)) return undefined;
+      }
+      const operation = walk.context.records.targetOperation.get(node);
+      const generatorInvocation = operation?.kind === "provider-operation"
+        ? rustGeneratorSourceInvocationKind(operation.operationId) : undefined;
+      const iterationOperand = operation?.kind === "iteration" && operation.iterationKind !== "for-in"
+        ? Node_Expression(ast, node) : undefined;
+      const generatorIteration = iterationOperand !== undefined &&
+        getRustGeneratorProtocol(walk.context.records.runtimeCarrier.get(iterationOperand)?.carrier) !== undefined;
+      if (generatorInvocation === "sync" || generatorIteration) {
+        const receiver = generatorIteration ? iterationOperand
+          : asSourceNode(walk.context.records.selectedOperation.get(node)?.provenance?.sourceReceiver, ast);
+        const edge = receiver === undefined ? undefined
+          : selectRustGeneratorSourceErrors(walk, receiver, declarationEffects, selectSourceErrors, budget);
+        if (edge === undefined) {
+          appendRustDiagnostic(walk, "RUST_GENERATOR_BODY_ERRORS_NOT_CLOSED",
+            "Generator execution requires its exact original creation, input bindings and closed body error channel.", node,
+            ["target.capability=rust.generator.exact-body-errors"]);
+          return undefined;
+        }
+        appendEdge(node, edge);
       }
       if (kind === "KindAwaitExpression") {
         const operand = Node_Expression(walk.context.ast, node);
