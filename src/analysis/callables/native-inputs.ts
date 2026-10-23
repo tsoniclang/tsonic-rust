@@ -121,10 +121,17 @@ export function createRustNativeCallableInputPlan(input: {
       if (input.ast.is.IsParameterDeclaration(capture.declaration)) nativeRetainedParameters.add(capture.declaration);
     }
   }
-  // A parameter retained natively, or retained by a nominal record result (stored in that record's concrete field type),
-  // keeps its concrete callable carrier.
-  const keepsConcreteCarrier = (parameter: Node): boolean =>
-    nativeRetainedParameters.has(parameter) || input.ownedRetainedParameter(parameter);
+  const concreteParameters = new Set<Node>();
+  for (const parameter of input.nativeNodes) {
+    if (!input.ast.is.IsParameterDeclaration(parameter)) continue;
+    const owner = input.ast.parent(parameter);
+    if (owner === undefined || sourceCallableValueParameters(input.ast, owner,
+      input.storage.source.semantics.forNode(owner))?.includes(parameter) !== true) continue;
+    if (!nativeRetainedParameters.has(parameter) && input.ownedRetainedParameter(parameter))
+      nativeRetainedParameters.add(parameter);
+    if (!input.declaresGenericInputs(owner) || nativeRetainedParameters.has(parameter)) concreteParameters.add(parameter);
+  }
+  const keepsConcreteCarrier = (parameter: Node): boolean => nativeRetainedParameters.has(parameter);
   const bindings = new Map<Node, SourceStorageBindings | null>();
   const inputs = new Map<Node, Map<SourceStorageSubject, RustNativeCallableInput>>();
   const captures = new Map<Node, Set<RustNativeCallableInput>>();
@@ -261,11 +268,7 @@ export function createRustNativeCallableInputPlan(input: {
   const declarationInputs = new Map([...inputs].map(([owner, members]) => [owner, Object.freeze([...members.values()])]));
   const declarationCaptures = new Map([...captures].map(([owner, members]) => [owner, Object.freeze([...members])]));
   const emptyInputs: readonly RustNativeCallableInput[] = Object.freeze([]);
-  const isConcreteCallableParameter = (parameter: Node): boolean => {
-    const owner = input.ast.parent(parameter);
-    return owner !== undefined && sourceCallableValueParameters(input.ast, owner, input.storage.source.semantics.forNode(owner))?.includes(parameter) === true &&
-      (!input.declaresGenericInputs(owner) || keepsConcreteCarrier(parameter));
-  };
+  const isConcreteCallableParameter = (parameter: Node): boolean => concreteParameters.has(parameter);
   return Object.freeze({ bindingsFor, originsFor, isConcreteCallableParameter,
     isNativeRetainedParameter: keepsConcreteCarrier, inputs: selectedInputs, protocols: definitions,
     calls: Object.freeze([...calls.values()]), callFor: (node: Node) => calls.get(node),

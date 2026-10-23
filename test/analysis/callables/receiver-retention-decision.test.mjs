@@ -16,8 +16,12 @@ export class Counter {
   make(): () => number { ${body} }
 }
 ` } });
-      const owners = program.sourceStorage.nodes.filter(node =>
-        (program.records.closureCapture.get(node)?.receivers.length ?? 0) > 0);
+      const owners = [];
+      const visit = node => {
+        if ((program.records.closureCapture.get(node)?.receivers.length ?? 0) > 0) owners.push(node);
+        program.source.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+      };
+      for (const sourceFile of program.sourceFiles) visit(sourceFile);
       assert.equal(owners.length > 0, true, "checked whole-receiver captures participate in ownership analysis");
       for (const owner of owners) {
         const captures = program.records.closureCapture.get(owner);

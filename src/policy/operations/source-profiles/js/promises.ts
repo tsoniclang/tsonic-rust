@@ -2,7 +2,7 @@ import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import type { JsOperationRequest, JsOperationSelection } from "./model.js";
 import { rustCallableTargetType, rustClosureProtocol, rustCallableProtocol, rustJsPromiseOutputTargetType, rustJsPromiseResolutionTargetType, rustJsPromiseTargetType, rustJsValueTargetType, rustOptionTargetType, rustUnitTargetType } from "../../../../target-model/types/index.js";
 import { rustInferCarrier } from "./rows.js";
-import { rustStaticLifetime } from "../../../../target-model/lifetimes/index.js";
+import { rustPlaceholderLifetime, rustStaticLifetime } from "../../../../target-model/lifetimes/index.js";
 
 const callbackCarrier = (parameters: readonly TargetTypeRef[], result: TargetTypeRef): TargetTypeRef =>
   rustCallableTargetType(parameters, result, rustStaticLifetime, rustJsValueTargetType());
@@ -15,7 +15,8 @@ export function selectRustJsPromiseConstructor(
   if (output === undefined || arguments_.length !== 1) return undefined;
   const resolve = callbackCarrier([rustJsPromiseResolutionTargetType(output)], rustUnitTargetType());
   const reject = callbackCarrier([rustJsValueTargetType()], rustUnitTargetType());
-  const parameters = [callbackCarrier([resolve, reject], rustUnitTargetType())];
+  const parameters = [rustCallableTargetType([resolve, reject], rustUnitTargetType(),
+    rustPlaceholderLifetime, rustJsValueTargetType())];
   const result = rustJsPromiseTargetType(output);
   return {
     resultCarrier: result, parameterCarriers: parameters,
