@@ -1,4 +1,4 @@
-import { Node_Initializer } from "@tsonic/target-api/source";
+import { Node_Initializer, sourceCallableValueParameters } from "@tsonic/target-api/source";
 import type { Node } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
 import { rustResolutionContext } from "../program/walk.js";
@@ -19,7 +19,8 @@ export function recordCallableParameterInputFacts(
   records.assertOpen();
   let state = walk.callableSignatures.get(declaration);
   if (state?.inputActive) return undefined;
-  const parameters = requireDenseSourceNodes(walk, ast.parameters(declaration),
+  const parameters = requireDenseSourceNodes(walk,
+    sourceCallableValueParameters(ast, declaration, walk.context.semanticsFor(declaration)),
     "Function declaration contains an undefined or non-data parameter slot.");
   if (parameters === undefined) return undefined;
   const existing = parameters.map(parameter => records.sourceParameterAbi.get(parameter));

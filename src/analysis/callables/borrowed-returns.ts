@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import type { RustExplicitUnsafeContexts } from "../safety/explicit-regions.js";
-import { forEachSourceImmediateEvaluationChild, sourceBindingHasMutableExposure, type TargetSourceProgram } from "@tsonic/target-api/source";
+import { forEachSourceImmediateEvaluationChild, sourceBindingHasMutableExposure, sourceCallableValueParameters, type ResolvedSourceCallInfo, type TargetSourceProgram } from "@tsonic/target-api/source";
 import type { SourceStorageQueries } from "@tsonic/target-api/analysis";
 import { createRustSourceLexicalCallableQueries } from "./lexical-bindings.js";
 import { rustSourceValueWrapperContains } from "../../policy/ownership/source-value-wrappers.js";
@@ -45,9 +45,9 @@ function selectSourceBorrowedReturnParameter(
   if (result.kind !== "resolved" || bindings.kind !== "resolved") return undefined;
   const origins = sourceStorage.boundOriginsFor(result.subject, bindings.bindings);
   if (origins.kind !== "resolved" || origins.subjects.length !== 1) return undefined;
+  const parameters = sourceCallableValueParameters(ast, declaration, source.semantics.forNode(declaration));
   const origin = origins.subjects[0]!;
-  if (origin.kind !== "input" || origin.projection.length !== 0 ||
-    !ast.parameters(declaration).includes(origin.node)) return undefined;
+  if (origin.kind !== "input" || origin.projection.length !== 0 || parameters?.includes(origin.node) !== true) return undefined;
   const parameter = origin.node;
   const summary = source.navigation.parameterUseSummary(parameter);
   if (summary === undefined || summary.bindingWritten || summary.memberWritten || summary.captured ||
@@ -58,8 +58,9 @@ function selectSourceBorrowedReturnParameter(
   if (calls === undefined) return undefined;
   for (const call of calls) {
     const selected = source.semantics.forNode(call).operations.call(call);
-    const inputs = selected?.sourceArgumentBindings.filter(input =>
-      input.sourceParameterIndex === ast.parameters(declaration).indexOf(parameter));
+    if (selected === undefined) return undefined;
+    const inputs: ResolvedSourceCallInfo["sourceArgumentBindings"] = selected.sourceArgumentBindings.filter(input =>
+      input.sourceParameterIndex === parameters.indexOf(parameter));
     if (inputs?.length !== 1 || inputs[0]!.sourceForm !== "value" || inputs[0]!.sourceParameterForm !== "parameter") return undefined;
     const inputIndex = inputs[0]!.sourceArgumentIndex;
     const actual = selected!.sourceArguments[inputIndex]?.expression;

@@ -50,7 +50,7 @@ function physicalConstruction(checked, { unavailableReturns = new Set(), constru
   const generic = context.callableValues.generic;
   let queries;
   let physical;
-  const producers = createRustNativeCallableProducerPlan({ ast, nodes: input.nativeNodes, records, native,
+  const producers = createRustNativeCallableProducerPlan({ source: sourceStorage.source, ast, nodes: input.nativeNodes, records, native,
     definitions: context.typeDefinitions, returnCarrierFor(node) {
       if (unavailableReturns.has(node)) return undefined;
       const selected = queries.prepareReturn(node);

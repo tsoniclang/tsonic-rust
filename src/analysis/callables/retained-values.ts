@@ -4,21 +4,24 @@ import type { Node } from "@tsonic/tsts";
 import type { RustSourcePolicyContext } from "../../policy/model/context.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 
-import { sourceEnclosingCallable, sourceNodeIdentity } from "@tsonic/target-api/source";
+import { sourceEnclosingCallable, sourceNodeIdentity, sourceCallableValueParameters } from "@tsonic/target-api/source";
 import { rustCallScopedElisionLifetime, type RustLifetimeRef } from "../../target-model/lifetimes/index.js";
 import { selectRustSuspendedStorageLifetime } from "../../policy/ownership/suspended-storage.js";
 import { rustEnclosingStorageContract } from "./storage-contracts.js";
 
 export function rustRetainedValueLifetime(
   declaration: Node, captures: readonly TargetTypeRef[],
-  walk: { readonly context: Pick<RustSourcePolicyContext, "ast" | "sourceLifetimes" | "records" | "retainedEnvironments"> },
+  walk: { readonly context: Pick<RustSourcePolicyContext, "ast" | "source" | "sourceLifetimes" | "records" | "retainedEnvironments"> },
 ): RustLifetimeRef | undefined {
   const { context } = walk;
   if (!captures.some(rustHasOpenOwnedStorage)) return selectRustSuspendedStorageLifetime(captures,
     rustEnclosingStorageContract(declaration, context.ast, context.sourceLifetimes));
   const owner = sourceEnclosingCallable(context.ast.parent(declaration), context.ast);
+  const parameters = owner === undefined ? []
+    : sourceCallableValueParameters(context.ast, owner, context.source.semantics.forNode(owner));
+  if (parameters === undefined) return undefined;
   const selected = owner === undefined ? { kind: "none" as const } : rustRetainedEnvironment(owner,
-    context.ast.parameters(owner).map(parameter => context.records.sourceParameterAbi.get(parameter)?.parameterCarrier), context);
+    parameters.map(parameter => context.records.sourceParameterAbi.get(parameter)?.parameterCarrier), context);
   if (selected.kind === "unresolved") return undefined;
   if (selected.kind === "selected") return selected.environment.lifetime;
   const identity = sourceNodeIdentity(context.ast, declaration);
@@ -32,10 +35,10 @@ export function rustSuspendedCapturedParameters(declaration: Node, context: Rust
 export function rustRetainedEnvironment(
   declaration: Node,
   parameterCarriers: readonly (TargetTypeRef | undefined)[],
-  context: Pick<RustSourcePolicyContext, "ast" | "retainedEnvironments">,
+  context: Pick<RustSourcePolicyContext, "source" | "retainedEnvironments">,
 ): RustRetainedEnvironmentSelection {
-  const parameters = context.ast.parameters(declaration);
-  if (parameters.length !== parameterCarriers.length || parameters.some(parameter => parameter === undefined) ||
+  const parameters = sourceCallableValueParameters(context.source.ast, declaration, context.source.semantics.forNode(declaration));
+  if (parameters === undefined || parameters.length !== parameterCarriers.length ||
     parameterCarriers.some(carrier => carrier === undefined)) return { kind: "unresolved",
       reason: "A retained native environment requires exact declaration-owned input carriers." };
   const openParameters = new Set(parameters.filter((parameter, index) => {
@@ -43,10 +46,10 @@ export function rustRetainedEnvironment(
     return parameter !== undefined && carrier !== undefined && rustHasOpenOwnedStorage(carrier);
   }));
   const none = Object.freeze({ kind: "none" as const });
-  if (openParameters.size === 0) return none;
   const selected = context.retainedEnvironments.environmentFor(declaration);
-  return selected.kind === "selected" && !selected.environment.parameters.some(parameter => openParameters.has(parameter))
-    ? none : selected;
+  if (selected.kind === "selected") return selected.environment.inputs.some(input => input.kind === "native-task-scope" ||
+    openParameters.has(input.declaration)) ? selected : none;
+  return openParameters.size === 0 ? none : selected;
 }
 
 export function closeRustRetainedParameter(
@@ -55,7 +58,8 @@ export function closeRustRetainedParameter(
   if (!rustHasOpenCallableEnvironment(carrier)) return carrier;
   if (!context.ast.is.IsParameterDeclaration(parameter)) return undefined;
   const declaration = context.ast.parent(parameter);
-  if (declaration === undefined || !context.ast.parameters(declaration).includes(parameter)) return undefined;
+  if (declaration === undefined || sourceCallableValueParameters(context.ast, declaration,
+    context.source.semantics.forNode(declaration))?.includes(parameter) !== true) return undefined;
   const selected = context.retainedEnvironments.environmentFor(declaration);
   if (selected.kind === "unresolved") return undefined;
   if (selected.kind === "none") {
@@ -63,6 +67,6 @@ export function closeRustRetainedParameter(
       ? context.retainedEnvironments.suspendedParametersFor(declaration) : undefined;
     return retained?.includes(parameter) === true ? closeRustRetainedCallableCarrier(carrier, { kind: "static" }) : carrier;
   }
-  if (!selected.environment.parameters.includes(parameter)) return carrier;
+  if (!selected.environment.inputs.some(input => input.kind === "parameter" && input.declaration === parameter)) return carrier;
   return closeRustRetainedCallableCarrier(carrier, selected.environment.lifetime);
 }

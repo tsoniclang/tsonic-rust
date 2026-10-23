@@ -1,4 +1,5 @@
 import type { Node } from "@tsonic/tsts";
+import { sourceCallableValueParameters, type TargetSourceProgram } from "@tsonic/target-api/source";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustCallableConversionProducer } from "../program/records/callable-conversions.js";
@@ -24,7 +25,7 @@ import type { RustCallableValueAdapter } from "../../target-model/records/callab
 import { rustNativeCallablePhysicalSource } from "../../policy/conversions/native-callables.js";
 
 export function analyzeRustCallableEmission(program: Omit<RustAnalysisProgram, "reachability">,
-  nodes: readonly Node[], producer: RustCallableConversionProducer): void {
+  nodes: readonly Node[], producer: RustCallableConversionProducer, source: TargetSourceProgram): void {
   const operand = (node: Node, source: TargetTypeRef | undefined): RustCallableOperandEmission | undefined => {
     if (source === undefined) return undefined;
     const previous = producer.records.callableOperand.get(node, source);
@@ -105,7 +106,8 @@ export function analyzeRustCallableEmission(program: Omit<RustAnalysisProgram, "
     if (call === undefined || !ast.is.IsCallExpression(call) || program.records.targetOperation.get(node)?.kind !== "closure") return undefined;
     const index = ast.arguments(call).indexOf(node);
     const declaration = asSourceNode(program.records.selectedCall.get(call)?.sourceDeclaration, ast);
-    const parameter = declaration === undefined || index < 0 ? undefined : ast.parameters(declaration)[index];
+    const parameter = declaration === undefined || index < 0 ? undefined
+      : sourceCallableValueParameters(ast, declaration, source.semantics.forNode(declaration))?.[index];
     // A parameter that is not a native callable input takes its declared runtime callable.
     const slot = parameter === undefined ? undefined : program.records.sourceParameterAbi.get(parameter)?.parameterCarrier;
     if (parameter === undefined || declaration === undefined || ast.as.AsParameterDeclaration(parameter)?.DotDotDotToken !== undefined ||

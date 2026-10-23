@@ -16,6 +16,7 @@ import { resolveTypeNodeCarrier } from "../../source-evidence/types/source-carri
 import { rustResolutionContext } from "../../program/walk.js";
 
 import type { Node, Type } from "@tsonic/tsts";
+import { sourceCallableValueParameters } from "@tsonic/target-api/source";
 import type { RustFactWalk } from "../../program/walk.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
@@ -30,7 +31,7 @@ export function resolveProjectMethodPropertyCarrier(
     : walk.context.projectTypes.relationship(receiverCarrier, owner);
   const parameters = requireDenseSourceNodes(
     walk,
-    walk.context.ast.parameters(declaration),
+    sourceCallableValueParameters(walk.context.ast, declaration, walk.context.semanticsFor(declaration)),
     "Project method property contains an undefined parameter slot.",
   );
   if (relationship?.kind !== "related" || parameters === undefined ||
@@ -77,7 +78,7 @@ export function resolveObjectLiteralMethodCarrier(
   );
   const parameters = requireDenseSourceNodes(
     walk,
-    walk.context.ast.parameters(method),
+    sourceCallableValueParameters(walk.context.ast, method, walk.context.semanticsFor(method)),
     "Authored object-literal method contains an undefined parameter slot.",
   );
   const authoredReturnType = Node_Type(walk.context.ast, method);

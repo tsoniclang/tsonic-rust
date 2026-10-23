@@ -10,9 +10,11 @@ import { isValidRustIdentifier } from "../../target-model/names/identifiers.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustUnitTargetType } from "../../target-model/types/index.js";
 import { rustNodeIsOutsideNativeCode } from "../control-flow/compile-time-statements.js";
+import { sourceCallableValueParameters, type TargetSourceProgram } from "@tsonic/target-api/source";
 
 export function analyzeRustCallableDeclarationEmission(input: {
   readonly program: Omit<RustAnalysisProgram, "reachability">;
+  readonly source: TargetSourceProgram;
   readonly nodes: readonly Node[];
   readonly reachability: RustReachability;
   readonly producer: RustCallableDeclarationProducer;
@@ -80,7 +82,9 @@ export function analyzeRustCallableDeclarationEmission(input: {
     const leading = program.records.callableLeading.get(declaration);
     if (leading === undefined) failTargetAnalysisInvariant("tsonic-rust", "An admitted callable requires its exact leading parameter ABI.", declaration);
     const parameterCarriers: TargetTypeRef[] = [...leading.parameters.map(parameter => parameter.carrier)];
-    for (const parameter of ast.parameters(declaration)) {
+    const parameters = sourceCallableValueParameters(ast, declaration, input.source.semantics.forNode(declaration));
+    if (parameters === undefined) failTargetAnalysisInvariant("tsonic-rust", "An admitted callable requires its exact checked value parameters.", declaration);
+    for (const parameter of parameters) {
       const selected = program.records.callableParameter.get(parameter);
       if (selected === undefined) failTargetAnalysisInvariant("tsonic-rust", "An admitted callable requires its complete native formal parameter ABI.", parameter);
       parameterCarriers.push(selected.carrier);
@@ -97,11 +101,13 @@ export function analyzeRustCallableDeclarationEmission(input: {
       visibility: lexical !== undefined ? "private" : exported || publicAbi ? "public" : "crate",
       deadCode: input.reachability.suppressedDeclarations.has(declaration) || moduleBindingSuppressed(declaration)
         ? "authored-declaration" : undefined,
+      promiseObjectDeadCode: program.promiseBodies.objects.has(declaration) && !input.reachability.usedPromiseObjects.has(declaration)
+        ? "authored-declaration" : undefined,
       nativeBody, promiseObject: program.promiseBodies.objects.has(declaration),
       requiresSpecialization: program.sourceCallableSpecializations.requiresSpecialization(declaration),
       specializations: program.sourceCallableSpecializations.variantsForCallable(declaration),
       canFallThrough,
-      parameterCarriers: Object.freeze(parameterCarriers), resultCarrier,
+      parameters, parameterCarriers: Object.freeze(parameterCarriers), resultCarrier,
       nativeAsync: generator === undefined && (asyncFact?.kind === "native-future" || nativeBody !== undefined && asyncFact?.kind === "js-promise" && asyncFact.lowering.kind === "factory"),
       resultWrapped: !objectPromise && error.kind !== "infallible",
     });

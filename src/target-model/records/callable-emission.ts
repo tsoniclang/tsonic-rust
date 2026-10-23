@@ -16,11 +16,13 @@ export interface RustCallableDeclarationEmission {
   readonly exported: boolean;
   readonly visibility: "private" | "crate" | "public";
   readonly deadCode: RustDeadCodeDisposition | undefined;
+  readonly promiseObjectDeadCode: RustDeadCodeDisposition | undefined;
   readonly nativeBody: RustPromiseBodyDeclaration | undefined;
   readonly promiseObject: boolean;
   readonly requiresSpecialization: boolean;
   readonly specializations: readonly RustSourceCallableSpecializationVariant[];
   readonly canFallThrough: boolean;
+  readonly parameters: readonly Node[];
   readonly parameterCarriers: readonly TargetTypeRef[];
   readonly resultCarrier: TargetTypeRef;
   readonly nativeAsync: boolean;

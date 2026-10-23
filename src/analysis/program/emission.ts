@@ -167,7 +167,7 @@ export function finalizeRustNativeEmission(
     genericRequirements: program.declarationGenericRequirements, structuralShapes: program.structuralShapes });
   if (nativeDeclarations.kind === "rejected") return rejectedTargetStage(nativeDeclarations.diagnostics);
   context.records.nativeDeclarations.publish(context.ast, context.nativeNodes, context.sourceFiles, nativeDeclarations.forms);
-  const reachability = analyzeRustReachability(program, context.nativeNodes, context.records.conversionEmissionPlans, context.semanticsFor);
+  const reachability = analyzeRustReachability(program, context.nativeNodes, context.records.conversionEmissionPlans, context.semanticsFor, context.runtimeValueUses);
   const recordContributionIssues = admitRustRecordContributions(program, reachability.recordContributions, context.records.recordContributionPlans);
   if (recordContributionIssues.length !== 0) return rejectedTargetStage(recordContributionIssues);
   const facadeEmission = analyzeRustSourcePackageFacadeEmission(program, program.sourceOutputIdentities);
@@ -204,7 +204,7 @@ export function finalizeRustNativeEmission(
   const indexedRecordIssues = analyzeRustIndexedRecords(program, context.nativeNodes, context.records.indexedRecordPlans);
   if (indexedRecordIssues.length !== 0) return rejectedTargetStage(indexedRecordIssues);
   analyzeRustObjectProjections(program, context.nativeNodes, context.records.objectProjectionPlans);
-  const callableDeclarationIssues = analyzeRustCallableDeclarationEmission({ program, reachability, nodes: context.nativeNodes,
+  const callableDeclarationIssues = analyzeRustCallableDeclarationEmission({ program, source: context.source, reachability, nodes: context.nativeNodes,
     producer: context.records.callableDeclarationPlans });
   if (callableDeclarationIssues.length !== 0) return rejectedTargetStage(callableDeclarationIssues);
   const bindingEmissionIssues = analyzeRustBindingProjectionEmission({ program, nodes: context.nativeNodes, producer: context.records.bindingEmission });
@@ -231,7 +231,7 @@ export function finalizeRustNativeEmission(
   if (projectClassLayoutIssues.length !== 0) return rejectedTargetStage(projectClassLayoutIssues);
   const objectLiteralIssues = analyzeRustObjectLiteralEmission(program, context.nativeNodes, context.records.objectLiteralEmissionPlans,
     node => context.semanticsFor(node).propertyNames.get(node),
-    node => context.semanticsFor(node).operations.objectLiteralElement(node));
+    node => context.semanticsFor(node).operations.objectLiteralElement(node), context.source);
   if (objectLiteralIssues.length !== 0) return rejectedTargetStage(objectLiteralIssues);
   analyzeRustCarrierReads(program, context.nativeNodes, context.records.carrierReadPlans);
   const sourceFileEmissionIssues = analyzeRustSourceFileEmission(program, context.records.sourceFileEmissionPlans);
@@ -265,7 +265,7 @@ export function finalizeRustNativeEmission(
   if (propertyReadIssues.length !== 0) return rejectedTargetStage(propertyReadIssues);
   const lambdaEmissionIssues = analyzeRustLambdaEmission(program, context.nativeNodes, context.records.lambdaEmissionPlans);
   if (lambdaEmissionIssues.length !== 0) return rejectedTargetStage(lambdaEmissionIssues);
-  analyzeRustCallableEmission(program, context.nativeNodes, context.records.callableConversionPlans);
+  analyzeRustCallableEmission(program, context.nativeNodes, context.records.callableConversionPlans, context.source);
   const recordFieldIssues = analyzeRustRecordFieldStorage(program, context.nativeNodes, context.records.callableConversionPlans);
   if (recordFieldIssues.length !== 0) return rejectedTargetStage(recordFieldIssues);
   const sourceCallIssues = analyzeRustSourceCalls(program, context.nativeNodes, context.records.sourceCallPlans);
@@ -297,7 +297,7 @@ export function finalizeRustNativeEmission(
   analyzeRustIndexedLocations(program, context.nativeNodes, context.records.indexedLocationPlans);
   analyzeRustLocationCallbacks(program, context.nativeNodes, context.records.locationCallbackPlans, context.records);
   analyzeRustErasedInputArguments(program, context.records.erasedInputArgumentPlans);
-  const sourceCallArgumentIssues = analyzeRustSourceCallArguments(program, context.nativeNodes, context.records.sourceCallArgumentPlans);
+  const sourceCallArgumentIssues = analyzeRustSourceCallArguments(program, context.nativeNodes, context.records.sourceCallArgumentPlans, context.source);
   if (sourceCallArgumentIssues.length !== 0) return rejectedTargetStage(sourceCallArgumentIssues);
   analyzeRustUnionCalls(program, context.nativeNodes, context.records.unionCallPlans, context.records.conversionEmissionPlans);
   const directStorageIssues = analyzeRustDirectStorage(program, context.nativeNodes, context.records.directStoragePlans, context.records);
@@ -313,7 +313,7 @@ export function finalizeRustNativeEmission(
   analyzeRustNativeComparisons(program, context.nativeNodes, context.records.nativeComparisonPlans);
   const binaryIssues = analyzeRustBinaryEmission(program, context.nativeNodes, context.records.binaryEmissionPlans);
   if (binaryIssues.length !== 0) return rejectedTargetStage(binaryIssues);
-  const literalIssues = analyzeRustLiteralEmission(program, context.nativeNodes, context.records.literalEmissionPlans);
+  const literalIssues = analyzeRustLiteralEmission(program, context.nativeNodes, context.records.literalEmissionPlans, context.source);
   if (literalIssues.length !== 0) return rejectedTargetStage(literalIssues);
   const templateIssues = analyzeRustTemplateStrings(program, context.nativeNodes, context.records.templateStringPlans);
   if (templateIssues.length !== 0) return rejectedTargetStage(templateIssues);

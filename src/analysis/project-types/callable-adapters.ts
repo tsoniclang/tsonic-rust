@@ -85,7 +85,7 @@ function classifyAdapter(
   const contractSubstitutions = substitutions(contractOwner, contract);
   const implementationSubstitutions = substitutions(implementationOwner, implementation);
   if (contractSubstitutions === undefined || implementationSubstitutions === undefined) return undefined;
-  const input = { ast, records };
+  const input = { ast, source: walk.context.source, records };
   const parameters = sourceCallableParameterAbis(input, contract, contractSubstitutions);
   const implementationParameters = sourceCallableParameterAbis(input, implementation, implementationSubstitutions);
   const returnCarrier = sourceCallableReturnCarrier(input, contract, contractSubstitutions);

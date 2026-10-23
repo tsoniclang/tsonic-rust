@@ -1,6 +1,7 @@
 import { Node_Expression, Node_Type, sourceEnclosingCallable } from "@tsonic/target-api/source";
 import { createTargetGraphComponentQuery, createSourceStorageBudget, defaultSourceStorageLimits } from "@tsonic/target-api/analysis";
 import type { Node } from "@tsonic/tsts";
+import { sourceCallableValueParameters } from "@tsonic/target-api/source";
 import { rustAwaitSelectionLeaves, type RustAwaitSelection } from "../../target-model/types/await.js";
 import { rustAwaitSelection } from "../../policy/operations/flow/await.js";
 import {
@@ -67,7 +68,9 @@ export function selectRustAsyncBodyFacts(
   const lowering = selectRustAsyncBodyLowering(walk, declaration);
   if (lowering.kind === "pending") return undefined;
   if (lowering.kind === "settled") {
-    const environment = rustRetainedEnvironment(declaration, ast.parameters(declaration).map(parameter =>
+    const parameters = sourceCallableValueParameters(ast, declaration, walk.context.semanticsFor(declaration));
+    if (parameters === undefined) return undefined;
+    const environment = rustRetainedEnvironment(declaration, parameters.map(parameter =>
       parameter === undefined ? undefined : walk.context.records.sourceParameterAbi.get(parameter)?.parameterCarrier), walk.context);
     if (environment.kind === "unresolved") {
       appendRustDiagnostic(walk, "RUST_ASYNC_PROMISE_STORAGE_LIFETIME_NOT_PROVEN", environment.reason,

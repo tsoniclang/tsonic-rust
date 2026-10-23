@@ -1,14 +1,14 @@
 import type { Node } from "@tsonic/tsts";
 import { rustProgramNodeIsOutsideNativeCode } from "../control-flow/compile-time-statements.js";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
-import { BinaryExpression_Left, BinaryExpression_Right, Node_Initializer, Node_Operand, Node_Type } from "@tsonic/target-api/source";
+import { BinaryExpression_Left, BinaryExpression_Right, Node_Initializer, Node_Operand, Node_Type, sourceCallableValueParameters, type TargetSourceProgram } from "@tsonic/target-api/source";
 import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustLiteralEmissionProducer } from "../program/records/literal-emission.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { isRustIntegerCarrier, isRustBigIntCarrier, rustPrimitiveTypeName } from "../../target-model/types/index.js";
 
 export function analyzeRustLiteralEmission(program: Omit<RustAnalysisProgram, "reachability">,
-  nodes: readonly Node[], producer: RustLiteralEmissionProducer): readonly TargetDiagnostic[] {
+  nodes: readonly Node[], producer: RustLiteralEmissionProducer, source: TargetSourceProgram): readonly TargetDiagnostic[] {
   const issues: TargetDiagnostic[] = [];
   const { ast } = program.source;
   const refuse = (node: Node, message: string, unsupported = false): void => {
@@ -44,7 +44,8 @@ export function analyzeRustLiteralEmission(program: Omit<RustAnalysisProgram, "r
     // A source-call argument is typed only by a parameter declared with a closed carrier (not a type parameter).
     const index = ast.arguments(parent).indexOf(current);
     const declaration = program.records.selectedCall.get(parent)?.sourceDeclaration;
-    const parameter = index < 0 || declaration === undefined ? undefined : ast.parameters(declaration)[index];
+    const parameter = index < 0 || declaration === undefined ? undefined
+      : sourceCallableValueParameters(ast, declaration, source.semantics.forNode(declaration))?.[index];
     const declared = parameter === undefined ? undefined : program.records.sourceParameterAbi.get(parameter)?.valueCarrier;
     return declared !== undefined && declared.kind === "source-primitive";
   };

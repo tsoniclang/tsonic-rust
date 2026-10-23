@@ -6,7 +6,7 @@ import { checkedCallIsConstruction, instantiateExactSelectedConstructionCarrier,
 import { selectRustOptionalCallResult } from "./members/calls/optional-results.js";
 import { asNode } from "../../policy/identities/selected-source.js";
 import { rustOptionElementCarrier, rustOptionTargetType } from "../../target-model/types/index.js";
-import { Node_Type } from "@tsonic/target-api/source";
+import { Node_Type, sourceCallableValueParameters } from "@tsonic/target-api/source";
 import { rejectSelectedOperation } from "./members/result.js";
 import { resolveRustTargetTypeRef } from "../source-evidence/types/resolution/source.js";
 
@@ -219,7 +219,9 @@ export function acceptProjectSourceCall(
   const sourceParameters = ast.kindName(callableDeclaration) === "KindClassDeclaration" || ast.kindName(callableDeclaration) === "KindClassExpression"
     ? request.source.sourceSelectedSignatureParameters.map((parameter) =>
         parameter.parameterDeclaration)
-    : ast.parameters(callableDeclaration);
+    : sourceCallableValueParameters(ast, callableDeclaration, context.semanticsFor(callableDeclaration));
+  if (sourceParameters === undefined) return rejectSelectedOperation(request.source.call, context,
+    "RUST_SOURCE_CALL_BINDINGS_MISSING", "A selected source call requires exact checked value-parameter declarations.");
   const parameters = sourceParameters.map((parameter, index) => {
     if (parameter === undefined) {
       return undefined;

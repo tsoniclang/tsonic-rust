@@ -62,10 +62,10 @@ test("suspended retention uses checked nested-function capture evidence and excl
   assert.equal(uses.uses.some(use => use.captured && use.role === "call-target"), true);
   const selected = queries.environmentFor(owner);
   assert.equal(selected.kind, "selected");
-  assert.equal(selected.environment.parameters.length, 1);
-  assert.equal(selected.environment.parameters[0] === parameters[0], true);
+  assert.equal(selected.environment.inputs.length, 1);
+  assert.equal(selected.environment.inputs[0].declaration === parameters[0], true);
   assert.equal(queries.suspendedParametersFor(owner)[0] === parameters[0], true);
-  assert.equal(Object.isFrozen(selected.environment.parameters), true);
+  assert.equal(Object.isFrozen(selected.environment.inputs), true);
 });
 
 for (const [name, body] of [
@@ -86,8 +86,8 @@ export function make<Value>(value: Value, unused: Value, selected: boolean) { ${
     const parameters = source.ast.parameters(owner);
     const selection = queries.environmentFor(owner);
     assert.equal(selection.kind, "selected", `${name}: a returned stored capture requires its environment`);
-    assert.equal(selection.environment.parameters.length, 1, `${name}: no unrelated or control-only input is retained`);
-    assert.equal(selection.environment.parameters[0] === parameters[0], true, `${name}: the original captured input owns the lifetime`);
+    assert.equal(selection.environment.inputs.length, 1, `${name}: no unrelated or control-only input is retained`);
+    assert.equal(selection.environment.inputs[0].declaration === parameters[0], true, `${name}: the original captured input owns the lifetime`);
     assert.equal(selection.environment.lifetime.kind, "parameter", `${name}: no static lifetime is invented`);
     assert.equal(queries.environmentFor(owner) === selection, true, `${name}: one immutable selection is reused`);
   });
@@ -102,8 +102,8 @@ export function make<Value>(value: Value, unused: Value) { return wrap(value); }
     const owner = declarations.get(name);
     const selection = queries.environmentFor(owner);
     assert.equal(selection.kind, "selected", `${name}: the exact returned source construction remains retained`);
-    assert.equal(selection.environment.parameters.length, 1, `${name}: one actual activation-owned input`);
-    assert.equal(selection.environment.parameters[0] === source.ast.parameters(owner)[0], true,
+    assert.equal(selection.environment.inputs.length, 1, `${name}: one actual activation-owned input`);
+    assert.equal(selection.environment.inputs[0].declaration === source.ast.parameters(owner)[0], true,
       `${name}: the factory's formal is rebound to the caller's actual input`);
   }
 });

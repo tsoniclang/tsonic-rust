@@ -1,5 +1,6 @@
 import type { RustOperationAnalysisContext } from "../../../program/operation-context.js";
 import type { Node } from "@tsonic/tsts";
+import { sourceCallableValueParameters } from "@tsonic/target-api/source";
 import type { RustCheckedCallSelectionInput } from "../../../../policy/model/contracts.js";
 import { resolveRustTargetTypeRef } from "../../../source-evidence/types/resolution/source.js";
 import { selectRustPointerReturnCarrier } from "../../../callables/pointer-return.js";
@@ -54,9 +55,9 @@ export function resolveRustUnionMethodContracts(
   options: RustOperationsProviderOptions,
 ): { readonly result: TargetTypeRef; readonly methods: readonly RustSelectedUnionMethod[] } | undefined {
   const resolved = methods.map(method => {
-    const declarations = context.ast.parameters(method.declaration);
+    const declarations = sourceCallableValueParameters(context.ast, method.declaration, context.semanticsFor(method.declaration));
     const normalizeGenerics = unionMethodGenericNormalization(method.declaration, selectedDeclaration, context);
-    if (declarations.length !== parameters.length || normalizeGenerics === undefined) return undefined;
+    if (declarations === undefined || declarations.length !== parameters.length || normalizeGenerics === undefined) return undefined;
     const instantiate = (subject: Node, carrier: TargetTypeRef): TargetTypeRef | undefined => {
       const owned = options.projectTypes.instantiateMemberCarrier(subject, method.carrier, carrier);
       return owned === undefined ? undefined : normalizeGenerics(owned);

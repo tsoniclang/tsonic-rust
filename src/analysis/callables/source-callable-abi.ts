@@ -13,7 +13,7 @@ import type { RustLifetimeBinder } from "../../target-model/lifetimes/index.js";
 import { rustParameterLaneTargetType } from "../source-evidence/types/resolution/index.js";
 import { resolveRustTargetTypeRef } from "../source-evidence/types/resolution/source.js";
 import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "../source-evidence/types/resolution/index.js";
-import { Node_Initializer, Node_Expression, Node_Type } from "@tsonic/target-api/source";
+import { Node_Initializer, Node_Expression, Node_Type, sourceCallableValueParameters } from "@tsonic/target-api/source";
 import { resolveSelectedProviderDeclaration, resolveSelectedSourceProfileMember } from "../../policy/identities/selected-source.js";
 import { selectRustProviderOperation } from "../../policy/operations/provider-selection.js";
 import { selectJsSurfaceConstructorBySourceOwner } from "../../policy/operations/source-profiles/js/index.js";
@@ -52,6 +52,9 @@ export function createRustSourceCallableAbiResolver(input: {
       return parameterCanUseSharedBorrow(parameter, context, options, input.isNativeCallableExpression);
     },
     resolveParameterAbi(parameter, context, options, contextualValueCarrier) {
+      const owner = context.ast.parent(parameter);
+      if (owner === undefined || sourceCallableValueParameters(context.ast, owner,
+        context.semanticsFor(owner))?.includes(parameter) !== true) return undefined;
       const finalized = input.parameterAbiFor(parameter);
       if (finalized !== undefined) return contextualValueCarrier === undefined ||
         rustTargetTypeRefEquals(finalized.valueCarrier, contextualValueCarrier) ? finalized : undefined;
@@ -370,7 +373,10 @@ function parameterCanUseSharedBorrow(
       if (argumentIndex < 0 || implementation?.kind !== "resolved" ||
         !(ast.is.IsFunctionDeclaration(implementation.implementation.declaration) ||
           isNativeCallableExpression(implementation.implementation.declaration))) return false;
-      const destination = ast.parameters(implementation.implementation.declaration)[argumentIndex];
+      const parameters = sourceCallableValueParameters(ast, implementation.implementation.declaration,
+        context.semanticsFor(implementation.implementation.declaration));
+      if (parameters === undefined) return false;
+      const destination = parameters[argumentIndex];
       const parameterSyntax = destination === undefined ? undefined : ast.as.AsParameterDeclaration(destination);
       if (destination === undefined || parameterSyntax === undefined || parameterSyntax.DotDotDotToken !== undefined ||
         ast.questionToken(destination) !== undefined || Node_Initializer(ast, destination) !== undefined) return false;

@@ -1,4 +1,4 @@
-import { BinaryExpression_Left, BinaryExpression_Right, Node_Expression, Node_Initializer, Node_Operand, Node_Type } from "@tsonic/target-api/source";
+import { BinaryExpression_Left, BinaryExpression_Right, Node_Expression, Node_Initializer, Node_Operand, Node_Type, sourceCallableValueParameters } from "@tsonic/target-api/source";
 import type { Node } from "@tsonic/tsts";
 import { createRustCarrierProbe } from "../program/carrier-probe.js";
 
@@ -76,7 +76,9 @@ function selectReturn(
     walk.context.semanticsFor(declaration).operations.generator(declaration) !== undefined) return { kind: "complete", carrier: baseline };
   const numericResult = isRustNumericCarrier(scalar) || isRustBigIntCarrier(scalar);
   const parameterAbis: RustSourceParameterAbiFact[] = [];
-  for (const parameter of ast.parameters(declaration)) {
+  const parameters = sourceCallableValueParameters(ast, declaration, walk.context.semanticsFor(declaration));
+  if (parameters === undefined) return { kind: "pending", hint: baseline };
+  for (const parameter of parameters) {
     const selected = walk.context.records.sourceParameterAbi.get(parameter);
     if (selected === undefined) return { kind: "pending", hint: baseline };
     parameterAbis.push(selected);

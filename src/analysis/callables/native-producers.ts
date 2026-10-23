@@ -1,5 +1,5 @@
 import type { AstReader, Node } from "@tsonic/tsts";
-import { sourceNodeIdentity } from "@tsonic/target-api/source";
+import { sourceNodeIdentity, sourceCallableValueParameters, type TargetSourceProgram } from "@tsonic/target-api/source";
 import { rejectedTargetStage, resolvedTargetStage, type TargetDiagnostic, type TargetStageResult } from "@tsonic/target-api/artifacts";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { RustTargetGenericArgument, TargetTypeRef } from "../../target-model/types/model.js";
@@ -32,6 +32,7 @@ export interface RustNativeCallableProducerConstruction extends RustNativeCallab
 }
 
 export function createRustNativeCallableProducerPlan(input: {
+  readonly source: TargetSourceProgram;
   readonly ast: AstReader;
   readonly nodes: readonly Node[];
   readonly records: RustProgramRecords;
@@ -52,8 +53,8 @@ export function createRustNativeCallableProducerPlan(input: {
     const captures = input.records.closureCapture.get(declaration);
     const operation = input.records.targetOperation.get(declaration);
     const asynchronous = input.records.asyncFunction.get(declaration);
-    const parameters = input.ast.parameters(declaration);
-    if (parameters.some(parameter => parameter === undefined)) continue;
+    const parameters = sourceCallableValueParameters(input.ast, declaration, input.source.semantics.forNode(declaration));
+    if (parameters === undefined) continue;
     const inputs = input.native.inputsFor(declaration);
     const physicalInput = (parameter: Node, carrier: TargetTypeRef): TargetTypeRef => mapRustTargetTypes(carrier, current => {
       const selected = inputs.find(value => value.subject.node === parameter && rustTargetTypeRefEquals(value.carrier, current));
@@ -130,7 +131,9 @@ export function createRustNativeCallableProducerPlan(input: {
     const sourceSignature = operation?.kind === "closure" ? rustCallableProtocol(
       input.records.receiverIndependentMethod.get(declaration)?.carrier ?? operation.resultCarrier) : undefined;
     const asynchronous = input.records.asyncFunction.get(declaration);
-    const expectedParameters = sourceSignature?.parameters ?? input.ast.parameters(declaration).map(parameter =>
+    const parameters = sourceCallableValueParameters(input.ast, declaration, input.source.semantics.forNode(declaration));
+    if (parameters === undefined) return unresolved("A native producer requires its exact checked value parameters.");
+    const expectedParameters = sourceSignature?.parameters ?? parameters.map(parameter =>
       input.records.sourceParameterAbi.get(parameter)?.parameterCarrier);
     const expectedResult = sourceSignature?.result ?? asynchronous?.futureCarrier ??
       input.records.sourceCallableReturn.get(declaration)?.returnCarrier;

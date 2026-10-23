@@ -1,4 +1,5 @@
 import { requireRustRecord } from "../../../program/records/required-records.js";
+import { sourceCallableValueParameters } from "@tsonic/target-api/source";
 
 import { KindExportAssignment, KindFunctionDeclaration, KindBindingElement, KindParameter, KindVariableDeclaration, Node_Expression, Node_Initializer, asSourceNode, sourceDeclarationIsModuleScoped, sourceBindingCapturedBeforeInitialization } from "@tsonic/target-api/source";
 
@@ -70,7 +71,8 @@ export function resolveIdentifierCarrier(
     // Every reference to a function declaration records its own callable value, so this precedes the declaration
     // carrier shortcut below (the declaration carries the function value's carrier too).
     if (declarationKind === KindFunctionDeclaration) {
-      const parameters = ast.parameters(declaration);
+      const parameters = sourceCallableValueParameters(ast, declaration, walk.context.semanticsFor(declaration));
+      if (parameters === undefined) return;
       const parameterAbis = parameters.map((parameter) => parameter === undefined
         ? undefined
         : walk.context.records.sourceParameterAbi.get(parameter));

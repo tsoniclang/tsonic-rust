@@ -5,7 +5,7 @@ import { selectRustCallableStorageLifetime, selectRustSuspendedStorageLifetime }
 import { rustEnclosingStorageContract } from "./storage-contracts.js";
 import { type RustLifetimeRef } from "../../target-model/lifetimes/index.js";
 import { rustLifetimeOutlives } from "../../policy/constraints/lifetime-outlives.js";
-import { sourceLexicalEnvironment } from "@tsonic/target-api/source";
+import { sourceLexicalEnvironment, sourceCallableValueParameters } from "@tsonic/target-api/source";
 
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustFactWalk } from "../program/walk.js";
@@ -43,8 +43,8 @@ export function resolveRustSuspendedCallableStorage(
   if (body === undefined) {
     return { kind: "rejected", reason: "A suspended callable has no concrete source body." };
   }
-  const parameters = ast.parameters(declaration);
-  if (parameters.some((parameter) => parameter === undefined)) {
+  const parameters = sourceCallableValueParameters(ast, declaration, walk.context.semanticsFor(declaration));
+  if (parameters === undefined) {
     return { kind: "rejected", reason: "A suspended callable contains an undefined parameter slot." };
   }
   const exactParameters = parameters as readonly Node[];

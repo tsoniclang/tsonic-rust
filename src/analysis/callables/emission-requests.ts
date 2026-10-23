@@ -1,4 +1,5 @@
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
+import { sourceCallableValueParameters } from "@tsonic/target-api/source";
 import { targetUseSiteRef, type TargetUseSiteRef } from "@tsonic/target-api/analysis";
 import { rejectedTargetStage, resolvedTargetStage, type TargetDiagnostic, type TargetStageResult } from "@tsonic/target-api/artifacts";
 import { ForStatement_Initializer, IsTypeSyntaxNode, Node_Initializer, sourceClassFieldHasStorage, VariableDeclarationList_Declarations, VariableStatement_DeclarationList, sourceConstructValueInputs, sourceExpressionValueInputs, type SourceValueInput } from "@tsonic/target-api/source";
@@ -82,6 +83,9 @@ export function prepareRustPhysicalCallableEmissionRequests(
   const { ast, records } = input;
   const requests: RustPhysicalCallableEmissionRequest[] = [];
   const diagnostics: TargetDiagnostic[] = [];
+  const storage = input.carrierHost.sourceStorage;
+  if (storage === undefined) return rejectedTargetStage([{ code: "RUST_MISSING_TARGET_FACT", category: "error", source: "tsonic-rust",
+    message: "Physical callable emission requires its exact original checked source storage.", evidence: ["target.capability=rust.callable-value.exact-implementation"] }]);
   const sourceFiles = new Set(input.sourceFiles);
   const checkedSourceFile = (node: Node): SourceFile | undefined => {
     const sourceFile = ast.getSourceFile(node);
@@ -351,7 +355,9 @@ export function prepareRustPhysicalCallableEmissionRequests(
       if (generator !== undefined) for (const [index, carrier] of [generator.yieldType, generator.returnType, generator.nextType, generator.resultCarrier].entries())
         type(node, node, `generator-signature:${index}`, carrier);
       if (returned !== undefined) type(node, node, "return-type", returned.returnCarrier);
-      for (const parameter of ast.parameters(node)) if (parameter !== undefined) {
+      const parameters = sourceCallableValueParameters(ast, node, storage.source.semantics.forNode(node));
+      if (parameters === undefined) diagnostics.push(emissionDiagnostic(node, "An emitted native callable requires exact checked value parameters."));
+      for (const parameter of parameters ?? []) {
         const abi = records.sourceParameterAbi.get(parameter);
         type(node, parameter, "parameter-value", abi?.valueCarrier);
         type(node, parameter, "parameter-abi", abi?.parameterCarrier);
@@ -391,7 +397,9 @@ export function prepareRustPhysicalCallableEmissionRequests(
     const signature = records.sourceCallableReturn.get(node);
     if (signature !== undefined) {
       type(node, node, "signature-return", signature.returnCarrier);
-      for (const parameter of ast.parameters(node)) if (parameter !== undefined) {
+      const parameters = sourceCallableValueParameters(ast, node, storage.source.semantics.forNode(node));
+      if (parameters === undefined) diagnostics.push(emissionDiagnostic(node, "An emitted signature requires exact checked value parameters."));
+      for (const parameter of parameters ?? []) {
         const abi = records.sourceParameterAbi.get(parameter);
         type(node, parameter, "signature-parameter-value", abi?.valueCarrier);
         type(node, parameter, "signature-parameter-abi", abi?.parameterCarrier);

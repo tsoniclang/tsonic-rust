@@ -2,7 +2,7 @@ import type { AstReader, Node } from "@tsonic/tsts";
 import { failTargetAnalysisInvariant, rejectedTargetStage, resolvedTargetStage, type TargetDiagnostic, type TargetStageResult } from "@tsonic/target-api/artifacts";
 import type { TargetSourcePackageGraph } from "@tsonic/target-api";
 import type { SourceStorageBindings, SourceStorageQueries, SourceStorageSubject } from "@tsonic/target-api/analysis";
-import { sourceEnclosingCallable, sourceNodeIdentity, Node_Expression, IsTypeSyntaxNode } from "@tsonic/target-api/source";
+import { sourceEnclosingCallable, sourceNodeIdentity, Node_Expression, IsTypeSyntaxNode, sourceCallableValueParameters } from "@tsonic/target-api/source";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 
 import type { TargetTypeRef } from "../../target-model/types/model.js";
@@ -146,7 +146,7 @@ export function createRustNativeCallableInputPlan(input: {
   const selectInput = (subject: SourceStorageSubject, carrier: TargetTypeRef): RustNativeCallableInput | undefined => {
     if (subject.kind !== "input") return undefined;
     const owner = input.ast.parent(subject.node);
-    if (owner === undefined || !input.ast.parameters(owner).includes(subject.node)) return undefined;
+    if (owner === undefined || sourceCallableValueParameters(input.ast, owner, input.storage.source.semantics.forNode(owner))?.includes(subject.node) !== true) return undefined;
     if (!input.declaresGenericInputs(owner) || keepsConcreteCarrier(subject.node)) return undefined;
     const selected = rustOptionElementCarrier(carrier) ?? carrier;
     if (rustGenericCallableProtocol(selected) === undefined && rustCallableProtocol(selected) === undefined) return undefined;
@@ -194,7 +194,7 @@ export function createRustNativeCallableInputPlan(input: {
       const inputOwner = origin.kind === "input" ? input.ast.parent(origin.node) : undefined;
       if (origin.kind !== "input" || closureParameter(origin) || origin.projection[origin.projection.length - 1]?.kind === "method-value" &&
         rustGenericCallableValue(rustOptionElementCarrier(carrier) ?? carrier) !== undefined ||
-        inputOwner !== undefined && input.ast.parameters(inputOwner).includes(origin.node) &&
+        inputOwner !== undefined && sourceCallableValueParameters(input.ast, inputOwner, input.storage.source.semantics.forNode(inputOwner))?.includes(origin.node) === true &&
           (!input.declaresGenericInputs(inputOwner) || keepsConcreteCarrier(origin.node))) {
         implementations.add(origin);
         continue;
@@ -263,7 +263,7 @@ export function createRustNativeCallableInputPlan(input: {
   const emptyInputs: readonly RustNativeCallableInput[] = Object.freeze([]);
   const isConcreteCallableParameter = (parameter: Node): boolean => {
     const owner = input.ast.parent(parameter);
-    return owner !== undefined && input.ast.parameters(owner).includes(parameter) &&
+    return owner !== undefined && sourceCallableValueParameters(input.ast, owner, input.storage.source.semantics.forNode(owner))?.includes(parameter) === true &&
       (!input.declaresGenericInputs(owner) || keepsConcreteCarrier(parameter));
   };
   return Object.freeze({ bindingsFor, originsFor, isConcreteCallableParameter,
@@ -311,7 +311,14 @@ export function analyzeRustNativeCallableGenerics(input: {
     let retention: RustNativeCallableGenericContext["retention"];
     if (retained !== undefined) {
       const carriers: TargetTypeRef[] = [];
-      for (const parameter of retained.parameters) {
+      for (const selected of retained.inputs) {
+        if (selected.kind === "native-task-scope") {
+          const task = input.records.nativeTaskUse.get(declaration);
+          if (task?.kind !== "owner") failTargetAnalysisInvariant("tsonic-rust", "An admitted retained task scope requires its exact selected physical input.", declaration);
+          carriers.push(task.inputCarrier);
+          continue;
+        }
+        const parameter = selected.declaration;
         const physical = input.nativeStorage.parameterFor(parameter);
         if (input.records.sourceParameterAbi.get(parameter) === undefined || physical.kind === "unresolved")
           failTargetAnalysisInvariant("tsonic-rust", "An admitted retained callable requires its exact native parameter storage.", parameter);

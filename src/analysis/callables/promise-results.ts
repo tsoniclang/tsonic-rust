@@ -4,7 +4,7 @@ import { analyzeSourceGenericAdoption, sourceGenericAdoptionDiagnosticCode, sour
   createSourceOwnershipQuery, createSourceStorageBudget, defaultSourceStorageLimits,
   type SourceOwnershipPremises, type SourceOwnershipUnresolved, type SourceRetentionSelection,
   type SourceStorageBindings, type SourceStorageProjection, type SourceStorageQueries, type SourceStorageSubject } from "@tsonic/target-api/analysis";
-import { sourceEnclosingCallable, sourceExpressionResultDisposition, type TargetSourceProgram } from "@tsonic/target-api/source";
+import { sourceEnclosingCallable, sourceExpressionResultDisposition, sourceCallableValueParameters, type TargetSourceProgram } from "@tsonic/target-api/source";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { RustPromiseResult, RustPromiseResults, RustPromiseResultUses } from "../../target-model/records/promise-results.js";
 import { mapRustAwaitSelection, rustAwaitSelectionLeaves } from "../../target-model/types/await.js";
@@ -317,7 +317,7 @@ export function analyzeRustPromiseResults(input: {
       const lifetime = carrier.lifetime;
       if (lifetime === undefined) return unresolved(value.node, "A retained native reference requires its completed physical lifetime evidence.");
       if (owner === undefined || value.kind !== "receiver" &&
-        (value.kind !== "input" || !input.ast.parameters(owner).includes(value.node))) {
+        (value.kind !== "input" || sourceCallableValueParameters(input.ast, owner, input.source.semantics.forNode(owner))?.includes(value.node) !== true)) {
         return unresolved(value.node, "A retained native reference requires its concrete source owner or exact formal input contract.");
       }
       const abi = value.kind === "input" ? input.records.sourceParameterAbi.get(value.node) : undefined;

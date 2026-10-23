@@ -48,6 +48,7 @@ export interface RustGeneratedItemUsage {
 }
 
 export interface RustReachability extends RustGeneratedItemUsage {
+  readonly usedPromiseObjects: ReadonlySet<Node>;
   readonly externallyReachable: ReadonlySet<Node>;
   readonly suppressedDeclarations: ReadonlySet<Node>;
 }

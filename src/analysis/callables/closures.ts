@@ -3,7 +3,7 @@ import { requireRustRecord } from "../program/records/required-records.js";
 import { rustTypeParameterFromSourceContract } from "../../target-model/types/carriers/generic-references.js";
 
 import { appendRustDiagnostic } from "../program/walk.js";
-import { KindBlock, KindFunctionExpression, KindBindingElement, KindParameter, KindVariableDeclaration, Node_Initializer, Node_Name, Node_Type, sourceLexicalEnvironment } from "@tsonic/target-api/source";
+import { KindBlock, KindFunctionExpression, KindBindingElement, KindParameter, KindVariableDeclaration, Node_Initializer, Node_Name, Node_Type, sourceLexicalEnvironment, sourceCallableValueParameters } from "@tsonic/target-api/source";
 
 import { rustSourceOptionalTargetType, rustOptionElementCarrier, rustCallableProtocol, rustCallableInputProtocol, rustCallableTargetType, rustClosureProtocol, rustUnitTargetType } from "../../target-model/types/index.js";
 import { recordRustParameterAbiSelection, recordCallableDefaultParameterFacts } from "./parameter-facts.js";
@@ -46,7 +46,8 @@ export function resolveFunctionExpressionSignature(
   const { ast } = walk.context;
   const genericParameters = walk.context.sourceLifetimes.contractFor(expression)?.parameters
     .flatMap(parameter => parameter.kind === "type" ? [rustTypeParameterFromSourceContract(parameter)] : []);
-  const parameters = ast.parameters(expression);
+  const parameters = sourceCallableValueParameters(ast, expression, walk.context.semanticsFor(expression));
+  if (parameters === undefined) return undefined;
   const sourceSelected = sourceCarrier ?? resolveRustTargetTypeRef(
     expression, rustResolutionContext(walk, expression, "value"), walk.operationOptions,
   );
@@ -102,7 +103,8 @@ export function resolveFunctionExpressionCarrier(
   }
   const genericParameters = walk.context.sourceLifetimes.contractFor(expression)?.parameters
     .flatMap(parameter => parameter.kind === "type" ? [rustTypeParameterFromSourceContract(parameter)] : []);
-  const parameters = ast.parameters(expression);
+  const parameters = sourceCallableValueParameters(ast, expression, walk.context.semanticsFor(expression));
+  if (parameters === undefined) return undefined;
   const inferred = expected === undefined || options?.sourceCarrier !== undefined
     ? resolveFunctionExpressionSignature(walk, expression, options?.sourceCarrier) : undefined;
   if (expected === undefined && inferred?.inference.kind === "pending") return undefined;

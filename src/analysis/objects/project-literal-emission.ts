@@ -1,4 +1,5 @@
 import type { Node } from "@tsonic/tsts";
+import type { TargetSourceProgram } from "@tsonic/target-api/source";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustProjectLiteralEmission, RustProjectLiteralImplementation, RustProjectLiteralMethodEmission, RustRecordLiteralFact } from "../../target-model/records/object-literal-emission.js";
@@ -10,12 +11,12 @@ import { sourceCallableParameterAbis, sourceCallableReturnCarrier, projectOwnerT
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 
 export function analyzeRustProjectLiteralEmission(program: Omit<RustAnalysisProgram, "reachability">,
-  node: Node, fact: RustRecordLiteralFact): RustProjectLiteralEmission {
+  node: Node, fact: RustRecordLiteralFact, source: TargetSourceProgram): RustProjectLiteralEmission {
   const definition = program.projectTypes.definitionForCarrier(fact.resultCarrier);
   const contracts = program.records.projectInstanceContracts.get(fact.resultCarrier);
   if (definition?.kind !== "interface" || contracts === undefined)
     failTargetAnalysisInvariant("tsonic-rust", "An admitted project literal requires its exact native interface and instantiated contracts.", node);
-  const input = { ast: program.source.ast, records: program.records, sourceLifetimes: program.sourceLifetimes };
+  const input = { ast: program.source.ast, source, records: program.records, sourceLifetimes: program.sourceLifetimes };
   const errorFor = (declaration: Node): TargetTypeRef => {
     const owner = selectRustPhysicalProgramErrorOwner(declaration, { ast: input.ast, components: program.sourcePackageComponents });
     if (owner === undefined) failTargetAnalysisInvariant("tsonic-rust", "An admitted literal callable requires its exact declaration-owned native error carrier.", declaration);

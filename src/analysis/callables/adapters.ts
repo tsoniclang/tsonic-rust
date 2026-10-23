@@ -1,24 +1,24 @@
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { AstReader, Node } from "@tsonic/tsts";
+import { sourceCallableValueParameters, type TargetSourceProgram } from "@tsonic/target-api/source";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustCallableParameterAbi } from "../../target-model/records/callable-adapters.js";
 
 import { rustCallableInvocationResult } from "../../policy/types/callables/return-contexts.js";
 import type { RustProjectTypeDefinition } from "../project-types/index.js";
-import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 import { rustCallableProtocol, rustClosureProtocol, rustSourceTypeCarrierValue, rustTargetGenericTypeArguments, substituteRustTargetTypeParameters } from "../../target-model/types/index.js";
 
 export function sourceCallableParameterAbis(
-  input: { readonly ast: AstReader; readonly records: RustProgramRecords },
+  input: { readonly ast: AstReader; readonly source: TargetSourceProgram; readonly records: RustProgramRecords },
   callable: Node,
   substitutions: ReadonlyMap<string, TargetTypeRef>,
 ): RustCallableParameterAbi[] | undefined {
-  const parameters = input.ast.parameters(callable);
-  if (!isDenseDataArray(parameters) || parameters.some((parameter) => parameter === undefined)) {
+  const parameters = sourceCallableValueParameters(input.ast, callable, input.source.semantics.forNode(callable));
+  if (parameters === undefined) {
     return undefined;
   }
-  const abis = (parameters as readonly Node[]).map((parameter) => {
+  const abis = parameters.map((parameter) => {
     const abi = input.records.sourceParameterAbi.get(parameter);
     return abi === undefined ? undefined : substituteRustCallableParameterAbi(abi, substitutions);
   });

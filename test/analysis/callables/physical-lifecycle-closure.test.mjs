@@ -590,7 +590,7 @@ export function choose(): typeof identity { return identity; }
   const records = Proxy.revocable(program.records, {});
   let open = true;
   let selections = 0;
-  const construction = createRustNativeCallableProducerPlan({ ast: ast.proxy, nodes: sourceNodes(program), records: records.proxy,
+  const construction = createRustNativeCallableProducerPlan({ source: { ...program.source, ast: ast.proxy }, ast: ast.proxy, nodes: sourceNodes(program), records: records.proxy,
     native: program.callableValues.native, definitions: program.typeDefinitions,
     returnCarrierFor(declaration) {
       assert.equal(open, true, "only private construction selects return storage");

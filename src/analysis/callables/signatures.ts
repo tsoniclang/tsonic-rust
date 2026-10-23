@@ -3,7 +3,7 @@ import { rustTypeParameterFromSourceContract } from "../../target-model/types/ca
 import { rustCallableInvocationResult } from "../../policy/types/callables/return-contexts.js";
 import { rustUnionPayloadAdmission } from "../../policy/conversions/union-injection.js";
 import { rustAbsenceTargetType } from "../../target-model/types/carriers/native.js";
-import { KindFunctionExpression, KindFunctionDeclaration, KindNonNullExpression, KindParenthesizedExpression, KindSatisfiesExpression, KindVariableDeclaration, KindVariableStatement, Node_Expression, Node_Initializer, Node_Type, VariableDeclarationList_Declarations, VariableStatement_DeclarationList, sourceDeclarationIsModuleScoped } from "@tsonic/target-api/source";
+import { KindFunctionExpression, KindFunctionDeclaration, KindNonNullExpression, KindParenthesizedExpression, KindSatisfiesExpression, KindVariableDeclaration, KindVariableStatement, Node_Expression, Node_Initializer, Node_Type, VariableDeclarationList_Declarations, VariableStatement_DeclarationList, sourceDeclarationIsModuleScoped, sourceCallableValueParameters } from "@tsonic/target-api/source";
 
 import { isRustUnitCarrier, isRustNeverCarrier, rustOptionElementCarrier, rustSourceOptionalTargetType, rustCallableProtocol, rustClosureProtocol } from "../../target-model/types/index.js";
 import { rustResolutionContext } from "../program/walk.js";
@@ -147,7 +147,9 @@ function finalizedNativeCallableValue(
   import("../../target-model/records/operation-selections.js").RustModuleBindingFact,
   { readonly storage: "native-callable" }
 >["value"] | undefined {
-  const parameterAbis = walk.context.ast.parameters(callableDeclaration).map((parameter) =>
+  const parameters = sourceCallableValueParameters(walk.context.ast, callableDeclaration, walk.context.semanticsFor(callableDeclaration));
+  if (parameters === undefined) return undefined;
+  const parameterAbis = parameters.map((parameter) =>
     parameter === undefined
       ? undefined
       : walk.context.records.sourceParameterAbi.get(parameter));
@@ -171,8 +173,8 @@ function nativeModuleFunctionAbiIsFinalized(
   walk: RustFactWalk,
   callableDeclaration: Node,
 ): boolean {
-  const parameters = walk.context.ast.parameters(callableDeclaration);
-  return isDenseDataArray(parameters) &&
+  const parameters = sourceCallableValueParameters(walk.context.ast, callableDeclaration, walk.context.semanticsFor(callableDeclaration));
+  return parameters !== undefined && isDenseDataArray(parameters) &&
     parameters.every((parameter) =>
       parameter !== undefined &&
       (walk.context.records.sourceParameterAbi.get(parameter)) !== undefined) &&
@@ -260,8 +262,8 @@ function recordCallableValueSignatureFacts(
   const selectedReturnCarrier = selectedCarrier?.kind === "function-pointer"
     ? selectedCarrier.result
     : closure?.result ?? callable?.result;
-  const parameters = ast.parameters(expression);
-  if (selectedCarrier === undefined || parameterCarriers === undefined ||
+  const parameters = sourceCallableValueParameters(ast, expression, walk.context.semanticsFor(expression));
+  if (parameters === undefined || selectedCarrier === undefined || parameterCarriers === undefined ||
     selectedReturnCarrier === undefined || parameters.length > parameterCarriers.length) {
     return;
   }
@@ -376,7 +378,9 @@ export function selectRustSourceCallableReturn(
     return undefined;
   }
   const rawCarrier = pointer?.returnCarrier ?? rustGenericCallableValueOwner(walk.context.ast, declaration, selected);
-  const parameterCarriers = walk.context.ast.parameters(declaration).map(parameter =>
+  const parameters = sourceCallableValueParameters(walk.context.ast, declaration, walk.context.semanticsFor(declaration));
+  if (parameters === undefined) return undefined;
+  const parameterCarriers = parameters.map(parameter =>
     parameter === undefined ? undefined : walk.context.records.sourceParameterAbi.get(parameter)?.parameterCarrier);
   if (parameterCarriers.some(parameter => parameter === undefined)) return undefined;
   const nativeReturn = rawCarrier === undefined || asynchronous !== undefined || generator !== undefined ? undefined

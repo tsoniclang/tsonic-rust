@@ -1,4 +1,5 @@
 import type { RustOperationAnalysisContext } from "../program/operation-context.js";
+import { sourceCallableValueParameters } from "@tsonic/target-api/source";
 import { isProjectSourceDeclaration } from "../../policy/identities/selected-source.js";
 import { acceptRustMemberOperation, rejectSelectedOperation, sourceOperationId } from "./members/result.js";
 
@@ -145,7 +146,9 @@ export function selectProjectSourceMethodProperty(
     );
   }
   const methodTypeParameters = context.ast.typeParameters(declaration);
-  const parameters = context.ast.parameters(declaration);
+  const parameters = sourceCallableValueParameters(context.ast, declaration, context.semanticsFor(declaration));
+  if (parameters === undefined) return rejectSelectedOperation(request.expression, context,
+    "RUST_PROJECT_METHOD_PROPERTY_ABI_UNSUPPORTED", "Mutable project methods require exact checked value parameters.");
   const parameterAbis = parameters.map((parameter) => parameter === undefined
     ? undefined
     : options.sourceCallableAbi.resolveParameterAbi(parameter, context, options));

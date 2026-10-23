@@ -1,6 +1,7 @@
 import { createRustRecordFixture } from "../../helpers/records.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
+import { createTargetSourceProgram } from "@tsonic/target-api/source";
 import { analyzeRust } from "../../helpers/rust-session.mjs";
 import { analyzeRustObjectLiteralEmission } from "../../../dist/analysis/objects/object-literal-emission.js";
 import { createRustObjectLiteralEmissionProducer } from "../../../dist/analysis/program/records/object-literal-emission.js";
@@ -10,7 +11,7 @@ import { rustSourcePrimitiveTargetType } from "../../../dist/target-model/types/
 // closedRecord record only for an exact ordered data-property fact. These cases carry over the planner test's
 // corrupted-evidence assertions: each rejects and publishes nothing.
 test("closed record admission rejects corrupted ordered property and native carrier evidence", () => {
-  const { program } = analyzeRust({ surfaces: ["js"], files: { "index.ts": `
+  const { program, source: checked } = analyzeRust({ surfaces: ["js"], files: { "index.ts": `
 export function run(first: unknown, second: unknown): unknown {
   return { first, second };
 }
@@ -31,7 +32,8 @@ export function run(first: unknown, second: unknown): unknown {
   const integer = rustSourcePrimitiveTargetType("int32");
   const admit = records => {
     const producer = createRustObjectLiteralEmissionProducer(() => {});
-    const issues = analyzeRustObjectLiteralEmission({ ...program, records }, [literal], producer, () => undefined, () => undefined);
+    const issues = analyzeRustObjectLiteralEmission({ ...program, records }, [literal], producer, () => undefined, () => undefined,
+      createTargetSourceProgram(checked));
     return { issues, closed: producer.records.closedRecord.get(literal) };
   };
   const accepted = admit(program.records);

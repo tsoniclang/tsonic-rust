@@ -13,7 +13,7 @@ import { rustFinalizedCarrierTransitionMatches } from "../../policy/operations/m
 import { mapRustTargetTypes } from "../../target-model/types/carriers/substitution.js";
 import { rustSpreadElementCarrier } from "../../target-model/operations/rest-assembly.js";
 import { rustSourceOptionalTargetType } from "../../target-model/types/projections.js";
-import { asSourceNode, Node_Expression, sourceEnclosingCallable } from "@tsonic/target-api/source";
+import { asSourceNode, Node_Expression, sourceEnclosingCallable, sourceCallableValueParameters, type TargetSourceProgram } from "@tsonic/target-api/source";
 import { sourceCallSelectedMemberMatches } from "./source-call-evidence.js";
 import { rustSourceCallArgumentCarriers } from "./source-call-lifetimes.js";
 import { rustRetainedCallSubstitutions } from "./retained-call-lifetimes.js";
@@ -21,7 +21,7 @@ import { rustArgumentPassingMode } from "../../policy/ownership/argument-passing
 import type { RustSourceCallInputEmission, RustSourceParameterEmission, RustSourceCallEvaluationEmission } from "../../target-model/records/source-call-arguments.js";
 
 export function analyzeRustSourceCallArguments(program: Omit<RustAnalysisProgram, "reachability">,
-  nodes: readonly Node[], producer: RustSourceCallArgumentProducer): readonly TargetDiagnostic[] {
+  nodes: readonly Node[], producer: RustSourceCallArgumentProducer, source: TargetSourceProgram): readonly TargetDiagnostic[] {
   const issues: TargetDiagnostic[] = [];
   const refuse = (node: Node, capability: string, message: string, unsupported = false): void => {
     issues.push({ code: unsupported ? "RUST_UNSUPPORTED_AST" : "RUST_MISSING_TARGET_FACT", source: "tsonic-rust", category: "error", sourceNode: node,
@@ -59,6 +59,10 @@ export function analyzeRustSourceCallArguments(program: Omit<RustAnalysisProgram
       return { source, expression, destination: program.callableValues.nativeStorage.invocationArgumentWitnessFor(call, source), mutable: false, borrow: "value", elements: [] };
     });
     const declaration = asSourceNode(selectedCall.sourceDeclaration, program.source.ast);
+    const declarationParameters = declaration === undefined ? undefined
+      : sourceCallableValueParameters(program.source.ast, declaration, source.semantics.forNode(declaration));
+    if (declaration !== undefined && declarationParameters === undefined)
+      failTargetAnalysisInvariant("tsonic-rust", "An admitted source call requires its exact checked value parameters.", call);
     const elements = new Map<number, Map<number, "value" | "ref" | "mut-ref">>();
     const mutable = new Set<number>();
     const borrowedRoots = new Map<number, "identity" | "ref" | "mut-ref">();
@@ -130,7 +134,7 @@ export function analyzeRustSourceCallArguments(program: Omit<RustAnalysisProgram
       // An omitted optional native callable input is passed as the absent value of its invocation witness.
       const omitted = parameter.inputs.length !== 0 || declaration === undefined ? undefined
         : program.callableValues.native.inputsFor(declaration).find(candidate => candidate.subject.projection.length === 0 &&
-          candidate.subject.node === program.source.ast.parameters(declaration)[parameterIndex]);
+          candidate.subject.node === declarationParameters?.[parameterIndex]);
       const witness = omitted === undefined ? undefined : program.callableValues.nativeStorage.invocationWitnessFor(omitted, call);
       const carrier = witness === undefined ? parameter.parameterCarrier : rustSourceOptionalTargetType(witness);
       return Object.freeze({ form: parameter.form, carrier, rest: isRustJsArrayCarrier(parameter.parameterCarrier) ? "js" : "native",
