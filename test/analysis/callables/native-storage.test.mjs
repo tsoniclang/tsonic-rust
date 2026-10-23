@@ -20,6 +20,35 @@ import { rustCallableProtocol, rustCallableTargetType } from "../../../dist/targ
 import { rustSourcePrimitiveTargetType } from "../../../dist/target-model/types/carriers/native.js";
 import { sourcePackageCallbackErrorFiles, sourcePackageCallbackErrorGraph }
   from "../../../../tsonic/test/fixtures/source-package-callback-errors.mjs";
+import { createRustNativeStorageJoins } from "../../../dist/analysis/callables/native-storage-joins.js";
+import { emptyRustTypeDefinitions } from "../../../dist/target-model/types/source-union-definitions.js";
+
+test("native callback signatures do not masquerade as stored aggregate payloads", () => {
+  const integer = rustSourcePrimitiveTargetType("int32");
+  const callback = rustCallableTargetType([integer], integer);
+  const selected = createRustNativeStorageJoins({
+    input: { storage: {}, definitions: emptyRustTypeDefinitions,
+      structuralShapes: { field() { throw new Error("A native call signature owns no structural storage fields."); } },
+      producerErrorFor: () => undefined },
+    boundaries: [], joinWrites: new Map(), step: () => true,
+    fail(message) { throw new Error(message); },
+  });
+  for (const callTrait of ["Fn", "FnMut", "FnOnce"]) {
+    for (const [name, args, result] of [["input", [callback], integer], ["output", [], callback], ["both", [callback], callback]]) {
+      const carrier = { kind: "closure", callTrait, args, result };
+      assert.equal(selected.containsCallable(carrier, 0), false,
+        `${callTrait} ${name}: callback ABI metadata is not a captured aggregate storage slot`);
+      assert.equal(carrier.args === args && carrier.result === result, true,
+        `${callTrait} ${name}: the exact native argument and result contracts remain unchanged`);
+    }
+  }
+  assert.equal(selected.containsCallable({ kind: "function-pointer", args: [callback], result: callback }, 0), false,
+    "a native function pointer keeps the same signature-only storage rule");
+  for (const carrier of [{ kind: "array", element: callback }, { kind: "tuple", elements: [callback] }]) {
+    assert.equal(selected.containsCallable(carrier, 0), true,
+      "actual aggregate callback payloads still require their physical stored-producer owner");
+  }
+});
 
 function fixture(text, options = {}) {
   const { program, source: checked } = analyzeRust({ surfaces: [], files: { "index.ts": text }, ...options });
