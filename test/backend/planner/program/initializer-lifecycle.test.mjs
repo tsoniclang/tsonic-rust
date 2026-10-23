@@ -4,6 +4,7 @@ import { planRustInitializerLifecycleResult } from "../../../../dist/backend/pla
 import { planRustNativeErrorJoin } from "../../../../dist/backend/planner/types/native-error-joins.js";
 import { rustNativeFallibleBoundary, rustPackageFallibleBoundary } from "../../../../dist/backend/planner/program/fallible-boundaries.js";
 import { printRustExpr } from "../../../../dist/print/source/expressions/core.js";
+import { planRustBinaryErrors } from "../../../../dist/backend/planner/program/binary-errors.js";
 
 const localOwner = Object.freeze({ componentId: "root", errorDomain: "runtime",
   errorTypePath: "tsonic_rust_runtime::TsonicError", errorTypeIdentity: "root-error" });
@@ -33,7 +34,8 @@ test("a package initializer enters the same lifecycle local channel without conv
   const selected = planRustInitializerLifecycleResult({ kind: "package", owner: {
     kind: "physical", domain: "runtime",
   } }, native, native, operation);
-  assert.equal(printRustExpr(selected), "initialize()?", "the identical native package error propagates directly");
+  assert.equal(selected === operation, true, "the identical native Result remains available to its selected caller");
+  assert.equal(printRustExpr(selected), "initialize()", "mapping does not prematurely propagate into a different caller error type");
   assert.doesNotMatch(printRustExpr(selected), /from|clone|Box|unwrap/u, "no facade or compatibility conversion is added");
 });
 
@@ -49,8 +51,9 @@ test("all selected module payloads and the local channel map once into the exist
     { kind: "module", identity: foreign.identity, variant: foreign.variant, sourceFile: Object.freeze({}) },
   ] };
   const selected = planRustInitializerLifecycleResult(selection, source, target, operation);
-  assert.equal(selected.kind, "try", "the initializer returns through the single lifecycle Result");
-  const mapped = selected.expr.args[0].body;
+  assert.equal(selected.kind, "method-call", "the initializer retains its one mapped lifecycle Result before caller propagation");
+  assert.equal(selected.method, "map_err", "only the error channel is mapped");
+  const mapped = selected.args[0].body;
   assert.equal(mapped.arms.length, 3, "every original initializer error arm is retained");
   assert.equal(mapped.arms[0].expression.method, "Error0", "the local package uses only its selected local arm");
   assert.equal(mapped.arms[1].expression.method, "Error2", "the worker keeps its exact module identity, not its position");
@@ -58,6 +61,11 @@ test("all selected module payloads and the local channel map once into the exist
   assert.equal(mapped.arms.every(arm => arm.expression.args[0].path === "initializer_payload"), true,
     "each native payload moves directly once without reconstruction");
   assert.doesNotMatch(printRustExpr(selected), /from|clone|Box|unwrap/u, "no foreign error narrows through the root error type");
+  const binary = planRustBinaryErrors({ lifecycle: { region: { kind: "native" } },
+    sources: [{ kind: "lifecycle", identity: "lifecycle", variant: "Lifecycle" }] }, target.errorType);
+  const startup = binary.lifecycle(selected, target.errorType);
+  assert.equal(startup.kind, "try", "the actual binary caller alone propagates its startup Result");
+  assert.equal(startup.expr === selected, true, "the one lifecycle arm preserves the already mapped Result without a second conversion");
   const absent = boundary("MissingWorker", [local, foreign], local);
   assert.throws(() => planRustInitializerLifecycleResult(selection, source, absent, operation), /exact original module and local lifecycle channels/u,
     "an equal display name never substitutes for a missing selected worker channel");

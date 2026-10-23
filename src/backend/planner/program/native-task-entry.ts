@@ -28,7 +28,8 @@ export function planRustNativeTaskEntry(input: {
     const lifecycle = planRustSelectedErrorRegion(input.lifecycle.region, input.rendering, undefined, input.crateName)?.boundary;
     if (operand === undefined || lifecycle === undefined)
       failRustPlannerInvariant("An admitted native task entry requires its exact initializer-to-lifecycle error transport.");
-    initialize = planRustInitializerLifecycleResult(input.initialization.error, operand, lifecycle, execution);
+    initialize = { kind: "try", operandErrorType: lifecycle.errorType, resultErrorType: lifecycle.errorType,
+      expr: planRustInitializerLifecycleResult(input.initialization.error, operand, lifecycle, execution) };
   }
   const statements: readonly RustStmt[] = [
     { kind: "expr", expr: initialize },

@@ -12,10 +12,13 @@ import type { RustSourcePackageInitializerPlan } from "../../../target-model/rec
 import type { RustTypeRenderingContext } from "../types/render.js";
 import {
   planRustCrateInitializer,
+  planRustInitializerBoundary,
   planRustModuleInitializers,
 } from "./module-initialization.js";
 import { resolveRustSourcePackageErrorBoundary } from "./source-package-errors.js";
 import type { RustSourcePackageErrorPlan } from "../../../target-model/records/source-package-errors.js";
+import type { RustInitializerErrorSelection } from "../../../target-model/records/error-regions.js";
+import type { RustFallibleBoundary } from "./fallible-boundaries.js";
 
 export interface RustWorkerEntryPlan {
   readonly sourceFile: SourceFile;
@@ -27,6 +30,8 @@ export interface RustWorkerEntryPlan {
   readonly operandErrorType?: RustType;
   readonly nativeError: boolean;
   readonly errorIdentity: string;
+  readonly initializerError: RustInitializerErrorSelection;
+  readonly initializerBoundary: RustFallibleBoundary | undefined;
 }
 
 export interface RustWorkerEntryPlans {
@@ -129,6 +134,10 @@ export function planRustWorkerEntries(input: {
       asynchronous: initializer?.asynchronous === true,
       nativeError,
       errorIdentity: target.fileName,
+      initializerError: selection.error,
+      initializerBoundary: initializer?.errorType === undefined ? undefined
+        : planRustInitializerBoundary(selection, initializers, functionName, initializer.errorJoinName,
+          input.typeRenderingContextFor(component), component.root ? input.rootCrateName : component.crateName),
       ...(initializer?.errorType === undefined
         ? {}
         : {
