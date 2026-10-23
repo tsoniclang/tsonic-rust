@@ -5,22 +5,26 @@ import { readRustProjectObjectIndex, copyRustProjectObjectIndexStorage, writeRus
 import { printRustExpr } from "../../../../dist/print/source/expressions/core.js";
 import { resolvedTargetStage, runTargetCompilationStages } from "@tsonic/target-api/artifacts";
 import { rustSourcePrimitiveTargetType } from "../../../../dist/target-model/types/index.js";
+import { createRustRecordFixture } from "../../../helpers/records.mjs";
 
 test("object storage scopes borrow their handles while preserving actual writes to captured locals", () => {
   const owner = { kind: "path", path: "owner" };
   const value = { kind: "int-literal", text: "1" };
   const carrier = rustSourcePrimitiveTargetType("int32");
+  const context = { input: { program: { records: createRustRecordFixture({
+    carrierRead: { get: selected => selected === carrier ? { copy: true, clone: true } : undefined },
+  }) } } };
   const representation = { kind: "shared-mutable" };
   const expressions = [
     enterRustProjectObjectMutableState(owner, "state", value),
     withRustProjectStoredField(owner, "field", representation, field => field),
-    readRustStructuralObjectField(owner, "field", carrier),
+    readRustStructuralObjectField(owner, "field", carrier, context),
     writeRustProjectObjectField(owner, "field", "=", value, representation),
     readRustProjectPrivateField(owner, ["field"], "read", representation),
     writeRustProjectPrivateField(owner, ["field"], "write", value, representation),
     readRustProjectMethodOverride(owner, "field", representation),
     writeRustProjectMethodOverride(owner, "field", value, representation),
-    readRustProjectObjectIndex(owner, "entries", value, carrier, representation),
+    readRustProjectObjectIndex(owner, "entries", value, carrier, representation, context),
     copyRustProjectObjectIndexStorage(owner, "entries", { kind: "path", path: "destination" }, representation),
     writeRustProjectObjectIndex(owner, "entries", value, value, representation),
     mutateRustProjectObjectIndex(owner, "entries", value, field => field, representation),
