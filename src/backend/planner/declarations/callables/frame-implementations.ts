@@ -157,9 +157,9 @@ function planFrameEntry(
         : { kind: "object", mutable: definition.storage.mutable, name: allocateRustSyntheticName(names, "frame_data") } };
     const helperContext = rustFrameBindingContext(definition, owner,
       rustCallablePayloadContext(implementation, { kind: "path", path: stateName }, context));
-    const helper = planNativeModuleFunction(implementation.declaration, implementation.declaration,
+    const planned = planNativeModuleFunction(implementation.declaration, implementation.declaration,
       implementation.functionName, true, helperContext);
-    const parameters = helper.params;
+    const helpers = planned.helper === undefined ? [planned.item] : [planned.item, planned.helper];
     argumentTypes ??= callable.parameterCarriers.map(carrier => rustTypeFromCarrierInContext(carrier, context)
       ?? failRustPlannerInvariant("An admitted frame entry requires its renderable native argument ABI.", implementation.declaration));
     const fallible = callable.resultWrapped;
@@ -169,13 +169,13 @@ function planFrameEntry(
       { kind: "type" as const, type: rustErrorType(boundary) },
     ] };
     resultType ??= output;
-    items.push({ ...helper, generics, params: [
+    items.push(...helpers.map((helper): RustItem => ({ ...helper, generics, params: [
       { name: frameName, type: suspended ? shared(types.frameType)
         : { kind: "reference", referent: shared(types.frameType), mutable: false } },
       ...(captures.length === 0 ? [] : [{ name: stateName, type: suspended ? implementation.copy ? state : shared(state)
         : { kind: "reference" as const, referent: state, mutable: false } }]),
-      ...parameters,
-    ] });
+      ...helper.params,
+    ] })));
     variants.push({ name: implementation.variantName, fields: [{ kind: "primitive", name: "usize" },
       ...(!entryHasPayload(implementation, emission) ? [] : [implementation.copy ? state : shared(state)])] });
     const call: RustExpr = { kind: "call", path: implementation.functionName, args: [

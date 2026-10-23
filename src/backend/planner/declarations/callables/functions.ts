@@ -37,7 +37,7 @@ import { rustPackageFallibleBoundary } from "../../program/fallible-boundaries.j
 import { planRustErrorRegion } from "../../program/error-regions.js";
 import { planRustPromiseBodyObjectAdapter, rustPromiseBodyGenericArguments } from "./promise-body-adapters.js";
 
-interface RustFunctionItemPlan {
+export interface RustFunctionItemPlan {
   readonly item: Extract<RustItem, { readonly kind: "function" }>;
   readonly helper: Extract<RustItem, { readonly kind: "function" }> | undefined;
 }
@@ -111,13 +111,13 @@ export function planNativeModuleFunction(
   name: string,
   exported: boolean,
   outerContext: RustPlanContext,
-): Extract<RustItem, { readonly kind: "function" }> {
+): RustFunctionItemPlan {
   return planRustFunctionItem({
     callableDeclaration,
     nameDeclaration: declaration,
     name,
     exported,
-  }, outerContext).item;
+  }, outerContext);
 }
 
 function planRustFunctionItem(

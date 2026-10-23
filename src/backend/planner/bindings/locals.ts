@@ -28,9 +28,8 @@ function planVariableDeclaration(declaration: Node, context: RustPlanContext): r
   if (binding.kind === "erased") return [];
   if (binding.kind === "pattern") return planBindingVariableDeclaration(declaration, binding, context);
   if (binding.kind === "function") {
-    const item = planNativeModuleFunction(declaration, binding.initializer, binding.name, false, context);
-    if (item === undefined) failRustPlannerInvariant("An admitted lexical function binding requires its native item plan.", declaration);
-    return [{ kind: "item", item }];
+    const planned = planNativeModuleFunction(declaration, binding.initializer, binding.name, false, context);
+    return [{ kind: "item", item: planned.item }, ...(planned.helper === undefined ? [] : [{ kind: "item" as const, item: planned.helper }])];
   }
   const initializerContext = binding.initializer === undefined ? context
     : rustValueDestinationContext(binding.initializer, binding.initializerCarrier, context);
