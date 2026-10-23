@@ -1,7 +1,7 @@
 import type { Node } from "@tsonic/tsts";
 import type { RustErrorRegionSelection } from "../../../target-model/records/error-regions.js";
 import type { RustItem, RustType } from "../../target-ast/syntax/nodes.js";
-import { planRustNativeErrorJoin } from "../types/native-error-joins.js";
+import { planRustNativeErrorJoin, planRustNativeErrorRuntimeFrom } from "../types/native-error-joins.js";
 import { rustTypeFromCarrierInContext, type RustTypeRenderingContext } from "../types/render.js";
 import { rustErrorType, rustNativeFallibleBoundary, rustPackageFallibleBoundary,
   type RustFallibleBoundary } from "./fallible-boundaries.js";
@@ -11,6 +11,7 @@ import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustNativeErrorJoinIdentity } from "../../../target-model/types/native-error-joins.js";
 import { failRustPlannerInvariant } from "../diagnostics.js";
 import { planRustJsRejectionRegion } from "./js-rejection-regions.js";
+import { qualifyRustCratePath, qualifyRustCrateType } from "../../target-ast/syntax/type-paths.js";
 
 export function planRustErrorJoinDeclarations(sourceFile: import("@tsonic/tsts").SourceFile,
   input: import("../context.js").RustPlanningContext): readonly RustItem[] {
@@ -26,7 +27,8 @@ export function planRustErrorJoinDeclarations(sourceFile: import("@tsonic/tsts")
       })),
     });
     if (join === undefined) failRustPlannerInvariant("An admitted native error join requires its complete syntax declaration.", sourceFile);
-    return join.items;
+    const runtimeFrom = planRustNativeErrorRuntimeFrom(declaration);
+    return runtimeFrom === undefined ? join.items : [...join.items, runtimeFrom];
   }));
 }
 
@@ -43,9 +45,13 @@ export function planRustSelectedErrorRegion(
   selected: RustErrorRegionSelection,
   context: RustTypeRenderingContext,
   render: (carrier: TargetTypeRef) => RustType | undefined = carrier => rustTypeFromCarrierInContext(carrier, context),
+  referenceCrate?: string,
 ): { readonly boundary: RustFallibleBoundary | undefined } | undefined {
-  const owner = selected.localOwner === undefined || context.sourcePackageErrors === undefined ? undefined
+  const physicalOwner = selected.localOwner === undefined || context.sourcePackageErrors === undefined ? undefined
     : resolveRustPhysicalProgramErrorBoundary(context.input.program.records, context.sourcePackageComponentId, selected.localOwner);
+  const owner = physicalOwner === undefined || referenceCrate === undefined ? physicalOwner : {
+    ...physicalOwner, errorTypePath: qualifyRustCratePath(physicalOwner.errorTypePath, referenceCrate),
+  };
   if (selected.localOwner !== undefined && owner === undefined) failRustPlannerInvariant("An admitted native error region requires its exact physical package boundary.");
   if (owner !== undefined) registerAliasFromPath(context, owner.errorTypePath);
   if (selected.sources.length === 0) return Object.freeze({ boundary: owner === undefined
@@ -55,11 +61,12 @@ export function planRustSelectedErrorRegion(
   const moduleName = context.moduleNameByFileName.get(selected.fileName);
   if (name === undefined || moduleName === undefined) failRustPlannerInvariant("An admitted native error region requires its sealed join name and source module.");
   const external = context.externalCrateNameByFileName.get(selected.fileName);
-  const referencePath = `${external !== undefined && external !== context.crateName ? external : "crate"}::${moduleName}::${name}`;
+  const selectedPath = `${external !== undefined && external !== context.crateName ? external : "crate"}::${moduleName}::${name}`;
+  const referencePath = referenceCrate === undefined ? selectedPath : qualifyRustCratePath(selectedPath, referenceCrate);
   const nativeSources = selected.sources.map(source => {
     const errorType = render(source.errorType);
     if (errorType === undefined) failRustPlannerInvariant("An admitted native error source requires its renderable finalized carrier.");
-    return { ...source, errorType };
+    return { ...source, errorType: referenceCrate === undefined ? errorType : qualifyRustCrateType(errorType, referenceCrate) };
   });
   const local = owner === undefined ? undefined : { identity: `package:${owner.errorTypeIdentity}`,
     variant: "Error0", errorType: rustErrorType(owner) };
