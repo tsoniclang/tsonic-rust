@@ -1,6 +1,7 @@
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustProviderOperationTemplate } from "../../../target-model/operations/model.js";
 import { getRustGeneratorProtocol, getRustIteratorResultProtocol, rustIteratorResultTargetType, rustSourcePrimitiveTargetType } from "../../../target-model/types/index.js";
+import { jsSourceCallableRefusal } from "@tsonic/js-source-profile";
 
 export interface RustGeneratorSourceCallRequest {
   readonly ownerName: string;
@@ -20,7 +21,7 @@ export interface RustGeneratorSourcePropertyRequest {
 
 export type RustGeneratorSourceSelection =
   | { readonly kind: "not-applicable" }
-  | { readonly kind: "rejected"; readonly message: string }
+  | { readonly kind: "rejected"; readonly code: string; readonly message: string }
   | {
       readonly kind: "resolved";
       readonly template: RustProviderOperationTemplate;
@@ -39,10 +40,12 @@ export function selectRustGeneratorSourceCall(
   if (!generatorOwners.has(request.ownerName)) {
     return { kind: "not-applicable" };
   }
+  const refusal = jsSourceCallableRefusal(request);
+  if (refusal !== undefined) return { kind: "rejected", ...refusal };
   const protocol = getRustGeneratorProtocol(request.receiverCarrier);
   const expectedKind = request.ownerName === "Generator" ? "sync" : "async";
   if (protocol?.kind !== expectedKind) {
-    return rejected(`${request.ownerName}.${request.memberName} has no closed matching Rust generator receiver protocol.`);
+    return rejected("RUST_GENERATOR_SOURCE_CALL_NOT_CLOSED", `${request.ownerName}.${request.memberName} has no closed matching Rust generator receiver protocol.`);
   }
   const resultCarrier = rustIteratorResultTargetType(protocol);
   if (request.memberName === "next" &&
@@ -81,29 +84,7 @@ export function selectRustGeneratorSourceCall(
       errorBoundary: "none",
     }, [protocol.returnType]);
   }
-  if (request.memberName === "throw") {
-    const errorCarrier = request.argumentCarriers[0];
-    if (request.selectedParameterCount !== 1 || request.argumentCarriers.length !== 1 ||
-      errorCarrier?.kind !== "target-named" || errorCarrier.id !== "rust.runtime.JsError") {
-      return rejected("Generator.throw requires one exact closed Rust JsError carrier.");
-    }
-    return resolved({
-      kind: "provider-operation",
-      operationId: `tsonic.rust.generator.throw.${protocol.kind}`,
-      operationKind: "method",
-      target: {
-        form: "receiver-method",
-        name: "throw_value",
-        mutatesReceiver: false,
-      },
-      resultCarrier,
-      parameterCarriers: [errorCarrier],
-      isAsync: protocol.kind === "async",
-      isFallible: true,
-      errorBoundary: "target-runtime",
-    }, [errorCarrier]);
-  }
-  return rejected(`The exact selected ${request.ownerName}.${request.memberName} signature has no Rust generator operation.`);
+  return rejected("RUST_GENERATOR_SOURCE_CALL_NOT_CLOSED", `The exact selected ${request.ownerName}.${request.memberName} signature has no Rust generator operation.`);
 }
 
 export function selectRustGeneratorSourceProperty(
@@ -118,7 +99,7 @@ export function selectRustGeneratorSourceProperty(
   }
   const protocol = getRustIteratorResultProtocol(request.receiverCarrier);
   if (protocol === undefined) {
-    return rejected(`${sourceMember.ownerName}.${sourceMember.memberName} has no closed Rust iterator-result receiver protocol.`);
+    return rejected("RUST_GENERATOR_SOURCE_PROPERTY_NOT_CLOSED", `${sourceMember.ownerName}.${sourceMember.memberName} has no closed Rust iterator-result receiver protocol.`);
   }
   const ownerNames = new Set(request.sourceMembers.map((member) => member.ownerName));
   const combined = ownerNames.size === 2 &&
@@ -155,7 +136,7 @@ export function selectRustGeneratorSourceProperty(
       errorBoundary: "none",
     }, []);
   }
-  return rejected(`The exact selected iterator-result '${sourceMember.memberName}' property set has no Rust operation.`);
+  return rejected("RUST_GENERATOR_SOURCE_PROPERTY_NOT_CLOSED", `The exact selected iterator-result '${sourceMember.memberName}' property set has no Rust operation.`);
 }
 
 function resolved(
@@ -165,6 +146,6 @@ function resolved(
   return { kind: "resolved", template, parameterCarriers };
 }
 
-function rejected(message: string): RustGeneratorSourceSelection {
-  return { kind: "rejected", message };
+function rejected(code: string, message: string): RustGeneratorSourceSelection {
+  return { kind: "rejected", code, message };
 }
