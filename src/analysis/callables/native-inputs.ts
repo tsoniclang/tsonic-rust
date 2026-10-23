@@ -162,7 +162,6 @@ export function createRustNativeCallableInputPlan(input: {
     if (identity === undefined || file === undefined) return undefined;
     const projection = subject.projection.map(component => component.kind === "array-element" ? "array"
       : component.kind === "tuple-element" ? `tuple:${component.index}`
-      : component.kind === "type-argument-slot" ? `type-argument:${component.index}`
       : sourceNodeIdentity(input.ast, component.declaration));
     if (projection.some(component => component === undefined)) return undefined;
     const nativeIdentity = `native-callable:${input.ast.getFileName(file)}:${identity}:${JSON.stringify(projection)}`;
