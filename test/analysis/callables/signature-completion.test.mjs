@@ -357,6 +357,77 @@ test("a complete callable keeps its selected logical contract separate from nati
   assert.equal(finalizeRustCallableSignature(current, declaration) === selected, true);
 });
 
+test("a scalar native signature does not query unrelated retained source storage", () => {
+  const input = fixture(false, "export function step(value: number): number { return value; }", []);
+  const current = { ...input.current, context: { ...input.current.context, retainedEnvironments: {
+    ...input.current.context.retainedEnvironments,
+    environmentFor() { throw new Error("a scalar native signature has no retained environment demand"); },
+  } } };
+  const selected = finalizeRustCallableSignature(current, input.declaration);
+  assert.equal(selected !== undefined, true, "the original scalar signature completes without a storage-retention walk");
+  assert.equal(current.context.records.retainedEnvironment.get(input.declaration) === undefined, true,
+    "a scalar native signature publishes no invented retained environment");
+  assert.equal(finalizeRustCallableSignature(current, input.declaration) === selected, true,
+    "the completed scalar signature remains a canonical lookup");
+});
+
+const retainedInputSource = `
+type Identity = <Value>(value: Value) => Value;
+export function step(callback: () => number): Identity {
+  return <Value>(value: Value): Value => { callback(); return value; };
+}`;
+
+test("one completed synchronous owner publishes input-only native retention before caching its signature", () => {
+  const input = fixture(false, retainedInputSource, []);
+  const records = input.current.context.records;
+  let admissions = 0;
+  const current = { ...input.current, context: { ...input.current.context, records: { ...records,
+    retainedEnvironments: { ...records.retainedEnvironments,
+      retain(...arguments_) { admissions++; return records.retainedEnvironments.retain(...arguments_); },
+    },
+  } } };
+  const selected = finalizeRustCallableSignature(current, input.declaration);
+  assert.equal(selected !== undefined && selected.result.returnCarrier.kind === "target-specific", true,
+    "the actual generic callable result is distinct from a monomorphic runtime-callable result");
+  const environment = records.retainedEnvironment.get(input.declaration);
+  const parameter = current.context.ast.parameters(input.declaration)[0];
+  const nativeLifetime = rustCallableProtocol(selected.parameterAbis[0].parameterCarrier)?.lifetime;
+  assert.equal(environment !== undefined && nativeLifetime?.kind === "parameter", true,
+    "the concrete native input already requires its exact declaration-owned environment");
+  assert.equal(environment.lifetime.identity === nativeLifetime.identity, true, "the published lifetime is the actual native input lifetime");
+  assert.equal(environment.inputs.length, 1, "the complete input vector contains one retained source formal");
+  assert.equal(environment.inputs[0].kind === "parameter" && environment.inputs[0].declaration === parameter, true,
+    "retention keeps the exact original source parameter, not a callable-family or contextual surrogate");
+  assert.equal(admissions, 1, "input and result completion have one synchronous environment publisher");
+  assert.equal(finalizeRustCallableSignature(current, input.declaration) === selected, true);
+  const repeated = finalizeRustCallableSignature(current, input.declaration, { selectedReturn: selected.logicalReturn });
+  assert.equal(repeated?.result === selected.result, true, "an exact new request reuses the admitted result");
+  assert.equal(records.retainedEnvironment.get(input.declaration) === environment, true);
+  assert.equal(admissions, 1, "matching signature requests do not publish a second environment");
+  records.seal(current.context.requiredRecords);
+});
+
+test("required native input retention preserves its actual unresolved reason and publishes no completed signature", () => {
+  const input = fixture(false, retainedInputSource, []);
+  const reason = "the actual retained source input has no completed native storage";
+  const current = { ...input.current, context: { ...input.current.context, retainedEnvironments: {
+    ...input.current.context.retainedEnvironments, environmentFor: () => ({ kind: "unresolved", reason }),
+  } } };
+  assert.equal(finalizeRustCallableSignature(current, input.declaration) === undefined, true,
+    "required retention is a refusal, not an empty environment or a completed result");
+  const diagnostics = current.context.diagnostics.filter(diagnostic => diagnostic.code === "RUST_RETAINED_ENVIRONMENT_NOT_EXACT");
+  assert.equal(diagnostics.length, 1, "the original source owner emits one precise refusal");
+  assert.equal(diagnostics[0].message, reason, "the native retention reason is not replaced with a missing-record failure");
+  assert.equal(diagnostics[0].sourceNode === input.declaration, true, "the diagnostic preserves the exact original callable");
+  assert.equal(current.rejectedExpressions.has(input.declaration), true, "the existing terminal failure route records the actual declaration");
+  assert.equal(current.context.records.sourceCallableReturn.get(input.declaration) === undefined, true,
+    "a refused input environment cannot publish its dependent result");
+  assert.equal(current.context.records.retainedEnvironment.get(input.declaration) === undefined, true,
+    "an unresolved required environment is never published as none");
+  assert.equal(current.callableSignatures.get(input.declaration).completed.size, 0,
+    "terminal retention refusal never becomes a successful signature-cache entry");
+});
+
 test("the cached native callable owns immutable argument containers without copying canonical input carriers", () => {
   const input = fixture(false);
   const selected = finalizeRustCallableSignature(input.current, input.declaration);

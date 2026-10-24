@@ -20,9 +20,6 @@ import type { RustCallableSuspensionSelection } from "./suspension.js";
 import { recordRustSourceCallableReturn, selectRustCallableLogicalReturn } from "./source-callable-abi.js";
 import { requireRustRecord } from "../program/records/required-records.js";
 import { rustClassCallableMemberOwner, rustClassReceiverCarriers } from "../declarations/classes/receivers.js";
-import { appendRustDiagnostic } from "../program/walk.js";
-import { rustRetainedEnvironment } from "./retained-values.js";
-import type { RustRetainedEnvironment } from "../../target-model/records/retained-environments.js";
 
 export interface RustCallableSignatureRequest {
   readonly parameterAbis?: readonly RustSourceParameterAbiFact[];
@@ -112,16 +109,7 @@ export function finalizeRustCallableSignature(
       if (suspension === undefined) return undefined;
       state.suspensions.set(suspensionKey, suspension);
     }
-    const retained = suspension.kind === "none"
-      ? rustRetainedEnvironment(declaration, parameterAbis.map(parameter => parameter.parameterCarrier), walk.context)
-      : suspension.retainedEnvironment === undefined ? { kind: "none" as const }
-        : { kind: "selected" as const, environment: suspension.retainedEnvironment };
-    if (retained.kind === "unresolved") {
-      appendRustDiagnostic(walk, "RUST_RETAINED_ENVIRONMENT_NOT_EXACT", retained.reason, declaration,
-        ["target.capability=rust.callable.retained-environment"]);
-      return undefined;
-    }
-    admitCallableState(walk, declaration, suspension, retained.kind === "selected" ? retained.environment : undefined);
+    admitSuspension(walk, declaration, suspension);
     const suspendedReturn = suspension.kind === "async" ? suspension.fact.outputCarrier
       : suspension.kind === "generator" ? suspension.fact.resultCarrier : undefined;
     if (suspendedReturn !== undefined && request?.selectedReturn !== undefined &&
@@ -153,17 +141,17 @@ export function finalizeRustCallableSignature(
   }
 }
 
-function admitCallableState(walk: RustFactWalk, declaration: Node, selection: RustCallableSuspensionSelection,
-  retained: RustRetainedEnvironment | undefined): void {
-  const { records, ast } = walk.context;
-  if (retained !== undefined) {
-    requireRustRecord(walk.context.requiredRecords, "retainedEnvironment", declaration,
-      "native callable environment", "admitCallableState");
-    records.retainedEnvironments.retain(declaration, retained.lifetime, retained.inputs);
-  }
+function admitSuspension(walk: RustFactWalk, declaration: Node, selection: RustCallableSuspensionSelection): void {
   if (selection.kind === "none") return;
+  const { records, ast } = walk.context;
+  if (selection.retainedEnvironment !== undefined) {
+    requireRustRecord(walk.context.requiredRecords, "retainedEnvironment", declaration,
+      "native callable environment", "admitSuspension");
+    records.retainedEnvironments.retain(declaration,
+      selection.retainedEnvironment.lifetime, selection.retainedEnvironment.inputs);
+  }
   requireRustRecord(walk.context.requiredRecords, selection.kind === "async" ? "asyncFunction" : "generator",
-    declaration, selection.fact.kind, "admitCallableState");
+    declaration, selection.fact.kind, "admitSuspension");
   const asynchronous = records.asyncFunction.get(declaration);
   const generator = records.generator.get(declaration);
   if (selection.kind === "async" ? generator !== undefined || asynchronous !== undefined &&
