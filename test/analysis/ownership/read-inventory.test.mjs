@@ -13,12 +13,21 @@ import { finalizeRustProviderOperationAbi } from "../../../dist/policy/operation
 import { rustBigIntTargetType } from "../../../dist/target-model/types/carriers/native.js";
 import { rustNativeStorageRoot, rustNativeStorageProjections } from "../../../dist/analysis/storage/native-paths.js";
 
+function readBorrowEffectsInput(source, program, nodes, records) {
+  const nativeNodes = new Set(nodes);
+  return { ast: source.ast, sourceFacts: source.sourceFacts, nodes, records,
+    isNativeNode: node => nativeNodes.has(node), navigation: program.sourceNavigation,
+    projectTypes: program.projectTypes, objectRepresentations: program.objectRepresentations,
+    structuralShapes: program.structuralShapes, frozenDataWrites: program.frozenDataWrites };
+}
+
 for (const projection of [false, true]) test(`owned native getter results remain distinct from stored element places (projection=${projection})`, async () => {
   for (const [sourceType, payload] of [["string", rustStringTargetType()], ["bigint", rustBigIntTargetType()]]) {
-    const source = createTargetSourceProgram(await checkedSource("ownership-native-getter-result", {
-      "src/index.ts": `function inspect(values: (${sourceType} | undefined)[]): void { void (values[0]!); }`,
-    }));
-    const storage = createSourceStorageQuery(source, source.sourceFiles);
+    const { source: checked, program } = analyzeRust({ files: {
+      "index.ts": `function inspect(values: (${sourceType} | undefined)[]): void { void (values[0]!); }`,
+    } });
+    const source = createTargetSourceProgram(checked);
+    const storage = createSourceStorageQuery(source, program.sourceFiles);
     const { ast } = source;
     const element = storage.nodes.find(node => ast.is.IsElementAccessExpression(node));
     assert.equal(element !== undefined, true, "the fixture keeps its original checked element source occurrence");
@@ -39,11 +48,11 @@ for (const projection of [false, true]) test(`owned native getter results remain
       for (const node of storage.nodes) if (ast.is.IsVoidExpression(node)) builder.targetOperations.source(node, {
         kind: "void-expression", operationId: "ownership-read.discard", resultCarrier: rustUnitTargetType(),
       });
-      const nodes = new Set(storage.nodes);
-      const selected = analyzeRustReadOwnership({ storage, nativeNodes: storage.nodes, records: builder.seal([]),
+      const records = builder.seal([]);
+      const selected = analyzeRustReadOwnership({ storage, nativeNodes: storage.nodes, records,
         flow: { movingReads: new Set(owned ? [element] : []), captureTransfers: new Map() },
         borrowEffects: { pureValues: new Set(), fieldWrites: new Map(), stableBindings: new Set(), nativeWrites: new Map() },
-        borrowEffectsInput: { ast, isNativeNode: node => nodes.has(node) }, definitions: emptyRustTypeDefinitions,
+        borrowEffectsInput: readBorrowEffectsInput(source, program, storage.nodes, records), definitions: emptyRustTypeDefinitions,
         genericRequirements: { supportsClone: () => true }, genericCallables: { definitionFor: () => undefined },
         capturesFor: () => undefined, invocationTransfersCapture: () => false, ownsExternalArgument: () => false,
       });
@@ -127,7 +136,7 @@ for (const surfaces of [[], ["js"]]) {
     program.sourceFiles.forEach(visit);
     assert.equal(fields.length, 1, "the source has exactly one genuine stored-field read");
     const field = fields[0];
-    const input = { ast, records: program.records, navigation: program.source.navigation };
+    const input = { ast, records: program.records, navigation: program.sourceNavigation };
     const root = rustNativeStorageRoot(field, input);
     assert.equal(root !== undefined, true, "the original checked input owns the native storage");
     const path = rustNativeStorageProjections(field, root, input);
@@ -193,22 +202,23 @@ for (const surfaces of [[], ["js"]]) {
 }
 
 async function fixture() {
-  const source = createTargetSourceProgram(await checkedSource("ownership-read-inventory", {
-    "src/index.ts": `function read(value: string) { return ${"(".repeat(80)}value${")".repeat(80)}; }`,
-  }));
-  const storage = createSourceStorageQuery(source, source.sourceFiles);
-  const nativeNodes = new Set(storage.nodes);
+  const { source: checked, program } = analyzeRust({ files: {
+    "index.ts": `function read(value: string) { return ${"(".repeat(80)}value${")".repeat(80)}; }`,
+  } });
+  const source = createTargetSourceProgram(checked);
+  const storage = createSourceStorageQuery(source, program.sourceFiles);
   const builder = createRustProgramRecordBuilder();
   const selected = storage.nodes.filter(node => source.ast.is.IsParenthesizedExpression(node) ||
     source.ast.is.IsIdentifier(node) && source.ast.text(node) === "value");
   for (const node of selected) builder.runtimeCarriers.selected(node, { kind: "target-named", id: "rust.std.String" });
+  const records = builder.seal([]);
   const input = {
     storage,
     nativeNodes: storage.nodes,
-    records: builder.seal([]),
+    records,
     flow: { movingReads: new Set(), captureTransfers: new Map() },
     borrowEffects: { pureValues: new Set(), fieldWrites: new Map(), stableBindings: new Set(), nativeWrites: new Map() },
-    borrowEffectsInput: { ast: source.ast, isNativeNode: node => nativeNodes.has(node) },
+    borrowEffectsInput: readBorrowEffectsInput(source, program, storage.nodes, records),
     definitions: emptyRustTypeDefinitions,
     genericRequirements: { supportsClone: () => true },
     genericCallables: { definitionFor: () => undefined },
@@ -234,7 +244,9 @@ test("transparent storage reads are classified once from the complete checked in
 
 test("an incomplete or unordered transparent inventory never silently selects a move", async () => {
   const { input, selected } = await fixture();
-  const operand = selected.at(-1);
+  const operand = selected.find(node => input.storage.source.ast.is.IsIdentifier(node) &&
+    input.storage.source.ast.is.IsParenthesizedExpression(input.storage.source.ast.parent(node)));
+  assert.equal(operand !== undefined, true, "the incomplete inventory removes the actual innermost checked operand");
   for (const nodes of [input.storage.nodes.filter(node => node !== operand), [...input.storage.nodes].reverse()]) {
     const result = analyzeRustReadOwnership({ ...input, nativeNodes: nodes, storage: { ...input.storage, nodes } });
     assert.equal(result.kind, "rejected");
@@ -259,16 +271,17 @@ for (const projection of [false, true]) {
       ["string", rustStringTargetType(), "move"],
       ["number", rustSourcePrimitiveTargetType("float64"), "copy"],
     ]) {
-      const source = createTargetSourceProgram(await checkedSource("ownership-owned-call-read", {
-        "src/index.ts": `
-          declare function get_text(): ${sourceType} | undefined;
+      const { source: checked, program } = analyzeRust({ files: {
+        "index.ts": `
+          function get_text(): ${sourceType} | undefined { return ${sourceType === "string" ? '"owned"' : "0"}; }
           export function inspect(stored: ${sourceType} | undefined): void {
             void (get_text()!);
             void (stored!);
           }
         `,
-      }));
-      const storage = createSourceStorageQuery(source, source.sourceFiles);
+      } });
+      const source = createTargetSourceProgram(checked);
+      const storage = createSourceStorageQuery(source, program.sourceFiles);
       const { ast } = source;
       const temporary = storage.nodes.find(node => ast.is.IsCallExpression(node));
       const stored = storage.nodes.find(node => ast.is.IsIdentifier(node) && ast.text(node) === "stored" &&
@@ -286,12 +299,12 @@ for (const projection of [false, true]) {
           kind: "void-expression", operationId: "ownership-read.discard", resultCarrier: rustUnitTargetType(),
         });
       }
-      const nativeNodes = new Set(storage.nodes);
+      const records = builder.seal([]);
       const selected = analyzeRustReadOwnership({
-        storage, nativeNodes: storage.nodes, records: builder.seal([]),
+        storage, nativeNodes: storage.nodes, records,
         flow: { movingReads: new Set(), captureTransfers: new Map() },
         borrowEffects: { pureValues: new Set(), fieldWrites: new Map(), stableBindings: new Set(), nativeWrites: new Map() },
-        borrowEffectsInput: { ast, isNativeNode: node => nativeNodes.has(node) },
+        borrowEffectsInput: readBorrowEffectsInput(source, program, storage.nodes, records),
         definitions: emptyRustTypeDefinitions,
         genericRequirements: { supportsClone: () => true },
         genericCallables: { definitionFor: () => undefined },

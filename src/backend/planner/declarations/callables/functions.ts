@@ -256,7 +256,7 @@ function planRustFunctionItem(
   }
   // A function body is its own completion and control-flow region: a local function item planned inside an enclosing
   // try/finally or loop must not inherit that region (closures reset it the same way).
-  const bodyContext: RustPlanContext = {
+  const parameterContext: RustPlanContext = {
     ...context,
     syntheticNames,
     controlFlow: { nextLoopId: 0 },
@@ -274,14 +274,16 @@ function planRustFunctionItem(
     fallibleBoundary: callableErrorBoundary,
     returnResult: bodyErrorType === undefined ? undefined : { errorType: bodyErrorType },
   };
-  const parameterStatements = planRustCallableParameterPrelude(
+  const parameterPrelude = planRustCallableParameterPrelude(
     parameterPlan,
-    bodyContext,
+    parameterContext,
     planExpression,
   );
-  if (parameterStatements === undefined) {
+  if (parameterPrelude === undefined) {
     failRustPlannerInvariant("An admitted callable requires its complete native function plan.", node);
   }
+  const bodyContext = parameterPrelude.context;
+  const parameterStatements = parameterPrelude.statements;
   const plannedBody = ast.kindName(bodyNode) === "KindBlock"
     ? planBlockLike(bodyNode, bodyContext)
     : (() => {
