@@ -36,14 +36,16 @@ export function planRustConstructorShape(
       selfParam: rustSelfParameter(member.selfMode), params: field?.role === "setter" ? [{ name: "value", type: params[0]!.type }] : params,
       returnType: result, errorType });
   }
-  const trait: RustType = { kind: "named", path: definition.dispatchName, genericArguments: type.genericArguments };
+  const traitGenerics: RustGenerics = { ...generics, parameters: selected.genericParameterIndices.map(index => generics.parameters[index]!) };
+  const trait: RustType = { kind: "named", path: definition.dispatchName,
+    genericArguments: selected.genericParameterIndices.map(index => type.genericArguments![index]!) };
   const dispatch: RustType = { kind: "named", path: "alloc::rc::Rc", genericArguments: [{ kind: "type", type: {
     kind: "trait-object", principal: { trait }, autoTraits: [],
     ...(selected.lifetime === undefined ? {} : { lifetime: rustLifetimeToAst(selected.lifetime) }),
   } }] };
   const field = (owner: string, name: string): RustExpr => ({ kind: "field", receiver: { kind: "path", path: owner }, name });
   return [
-    { kind: "trait", name: definition.dispatchName, visibility, generics, members: functions,
+    { kind: "trait", name: definition.dispatchName, visibility, generics: traitGenerics, members: functions,
       superTraits: [{ kind: "named", path: "rt::ObjectIdentityCarrier" }, ...superTraits] },
     { kind: "struct", name: definition.targetName, visibility, generics, fields: [
       { name: "dispatch", visibility, type: dispatch },

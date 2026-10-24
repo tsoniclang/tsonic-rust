@@ -308,7 +308,7 @@ function recordCallableValueSignatureFacts(
     walk.context.semanticsFor(expression).operations.generator(expression) !== undefined;
   if (finalizeRustCallableSignature(walk, expression, {
     parameterAbis, contextualResult: selectedReturnCarrier, ...(suspended ? {} : { selectedReturn: returnCarrier }),
-  }) === undefined) {
+  }).kind !== "complete") {
     return;
   }
   if (nativeCallable?.callableDeclaration === expression) return;

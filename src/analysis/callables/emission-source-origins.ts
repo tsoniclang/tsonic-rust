@@ -181,6 +181,8 @@ export function createRustEmissionSourceOriginPreparation(input: RustEmissionSou
     if (source.kind !== "construction" || source.layer === undefined)
       return unavailable("An authored constructor occurrence requires its exact selected native layer.");
     const layer = source.layer;
+    if (!source.plan.layers.includes(layer) || !source.plan.layers.some(candidate => candidate.definition === source.plan.definition))
+      return unavailable("An authored constructor occurrence requires its original constructor plan and layer.");
     if (constructions === undefined) {
       const calls = new Map<Node, RustPhysicalCallableEmissionRequest>();
       const byOwner = new Map<Node, RustPhysicalCallableEmissionRequest[]>();
@@ -245,7 +247,9 @@ export function createRustEmissionSourceOriginPreparation(input: RustEmissionSou
     }
     const region = storage.enclosingRegionFor(subject.node);
     const owner = layer.constructor ?? layer.definition.declaration;
-    const alternatives = constructions.filter(origin => origin.root.root === source.plan.definition.declaration &&
+    const alternatives = constructions.filter(origin =>
+      (layer.definition === source.plan.definition ? origin.construction.root : origin.root.root) === source.plan.definition.declaration &&
+      origin.construction.allocation === origin.root.allocation &&
       (origin.owner === owner || origin.owner === layer.definition.declaration) && origin.region === region);
     if (constructionFailure !== undefined) return unavailable(constructionFailure);
     return alternatives.length === 0 ? unavailable("An authored constructor occurrence has no original checked construction/region selection.")

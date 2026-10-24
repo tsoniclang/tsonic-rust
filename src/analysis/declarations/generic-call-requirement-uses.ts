@@ -157,7 +157,9 @@ export function collectRustSourceCallRequirements(input: RustCallableRequirement
               continue;
             }
             const physical = input.nativeStorage.invocationInputFor(parameter, node, declaration);
-            const payload = physical.kind === "unresolved" ? undefined : rustPhysicalPayloadFor(parameter.carrier,
+            if (physical.kind === "unresolved")
+              return `A source call lost the exact physical native input required by its callee contract: ${physical.reason}`;
+            const payload = rustPhysicalPayloadFor(parameter.carrier,
               physical.carrier, rustOptionElementCarrier(parameter.carrier) ?? parameter.carrier, input.typeDefinitions);
             if (payload === undefined) return "A source call lost the exact physical native input required by its callee contract.";
             substitutions.set(parameter.implementation.identity, payload);

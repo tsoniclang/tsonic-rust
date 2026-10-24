@@ -112,6 +112,7 @@ function construction(text, wrapCaptures = captures => captures, wrapRecords = r
     capturesFor: declaration => captures.forDeclaration(declaration) });
   const captures = wrapCaptures(createRustNativeCapturePlan({ ...input, nativeStorage: queries }));
   physical = registry.initializePhysical({ ...input, native, captures,
+    genericBindingsFor: queries.genericBindingsFor,
     boundSubjectFor: (subject, carrier, bindings) => queries.boundSubjectFor(subject, carrier, bindings) });
   const declaration = name => storage.nodes.find(node => source.ast.is.IsFunctionDeclaration(node) &&
     source.ast.name(node) !== undefined && source.ast.text(source.ast.name(node)) === name);

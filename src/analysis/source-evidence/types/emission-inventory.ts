@@ -57,6 +57,7 @@ export function rustDeclarationEmissionCarriers(program: Omit<RustAnalysisProgra
     collect(program.records.structuralViewImplementations.get(selected.declaration, selected.ownerFileName));
   for (const node of nodes) {
     collect(program.records.nativeDeclaration.get(node));
+    collect(program.records.nativeClass.get(node));
     collect(program.records.lexicalFunction.get(node));
     collect(program.records.localBinding.get(node));
     collect(program.records.projectCallableAdapters.get(node));

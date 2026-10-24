@@ -82,8 +82,6 @@ export function createRustNativeCallableInputPlan(input: {
    * declare type parameters, so their callable parameters keep their concrete callable carrier.
    */
   readonly declaresGenericInputs: (owner: Node) => boolean;
-  /** Generic callable family implementations: their captures live in the family's named environment. */
-  readonly genericImplementations: ReadonlySet<Node>;
   /** Whether a parameter is retained by a synchronous declaration whose nominal record result owns it ('static). */
   readonly ownedRetainedParameter: (parameter: Node) => boolean;
 }): RustNativeCallableInputPlan {
@@ -116,14 +114,6 @@ export function createRustNativeCallableInputPlan(input: {
       }
     }
   }
-  // A callable parameter captured by a generic callable implementation is stored in the family's named environment, which
-  // is the storage type of every place the family value reaches (a record field, a returned object); that type cannot
-  // carry the capturing declaration's native input type parameter, so the parameter keeps its concrete callable carrier.
-  for (const implementation of input.genericImplementations) {
-    for (const capture of input.records.closureCapture.get(implementation)?.captures ?? []) {
-      if (input.ast.is.IsParameterDeclaration(capture.declaration)) nativeRetainedParameters.add(capture.declaration);
-    }
-  }
   const concreteParameters = new Set<Node>();
   for (const parameter of input.nativeNodes) {
     if (!input.ast.is.IsParameterDeclaration(parameter)) continue;
@@ -148,10 +138,10 @@ export function createRustNativeCallableInputPlan(input: {
     bindings.set(declaration, result ?? null);
     return result;
   };
-  // A closure cannot be generic: its callable parameters keep their type-erased runtime callable carrier.
   const closureParameter = (subject: SourceStorageSubject): boolean => {
     const owner = subject.kind === "input" ? input.ast.parent(subject.node) : undefined;
-    return owner !== undefined && (input.ast.is.IsArrowFunction(owner) || input.ast.is.IsFunctionExpression(owner));
+    return owner !== undefined && (input.ast.is.IsArrowFunction(owner) || input.ast.is.IsFunctionExpression(owner)) &&
+      !input.declaresGenericInputs(owner);
   };
   const selectInput = (subject: SourceStorageSubject, carrier: TargetTypeRef): RustNativeCallableInput | undefined => {
     if (subject.kind !== "input") return undefined;

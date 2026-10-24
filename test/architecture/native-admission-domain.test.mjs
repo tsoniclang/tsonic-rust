@@ -16,7 +16,7 @@ const walkerContracts = new Map([
   ["analysis/control-flow/counted-loop-representations.ts", [3, "admitted-loop-subtrees"]],
   ["analysis/control-flow/project-flow-read-selections.ts", [1, "native-domain"]],
   ["analysis/control-flow/statement-completion.ts", [1, "native-domain"]],
-  ["analysis/objects/copied-methods.ts", [2, "native-domain"]],
+  ["analysis/objects/copied-methods.ts", [1, "native-domain"]],
   ["analysis/objects/frozen-receiver-captures.ts", [1, "native-domain"]],
   ["analysis/program/records/module-callable-storage.ts", [1, "native-domain"]],
   ["analysis/project-types/mutable-storage-requirements.ts", [1, "native-domain"]],

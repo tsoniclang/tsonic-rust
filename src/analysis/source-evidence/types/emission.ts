@@ -1,5 +1,4 @@
 import type { Node } from "@tsonic/tsts";
-import type { RustCallableConversionEmission } from "../../../target-model/records/callable-conversions.js";
 import { rustRuntimeUnionContract } from "../../../target-model/types/carriers/runtime-unions.js";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { RustAnalysisProgram } from "../../program/model.js";
@@ -104,7 +103,7 @@ export function analyzeRustTypeEmission(program: Omit<RustAnalysisProgram, "reac
     }
   }
   for (const shape of program.structuralShapes.instances) pending.push(shape.carrier, ...shape.fields.flatMap(field =>
-    [field.carrier, ...(field.methodPlan?.carrier === undefined ? [] : [field.methodPlan?.carrier])]));
+    [field.carrier, ...(field.methodPlan?.carrier === undefined ? [] : [field.methodPlan.carrier])]));
   for (const view of program.classValues.instanceViewImplementations) pending.push(view.sourceCarrier, view.targetCarrier);
   for (const sourceFile of program.sourceFiles) {
     const inventory = program.records.genericDeclarations.get(sourceFile);
@@ -167,12 +166,6 @@ export function analyzeRustTypeEmission(program: Omit<RustAnalysisProgram, "reac
     // A source call renders the absence witness of each native input it leaves absent, and passes an omitted argument as
     // that witness's absent value (no argument node carries it).
     for (const witness of program.records.sourceCall.get(node)?.witnesses ?? []) if (witness !== undefined) pending.push(witness, rustSourceOptionalTargetType(witness));
-    // A callable adapter constructs its physical callable (and each nested adapter's), which renders as a constructor type.
-    const adapter = program.records.contextualValueConversion.get(node)?.conversion;
-    const adapterContract = adapter?.kind === "callable-adapter" ? program.records.callableContract.get(node, adapter) : undefined;
-    const adapterCarriers = (contract: RustCallableConversionEmission): readonly TargetTypeRef[] =>
-      [contract.physical.carrier, ...[...contract.nested.values()].flatMap(adapterCarriers)];
-    if (adapterContract !== undefined) pending.push(...adapterCarriers(adapterContract));
     const hoisted = program.records.moduleHoistedCallable.get(node);
     if (hoisted !== undefined) pending.push(hoisted.carrier);
     // A callable written through the eliminating adapter renders the callable carrying the destination's error.

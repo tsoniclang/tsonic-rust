@@ -313,7 +313,7 @@ function createRustCallableValueLifecycle(input: RustCallableValuePlanInput,
     declaresGenericInputs: owner => input.ast.is.IsFunctionDeclaration(owner) || input.ast.is.IsMethodDeclaration(owner) ||
       input.ast.is.IsConstructorDeclaration(owner) || input.ast.is.IsGetAccessorDeclaration(owner) ||
       input.ast.is.IsSetAccessorDeclaration(owner) || genericImplementations.has(owner) ||
-      input.lexicalFunctions.forDeclaration(owner)?.kind === "resolved", genericImplementations,
+      input.lexicalFunctions.forDeclaration(owner)?.kind === "resolved",
     ownedRetainedParameter: parameter => {
       const declaration = input.ast.parent(parameter);
       if (declaration === undefined || input.ast.hasModifierKind(declaration, "async")) return false;
@@ -347,6 +347,7 @@ function createRustCallableValueLifecycle(input: RustCallableValuePlanInput,
     nativeStorage: nativeStorageQueries });
   const physical = genericRegistry.initializePhysical({ ast: input.ast, lifetimes: input.lifetimes,
     storage: input.sourceStorage, captures, native,
+    genericBindingsFor: nativeStorageQueries.genericBindingsFor,
     boundSubjectFor: (subject, carrier, bindings) => nativeStorageQueries.boundSubjectFor(subject, carrier, bindings) });
   physicalCarrierFor = physical.carrierFor;
   let parameterStorage: RustNativeStoragePlan | undefined;

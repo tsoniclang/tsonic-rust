@@ -13,7 +13,50 @@ import { closedMetadataEquals } from "../../../dist/target-model/metadata/closed
 import { recordClassSignatureFacts, recordInterfaceFacts } from "../../../dist/analysis/declarations/project-types.js";
 import { resolveRustCallableEnvironment } from "../../../dist/analysis/source-evidence/types/resolution/callable-environments.js";
 import { rustSourceFunctionValueCarrier } from "../../../dist/analysis/callables/function-values.js";
-import { rustCallableProtocol } from "../../../dist/target-model/types/carriers/callables.js";
+import { rustCallableProtocol, rustCallableInputProtocol, rustCallableInputTargetType } from "../../../dist/target-model/types/carriers/callables.js";
+import { resolveRustCallableInputCarrier } from "../../../dist/analysis/source-evidence/types/resolution/callable-inputs.js";
+import { resolveRustTargetType } from "../../../dist/analysis/source-evidence/types/resolution/target.js";
+
+for (const generic of [true, false]) test(`checked ${generic ? "generic" : "concrete"} callable formals retain their actual native input origin requirement`, () => {
+  const type = generic ? "Value" : "number";
+  const { context, walk } = analyzeRustOperations(`
+export function apply${generic ? "<Value>" : ""}(callback: (value: ${type}) => ${type}, value: ${type}): ${type} {
+  return callback(value);
+}`, { surfaces: [] });
+  const declaration = context.sourceStorage.nodes.find(node => context.ast.is.IsFunctionDeclaration(node) &&
+    context.ast.text(context.ast.name(node)) === "apply");
+  assert.equal(declaration !== undefined, true, "the actual checked function owns the formal");
+  const parameter = sourceCallableValueParameters(context.ast, declaration, context.semanticsFor(declaration))[0];
+  const resolution = rustResolutionContext(walk, parameter);
+  const sourceType = context.semanticsFor(parameter).declarations.declaredValueType(parameter);
+  const carrier = resolveRustTargetType(sourceType, { ...resolution, sourceStorageSubject: undefined,
+    callableRepresentation: "signature" }, walk.operationOptions, new Set());
+  const protocol = rustCallableProtocol(carrier);
+  assert.equal(protocol !== undefined, true, "the original checked callable signature resolves exactly");
+  assert.equal(protocol.parameters[0].kind, generic ? "type-parameter" : "source-primitive",
+    "the selected source binder is not a guessed concrete instantiation");
+  const subject = resolution.sourceStorage.subject(parameter, "input");
+  assert.equal(subject.kind, "resolved", "the same original parameter has an owned input subject");
+  let originQueries = 0;
+  const selected = resolveRustCallableInputCarrier(subject.subject, carrier, { ...resolution,
+    sourceStorage: { ...resolution.sourceStorage, closedOriginsFor(current) {
+      originQueries++;
+      assert.equal(current === subject.subject, true, "origin selection retains the original input identity");
+      assert.equal(generic, false, "an abstract checked generic formal does not require a concrete actual implementation");
+      return { kind: "unresolved", reason: "The concrete original input is not yet bound." };
+    } },
+  }, walk.operationOptions);
+  assert.equal(originQueries, generic ? 0 : 1, "only the concrete input depends on actual closed origins");
+  if (generic) {
+    assert.equal(rustTargetTypeRefEquals(selected, rustCallableInputTargetType(protocol.parameters, protocol.result)), true,
+      "the borrowed native input preserves the exact checked parameter and result binders");
+    const actual = rustCallableInputProtocol(selected);
+    assert.equal(actual?.parameters[0] === protocol.parameters[0] && actual.result === protocol.result, true,
+      "input selection neither substitutes another generic identity nor copies a source implementation");
+  } else {
+    assert.equal(selected === undefined, true, "a genuinely unresolved concrete input remains unavailable");
+  }
+});
 
 test("a named captured function retains its actual native borrow instead of a static environment", () => {
   const { context, walk } = analyzeRustOperations(`
@@ -284,7 +327,7 @@ for (const [name, source, surfaces] of [
 ]) for (const inherited of [false, true]) test(`complete ${name} signatures reuse ${inherited ? "inherited" : "local"} native facts`, () => {
   const input = fixture(inherited, source, surfaces);
   const selected = finalizeRustCallableSignature(input.current, input.declaration);
-  assert.equal(selected !== undefined && selected.suspension !== undefined, true);
+  assert.equal(selected.kind === "complete" && selected.suspension !== undefined, true);
   assert.equal(finalizeRustCallableSignature(input.current, input.declaration) === selected, true);
   assert.equal(input.admissions(), inherited ? 0 : 1);
   if (name !== "native future") {
@@ -297,7 +340,7 @@ for (const [name, source, surfaces] of [
 test("a completed full signature is a canonical lookup and rejects closed access before metadata", () => {
   const input = fixture(false);
   const selected = finalizeRustCallableSignature(input.current, input.declaration);
-  assert.equal(selected !== undefined, true);
+  assert.equal(selected.kind, "complete");
   let reads = 0;
   const lookup = { ...input.current, context: { ...input.current.context,
     get ast() { reads++; throw new Error("metadata read during completed lookup"); },
@@ -315,7 +358,7 @@ test("a completed full signature is a canonical lookup and rejects closed access
 test("a differing full parameter ABI cannot be hidden by a completed native signature", () => {
   const input = fixture(false);
   const selected = finalizeRustCallableSignature(input.current, input.declaration);
-  assert.equal(selected !== undefined, true);
+  assert.equal(selected.kind, "complete");
   assert.throws(() => finalizeRustCallableSignature(input.current, input.declaration, {
     parameterAbis: selected.parameterAbis.map(abi => ({ ...abi, form: "optional" })),
   }), /Conflicting Rust semantic plan 'tsonic.rust.sourceParameterAbi'/u);
@@ -329,7 +372,7 @@ for (const [name, source] of [
 ]) for (const inherited of [false, true]) test(`a different ${name} logical result cannot hide behind ${inherited ? "inherited" : "local"} suspension facts`, () => {
   const input = fixture(inherited, source);
   const complete = finalizeRustCallableSignature(input.current, input.declaration);
-  assert.equal(complete !== undefined, true);
+  assert.equal(complete.kind, "complete");
   assert.throws(() => finalizeRustCallableSignature(input.current, input.declaration, {
     selectedReturn: { kind: "source-primitive", name: "int32" },
   }), /Conflicting Rust semantic plan/u);
@@ -337,7 +380,7 @@ for (const [name, source] of [
   assert.equal(input.current.context.records.sourceCallableReturn.get(input.declaration) === complete.result, true);
   const request = { selectedReturn: complete.logicalReturn };
   const matching = finalizeRustCallableSignature(input.current, input.declaration, request);
-  assert.equal(matching !== undefined, true);
+  assert.equal(matching.kind, "complete");
   assert.equal(matching.result === complete.result, true);
   assert.equal(matching.suspension === complete.suspension, true);
   assert.equal(finalizeRustCallableSignature(input.current, input.declaration, request) === matching, true);
@@ -350,17 +393,87 @@ test("a complete callable keeps its selected logical contract separate from nati
   assert.equal(declaration !== undefined, true);
   const current = createRustCarrierProbe(walk);
   const selected = finalizeRustCallableSignature(current, declaration);
-  assert.equal(selected !== undefined, true);
+  assert.equal(selected.kind, "complete");
   assert.equal(rustTargetTypeRefEquals(selected.logicalReturn, selected.result.returnCarrier), false,
     "a selected logical annotation is not reconstructed from the normalized native fact");
   assert.equal(current.context.records.sourceCallableReturn.get(declaration) === selected.result, true);
   assert.equal(finalizeRustCallableSignature(current, declaration) === selected, true);
 });
 
+test("a scalar native signature does not query unrelated retained source storage", () => {
+  const input = fixture(false, "export function step(value: number): number { return value; }", []);
+  const current = { ...input.current, context: { ...input.current.context, retainedEnvironments: {
+    ...input.current.context.retainedEnvironments,
+    environmentFor() { throw new Error("a scalar native signature has no retained environment demand"); },
+  } } };
+  const selected = finalizeRustCallableSignature(current, input.declaration);
+  assert.equal(selected.kind, "complete", "the original scalar signature completes without a storage-retention walk");
+  assert.equal(current.context.records.retainedEnvironment.get(input.declaration) === undefined, true,
+    "a scalar native signature publishes no invented retained environment");
+  assert.equal(finalizeRustCallableSignature(current, input.declaration) === selected, true,
+    "the completed scalar signature remains a canonical lookup");
+});
+
+const retainedInputSource = `
+type Identity = <Value>(value: Value) => Value;
+export function step(callback: () => number): Identity {
+  return <Value>(value: Value): Value => { callback(); return value; };
+}`;
+
+test("one completed synchronous owner publishes input-only native retention before caching its signature", () => {
+  const input = fixture(false, retainedInputSource, []);
+  const records = input.current.context.records;
+  const current = input.current;
+  const admissions = () => current.context.requiredRecords.filter(requirement =>
+    requirement.family === "retainedEnvironment" && requirement.subject === input.declaration);
+  assert.equal(admissions().length, 0, "the actual probe begins without a dependent environment publication");
+  const selected = finalizeRustCallableSignature(current, input.declaration);
+  assert.equal(selected.kind === "complete" && selected.result.returnCarrier.kind === "target-specific", true,
+    "the actual generic callable result is distinct from a monomorphic runtime-callable result");
+  const environment = records.retainedEnvironment.get(input.declaration);
+  const parameter = current.context.ast.parameters(input.declaration)[0];
+  const nativeLifetime = rustCallableProtocol(selected.parameterAbis[0].parameterCarrier)?.lifetime;
+  assert.equal(environment !== undefined && nativeLifetime?.kind === "parameter", true,
+    "the concrete native input already requires its exact declaration-owned environment");
+  assert.equal(environment.lifetime.identity === nativeLifetime.identity, true, "the published lifetime is the actual native input lifetime");
+  assert.equal(environment.inputs.length, 1, "the complete input vector contains one retained source formal");
+  assert.equal(environment.inputs[0].kind === "parameter" && environment.inputs[0].declaration === parameter, true,
+    "retention keeps the exact original source parameter, not a callable-family or contextual surrogate");
+  assert.equal(admissions().length, 1, "input and result completion have one synchronous environment publisher");
+  assert.equal(admissions()[0].producer, "sourceCallableReturns.resolve", "the completed source-return owner owns that publication");
+  assert.equal(finalizeRustCallableSignature(current, input.declaration) === selected, true);
+  const repeated = finalizeRustCallableSignature(current, input.declaration, { selectedReturn: selected.logicalReturn });
+  assert.equal(repeated.kind === "complete" && repeated.result === selected.result, true, "an exact new request reuses the admitted result");
+  assert.equal(records.retainedEnvironment.get(input.declaration) === environment, true);
+  assert.equal(admissions().length, 1, "matching signature requests do not publish a second environment");
+  records.seal(current.context.requiredRecords);
+});
+
+test("required native input retention preserves its actual unresolved reason and publishes no completed signature", () => {
+  const input = fixture(false, retainedInputSource, []);
+  const reason = "the actual retained source input has no completed native storage";
+  const current = { ...input.current, context: { ...input.current.context, retainedEnvironments: {
+    ...input.current.context.retainedEnvironments, environmentFor: () => ({ kind: "unresolved", reason }),
+  } } };
+  assert.equal(finalizeRustCallableSignature(current, input.declaration).kind, "unresolved",
+    "required retention is a refusal, not an empty environment or a completed result");
+  const diagnostics = current.context.diagnostics.filter(diagnostic => diagnostic.code === "RUST_RETAINED_ENVIRONMENT_NOT_EXACT");
+  assert.equal(diagnostics.length, 1, "the original source owner emits one precise refusal");
+  assert.equal(diagnostics[0].message, reason, "the native retention reason is not replaced with a missing-record failure");
+  assert.equal(diagnostics[0].sourceNode === input.declaration, true, "the diagnostic preserves the exact original callable");
+  assert.equal(current.rejectedExpressions.has(input.declaration), true, "the existing terminal failure route records the actual declaration");
+  assert.equal(current.context.records.sourceCallableReturn.get(input.declaration) === undefined, true,
+    "a refused input environment cannot publish its dependent result");
+  assert.equal(current.context.records.retainedEnvironment.get(input.declaration) === undefined, true,
+    "an unresolved required environment is never published as none");
+  assert.equal(current.callableSignatures.get(input.declaration).completed.size, 0,
+    "terminal retention refusal never becomes a successful signature-cache entry");
+});
+
 test("the cached native callable owns immutable argument containers without copying canonical input carriers", () => {
   const input = fixture(false);
   const selected = finalizeRustCallableSignature(input.current, input.declaration);
-  assert.equal(selected !== undefined && selected.callableValue !== undefined, true);
+  assert.equal(selected.kind === "complete" && selected.callableValue !== undefined, true);
   const carrier = selected.callableValue;
   assert.equal(carrier.kind, "target-named");
   const arguments_ = carrier.genericArguments;
@@ -393,7 +506,7 @@ export class Square {
     ast.is.IsGetAccessorDeclaration(node) || ast.is.IsSetAccessorDeclaration(node));
   assert.equal(declarations.length, 2);
   assert.equal(members.length, 4);
-  for (const member of members) assert.equal(finalizeRustCallableSignature(current, member) !== undefined, true);
+  for (const member of members) assert.equal(finalizeRustCallableSignature(current, member).kind, "complete");
   const lookup = { ...current, context: { ...current.context, ast: { ...ast,
     parameters(node) {
       assert.equal(members.includes(node), false, "a completed full callable cannot re-enter outer parameter orchestration");
@@ -404,7 +517,31 @@ export class Square {
     if (ast.is.IsClassDeclaration(declaration)) recordClassSignatureFacts(lookup, declaration);
     else recordInterfaceFacts(lookup, declaration);
   }
-  for (const member of members) assert.equal(finalizeRustCallableSignature(lookup, member) !== undefined, true);
+  for (const member of members) assert.equal(finalizeRustCallableSignature(lookup, member).kind, "complete");
+});
+
+test("a computed signature refusal preserves its actual input predicate and does not cache a pending completion", () => {
+  const input = fixture(false, "export function step(value: number): number { return value; }", []);
+  const parameters = input.current.context.ast.parameters(input.declaration);
+  const inherited = createRustRecordFixture({ sourceParameterAbi: {
+    get: node => parameters.includes(node) ? undefined : input.current.context.records.sourceParameterAbi.get(node),
+  } }, input.current.context.records);
+  const current = createRustCarrierProbe({ ...input.current, context: { ...input.current.context,
+    records: createRustProgramRecordBuilder(input.current.context.typeDefinitions, inherited) } });
+  const pending = { ...current, sourceCallableAbi: { ...current.sourceCallableAbi, resolveParameterAbi: () => undefined } };
+  const failure = finalizeRustCallableSignature(pending, input.declaration);
+  assert.equal(failure.kind, "unresolved", "a genuine unavailable input is not a successful empty signature");
+  assert.equal(failure.sourceNode === input.declaration, true, "the computed reason keeps the original checked owner");
+  assert.match(failure.reason, /native callable input stage did not complete; unadmitted original parameter ABIs: value \(KindNumberKeyword\)/u);
+  assert.equal(Object.isFrozen(failure), true, "the computed failure is immutable data, not a mutable last-error channel");
+  assert.equal(current.callableSignatures.get(input.declaration).completed.size, 0, "pending input completion publishes no cached success");
+  assert.equal(current.context.records.sourceCallableReturn.get(input.declaration) === undefined, true,
+    "no dependent native result is published for missing input contracts");
+  assert.equal(current.context.diagnostics.length, 0, "a retryable query does not emit a final program refusal prematurely");
+  const complete = finalizeRustCallableSignature(current, input.declaration);
+  assert.equal(complete.kind, "complete", "the same original owner retries after its real input resolver is restored");
+  assert.equal(finalizeRustCallableSignature(current, input.declaration) === complete, true,
+    "only the completed immutable signature becomes the canonical lookup");
 });
 
 for (const [name, path] of [

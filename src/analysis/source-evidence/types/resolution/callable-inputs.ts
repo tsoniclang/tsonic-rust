@@ -22,10 +22,10 @@ export function resolveRustCallableInputCarrier(
       ? undefined : rustSourceInputLifetime(subject.node, context);
     return rustCallableInputTargetType(protocol.parameters, protocol.result, lifetime);
   };
+  if (rustTargetGenericReferences(logicalCarrier).typeIdentities.length > 0) return borrowed(logical);
   const origins = context.sourceStorage.closedOriginsFor(subject);
   if (origins.kind === "unresolved") return undefined;
-  if (origins.kind === "open" || rustTargetGenericReferences(logicalCarrier).typeIdentities.length > 0)
-    return borrowed(logical);
+  if (origins.kind === "open") return borrowed(logical);
   let selected: typeof logical | undefined;
   for (const origin of origins.origins) {
     const declaration = origin.subject.node;
