@@ -5,8 +5,8 @@ import type {
 import type { RustExpr, RustGenerics, RustItem, RustPattern, RustType } from "../../../target-ast/syntax/nodes.js";
 import { emptyRustGenerics } from "../../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
-import { rustCurrentErrorBoundary } from "../../program/plan-context.js";
-import { rustErrorType } from "../../program/fallible-boundaries.js";
+import { planRustSelectedErrorRegion } from "../../program/error-regions.js";
+import { planRustSelectedSourceErrorPropagation } from "../../expressions/calls/source-errors.js";
 import { failRustPlannerInvariant } from "../../diagnostics.js";
 import { rustGeneratedTypeParameterContext } from "../../names/type-parameters.js";
 import { rustFrameCallableTypes } from "../../types/frame-callables.js";
@@ -125,8 +125,13 @@ function planFrameEntry(
   if (emission === undefined) failRustPlannerInvariant("An admitted native frame requires its selected emission metadata.", definition.activation.ownerDeclaration);
   const carrier = entry.implementations[0]?.carrier;
   const types = carrier === undefined ? undefined : rustFrameCallableTypes(carrier, context);
-  const boundary = rustCurrentErrorBoundary(context);
-  if (types === undefined || boundary === undefined) failRustPlannerInvariant("An admitted native frame requires its complete storage and callable syntax.", definition.activation.ownerDeclaration);
+  const errors = emission.errors.get(entry);
+  const errorType = errors === undefined ? undefined : rustTypeFromCarrierInContext(errors.carrier, context);
+  if (types === undefined || errors === undefined || errorType === undefined)
+    failRustPlannerInvariant("An admitted native frame requires its complete storage and invocation error syntax.", definition.activation.ownerDeclaration);
+  const boundary = planRustSelectedErrorRegion(errors.region, context, definition.activation.ownerDeclaration);
+  if (boundary === undefined) failRustPlannerInvariant("An admitted native frame requires its selected invocation error region.", definition.activation.ownerDeclaration);
+  const entryContext = { ...context, fallibleBoundary: boundary.boundary };
   const generics = definitionGenerics(definition, context);
   const items: RustItem[] = [];
   const variants: Extract<RustItem, { readonly kind: "enum" }>["variants"][number][] = [];
@@ -166,7 +171,7 @@ function planFrameEntry(
     const output: RustType = { kind: "named", path: "Result", genericArguments: [
       { kind: "type" as const, type: rustTypeFromCarrierInContext(callable.resultCarrier, context)
         ?? failRustPlannerInvariant("An admitted frame entry requires its renderable native completion ABI.", implementation.declaration) },
-      { kind: "type" as const, type: rustErrorType(boundary) },
+      { kind: "type" as const, type: errorType },
     ] };
     resultType ??= output;
     items.push(...helpers.map((helper): RustItem => ({ ...helper, generics, params: [
@@ -187,10 +192,19 @@ function planFrameEntry(
       ...callable.parameterCarriers.map((_parameter, index) => ({ kind: "field" as const,
         receiver: { kind: "path" as const, path: "arguments" }, name: String(index) })),
     ] };
+    const transport = errors.implementations.get(implementation);
+    if (transport === undefined) failRustPlannerInvariant("An admitted frame implementation requires its selected invocation error transport.", implementation.declaration);
+    const mapped = transport.kind !== "mapped" ? undefined : planRustSelectedSourceErrorPropagation(implementation.declaration,
+      { ...transport.transport, channels: new Map(transport.transport.channels.map(channel => [channel.sourceIdentity,
+        { targetIdentity: channel.targetIdentity, uninhabited: channel.uninhabited, jsRejection: false }])) }, call, entryContext);
+    if (transport.kind === "mapped" && mapped === undefined)
+      failRustPlannerInvariant("An admitted frame implementation requires its complete selected invocation error syntax.", implementation.declaration);
+    const invoked = transport.kind === "mapped" ? { kind: "call" as const, path: "Ok", args: [mapped!] }
+      : fallible ? call : { kind: "call" as const, path: "Ok", args: [call] };
     arms.push({ pattern: { kind: "tuple-variant", path: `Self::${implementation.variantName}`, elements: [
       { kind: "wildcard" }, ...(!entryHasPayload(implementation, emission) ? [] : [captures.length === 0
         ? { kind: "wildcard" as const } : { kind: "binding" as const, name: "state" }]),
-    ] }, expression: fallible ? call : { kind: "call", path: "Ok", args: [call] } });
+    ] }, expression: invoked });
   }
   if (argumentTypes === undefined || resultType === undefined) failRustPlannerInvariant("An admitted native frame requires its complete storage and callable syntax.", definition.activation.ownerDeclaration);
   const independentType: RustType = { kind: "named", path: "rt::Callable", genericArguments: [

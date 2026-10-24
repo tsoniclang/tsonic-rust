@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { failTargetAnalysisInvariant, type TargetStageResult } from "@tsonic/target-api/artifacts";
 
 import type { AstReader, Node } from "@tsonic/tsts";
 import type { SourceStorageQueries } from "@tsonic/target-api/analysis";
@@ -22,9 +23,13 @@ import type { RustObjectRepresentationPlan } from "../project-types/object-repre
 import type { RustProjectConstructionPlan } from "../project-types/construction-plan.js";
 import { prepareRustRetainedFrameCounters } from "./frame-counter-storage.js";
 
-import type { RustFrameCallableImplementation, RustFrameCallableEntryDefinition, RustFrameCallableBinding, RustFrameCallableDefinition } from "../../target-model/records/frame-callables.js";
+import type { RustFrameCallableImplementation, RustFrameCallableEntryDefinition, RustFrameCallableBinding,
+  RustFrameCallableDefinition, RustFrameEntryErrorSelection } from "../../target-model/records/frame-callables.js";
+import { substituteRustTargetGenerics } from "../../target-model/types/carriers/substitution.js";
 
 export interface RustFrameCallablePlanRegistry extends RustFrameCallablePlan {
+  completeErrors(select: (definition: RustFrameCallableDefinition,
+    entry: RustFrameCallableEntryDefinition) => TargetStageResult<RustFrameEntryErrorSelection>): readonly RustSourceCallableSpecializationIssue[];
   sealCounters(constructions: readonly RustProjectConstructionPlan[]): RustFrameCallablePlan;
 }
 
@@ -301,11 +306,41 @@ export function createRustFrameCallablePlan(input: {
       activationInputs.set(node, selected);
     }
   }
+  let errors: ReadonlyMap<RustFrameCallableEntryDefinition, RustFrameEntryErrorSelection> | undefined;
+  const entryErrors = (entry: RustFrameCallableEntryDefinition): RustFrameEntryErrorSelection => {
+    const selected = errors?.get(entry);
+    if (selected === undefined) failTargetAnalysisInvariant("tsonic-rust",
+      "A native frame error lookup requires its completed original entry selection.");
+    return selected;
+  };
   const producer = createRustFrameCallableRecords({
     definitions: Object.freeze(definitions), issues: Object.freeze(issues), activationInputs, receiverOwners,
-    selectedDefinitions, selectedEntries, byDeclaration, implementations, bindings,
+    selectedDefinitions, selectedEntries, byDeclaration, implementations, bindings, entryErrors,
+    errorFor(carrier) {
+      const frame = rustFrameCallableValue(carrier);
+      if (frame === undefined) return undefined;
+      const entry = selectedEntries.get(closedMetadataKey(carrier));
+      if (entry === undefined) failTargetAnalysisInvariant("tsonic-rust",
+        "A native frame error requires its exact admitted carrier and environment correspondence.");
+      return substituteRustTargetGenerics(entryErrors(entry).carrier,
+        new Map(entry.signature.environmentParameters.map((parameter, index) => [parameter.identity, frame.environment[index]!])), new Map());
+    },
   });
   return Object.freeze({ ...producer.records,
+    completeErrors(select: Parameters<RustFrameCallablePlanRegistry["completeErrors"]>[0]) {
+      if (errors !== undefined) failTargetAnalysisInvariant("tsonic-rust", "Native frame entry errors complete exactly once.");
+      const selections = new Map<RustFrameCallableEntryDefinition, RustFrameEntryErrorSelection>();
+      const rejected: RustSourceCallableSpecializationIssue[] = [];
+      for (const definition of definitions) for (const entry of definition.entries) {
+        const selected = select(definition, entry);
+        if (selected.kind === "resolved") selections.set(entry, selected.value);
+        else rejected.push(...selected.diagnostics.map(diagnostic => ({
+          subject: diagnostic.sourceNode ?? definition.activation.ownerDeclaration, message: diagnostic.message,
+        })));
+      }
+      if (rejected.length === 0) errors = selections;
+      return Object.freeze(rejected);
+    },
     sealCounters(constructions: readonly RustProjectConstructionPlan[]): RustFrameCallablePlan {
       return producer.finalizeCounters(prepareRustRetainedFrameCounters(definitions, input.ast, constructions));
     },

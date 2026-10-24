@@ -23,6 +23,8 @@ import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
 import { rustSourceCallCallableStorageCarrier } from "../../policy/operations/members/native-contracts.js";
 import { rustCallableProtocol } from "../../target-model/types/carriers/callables.js";
+import { rustFrameCallableValue } from "../../target-model/types/carriers/frame-callables.js";
+import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 
 interface RustDirectErrorEffectsInput {
   readonly walk: RustFactWalk;
@@ -95,11 +97,17 @@ export function createRustDirectErrorEffects(
     };
     const operation = walk.context.records.targetOperation.get(node);
     const nativeInput = walk.context.callableValues.native.callFor(node);
-    const invokedError = nativeInput === undefined
+    const callee = operation?.kind === "source-call" && operation.target.form === "callable" ? Node_Expression(ast, node) : undefined;
+    const frameCarrier = callee === undefined ? undefined : walk.context.records.runtimeCarrier.get(callee)?.carrier;
+    const frame = frameCarrier === undefined || rustFrameCallableValue(frameCarrier) === undefined
+      ? undefined : walk.context.callableValues.frames.entryFor(frameCarrier);
+    if (frameCarrier !== undefined && rustFrameCallableValue(frameCarrier) !== undefined && frame === undefined)
+      failTargetAnalysisInvariant("tsonic-rust", "A selected frame invocation requires its one original entry inventory.", node);
+    const invokedError = nativeInput === undefined && frame === undefined
       ? rustCallableProtocol(rustSourceCallCallableStorageCarrier(operation, walk.context.structuralShapes))?.error : undefined;
     const invocationEffects = invokedError === undefined ? undefined : rustCallableInvocationErrorEffects(invokedError);
     if (kind === "KindThrowStatement" || kind === "KindRegularExpressionLiteral" ||
-      operationIsFallible(node, invokedError !== undefined)) selected.push(rustLocalErrorEffects);
+      operationIsFallible(node, invokedError !== undefined || frame !== undefined)) selected.push(rustLocalErrorEffects);
     const callbackEffects = preparedCallbackOperationEffects(node);
     if (callbackEffects === undefined) return undefined;
     for (const effects of [invocationEffects, callbackEffects]) {
@@ -214,10 +222,18 @@ export function createRustDirectErrorEffects(
         if (invocation === undefined) return undefined;
         selected.push({ localErrors: false, nativeErrors: invocation.invocation });
       }
-      const declarations = operation?.kind === "source-call" && operation.target.form === "union-method"
+      const declarations = frame !== undefined ? frame.implementations.map(implementation => implementation.declaration)
+        : operation?.kind === "source-call" && operation.target.form === "union-method"
         ? operation.target.variants.map(variant => variant.declaration)
         : generic !== undefined || target === undefined ? [] : [target];
       for (const declaration of declarations) {
+        if (frame !== undefined && walk.context.promiseBodies.plan.objects.has(declaration) &&
+          !walk.context.promiseBodies.plan.declarations.has(declaration)) {
+          const effects = rustCallableInvocationErrorEffects(rustJsValueTargetType());
+          budget.metadata(effects);
+          selected.push(effects);
+          continue;
+        }
         if ((operation?.kind === "source-call" && operation.asyncBody?.maySuspend === false ||
           walk.context.records.asyncFunction.get(declaration) === undefined) &&
           walk.context.records.generator.get(declaration) === undefined && !appendDeclaration(declaration)) return undefined;
