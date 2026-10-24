@@ -221,7 +221,7 @@ export function resolveRustTargetType(
             authoredTypeRoot,
           )
         );
-      return elements.length > 0 && elements.every((element) => element !== undefined)
+      return elements.every((element) => element !== undefined)
         ? rustTupleTargetType(elements as TargetTypeRef[])
         : undefined;
     }

@@ -6,7 +6,8 @@ import { Node_Expression, BinaryExpression_Left, BinaryExpression_Right } from "
 import { rustContextualRuntimeConversionContract } from "../../../policy/conversions/contextual.js";
 import { rustValueConversionContract } from "../../../policy/conversions/contracts.js";
 import { rustBorrowValueIsUnconverted, rustBorrowValueIsUnprojected } from "../../storage/borrowed-element-purity.js";
-import { isRustStringCarrier } from "../../../target-model/types/index.js";
+import { isRustStringCarrier, rustStrTargetType } from "../../../target-model/types/index.js";
+import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { rustProgramNodeIsOutsideNativeCode } from "../../control-flow/compile-time-statements.js";
 
 export function analyzeRustStringComparisonViews(program: Omit<RustAnalysisProgram, "reachability">, nodes: readonly Node[], producer: RustStringComparisonViewProducer): void {
@@ -37,9 +38,12 @@ export function analyzeRustStringComparisonViews(program: Omit<RustAnalysisProgr
     const contextual = program.records.contextualValueConversion.get(node);
     if (contextual !== undefined && rustContextualRuntimeConversionContract(contextual.conversion, program.typeDefinitions)?.lowering === "owned-string-from-borrowed-str")
       selected = { kind: "contextual" };
+    const carrier = program.records.valueRead.get(node)?.value;
+    const referent = carrier?.kind === "reference" ? carrier.referent : carrier;
     if (selected.kind === "value" && operation?.kind === "operator-token" &&
       (operation.operator === "==" || operation.operator === "!=") &&
-      isRustStringCarrier(program.records.valueRead.get(node)?.value)) selected = { kind: "owned-string" };
+      (isRustStringCarrier(referent) || rustTargetTypeRefEquals(referent, rustStrTargetType())))
+      selected = { kind: "native-str-reference" };
     if (parent !== undefined && operation?.kind === "operator-token" &&
       (BinaryExpression_Left(program.source.ast, parent) === node && operation.leftConversion !== undefined ||
         BinaryExpression_Right(program.source.ast, parent) === node && operation.rightConversion !== undefined)) selected = { kind: "value" };

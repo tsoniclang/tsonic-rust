@@ -58,19 +58,56 @@ export function compare(error: Error): boolean {
     const call = ast.is.IsCallExpression(right);
     const label = ast.text(call ? Node_Expression(ast, right) : right);
     assert.equal(program.records.stringComparisonView.get(left)?.kind, "error", `${label}: the actual field guard is preserved`);
-    assert.equal(program.records.stringComparisonView.get(right)?.kind, call ? "owned-string" : "literal",
-      `${label}: exact native String and native literal representations remain distinct`);
+    assert.equal(program.records.stringComparisonView.get(right)?.kind, call ? "native-str-reference" : "literal",
+      `${label}: native String or str reference and native literal representations remain distinct`);
     assert.equal(program.records.errorFieldSnapshot.get(left, right), label === "mutate",
       `${label}: only actual same-owner writes require an owned first-value snapshot`);
     const rendered = planBinaryExpression(node, rustSourceFilePlanContext(program, node));
     assert.equal(rendered !== undefined, true, `${label}: the admitted comparison renders without reselecting its view`);
     const printed = printRustExpr(rendered);
     if (call) {
-      assert.match(printed, /\.as_str\(\)/u, `${label}: the native String result supplies its exact str view without allocation`);
+      assert.match(printed, /core::convert::AsRef::<str>::as_ref/u,
+        `${label}: the actual native String or str reference supplies its view without ownership conversion`);
+      assert.equal(printed.includes(".as_str()"), false, `${label}: a native borrowed str is not treated as an owned String`);
       assert.equal((printed.match(new RegExp(`\\b${label}\\(`, "gu")) ?? []).length, 1,
         `${label}: the complete right-hand side is evaluated once`);
     }
     assert.equal(printed.includes("error_snapshot"), label === "mutate",
       `${label}: rendering retains the exact pre-seal snapshot decision`);
+  }
+});
+
+test("native comparison views cover parameter, borrowed result, capture, owned local and indexed String reads", () => {
+  const { program } = analyzeRust({ files: { "index.ts": `
+function read(value: string): string { return value; }
+export function compare(values: readonly string[], expected: string): boolean {
+  let owned = "owned";
+  owned += expected;
+  const captured = (): boolean => expected === read(expected);
+  return values[0]! === expected && read(expected) === expected && owned === expected && captured();
+}
+` } });
+  const ast = program.source.ast;
+  const comparisons = [];
+  const visit = node => {
+    if (program.records.binaryEmission.get(node)?.operator === "==") comparisons.push(node);
+    ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+  };
+  program.sourceFiles.forEach(visit);
+  assert.equal(comparisons.length, 4, "every captured, borrowed, indexed and owned comparison is admitted");
+  for (const node of comparisons) {
+    for (const operand of [BinaryExpression_Left(ast, node), BinaryExpression_Right(ast, node)]) {
+      const label = ast.text(operand);
+      assert.equal(program.records.stringComparisonView.get(operand)?.kind, "native-str-reference",
+        `${label}: native String and str-backed reads have one pre-seal AsRef view`);
+    }
+    const rendered = planBinaryExpression(node, rustSourceFilePlanContext(program, node));
+    assert.equal(rendered !== undefined, true, "the exact admitted comparison renders");
+    const printed = printRustExpr(rendered);
+    assert.equal((printed.match(/core::convert::AsRef::<str>::as_ref/gu) ?? []).length, 2,
+      "both native operands get their independently selected str view");
+    assert.equal(printed.includes(".as_str()"), false, "borrowed str never requires unstable str_as_str");
+    assert.equal(printed.includes("to_string"), false, "a native comparison does not manufacture an owned String");
+    assert.equal(printed.includes(".clone()"), false, "pure native string observation does not copy its owner");
   }
 });
