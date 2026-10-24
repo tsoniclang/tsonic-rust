@@ -37,7 +37,7 @@ function inspectFixture(program, requiredRecords) {
   };
   program.sourceFiles.forEach(visit);
   const input = { records: program.records, storage: program.callableValues.nativeStorage,
-    producers: program.callableValues.nativeProducers };
+    producers: program.callableValues.nativeProducers, frames: program.callableValues.frames };
   const declaration = name => {
     const node = declarations.get(name);
     assert.equal(node !== undefined, true, name);
@@ -57,7 +57,7 @@ function inspectFixture(program, requiredRecords) {
     assert.equal(source !== undefined, true, `${name}: the actual stored value has its checked source carrier`);
     const selected = input.storage.valueFor(node);
     assert.equal(selected.kind !== "unresolved", true, `${name}: ${selected.reason ?? "the original binding owns its published physical storage"}`);
-    const physical = rustNativeCallablePhysicalSource(source, selected);
+    const physical = rustNativeCallablePhysicalSource(source, selected, input.frames);
     assert.equal(physical !== undefined, true, `${name}: the stored value supplies its exact physical callable signature`);
     return physical;
   };
@@ -103,7 +103,7 @@ test("source-produced physical formal signatures retain exact selected input and
     assert.equal(rustTargetTypeRefEquals(value.signature.error.trait, inputs[index].trait), true);
     const wrong = inputs[1 - index];
     assert.equal(rustNativeCallablePhysicalSource(inputs[index].carrier,
-      { kind: "selected", carrier: inputs[index].implementation, inputs: [wrong] }) === undefined,
+      { kind: "selected", carrier: inputs[index].implementation, inputs: [wrong] }, current.input.frames) === undefined,
     true, "an equal logical signature cannot replace exact physical input identity");
   }
 });
@@ -181,7 +181,7 @@ test("physical callable operand queries reject unrelated values, missing owners 
   const selected = current.input.storage.valueFor(current.declaration("callback"));
   assert.equal(selected.kind, "selected");
   assert.equal(rustNativeCallablePhysicalSource(source,
-    { kind: "identity", carrier: source }) === undefined, true,
+    { kind: "identity", carrier: source }, current.input.frames) === undefined, true,
     "logical callable storage cannot masquerade as exact native Result storage");
 });
 

@@ -225,9 +225,9 @@ function physicalLifecycleInputs({ beforeInitialize, afterInitialize }) {
             afterInitialize(original, construction);
             return construction;
           } },
-          preparePhysicalStorage: { value(selected, effects) {
+          preparePhysicalStorage: { value(selected, effects, promiseBodies) {
             components = selected;
-            preparationIssues = original.preparePhysicalStorage(selected, effects);
+            preparationIssues = original.preparePhysicalStorage(selected, effects, promiseBodies);
             return preparationIssues;
           } },
           finalizeSelected: { value() {

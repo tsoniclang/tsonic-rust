@@ -67,6 +67,7 @@ function fixture(text, options = {}) {
   const generic = genericRegistry.plan;
   let physical;
   const input = { source, ast: source.ast, storage, nativeNodes, records: program.records, definitions: program.typeDefinitions,
+    frames: program.callableValues.frames,
     capturesFor: declaration => captures.forDeclaration(declaration),
     structuralShapes: program.structuralShapes,
     generic, lexicalFunctions: program.lexicalFunctions, lifetimes: program.sourceLifetimes,
