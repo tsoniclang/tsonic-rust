@@ -541,9 +541,9 @@ export function main(): string { return view(new Box<string>("value")).identity(
     }
     const template = program.structuralShapes.templateForCarrier(selected.nativeTargetCarrier);
     const dispatch = program.records.structuralShapeEmission.get(template).dispatch;
-    assert.equal(dispatch.lifetime, undefined, "an already selected receiver lifetime does not fabricate an additional placeholder binder");
-    assert.equal(template.genericParameters.filter(parameter => parameter.kind === "lifetime").length, 1,
-      "this exported logical view intentionally shares its one selected environment identity");
+    assert.equal(dispatch.lifetime.kind, "parameter", "the canonical template retains its independent receiver lifetime");
+    assert.equal(template.genericParameters.filter(parameter => parameter.kind === "lifetime").length, 3,
+      "the canonical template preserves its receiver and two independent callable-data lifetimes");
     assert.equal(Object.isFrozen(selected), true, "the native renderer consumes the completed immutable publication");
   });
 
