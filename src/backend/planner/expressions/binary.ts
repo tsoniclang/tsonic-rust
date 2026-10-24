@@ -147,8 +147,12 @@ export function planBinaryExpression(node: Node, context: RustPlanContext, resul
     }
     return rustStringConcat(parts);
   }
-  const leftReference = fact.kind === "operator-call" && selected.leftShared;
-  const rightReference = fact.kind === "operator-call" && selected.rightShared;
+  const leftView = context.input.program.records.stringComparisonView.get(leftNode);
+  const rightView = context.input.program.records.stringComparisonView.get(rightNode);
+  const leftReference = fact.kind === "operator-call" && selected.leftShared ||
+    leftView?.kind === "native-str-reference" && leftView.inputForm === "shared-reference";
+  const rightReference = fact.kind === "operator-call" && selected.rightShared ||
+    rightView?.kind === "native-str-reference" && rightView.inputForm === "shared-reference";
   const left = planExpression(leftNode, context, "value", leftReference ? "shared-reference" : selected.leftShared ? "shared-place" : "value");
   const right = planExpression(rightNode, context, "value", rightReference ? "shared-reference" : selected.rightShared ? "shared-place" : "value");
   if (left === undefined || right === undefined) return undefined;

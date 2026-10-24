@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createTargetSourceProgram, Node_Expression } from "@tsonic/target-api/source";
 import { checkedSource } from "../../../../tsonic/test/fixtures/source-navigation.mjs";
-import { analyzeRust } from "../../helpers/rust-session.mjs";
+import { analyzeRust, compileRust } from "../../helpers/rust-session.mjs";
 import { analyzeRustReadUses, rustNativeArgumentBorrowsRead } from "../../../dist/analysis/ownership/uses.js";
 import { selectRustOperationReadUses } from "../../../dist/policy/ownership/read-use.js";
 import { finalizeRustProviderOperationAbi } from "../../../dist/policy/operations/members/abi/finalize.js";
@@ -67,6 +67,130 @@ function select(ast, node, operation) {
   return selectRustOperationReadUses(ast, node, { operation, computedMember: undefined, nativeInputs: [], argumentModes: [],
     arguments: undefined, address: undefined, location: undefined, guard: undefined, callableMode: undefined, structuralReceiverMode: "shared" });
 }
+
+test("native reference loads and stores select only their actual operand's nonconsuming place use", async () => {
+  const source = createTargetSourceProgram(await checkedSource("ownership-native-reference-operands", {
+    "src/index.ts": `
+declare function load(value: number): number;
+declare function store(target: number, value: number): void;
+declare function ref(value: number): number;
+declare function mut(value: number): number;
+declare function target(): number;
+declare function next(): number;
+function run(value: number): void {
+  load(value);
+  load(((value)));
+  store(value, load(value) + 1);
+  store(((value)), next());
+  store(target(), next());
+  ref(value);
+  mut(value);
+}
+`,
+  }));
+  const { ast } = source;
+  const nodes = [];
+  const visit = node => {
+    nodes.push(node);
+    ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+  };
+  source.sourceFiles.forEach(visit);
+  const integer = { kind: "source-primitive", name: "int32" };
+  const shared = { kind: "reference", mutable: false, referent: integer };
+  const mutable = { ...shared, mutable: true };
+  const operations = new Map();
+  for (const node of nodes.filter(node => ast.is.IsCallExpression(node))) {
+    const name = ast.text(Node_Expression(ast, node));
+    if (!["load", "store", "ref", "mut"].includes(name)) continue;
+    const [operandExpression, valueExpression] = ast.arguments(node);
+    const operation = name === "ref" ? "shared-reference" : name === "mut" ? "mutable-reference" : name;
+    const operandCarrier = name === "ref" || name === "mut" ? integer : mutable;
+    const fact = { kind: "reference-operation", operationId: `fixture.reference.${operation}`, operation,
+      operandExpression, operandCarrier, referenceCarrier: name === "ref" ? shared : mutable,
+      resultCarrier: name === "store" ? { kind: "tuple", elements: [] } : name === "load" ? integer : name === "ref" ? shared : mutable,
+      ...(name === "store" ? { valueExpression, valueCarrier: integer } : {}) };
+    operations.set(node, fact);
+    const variants = name === "load" ? [fact, { ...fact, operandCarrier: shared, referenceCarrier: shared }] : [fact];
+    for (const selected of variants) {
+      const uses = select(ast, node, selected);
+      const use = uses.get(operandExpression);
+      const label = `${name} ${operations.size}: ${ast.kindName(operandExpression)} / ${selected.operandCarrier.mutable ?? "value"}`;
+      assert.equal(uses.size, 1, `${label}: only the exact admitted reference operand acquires a use`);
+      assert.equal(use?.mode, name === "store" || name === "mut" ? "mutable" : "shared", label);
+      assert.equal(use.later.length, 0, `${label}: a place use does not invent a borrow held across RHS evaluation`);
+      assert.equal(use.laterStart, 0, `${label}: no original effect is skipped`);
+      assert.equal(use.stableAcrossEffects, false, `${label}: replacement or mutation is not presumed harmless`);
+      assert.equal(Object.isFrozen(use), true, `${label}: the selected ownership input is immutable`);
+      if (valueExpression !== undefined) assert.equal(uses.has(valueExpression), false,
+        `${label}: the stored value retains its original ownership decision`);
+    }
+  }
+  assert.equal(operations.size, 8, "all direct, wrapped, repeated, effectful-target and reference-creation occurrences are covered");
+  const records = createRustRecordFixture({ targetOperation: { get: node => operations.get(node) } });
+  const uses = analyzeRustReadUses(ast, nodes, records, {}, () => false, { field: () => undefined });
+  for (const [node, operation] of operations) {
+    let operand = operation.operandExpression;
+    const mode = operation.operation === "store" || operation.operation === "mutable-reference" ? "mutable" : "shared";
+    while (true) {
+      assert.equal(uses.get(operand)?.mode, mode, `${operation.operation}: every original transparent operand keeps its selected role`);
+      if (!ast.is.IsParenthesizedExpression(operand)) break;
+      operand = Node_Expression(ast, operand);
+    }
+    if (operation.operation === "store") assert.equal(uses.has(operation.valueExpression), false,
+      `${operation.operation}: independent nested loads do not borrow the complete stored value`);
+  }
+});
+
+test("repeated native reference loads and stores reach their real sealed ownership and write plans", () => {
+  const { program } = analyzeRust({ files: { "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+import type { Mut, Ref } from "@tsonic/rust/types.js";
+import { load, store } from "@tsonic/rust/lang.js";
+export function update(target: Mut<int32>, source: Ref<int32>): int32 {
+  store(target, load(target) + 1);
+  store(((target)), load(((target))) + 1);
+  store(target, load(source));
+  return load(target) + load(source);
+}
+export function replace(target: Mut<string>, value: string): void { store(target, value); }
+` } });
+  const { ast } = program.source;
+  const operations = [];
+  const visit = node => {
+    const fact = program.records.targetOperation.get(node);
+    if (fact?.kind === "reference-operation") {
+      operations.push(fact);
+      const use = program.records.readOwnership.get(fact.operandExpression);
+      assert.equal(use?.source.kind, "borrow", `${fact.operation}: the real native handle is not transferred or cloned`);
+      assert.equal(use.source.mutable, fact.operation === "store", `${fact.operation}: the exact native use mode is preserved`);
+      assert.equal(program.records.referenceOperation.get(node)?.operation === fact, true,
+        `${fact.operation}: rendering reads the same admitted operation, not a new selector`);
+      if (fact.operation === "store") {
+        assert.equal(program.records.readOwnership.get(fact.valueExpression)?.value.kind === "borrow", false,
+          "the stored native value is not reclassified as a borrowed handle");
+      }
+    }
+    ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+  };
+  program.sourceFiles.forEach(visit);
+  assert.equal(operations.filter(operation => operation.operation === "load").length, 5,
+    "all repeated shared and mutable loads retain their real source occurrences");
+  assert.equal(operations.filter(operation => operation.operation === "store").length, 4,
+    "all direct, wrapped, disjoint and owned-value stores are admitted");
+  assert.equal(operations.filter(operation => operation.operation === "store" && operation.writeStrategy !== undefined).length, 1,
+    "only the existing exact-identifier compound recipe is selected; wrappers are not guessed equivalent");
+});
+
+test("a shared native reference still cannot be passed to the mutable store contract", () => {
+  assert.throws(() => compileRust({ files: { "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+import type { Ref } from "@tsonic/rust/types.js";
+import { store } from "@tsonic/rust/lang.js";
+export function invalid(value: Ref<int32>): void { store(value, 1); }
+` } }), failure => typeof failure?.message === "string" && failure.message.includes("TypeScript diagnostics:") &&
+    failure.message.includes("Ref") && failure.message.includes("Mut"),
+  "the checked immutable-reference inverse fails at the existing native mutable-reference admission boundary");
+});
 
 test("nested native result lifetimes retain only their corresponding reference input", async () => {
   const source = createTargetSourceProgram(await checkedSource("ownership-native-result-borrow", {

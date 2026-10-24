@@ -47,7 +47,8 @@ export function rustErrorFieldComparisonView(node: Node | undefined, expression:
     ?? failRustPlannerInvariant("An admitted comparison requires its sealed native string view.", node);
   if (selected.kind === "literal") return { kind: "str-literal", value: selected.value };
   if (selected.kind === "native-str-reference") return {
-    kind: "call", path: "core::convert::AsRef::<str>::as_ref", args: [{ kind: "reference", expr: expression }],
+    kind: "call", path: "core::convert::AsRef::<str>::as_ref",
+    args: [selected.inputForm === "shared-reference" ? expression : { kind: "reference", expr: expression }],
   };
   if (selected.kind === "error") {
     const field = context.input.program.records.errorFieldEmission.get(node);

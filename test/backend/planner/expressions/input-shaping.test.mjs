@@ -2,7 +2,7 @@ import { createRustRecordFixture } from "../../../helpers/records.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRust } from "../../../helpers/rust-session.mjs";
-import { applyFinalizedRustArgumentMode } from "../../../../dist/backend/planner/expressions/input-shaping.js";
+import { applyFinalizedRustArgumentMode, createRustSharedReferenceArgument } from "../../../../dist/backend/planner/expressions/input-shaping.js";
 import { rustStringTargetType } from "../../../../dist/target-model/types/index.js";
 
 
@@ -57,6 +57,23 @@ readOwnership: { get: () => ({ carrier: stringCarrier, source: ownership, value:
     expressionOverrides: new Map(override === undefined ? [] : [[sourceNode, override]]),
   };
 }
+
+test("comparison-only native String views do not replace an ordinary shared native argument ABI", () => {
+  const expression = { kind: "path", path: "owned_native_string" };
+  for (const inputForm of ["value", "shared-reference"]) {
+    const selected = context();
+    selected.input.program.records = { ...selected.input.program.records,
+      stringComparisonView: { get: () => ({ kind: "native-str-reference", inputForm }) } };
+    const shared = createRustSharedReferenceArgument(selected, { stage: "source", expression, node: sourceNode });
+    assert.equal(shared.kind, "reference", `${inputForm}: the actual &String argument remains a native reference`);
+    assert.equal(shared.expr === expression, true, `${inputForm}: the argument preserves its exact original native storage`);
+    const parameter = context({ mode: "ref" });
+    parameter.input.program.records = { ...parameter.input.program.records,
+      stringComparisonView: { get: () => ({ kind: "native-str-reference", inputForm }) } };
+    assert.equal(createRustSharedReferenceArgument(parameter, { stage: "source", expression, node: sourceNode }) === expression,
+      true, `${inputForm}: an already borrowed native parameter is still reused once`);
+  }
+});
 
 test("exact borrowed lexical captures pass once through the canonical shared-input owner", () => {
   const expression = { kind: "path", path: "capture" };
