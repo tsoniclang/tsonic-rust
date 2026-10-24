@@ -3,8 +3,9 @@ import test from "node:test";
 import { planRustNativeProducerBridge } from "../../../../dist/backend/planner/declarations/callables/native-producer-bridges.js";
 import { createRustNativeCallableProtocolRegistry } from "../../../../dist/analysis/callables/native-protocols.js";
 import { emptyRustTypeDefinitions } from "../../../../dist/target-model/types/source-union-definitions.js";
+import { createRustTypeDefinitionRegistry } from "../../../../dist/analysis/project-types/type-definitions.js";
 import { rustSourcePrimitiveTargetType, rustFutureTargetType, rustJsPromiseTargetType,
-  rustSourceOptionalTargetType, rustCallableTargetType, rustStrTargetType }
+  rustSourceOptionalTargetType, rustSourceUnionTargetType, rustCallableTargetType, rustStrTargetType }
   from "../../../../dist/target-model/types/index.js";
 import { rustGenericCallableTargetType } from "../../../../dist/target-model/types/carriers/generic-callables.js";
 import { nativeProducerFixture, nativeProducerItems, printNativeProducerItems }
@@ -22,6 +23,49 @@ function withProtocolRecord(fixture, variant) {
 
 const integer = rustSourcePrimitiveTargetType("uint64");
 const borrowed = { kind: "reference", referent: rustStrTargetType(), mutable: false };
+
+test("native output unions use the canonical generated declaration and sealed physical payloads", () => {
+  const payloads = [borrowed, rustFutureTargetType(borrowed), rustFutureTargetType(integer)];
+  const carrier = rustSourceUnionTargetType("/src/index.ts", "MixedOutput", [], "generated",
+    { kind: "physical", types: payloads });
+  const definitions = createRustTypeDefinitionRegistry();
+  assert.equal(definitions.registerSourceUnion({ carrier,
+    variants: payloads.map((type, index) => ({ name: `Variant${index}`, carrier: type })),
+  }, false), true, "all exact mixed output payloads are admitted by the actual registry");
+  const fixture = nativeProducerFixture({ identity: "mixed-output", parameters: [borrowed],
+    result: rustSourceOptionalTargetType(carrier), definitions });
+  const union = fixture.program.structuralShapes.unionForCarrier(carrier);
+  assert.equal(union !== undefined, true, "the native output owns a generated declaration before rendering");
+  assert.equal(Object.isFrozen(union), true, "the generated declaration is immutable");
+  assert.equal(union.ownerFileName, "/src/index.ts", "the declaration belongs to the actual checked source file");
+  assert.equal(fixture.program.records.sourceUnion.get(carrier) === union, true,
+    "project emission retains the same canonical generated declaration");
+  const emitted = fixture.program.records.typeEmission.get(carrier);
+  assert.equal(emitted?.structural?.targetName, union.targetName,
+    "TYPE publication names the actual generated declaration");
+  assert.equal(emitted.structural.arguments.length, payloads.length,
+    "each ready or suspended output retains its physical payload slot");
+  const printed = printNativeProducerItems(nativeProducerItems(fixture));
+  assert.match(printed, /crate::shapes::Union3</u,
+    "the native bridge uses the canonical generated declaration module");
+  assert.match(printed, /AwaitError0/u, "the first suspended payload retains its independent error channel");
+  assert.match(printed, /AwaitError1/u, "the second suspended payload retains its independent error channel");
+  assert.doesNotMatch(printed, /TsonicError|TsonicResult|Box|dyn |\.clone\(|'static/u,
+    "union admission invents no error erasure, allocation, clone or static lifetime");
+});
+
+test("native output union admission refuses a foreign source owner instead of inventing a declaration", () => {
+  const payloads = [integer, borrowed];
+  const carrier = rustSourceUnionTargetType("/foreign/index.ts", "ForeignOutput", [], "generated",
+    { kind: "physical", types: payloads });
+  const definitions = createRustTypeDefinitionRegistry();
+  assert.equal(definitions.registerSourceUnion({ carrier,
+    variants: payloads.map((type, index) => ({ name: `Variant${index}`, carrier: type })),
+  }, false), true, "the carrier metadata is valid independently of source-package ownership");
+  assert.throws(() => nativeProducerFixture({ identity: "foreign-output", result: carrier, definitions }),
+    /foreign-output: generated union has its actual source-package owner/u,
+    "a valid shape cannot impersonate an absent checked source component");
+});
 
 test("producer fixtures preserve the complete sealed native-input contract and exact source-item identity", () => {
   const fixture = nativeProducerFixture({ parameters: [integer], result: integer });
