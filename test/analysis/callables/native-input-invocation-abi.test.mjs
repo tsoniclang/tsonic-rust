@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { sourceEnclosingCallable, sourceNodeIdentity } from "@tsonic/target-api/source";
 import { analyzeRust } from "../../helpers/rust-session.mjs";
 import { rustNativeCallableInvocationArguments } from "../../../dist/policy/types/callables/native-invocations.js";
 
@@ -30,11 +31,24 @@ invoke((value) => value === undefined ? 0 : value === "native" ? 6 : 0, "native"
       const operation = program.records.targetOperation.get(call);
       const selected = program.records.nativeInputInvocation.get(call);
       assert.equal(operation?.kind === "source-call", true, "the exact checked source invocation is retained");
-      assert.equal(selected !== undefined, true, "the native input owner publishes its selected flat-argument call");
+      const callIdentity = sourceNodeIdentity(program.source.ast, call);
+      assert.equal(callIdentity !== undefined, true, "the actual invocation has its original checked source identity");
+      const owner = sourceEnclosingCallable(call, program.source.ast);
+      const inputs = owner === undefined ? [] : program.callableValues.native.inputsFor(owner);
+      const describe = carrier => [carrier.kind, carrier.id ?? "", carrier.mutable ?? "",
+        carrier.lifetime?.kind ?? "implicit", carrier.referent?.kind ?? "", carrier.referent?.id ?? ""];
+      const evidence = JSON.stringify({ inputs: inputs.length,
+        protocol: inputs[0]?.protocol.method.parameters.map(describe),
+        physical: operation.parameters.map(parameter => describe(parameter.parameterCarrier)),
+        binders: inputs[0]?.protocol.method.binder.parameters.map(parameter => parameter.lifetime.kind),
+        arguments: operation.targetGenericArguments?.map(argument => argument.kind) ?? [],
+        matched: inputs.length === 1 && rustNativeCallableInvocationArguments(inputs[0], operation, callIdentity) !== undefined });
+      assert.equal(selected !== undefined, true,
+        `the native input owner publishes its selected flat-argument call; ${evidence}`);
       assert.equal(selected.call.node === call, true, "the call record retains the original source invocation identity");
       assert.equal(selected.call.input.protocol.method.parameters.length, operation.parameters.length,
         "the native trait and source argument plan have the same value arity");
-      assert.equal(rustNativeCallableInvocationArguments(selected.call.input, operation) !== undefined, true,
+      assert.equal(rustNativeCallableInvocationArguments(selected.call.input, operation, callIdentity) !== undefined, true,
         "the actual physical formals instantiate the selected native method's complete generic and lifetime ABI");
       assert.equal(program.records.sourceCallEffects.get(call)?.nativeInput !== undefined, true,
         "the same selected input retains its native invocation error effects");
