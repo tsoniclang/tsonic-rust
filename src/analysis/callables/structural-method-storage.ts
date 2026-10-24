@@ -1,7 +1,7 @@
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { AstReader, Node } from "@tsonic/tsts";
 import type { SourceStorageBindings, SourceStorageDomainBoundary, SourceStorageProducer, SourceStorageQueries, SourceStorageSubject } from "@tsonic/target-api/analysis";
-import { Node_Expression, sourceEnclosingCallable, asSourceNode } from "@tsonic/target-api/source";
+import { Node_Expression, sourceEnclosingCallable, asSourceNode, type TargetSourceProgram } from "@tsonic/target-api/source";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
 import type { RustErrorRegionRecords } from "../../target-model/records/error-regions.js";
@@ -11,16 +11,16 @@ import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import { rustCallableProtocol, rustCallableTargetType } from "../../target-model/types/carriers/callables.js";
 import { rustOptionElementCarrier, rustOptionTargetType } from "../../target-model/types/carriers/optional.js";
-import { rustStructuralObjectCarrierValue, rustStructuralObjectTargetType } from "../../target-model/types/carriers/source-types.js";
+import { rustStructuralObjectCarrierValue, rustStructuralObjectTargetType, rustInfallibleTargetId } from "../../target-model/types/carriers/source-types.js";
 import { rustProducerErrorReference } from "../../target-model/types/carriers/producer-errors.js";
-import { inferRustTargetGenericBindings } from "../../target-model/types/carriers/generic-inference.js";
+import { inferRustTargetGenericBindings, type RustTargetGenericBindings } from "../../target-model/types/carriers/generic-inference.js";
 import { mapRustTargetTypes, substituteRustTargetGenerics } from "../../target-model/types/carriers/substitution.js";
 import { rustTargetGenericReferences } from "../../target-model/types/carriers/generic-references.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustStructuralGenericCarrier } from "../../policy/types/objects/structural-generics.js";
 import { rustEnclosingStorageContract } from "./storage-contracts.js";
 import { rustCallableTargetForSourceLifetime } from "../../policy/conversions/value-carrier-reconciliation.js";
-import type { RustStructuralMethodConstruction, RustStructuralMethodStorageSelection, RustStructuralMethodPayload } from "../../target-model/records/structural-shapes.js";
+import type { RustStructuralMethodConstruction, RustStructuralMethodStorageSelection, RustStructuralMethodPayload, RustStructuralMethodExposure } from "../../target-model/records/structural-shapes.js";
 import type { RustStructuralShapePlanRegistry } from "../objects/shapes/structural-shape-plan.js";
 import { rustNativeCallablePhysicalSource } from "../../policy/conversions/native-callables.js";
 import type { RustNativeCallableInputPlan } from "./native-inputs.js";
@@ -32,7 +32,6 @@ import type { RustRetainedEnvironmentQueries } from "../../target-model/records/
 import type { RustErrorEffectsFact } from "../../target-model/records/error-effects.js";
 import type { RustSourcePackageComponentClassifications } from "../../target-model/records/source-package-semantics.js";
 import { normalizeRustErrorType, type RustErrorTypeContext } from "../errors/error-types.js";
-import { rustInfallibleTargetId } from "../../target-model/types/carriers/source-types.js";
 import { rustHasOpenOwnedStorage, selectRustStructuralFactoryReceiver } from "../../policy/ownership/retained-storage.js";
 import type { RustDeclarationGenericRequirementIndex } from "../declarations/generic-requirements.js";
 import { rustFinalContractSupportsStatic } from "../declarations/generic-carrier-requirements.js";
@@ -40,90 +39,19 @@ import type { RustSourceTypeFamilyRegistry } from "../../target-model/types/type
 
 import type { RustSourceCallableSpecializationIssue } from "../../target-model/records/callable-issues.js";
 import type { RustSourceTypeRegistry } from "../project-types/source-type-model.js";
-import type { RustSourceObjectField } from "../../target-model/records/source-types.js";
-import type { RustNativeCaptureConstruction } from "./native-captures.js";
+import type { RustSourceObjectField, RustSourceObjectShape } from "../../target-model/records/source-types.js";
+import { completeRustNativeCaptureCarrier, type RustNativeCaptureConstruction } from "./native-captures.js";
 import type { RustNativeCaptureSelection } from "../../target-model/records/native-captures.js";
-import { completeRustNativeCaptureCarrier } from "./native-captures.js";
 import type { RustFrameCallablePlan } from "../../target-model/records/frame-callables.js";
 import type { RustClassValuePlan } from "../../target-model/records/class-values.js";
 import type { RustGenericCallablePlan } from "./generic-values.js";
-import type { RustTargetGenericBindings } from "../../target-model/types/carriers/generic-inference.js";
 import type { RustProjectTypePolicy } from "../project-types/index.js";
 import type { RustObjectRepresentationPlan } from "../project-types/object-representation.js";
 import { rustCallablePhysicalSignature } from "../../target-model/conversions/callable-physical.js";
-import type { TargetSourceProgram } from "@tsonic/target-api/source";
-import type { RustSourceObjectShape } from "../../target-model/records/source-types.js";
-import type { RustStructuralMethodExposure } from "../../target-model/records/structural-shapes.js";
 import { structuralStorageKey, bindRustStructuralImplementationContract } from "../../policy/types/objects/structural-storage.js";
 import { selectRustStructuralMethodExposure } from "../../policy/types/objects/structural-emission.js";
+import { rustStructuralMethodProducers } from "./structural-method-producers.js";
 
-function rustStructuralMethodProducers(sourceStorage: SourceStorageQueries, subject: SourceStorageSubject, bindings: SourceStorageBindings):
-  { readonly kind: "complete"; readonly producers: readonly SourceStorageProducer[]; readonly transported: ReadonlySet<SourceStorageProducer> } |
-  { readonly kind: "open"; readonly producers: readonly SourceStorageProducer[];
-    readonly boundaries: readonly SourceStorageDomainBoundary[] | undefined } |
-  { readonly kind: "unresolved"; readonly reason: string } {
-  const { ast } = sourceStorage.source;
-  const producers: SourceStorageProducer[] = [];
-  const boundaries: SourceStorageDomainBoundary[] = [];
-  const transported = new Set<SourceStorageProducer>();
-  const visited = new Map<SourceStorageSubject, Set<SourceStorageBindings>>();
-  const pending: { readonly subject: SourceStorageSubject; readonly bindings: SourceStorageBindings;
-    readonly transported?: true }[] = [{ subject, bindings }];
-  while (pending.length !== 0) {
-    const current = pending.pop()!;
-    const visits = visited.get(current.subject) ?? new Set<SourceStorageBindings>();
-    if (visits.has(current.bindings)) continue;
-    visits.add(current.bindings);
-    visited.set(current.subject, visits);
-    const selected = sourceStorage.storageProducersFor(current.subject, current.bindings);
-    if (selected.kind === "unresolved") return selected;
-    if (selected.kind === "open") {
-      if (selected.boundaries.length === 0) return { kind: "open", producers: Object.freeze(producers), boundaries: undefined };
-      boundaries.push(...selected.boundaries);
-    }
-    for (const producer of selected.producers) {
-      if (producer.subject.kind !== "input") {
-        producers.push(producer);
-        if (current.transported === true) transported.add(producer);
-        continue;
-      }
-      const declaration = ast.parent(producer.subject.node);
-      if (declaration === undefined) return { kind: "unresolved",
-        reason: "Structural method storage requires the checked declaration of its parameter producer." };
-      const canonical = sourceStorage.bindingsForDeclaration(declaration);
-      if (canonical.kind === "unresolved") return canonical;
-      const activations = producer.bindings === canonical.bindings
-        ? { kind: "resolved" as const, activations: [{ kind: "declaration" as const }] }
-        : sourceStorage.boundActivationsFor(declaration, producer.bindings);
-      if (activations.kind === "unresolved") return activations;
-      const invocations: { readonly bindings: SourceStorageBindings; readonly callerBindings: SourceStorageBindings }[] = [];
-      for (const activation of activations.activations) {
-        if (activation.kind === "invocation") {
-          invocations.push(activation);
-          continue;
-        }
-        if ("nativeEntry" in activation && activation.nativeEntry !== undefined) return { kind: "open", producers: Object.freeze(producers), boundaries: undefined };
-        const summary = sourceStorage.source.navigation.declarationUseSummary(declaration);
-        if (summary.exported || summary.bindingWritten) return { kind: "open", producers: Object.freeze(producers), boundaries: undefined };
-        for (const use of sourceStorage.source.navigation.declarationUses(declaration)) {
-          if (use.kind === "type-only") continue;
-          const call = ast.parent(use.reference);
-          if (use.kind !== "direct-call" || call === undefined || !ast.is.IsCallExpression(call) ||
-            Node_Expression(ast, call) !== use.reference) return { kind: "open", producers: Object.freeze(producers), boundaries: undefined };
-          const caller = sourceStorage.bindingsForLexicalOwner(call);
-          if (caller.kind === "unresolved") return caller;
-          const bound = sourceStorage.bindingsForInvocation(declaration, call, caller.bindings);
-          if (bound.kind === "unresolved") return bound;
-          invocations.push({ bindings: bound.bindings, callerBindings: caller.bindings });
-        }
-      }
-      if (invocations.length === 0) return { kind: "open", producers: Object.freeze(producers), boundaries: undefined };
-      for (const activation of invocations) pending.push({ subject: producer.subject, bindings: activation.bindings, transported: true });
-    }
-  }
-  return boundaries.length === 0 ? { kind: "complete", producers: Object.freeze(producers), transported }
-    : { kind: "open", producers: Object.freeze(producers), boundaries: Object.freeze(boundaries) };
-}
 
 function structuralBoundariesAreExportOnly(source: TargetSourceProgram,
   boundaries: readonly Pick<SourceStorageDomainBoundary, "kind" | "exposure">[] | undefined): boolean {
@@ -208,7 +136,7 @@ export function analyzeRustStructuralMethodExposures(input: {
         for (const declaration of original.declarations) {
           const subject = input.sourceStorage.subject(node, "value", [{ kind: "method-value", declaration }]);
           const producers = subject.kind === "unresolved" ? subject
-            : rustStructuralMethodProducers(input.sourceStorage, subject.subject, bindings.bindings);
+            : rustStructuralMethodProducers(input.sourceStorage, subject.subject, bindings.bindings, undefined);
           if (producers.kind !== "complete" || producers.producers.length === 0) {
             complete = false;
             break;
@@ -239,7 +167,7 @@ export function analyzeRustStructuralMethodExposures(input: {
       const subject = input.sourceStorage.subjectFor(method.expression);
       const bindings = input.sourceStorage.bindingsForLexicalOwner(method.expression);
       const producers = subject.kind === "unresolved" ? subject : bindings.kind === "unresolved" ? bindings
-        : rustStructuralMethodProducers(input.sourceStorage, subject.subject, bindings.bindings);
+        : rustStructuralMethodProducers(input.sourceStorage, subject.subject, bindings.bindings, undefined);
       if (candidate !== undefined) {
         if (producers.kind === "unresolved" || producers.kind === "open" &&
           !structuralBoundariesAreExportOnly(input.source, producers.boundaries)) candidate.boundary = "opaque";
@@ -417,10 +345,8 @@ export function createRustStructuralMethodStorage(input: {
       else register(node, destination, subject.subject);
     }
   }
-  // A method slot read through a parameter is produced by the arguments of every checked activation of the
-  // parameter's declaration; the domain follows each activation to its caller-side origins.
-  const producersFor = (subject: SourceStorageSubject, bindings: SourceStorageBindings) =>
-    rustStructuralMethodProducers(sourceStorage, subject, bindings);
+  const producersFor = (root: RustStructuralMethodRoot) =>
+    rustStructuralMethodProducers(sourceStorage, root.subject, root.bindings, root.construction?.expression);
   let complete = false;
   const producerErrors = new Map<import("../../target-model/types/carriers/producer-errors.js").RustProducerErrorReference, TargetTypeRef>();
   const retainedRequirements: { readonly declaration: Node; readonly bindings: RustTargetGenericBindings | undefined;
@@ -448,8 +374,6 @@ export function createRustStructuralMethodStorage(input: {
         return node === undefined ? undefined : effectsFor(node);
       } } },
         producers: input.nativeProducers, definitions: input.typeDefinitions };
-      // A method read through a parameter reaches the closures of the arguments' own constructions; a closure that
-      // a construction of the same storage definition already admits needs no second admission at the read.
       const constructed = new Map<Node, Set<RustStructuralMethodShape>>();
       for (const root of roots) if (root.construction !== undefined) {
         const definitions = constructed.get(root.construction.expression) ?? new Set<RustStructuralMethodShape>();
@@ -458,7 +382,7 @@ export function createRustStructuralMethodStorage(input: {
       }
       const covered = new Set<RustStructuralMethodRoot>();
       for (const root of roots) {
-        const selected = producersFor(root.subject, root.bindings);
+        const selected = producersFor(root);
         if (selected.kind !== "complete") return reject(root.subject.node, selected.kind === "unresolved" ? selected.reason
           : "Retained constructor selection requires its exact admitted source producer domain.");
         const admitted = selected.producers.filter(producer => !selected.transported.has(producer) ||
