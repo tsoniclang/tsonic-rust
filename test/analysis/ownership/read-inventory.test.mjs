@@ -80,6 +80,93 @@ for (const [name, body, moves] of [
   });
 }
 
+for (const captureStorage of ["value", "cell", "borrow-cell", "location"]) {
+  test(`a final source use respects actual ${captureStorage} capture storage`, async () => {
+    const source = createTargetSourceProgram(await checkedSource("ownership-captured-native-storage", {
+      "src/index.ts": `function read(value: ${captureStorage === "cell" ? "number" : "string"}) {
+        const retained = () => value;
+        void retained;
+        return value;
+      }`,
+    }));
+    const storage = createSourceStorageQuery(source, source.sourceFiles);
+    const { ast } = source;
+    const declaration = storage.nodes.find(node => ast.is.IsParameterDeclaration(node));
+    const closure = storage.nodes.find(node => ast.is.IsArrowFunction(node));
+    const reference = storage.nodes.find(node => ast.is.IsIdentifier(node) && ast.parent(node) === closure);
+    const terminal = storage.nodes.find(node => ast.is.IsIdentifier(node) && ast.is.IsReturnStatement(ast.parent(node)));
+    assert.equal(declaration !== undefined && closure !== undefined && reference !== undefined && terminal !== undefined, true,
+      "the original checked closure and final outer read are both present");
+    const selected = analyzeRustOwnershipFlow({ source, storage, nativeNodes: storage.nodes,
+      capturesFor: owner => owner !== closure ? undefined : { receivers: [], receiverFields: [], captures: [{
+        declaration, reference, carrier: captureStorage === "cell" ? rustSourcePrimitiveTargetType("float64") : rustStringTargetType(),
+        storage: captureStorage,
+      }] },
+      isOnceCallable: () => false, canMoveStoredField: () => false, isOwnedOperationResult: () => false });
+    assert.equal(selected.kind, "resolved", "checked source liveness is complete");
+    assert.equal(selected.flow.movingReads.has(terminal), captureStorage === "value",
+      "only a real by-value binding can transfer; a final source use cannot move a cell payload");
+    assert.equal(selected.flow.movingReads.has(reference), false, "a repeated retained invocation does not consume its capture");
+  });
+}
+
+for (const surfaces of [[], ["js"]]) {
+  test(`a native receiver alias follows its actual stored or owned receiver on ${surfaces[0] ?? "native"}`, () => {
+    const { program } = analyzeRust({ surfaces, files: { "index.ts": `
+      class Owner { readonly owner: Owner = this; }
+      export function equal(left: Owner, right: Owner): boolean { return left.owner === right.owner; }
+      export function direct(value: Owner): boolean { return value.owner !== value; }
+      export function temporary(): boolean { return new Owner().owner === new Owner(); }
+    ` } });
+    const { ast } = program.source;
+    const aliases = [];
+    const visit = node => {
+      const operation = program.records.targetOperation.get(node);
+      if (operation?.kind === "source-field" && operation.valueSemantics.kind === "receiver-alias") aliases.push(node);
+      ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+    };
+    program.sourceFiles.forEach(visit);
+    assert.equal(aliases.length, 4, "all original stored and fresh native receiver aliases remain admitted");
+    for (const node of aliases) {
+      const receiver = ast.as.AsPropertyAccessExpression(node).Expression;
+      const stored = !ast.is.IsNewExpression(receiver);
+      const read = program.ownership.reads.get(node);
+      assert.equal(read?.readsStorage, stored, "the readonly alias adds no fictitious native field storage");
+      assert.equal(read?.value.kind, stored ? "borrow" : "move", "native ownership follows the exact receiver instead of cloning or moving a stored owner");
+      assert.equal(read?.source.kind, stored ? "borrow" : "move", "the original source carrier retains the same native receiver contract");
+    }
+  });
+
+  test(`a captured mutation takes its native snapshot before the later operand on ${surfaces[0] ?? "native"}`, () => {
+    const { program } = analyzeRust({ surfaces, files: { "index.ts": `
+      class Token {}
+      type Choice = string | Token;
+      export function changing(initial: Choice, replacement: Choice): boolean {
+        let current = initial;
+        const replace = (): Choice => { current = replacement; return initial; };
+        return current === replace();
+      }
+      export function stable(left: Choice, right: Choice): boolean { return left === right; }
+    ` } });
+    const { ast } = program.source;
+    const comparisons = [];
+    const visit = node => {
+      if (program.records.targetOperation.get(node)?.kind === "union-equality") comparisons.push(ast.as.AsBinaryExpression(node));
+      ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+    };
+    program.sourceFiles.forEach(visit);
+    assert.equal(comparisons.length, 2, "both mutation and genuinely readonly comparisons remain admitted");
+    for (const comparison of comparisons) {
+      const left = program.ownership.reads.get(comparison.Left);
+      const changing = ast.text(comparison.Left) === "current";
+      assert.equal(left?.readsStorage, true, "the operand is the original checked native storage read");
+      assert.equal(left?.value.kind, changing ? "clone" : "borrow", "native cell movability and the actual later effect select one read");
+      assert.equal(left?.borrowedAcross.has(comparison.Right), !changing, "only an actual safe native lease spans the later operand");
+      if (changing) assert.equal(left?.source.kind, "clone", "the original payload is snapshotted, not moved out of its captured cell");
+    }
+  });
+}
+
 async function fixture() {
   const source = createTargetSourceProgram(await checkedSource("ownership-read-inventory", {
     "src/index.ts": `function read(value: string) { return ${"(".repeat(80)}value${")".repeat(80)}; }`,

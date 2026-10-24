@@ -25,7 +25,7 @@ const physicalCarrier = ({ parameters, result, error }) => rustRuntimeCallableTa
     { kind: "type", type: result }, { kind: "type", type: error },
   ]));
 
-test("native retained Callable Clone has no parameter, result or error Clone bound", () => {
+test("native retained Callable Clone and identity equality have no parameter, result or error trait bound", () => {
   const lifetime = { kind: "parameter", identity: "checked:retained-region", name: "region" };
   const parameter = { kind: "type-parameter", identity: "checked:Payload", name: "Payload" };
   const parameters = [parameter];
@@ -42,6 +42,14 @@ test("native retained Callable Clone has no parameter, result or error Clone bou
     "the native Callable Clone implementation clones only its existing Rc");
   assert.equal(obligations, 0, "no payload, result or error Clone requirement is invented");
   assert.equal(rustCarrierSupportsClone(carrier), true, "physical native metadata preserves the real Clone implementation");
+  for (const trait of ["core::cmp::PartialEq", "core::cmp::Eq"]) {
+    assert.equal(rustCarrierSupportsTrait(carrier, trait, () => { obligations++; return false; }), true,
+      `the actual native Callable implements ${trait} on its complete Self carrier`);
+    assert.equal(rustCarrierSupportsTrait(completion, trait), false, `${trait} is not imposed on the actual completion`);
+    assert.equal(rustCarrierSupportsTrait(failure, trait), false, `${trait} is not invented for an unrelated native carrier`);
+  }
+  assert.equal(obligations, 0, "native handle identity adds no parameter, result or error equality obligation");
+  assert.equal(rustCarrierSupportsTrait(carrier, "core::hash::Hash"), false, "native identity equality does not invent Hash");
   assert.equal(isRustCopyCarrier(carrier), false, "the native retained handle is not Copy");
   assert.equal(rustCarrierSupportsClone(completion), false, "cloning a handle does not make its actual completion Clone");
   assert.equal(rustCarrierSupportsClone(failure), false, "unrelated move-only native carriers remain move-only");

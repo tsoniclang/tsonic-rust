@@ -22,7 +22,11 @@ export function rustRuntimeCallableTargetType(
     { kind: "lifetime", lifetime },
     { kind: "type", type: { kind: "tuple", elements: parameters } },
     { kind: "type", type: completion },
-  ], [], { implementations: [{ trait: rustNativeTraitRef("core::clone::Clone"), requirements: [] }] });
+  ], [], { implementations: [
+    { trait: rustNativeTraitRef("core::clone::Clone"), requirements: [] },
+    { trait: rustNativeTraitRef("core::cmp::PartialEq"), requirements: [] },
+    { trait: rustNativeTraitRef("core::cmp::Eq"), requirements: [] },
+  ] });
 }
 
 export function rustRuntimeRecordFieldTargetType(value: TargetTypeRef, error: TargetTypeRef): TargetTypeRef {
