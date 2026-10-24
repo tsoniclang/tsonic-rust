@@ -19,6 +19,8 @@ import { validateRustFinalizedOperationAbi } from "../../../../dist/policy/opera
 import { analyzeRustStatementCompletions } from "../../../../dist/analysis/control-flow/statement-completion.js";
 import { analyzeRustCountedLoopRepresentations } from "../../../../dist/analysis/control-flow/counted-loop-representations.js";
 import { createRustStatementCompletionProducer } from "../../../../dist/analysis/program/records/statement-completion.js";
+import { createRustProgramRecordBuilder } from "../../../../dist/analysis/program/records/create.js";
+import { analyzeRustProgramErrorModuleEmission } from "../../../../dist/analysis/errors/module-emission.js";
 import { planStatement } from "../../../../dist/backend/planner/statements/planning.js";
 import { finalizeRustProviderOperationAbi } from "../../../../dist/policy/operations/members/abi/finalize.js";
 import { finishProviderOperationExpression } from "../../../../dist/backend/planner/expressions/conversions.js";
@@ -150,18 +152,38 @@ test("native provider error renderability remains a precise diagnostic rather th
   const program = programFixture();
   const node = nodeIn(program, "throwing", (ast, candidate) => ast.is.IsThrowStatement(candidate));
   const context = planContext(program, node);
+  const errorCarrier = { kind: "target-named", id: "fixture.UnresolvedError" };
   const abi = finalizeRustProviderOperationAbi({ operationKind: "method",
     form: { form: "call", path: "fixture::dispose" }, sourceArgumentCarriers: [],
     resultCarrier: { kind: "tuple", elements: [] }, isAsync: false, isFallible: true,
-    errorBoundary: "provider-native", errorCarrier: { kind: "target-named", id: "fixture.UnresolvedError" },
+    errorBoundary: "provider-native", errorCarrier,
   }, program.typeDefinitions);
   assert.equal(abi !== undefined, true, "structural carrier validity does not prove contextual native rendering");
-  const result = finishProviderOperationExpression(context, { abi }, { kind: "call", path: "fixture::dispose", args: [] }, node);
-  assert.equal(result === undefined, true, "an unrenderable provider error cannot produce a partial native expression");
-  assert.equal(context.diagnostics.length, 1, "one precise diagnostic is retained");
-  assert.equal(context.diagnostics[0].code, "RUST_MISSING_TARGET_FACT", "the failure is not relabelled as an internal invariant");
-  assert.equal(context.diagnostics[0].message.includes("exact rendered native error type"), true,
-    "the diagnostic identifies the unresolved renderability obligation");
+  const errors = program.records.sourcePackageErrors.get();
+  assert.equal(errors !== undefined, true, "the real source program supplies the native error domains");
+  const producer = createRustProgramRecordBuilder(program.typeDefinitions);
+  let domains = 0;
+  for (const domain of errors.domainsByComponentId.values()) {
+    if (domain.errorDomain !== "project" || domain.forwardModulePath !== undefined) continue;
+    const variants = program.records.programErrorVariants.get(domain.componentId);
+    assert.equal(variants !== undefined, true, "the actual error owner supplied the complete native variant inventory");
+    producer.errorTransportEmissionPlans.variants(domain.componentId, variants);
+    domains += 1;
+  }
+  assert.equal(domains > 0, true, "the real checked throw requires native program error transport");
+  const issues = analyzeRustProgramErrorModuleEmission({ ...program,
+    providerErrorCarriers: [...program.providerErrorCarriers, errorCarrier],
+  }, errors, producer.errorTransportEmissionPlans);
+  assert.equal(issues.length, 1, "one precise source admission diagnostic is retained before the seal");
+  assert.equal(issues[0].code, "RUST_PROVIDER_ERROR_CARRIER_UNRENDERABLE",
+    "the real admission owner rejects an unresolved native carrier rather than relabelling a source error");
+  assert.equal(issues[0].message, "A selected provider-native error carrier has no exact renderable Rust type.",
+    "the diagnostic identifies the exact unresolved renderability obligation");
+  assert.equal(issues[0].evidence.includes(`carrier=${JSON.stringify(errorCarrier)}`), true,
+    "the refusal retains the original unsupported native carrier");
+  assertInvariant(() => finishProviderOperationExpression(context, { abi },
+    { kind: "call", path: "fixture::dispose", args: [] }, node), context,
+  "An admitted native type requires its exact sealed position evidence.", undefined);
 });
 
 test("an admitted throw cannot lose its mandatory source expression", () => {
