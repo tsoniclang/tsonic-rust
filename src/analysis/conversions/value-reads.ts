@@ -18,6 +18,9 @@ import type { RustValueConversion } from "../../target-model/operations/model.js
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
 import { rustCallableAdapterValues } from "../../policy/conversions/callable-values.js";
 import type { RustCallableValueAdapter } from "../../target-model/records/callable-adapters.js";
+import { BinaryExpression_Left, BinaryExpression_Right, Node_Expression, Node_Operand } from "@tsonic/target-api/source";
+import { rustUnionEntryTransferIssue } from "../../policy/conversions/union-injection.js";
+import type { RustValueReadOwnership } from "../../target-model/records/ownership.js";
 
 export function analyzeRustValueReads(program: Omit<RustAnalysisProgram, "reachability">, nodes: readonly Node[],
   producer: RustValueReadProducer, projections: RustValueProjectionProducer, conversions: RustConversionEmissionProducer): readonly TargetDiagnostic[] {
@@ -25,6 +28,30 @@ export function analyzeRustValueReads(program: Omit<RustAnalysisProgram, "reacha
   const refuse = (node: Node, capability: string, message: string): void => {
     issues.push({ code: "RUST_MISSING_TARGET_FACT", category: "error", source: "tsonic-rust", sourceNode: node,
       message: `${message} Node kind: ${program.source.ast.kindName(node)}.`, evidence: [`target.capability=${capability}`] });
+  };
+  const rejectedEntries = new Set<Node>();
+  const providerClones = new Set(program.physicalEmissionContexts.sourceOccurrences.filter(occurrence =>
+    [program.records.providerForm.get(occurrence.node, occurrence.operation.abi),
+      program.records.providerForm.get(occurrence.node, occurrence.operation.abi, true)].some(form => form?.read === "clone"))
+    .map(occurrence => occurrence.node));
+  const entry = (node: Node, source: TargetTypeRef, target: TargetTypeRef,
+    read: RustValueReadOwnership["kind"] | undefined): void => {
+    if (rejectedEntries.has(node)) return;
+    const issue = rustUnionEntryTransferIssue(source, target, read,
+      program.records.nativeArrayStorage.get(node)?.kind === "reference", program.typeDefinitions);
+    if (issue !== undefined) {
+      rejectedEntries.add(node);
+      issues.push({ code: "RUST_UNION_ENTRY_STORAGE_IDENTITY_NOT_PRESERVED", category: "error", source: "tsonic-rust", sourceNode: node,
+        message: `${issue} Node kind: ${program.source.ast.kindName(node)}.`,
+        evidence: ["target.capability=rust.analysis.union-entry-storage-identity"] });
+    }
+  };
+  const convertedEntry = (node: Node | undefined, conversion: RustValueConversion | undefined): void => {
+    if (node === undefined || conversion === undefined) return;
+    const contract = admitRustConversionEmission(conversions, conversion, program.typeDefinitions);
+    const read = providerClones.has(node) ? "clone" : program.records.readOwnership.get(node)?.source.kind;
+    if (contract.sourceMode === "value" && contract.lowering !== "identity" || read === "clone")
+      entry(node, contract.source, contract.target, read);
   };
   const upcast = (node: Node, fact: RustProjectUpcastFact): void => {
     if (projections.records.projectUpcastEmission.get(fact) !== undefined) return;
@@ -121,6 +148,18 @@ export function analyzeRustValueReads(program: Omit<RustAnalysisProgram, "reacha
     const fused = flow?.kind === "union-map" && contextual?.conversion.kind === "project-union-map" && rustTargetTypeRefEquals(flow.selectedCarrier, contextual.sourceCarrier) &&
       cast === undefined && downcast === undefined && lifetime === undefined && object === undefined ? flow : undefined;
     const ownership = program.records.readOwnership.get(node);
+    const entrySource = contextual?.sourceCarrier ?? contextualInput;
+    const entryRead = providerClones.has(node) ? "clone" : ownership?.source.kind;
+    if (entrySource !== undefined && value !== undefined &&
+      (runtime?.sourceMode === "value" && runtime.lowering !== "identity" || optional?.kind === "some" || entryRead === "clone"))
+      entry(node, entrySource, value, entryRead);
+    const operation = program.records.targetOperation.get(node);
+    if (operation?.kind === "source-conversion") {
+      convertedEntry(Node_Expression(program.source.ast, node) ?? Node_Operand(program.source.ast, node), operation.conversion);
+    } else if (operation?.kind === "operator-call" || operation?.kind === "operator-token") {
+      convertedEntry(BinaryExpression_Left(program.source.ast, node) ?? Node_Operand(program.source.ast, node), operation.leftConversion);
+      convertedEntry(BinaryExpression_Right(program.source.ast, node), operation.rightConversion);
+    }
     const borrowable = ownership?.value.kind !== "move" && flow !== undefined && ((flow.kind === "source-union" || flow.kind === "runtime-union") && flow.project === undefined ||
       flow.kind === "option-value" && rustOptionalStorageValue(flow.sourceCarrier) === undefined) && rustOptionElementCarrier(flow.selectedCarrier) === undefined &&
       cast === undefined && downcast === undefined && lifetime === undefined && optional === undefined && object === undefined;
@@ -154,6 +193,18 @@ export function analyzeRustValueReads(program: Omit<RustAnalysisProgram, "reacha
         preserveAbsenceEffect: ownership?.pure !== true, absenceDiscard: isRustUnitCarrier(optional?.sourceCarrier) ? "unit" : "value" }) });
     }
     projections.publish(node, Object.freeze(plans), transitions.length === 0);
+  }
+  for (const occurrence of program.physicalEmissionContexts.sourceOccurrences) {
+    for (const { input, slot } of occurrence.inputs) {
+      if (input.conversion.kind === "semantic") convertedEntry(slot.node, input.conversion.conversion);
+      else if (input.conversion.kind === "sequence") for (const step of input.conversion.steps) convertedEntry(slot.node, step.conversion);
+    }
+    const { result } = occurrence.operation.abi;
+    if (result.kind === "sync") {
+      if (result.conversion.kind === "semantic") convertedEntry(occurrence.node, result.conversion.conversion);
+      else if (result.conversion.kind === "sequence") for (const step of result.conversion.steps) convertedEntry(occurrence.node, step.conversion);
+      else if (providerClones.has(occurrence.node)) entry(occurrence.node, result.rawCarrier, result.carrier, "clone");
+    }
   }
   return Object.freeze(issues);
 }
