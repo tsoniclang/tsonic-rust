@@ -150,10 +150,11 @@ test("structural storage renders combined native method and bound-field carriers
         contractForCarrier: () => ({ typeParameters: [], associatedTypes: [], optionalStorage: [], projectProjections: [] }) } };
     const projects = createRustProjectEmissionProducer(() => {});
     analyzeRustProjectEmission({ program, nodes: [], producer: projects });
+    const projected = { ...program, records: { ...program.records, ...projects.records } };
     const structural = createRustStructuralEmissionProducer(() => {});
-    const issues = analyzeRustStructuralEmission(program, structural);
+    const issues = analyzeRustStructuralEmission(projected, structural);
     assert.equal(issues.length, 0, name + ": the actual structural owner admits the complete native storage");
-    const admitted = { ...program, records: { ...program.records, ...projects.records, ...structural.records } };
+    const admitted = { ...projected, records: { ...projected.records, ...structural.records } };
     const types = createRustTypeEmissionProducer(() => {});
     analyzeRustTypeEmission(admitted, [], types, structural.records.structuralShapeEmission.get(definition).fields.map(field => field.carrier), projects);
     const liveness = createRustNativeLivenessProducer(() => {});
