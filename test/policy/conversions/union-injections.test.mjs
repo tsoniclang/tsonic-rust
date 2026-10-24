@@ -13,7 +13,7 @@ import {
   rustJsValueTargetType, rustTsValueTargetType,
 } from "../../../dist/target-model/types/index.js";
 import { lowerRustValueConversion } from "../../../dist/backend/planner/expressions/value-conversions.js";
-import { fakeAstReader, fakeSourceFile, fakeStatement } from "../../helpers/fake-compile-input.mjs";
+import { rustProgramPlanContext, rustProgramWithTypeEmissions } from "../../helpers/plan-context.mjs";
 import { rustSourceErrorTargetType, rustWritableSourceErrorTargetType, rustMutableJsErrorTargetType } from "../../../dist/target-model/types/carriers/source-error.js";
 import { rustOptionTargetType } from "../../../dist/target-model/types/index.js";
 import { selectRustUnionEquality } from "../../../dist/policy/operations/operators/union-equality.js";
@@ -191,14 +191,13 @@ test("exact union payload admission is generic and constructs nested native vari
   assert.deepEqual(wholeInner.path.map(step => step.variant.name), ["Nested"]);
   assert.deepEqual(wholeInner.carrier, inner);
   assert.deepEqual(contract.path.map(step => step.variant.name), ["Nested", "Complete"]);
-  const node = fakeStatement({ kindName: "Identifier", pos: 0, end: 5 });
-  const sourceFile = fakeSourceFile({ fileName: "/src/index.ts", text: "value", statements: [node] });
-  const context = { input: { program: { source: { ast: fakeAstReader([sourceFile]) }, typeDefinitions: definitions,
-    names: { nameForSourceType: (_file, name) => name }, configuration: { edition: "2024" } } },
-    sourceFile, diagnostics: [], moduleName: "index", moduleNameByFileName: new Map([["/src/index.ts", "index"]]),
-    externalCrateNameByFileName: new Map() };
+  const program = rustProgramWithTypeEmissions([source, payloadCarrier, inner, target], {
+    source: "export type Inner = boolean | undefined;\nexport type Outer = Inner | string;\nexport function probe(): void {}\n",
+    typeDefinitions: definitions,
+  });
+  const context = rustProgramPlanContext(program);
   const expression = { kind: "call", path: "produce", args: [] };
-  const planned = lowerRustValueConversion(contract, expression, context, node);
+  const planned = lowerRustValueConversion(contract, expression, context, context.sourceFile);
   assert.equal(planned.kind, "call");
   assert.match(planned.path, /Outer::Nested$/u);
   assert.match(planned.args[0].path, /Inner::Complete$/u);

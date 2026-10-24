@@ -10,7 +10,7 @@ for (const surface of [undefined, "js"]) {
       target: { id: "rust", options: { outputType: "bin", crateName: "record_alias_forwarding" } },
       files: { ...recordAliasForwardingFiles, "index.ts": (`${recordAliasForwardingFiles["index.ts"]}
         export function main(): void { if (!run()) throw new Error("record alias forwarding"); }` + "\nmain();\n") } });
-    assert.equal(result.diagnostics.length, 0, result.diagnostics.map(row => row.message).join("\n"));
+    assert.equal(result.diagnostics.length, 0, result.diagnostics.map(row => [row.message, ...(row.evidence ?? [])].join("\n")).join("\n"));
     validateGeneratedProject(`record-alias-forwarding-${surface ?? "native"}`, result.artifacts, { run: true });
   });
 }
@@ -20,6 +20,6 @@ test("record aliases retain generic rest-callable array storage on JS", { timeou
     target: { id: "rust", options: { outputType: "bin", crateName: "record_alias_listeners" } },
     files: { ...recordAliasListenerFiles, "index.ts": (`${recordAliasListenerFiles["index.ts"]}
       export function main(): void { if (!run()) throw new Error("record alias listeners"); }` + "\nmain();\n") } });
-  assert.equal(result.diagnostics.length, 0, result.diagnostics.map(row => row.message).join("\n"));
+  assert.equal(result.diagnostics.length, 0, result.diagnostics.map(row => [row.message, ...(row.evidence ?? [])].join("\n")).join("\n"));
   validateGeneratedProject("record-alias-listeners-js", result.artifacts, { run: true });
 });
