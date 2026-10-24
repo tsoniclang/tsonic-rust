@@ -1,5 +1,7 @@
 import type { TargetTypeRef } from "../model.js";
 import { rustNamedTargetType, rustNativeTraitRef } from "./native.js";
+import type { RustLifetimeRef } from "../../lifetimes/index.js";
+import { rustCallableTargetId } from "./source-types.js";
 
 export const rustRuntimeErrorTypeIdentity = "tsonic-rust-runtime:TsonicError";
 
@@ -11,6 +13,16 @@ export function rustRuntimeTaskScopeTargetType(error: TargetTypeRef): TargetType
   return rustNamedTargetType("rust.runtime.TaskScope", "rt::TaskScope", [{ kind: "type", type: error }], [], {
     implementations: [{ trait: rustNativeTraitRef("core::clone::Clone"), requirements: [] }],
   });
+}
+
+export function rustRuntimeCallableTargetType(
+  lifetime: RustLifetimeRef, parameters: readonly TargetTypeRef[], completion: TargetTypeRef,
+): TargetTypeRef {
+  return rustNamedTargetType(rustCallableTargetId, "rt::Callable", [
+    { kind: "lifetime", lifetime },
+    { kind: "type", type: { kind: "tuple", elements: parameters } },
+    { kind: "type", type: completion },
+  ], [], { implementations: [{ trait: rustNativeTraitRef("core::clone::Clone"), requirements: [] }] });
 }
 
 export function rustRuntimeRecordFieldTargetType(value: TargetTypeRef, error: TargetTypeRef): TargetTypeRef {
