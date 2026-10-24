@@ -170,6 +170,12 @@ export function replace(target: Mut<string>, value: string): void { store(target
         const selected = program.records.referenceOperation.get(node);
         stores.push(selected);
         assert.equal(selected?.recipe.kind, "store", "each native store publishes its required final recipe exactly once");
+        assert.equal(Object.isFrozen(selected.recipe), true, "the selected native store recipe is immutable");
+        assert.equal(Object.isFrozen(selected.recipe.evaluation), true, "the owned scalar evaluation recipe is frozen before publication");
+        const evaluationKind = selected.recipe.evaluation.kind;
+        assert.throws(() => { selected.recipe.evaluation.kind = "target-first"; }, TypeError,
+          "the published native evaluation order cannot be changed after sealing");
+        assert.equal(selected.recipe.evaluation.kind, evaluationKind, "a refused mutation preserves the original selected evaluation order");
         assert.equal(Object.hasOwn(fact, "writeStrategy"), false, "source facts no longer contain a premature optional store recipe");
         assert.equal(program.records.readOwnership.get(fact.valueExpression)?.value.kind === "borrow", false,
           "the stored native value is not reclassified as a borrowed handle");
@@ -186,6 +192,31 @@ export function replace(target: Mut<string>, value: string): void { store(target
     "both exact direct and transparently wrapped operands use the same proven pure native update");
   assert.equal(stores.filter(selected => selected.recipe.evaluation.kind === "direct").length, 2,
     "disjoint loads and owned String replacements keep their original native value semantics");
+});
+
+test("checked optional native handles retain their stable projected reference through a repeated load and store", () => {
+  const { program } = analyzeRust({ files: { "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+import type { Mut } from "@tsonic/rust/types.js";
+import { load, store } from "@tsonic/rust/lang.js";
+export function update(target: Mut<int32> | undefined): void {
+  if (target === undefined) return;
+  store(target, load(target) + 1);
+}
+` } });
+  const { ast } = program.source;
+  const stores = [];
+  const visit = node => {
+    const selected = program.records.referenceOperation.get(node);
+    if (selected?.operation.operation === "store") stores.push(selected);
+    ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+  };
+  program.sourceFiles.forEach(visit);
+  assert.equal(stores.length, 1, "the checked optional native handle has one real source store");
+  const selected = stores[0];
+  assert.equal(selected.recipe.evaluation.kind, "compound", "the admitted stable projection does not hold a second mutable borrow across its own load");
+  assert.equal(selected.recipe.evaluation.operator, "+=", "the pure integer update retains its exact selected native operator");
+  assert.equal(Object.isFrozen(selected.recipe.evaluation), true, "the projected native store publishes the same immutable evaluation contract");
 });
 
 test("a shared native reference still cannot be passed to the mutable store contract", () => {

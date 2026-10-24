@@ -175,6 +175,7 @@ function mutate(value: Mut<int32>): int32 {
 function update(value: Mut<int32>): void { store(value, load(value) + mutate(value)); }
 function wrapped(value: Mut<int32>): void { store(((value)), load(((value))) + mutate(value)); }
 function plain(value: Mut<int32>): void { store(value, load(value) + 1); }
+function observed(value: int32): int32 { return value; }
 export function main(): void {
   let first: int32 = 5;
   store(target(mut(first)), next());
@@ -188,7 +189,7 @@ export function main(): void {
   wrapped(mut(third));
   if (third !== 8 || events !== 3) throw new Error("wrapped native store old load");
   plain(mut(third));
-  if (third !== 9) throw new Error("pure native compound store");
+  if (observed(third) !== 9) throw new Error("pure native compound store");
 }
 `);
   const update = functionSection(output, "update", "wrapped");

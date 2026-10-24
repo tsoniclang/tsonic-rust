@@ -55,8 +55,11 @@ export function analyzeRustReferenceOperations(program: Omit<RustAnalysisProgram
         continue;
       }
     }
-    if (fact.operation === "store") producer.publish(call, { operation: fact, recipe: Object.freeze(referenceStoreRecipe(program, fact)) });
-    else if (fact.operation === "load") producer.publish(call, { operation: fact, recipe: Object.freeze({ kind: "load",
+    if (fact.operation === "store") {
+      const recipe = referenceStoreRecipe(program, fact);
+      Object.freeze(recipe.evaluation);
+      producer.publish(call, { operation: fact, recipe: Object.freeze(recipe) });
+    } else if (fact.operation === "load") producer.publish(call, { operation: fact, recipe: Object.freeze({ kind: "load",
       form: program.ownership.reads.get(call)?.sharedReference === true ? "reference"
         : !fact.operandCarrier.mutable && isRustStringCarrier(fact.operandCarrier.referent) ? "owned-string" : "dereference" }) });
     else if (fact.operation === "shared-reference") producer.publish(call, { operation: fact, recipe: Object.freeze({ kind: "shared-reference" }) });
@@ -323,7 +326,7 @@ function referenceStoreRecipe(program: Omit<RustAnalysisProgram, "reachability">
       const parent = ast.parent(reference);
       const operation = parent === undefined ? undefined : program.records.targetOperation.get(parent);
       return operation?.kind === "reference-operation" && operation.operation === "mutable-reference" && operation.operandExpression === reference;
-    }) && rustTargetTypeRefEquals(program.records.runtimeCarrier.get(target)?.carrier, fact.operandCarrier);
+    }) && rustTargetTypeRefEquals(rustValueCarrierBeforeOptionProjection(program.records, target), fact.operandCarrier);
   if (!stableTarget) {
     const read = program.ownership.reads.get(fact.operandExpression);
     return { kind: "store", valueExpression: fact.valueExpression, evaluation: {
