@@ -666,12 +666,25 @@ test("structural native dispatch signatures are not stored callable payloads and
     ["missing", rustStructuralObjectTargetType("/foreign.ts", shape.fields, shape.representation, shape.construction, shape.bases)],
     ["stored", rustStructuralObjectTargetType(shape.ownerFileName, shape.fields.map(field =>
       field.method === true ? { ...field, method: undefined } : field), shape.representation, shape.construction, shape.bases)],
+    ["malformed-presence", rustStructuralObjectTargetType(shape.ownerFileName, shape.fields.map(field =>
+      field.method === true ? { ...field, presence: "missing" } : field), shape.representation, shape.construction, shape.bases)],
   ]) {
     assert.equal(current.program.structuralShapes.definitionForCarrier(invalid), undefined,
       `${name}: no published native owner admits the forged layout`);
     const selected = current.plan.subjectFor(current.exactSubject(value), invalid, current.declaration("run"));
     assert.equal(selected.kind, "unresolved", name);
     assert.match(selected.reason, /layout owner/u, name);
+    for (const [wrapper, nested] of [
+      ["array", { kind: "array", element: invalid }],
+      ["slice", { kind: "slice", element: invalid }],
+      ["tuple", { kind: "tuple", elements: [invalid] }],
+      ["reference", { kind: "reference", referent: invalid, mutable: false }],
+      ["optional", rustOptionTargetType(invalid)],
+    ]) {
+      const selection = current.plan.subjectFor(current.exactSubject(value), nested, current.declaration("run"));
+      assert.equal(selection.kind, "unresolved", `${name}/${wrapper}: nesting cannot turn an invalid structural layout into identity`);
+      assert.match(selection.reason, /layout owner/u, `${name}/${wrapper}: the exact structural owner retains its refusal`);
+    }
   }
 });
 
