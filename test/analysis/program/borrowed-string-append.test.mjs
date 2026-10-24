@@ -80,9 +80,9 @@ test("a merely available borrowed operation cannot establish counted-loop purity
   const { source, program } = analyzeRust({ surfaces: ["js"], files: { "index.ts": sourceText } });
   const { loop, element } = selectedNodes(source, program, "combine");
   assert.ok(program.records.targetOperation.get(element).borrowedIndexOperation);
-  const reads = analyzeRustBorrowedElementReads(program.source.ast, rustNativeFixtureNodes(program), program.records, program.source.navigation);
+  const reads = analyzeRustBorrowedElementReads(program.source.ast, rustNativeFixtureNodes(program), program.records, source.navigation);
   const counted = analyzeRustCountedLoopRepresentations({
-    ast: program.source.ast, nativeNodes: rustNativeFixtureNodes(program), navigation: program.source.navigation, records: program.records,
+    ast: program.source.ast, nativeNodes: rustNativeFixtureNodes(program), navigation: source.navigation, records: program.records,
     borrowedElementReads: { ...reads, forRead: () => undefined },
   });
   assert.equal(counted.get(loop) === undefined, true);
@@ -146,11 +146,11 @@ targetOperation: { get: (node) => {
 } }}, program.records);
     assert.equal(records.targetOperation.get(subject) === replacement, true,
       `selected fact mutation ${mutationIndex}`);
-    const reads = analyzeRustBorrowedElementReads(program.source.ast, rustNativeFixtureNodes(program), records, program.source.navigation);
+    const reads = analyzeRustBorrowedElementReads(program.source.ast, rustNativeFixtureNodes(program), records, source.navigation);
     assert.equal(reads.forExpression(append) === undefined, true, `append mutation ${mutationIndex}`);
     assert.equal(reads.forRead(element) === undefined, true, `read mutation ${mutationIndex}`);
     const counted = analyzeRustCountedLoopRepresentations({ ast: program.source.ast, nativeNodes: rustNativeFixtureNodes(program),
-      navigation: program.source.navigation, records: { ...records, literalValue: program.records.literalValue }, borrowedElementReads: reads }).get(
+      navigation: source.navigation, records: { ...records, literalValue: program.records.literalValue }, borrowedElementReads: reads }).get(
       selectedNodes(source, program, "combine").loop);
     assert.equal(counted === undefined, true, `counted mutation ${mutationIndex}`);
   }
