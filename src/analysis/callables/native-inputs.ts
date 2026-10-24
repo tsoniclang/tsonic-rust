@@ -140,7 +140,8 @@ export function createRustNativeCallableInputPlan(input: {
   };
   const closureParameter = (subject: SourceStorageSubject): boolean => {
     const owner = subject.kind === "input" ? input.ast.parent(subject.node) : undefined;
-    return owner !== undefined && !input.declaresGenericInputs(owner);
+    return owner !== undefined && (input.ast.is.IsArrowFunction(owner) || input.ast.is.IsFunctionExpression(owner)) &&
+      !input.declaresGenericInputs(owner);
   };
   const selectInput = (subject: SourceStorageSubject, carrier: TargetTypeRef): RustNativeCallableInput | undefined => {
     if (subject.kind !== "input") return undefined;
