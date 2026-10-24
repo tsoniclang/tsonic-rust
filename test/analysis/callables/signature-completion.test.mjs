@@ -136,7 +136,8 @@ for (const [name, source, select, forms] of [
   const input = inputFixture(source, select);
   const expected = input.parameters.map(parameter => input.current.sourceCallableAbi.resolveParameterAbi(
     parameter, rustResolutionContext(input.current, parameter), input.current.operationOptions));
-  assert.equal(expected.every(abi => abi !== undefined), true, name + ": the existing intrinsic formal owner admits the inputs");
+  assert.equal(expected.every(selection => selection?.kind === "resolved"), true,
+    name + ": the existing intrinsic formal owner admits the inputs");
   let ownerQueries = 0;
   const current = { ...input.current, context: { ...input.current.context,
     semanticsFor(node) {
@@ -155,7 +156,7 @@ for (const [name, source, select, forms] of [
   assert.equal(actual.length, forms.length, name + ": source formals are not expanded invocation arguments");
   for (const [index, abi] of actual.entries()) {
     assert.equal(abi.form, forms[index], name + ": form " + index);
-    assert.equal(closedMetadataEquals(abi, expected[index]), true, name + ": exact existing ABI " + index);
+    assert.equal(closedMetadataEquals(abi, expected[index].abi), true, name + ": exact existing ABI " + index);
     assert.equal(current.context.records.sourceParameterAbi.get(input.parameters[index]) === abi, true,
       name + ": one admitted canonical input " + index);
   }
@@ -172,7 +173,8 @@ for (const [name, source] of [
   const expected = input.parameters.map(parameter => input.current.sourceCallableAbi.resolveParameterAbi(
     parameter, rustResolutionContext(input.current, parameter), input.current.operationOptions));
   const actual = input.complete(input.current);
-  assert.equal(actual === undefined, expected.some(abi => abi === undefined), name + ": no new effective-argument count rejection");
+  assert.equal(actual === undefined, expected.some(selection => selection?.kind !== "resolved"),
+    name + ": no new effective-argument count rejection");
   if (name === "explicit receiver") {
     assert.equal(input.pseudo !== undefined, true, "the explicit receiver is proved by the actual selected checked signature");
     assert.equal(input.parameters.length, 1, "only the actual offset value occupies the native input vector");
@@ -188,7 +190,7 @@ for (const [name, source] of [
   } else {
     assert.equal(actual.length, input.parameters.length, name + ": one ABI per source formal");
     for (const [index, abi] of actual.entries())
-      assert.equal(closedMetadataEquals(abi, expected[index]), true, name + ": unchanged intrinsic ABI " + index);
+      assert.equal(closedMetadataEquals(abi, expected[index].abi), true, name + ": unchanged intrinsic ABI " + index);
   }
 });
 

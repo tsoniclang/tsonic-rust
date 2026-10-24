@@ -36,9 +36,11 @@ export function resolveRustProjectAccessor(
     context.records.sourceCallableReturn.get(readDeclaration)?.returnCarrier ??
     resolveRustTargetTypeRef(Node_Type(context.ast, readDeclaration) ?? selection.sourceReadType, context, options));
   const parameters = writeDeclaration === undefined ? [] : context.ast.parameters(writeDeclaration);
-  const writeCarrier = writeDeclaration === undefined || parameters.length !== 1 ? undefined : instantiate(writeDeclaration,
-    options.sourceCallableAbi.resolveParameterAbi(parameters[0]!, context, options)?.valueCarrier ??
-    resolveRustTargetTypeRef(Node_Type(context.ast, parameters[0]!) ?? selection.sourceWriteType, context, options));
+  const writeParameter = writeDeclaration === undefined || parameters.length !== 1 ? undefined
+    : options.sourceCallableAbi.resolveParameterAbi(parameters[0]!, context, options);
+  if (writeParameter?.kind === "rejected") return undefined;
+  const writeCarrier = writeDeclaration === undefined || writeParameter === undefined ? undefined
+    : instantiate(writeDeclaration, writeParameter.abi.valueCarrier);
   const readMethod = readDeclaration === undefined ? undefined : options.projectTypes.memberSlotName(readDeclaration, "read");
   const writeMethod = writeDeclaration === undefined ? undefined : options.projectTypes.memberSlotName(writeDeclaration, "write");
   const resultCarrier = readCarrier ?? writeCarrier;

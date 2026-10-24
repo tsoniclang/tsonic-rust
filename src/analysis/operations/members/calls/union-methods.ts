@@ -65,7 +65,8 @@ export function resolveRustUnionMethodContracts(
     };
     const valid = declarations.every((declaration, index) => {
       if (declaration === undefined) return false;
-      const abi = options.sourceCallableAbi.resolveParameterAbi(declaration, context, options);
+      const selection = options.sourceCallableAbi.resolveParameterAbi(declaration, context, options);
+      const abi = selection?.kind === "resolved" ? selection.abi : undefined;
       const parameter = parameters[index]!;
       const selected = selectedParameters[index];
       return abi !== undefined && (selected === undefined

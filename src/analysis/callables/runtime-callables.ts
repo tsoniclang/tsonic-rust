@@ -17,6 +17,7 @@ import { resolveExpressionCarrier } from "../source-evidence/types/resolution/ex
 import { selectRustOptionalCallResult } from "../operations/members/calls/optional-results.js";
 
 import { resolveRustContextualParameterAbi } from "./source-callable-abi.js";
+import { refuseRustParameterCarrier } from "./parameter-facts.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustCallableTargetForSourceLifetime } from "../../policy/conversions/value-carrier-reconciliation.js";
 
@@ -99,9 +100,14 @@ export function applySelectedRuntimeCallableCall(
     const sourceParameter = selectedParameters.find(selected =>
       selected.parameterIndex === sourceParameterIndexes[index]);
     const declaration = asSourceNode(sourceParameter?.parameterDeclaration, walk.context.ast);
-    const sourceAbi = declaration === undefined ? undefined
+    const sourceSelection = declaration === undefined ? undefined
       : resolveRustContextualParameterAbi(declaration, parameterCarrier,
           rustResolutionContext(walk, declaration), walk.operationOptions);
+    if (sourceSelection?.kind === "rejected") {
+      refuseRustParameterCarrier(walk, declaration!, sourceSelection.reason);
+      return undefined;
+    }
+    const sourceAbi = sourceSelection?.abi;
     const borrowedAbi = sourceAbi !== undefined && form === "required" &&
       sourceAbi.mode !== "value" &&
       rustTargetTypeRefEquals(sourceAbi.parameterCarrier, parameterCarrier)

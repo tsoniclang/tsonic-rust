@@ -66,10 +66,11 @@ test("probe ABI queries read local facts and live parent facts through one scope
   const localFact = probe.context.records.sourceParameterAbi.get(local);
   assert.equal(parent.context.records.sourceParameterAbi.get(local) === undefined, true, "probe writes never reach the parent");
   assert.equal(probe.sourceCallableAbi === probe.operationOptions.sourceCallableAbi, true, "one resolver serves both query paths");
-  assert.equal(probe.sourceCallableAbi.resolveParameterAbi(local, {}, {}) === localFact, true);
+  assert.equal(probe.sourceCallableAbi.resolveParameterAbi(local, {}, {})?.abi === localFact, true,
+    "the local resolved result retains the published ABI identity");
   parent.context.records.sourceParameterAbis.parameter(inherited, abi);
   const inheritedFact = parent.context.records.sourceParameterAbi.get(inherited);
-  assert.equal(probe.sourceCallableAbi.resolveParameterAbi(inherited, {}, {}) === inheritedFact, true,
+  assert.equal(probe.sourceCallableAbi.resolveParameterAbi(inherited, {}, {})?.abi === inheritedFact, true,
     "a parent admission after probe creation remains visible");
 });
 
@@ -80,12 +81,12 @@ test("nested probes inherit live facts without retaining ancestor query closures
   const subject = {};
   const later = {};
   nested.context.records.sourceParameterAbis.parameter(subject, abi);
-  assert.equal(nested.operationOptions.sourceCallableAbi.resolveParameterAbi(subject, {}, {}) ===
+  assert.equal(nested.operationOptions.sourceCallableAbi.resolveParameterAbi(subject, {}, {})?.abi ===
     nested.context.records.sourceParameterAbi.get(subject), true);
   assert.equal(probe.context.records.sourceParameterAbi.get(subject) === undefined, true);
   assert.equal(parent.context.records.sourceParameterAbi.get(subject) === undefined, true);
   probe.context.records.sourceParameterAbis.parameter(later, abi);
-  assert.equal(nested.operationOptions.sourceCallableAbi.resolveParameterAbi(later, {}, {}) ===
+  assert.equal(nested.operationOptions.sourceCallableAbi.resolveParameterAbi(later, {}, {})?.abi ===
     probe.context.records.sourceParameterAbi.get(later), true);
   assert.equal(nested.operationOptions.callableSignatureCarrier({}) === undefined, true);
 });

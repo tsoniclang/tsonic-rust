@@ -149,9 +149,13 @@ export function selectProjectSourceMethodProperty(
   const parameters = sourceCallableValueParameters(context.ast, declaration, context.semanticsFor(declaration));
   if (parameters === undefined) return rejectSelectedOperation(request.expression, context,
     "RUST_PROJECT_METHOD_PROPERTY_ABI_UNSUPPORTED", "Mutable project methods require exact checked value parameters.");
-  const parameterAbis = parameters.map((parameter) => parameter === undefined
+  const parameterSelections = parameters.map((parameter) => parameter === undefined
     ? undefined
     : options.sourceCallableAbi.resolveParameterAbi(parameter, context, options));
+  const rejectedParameter = parameterSelections.find(selection => selection?.kind === "rejected");
+  if (rejectedParameter?.kind === "rejected") return rejectSelectedOperation(request.expression, context,
+    "RUST_FORMAL_MEMBER_WRITE_DEMAND_NOT_PROVEN", rejectedParameter.reason);
+  const parameterAbis = parameterSelections.map(selection => selection?.kind === "resolved" ? selection.abi : undefined);
   const callable = rustCallableProtocol(callableCarrier)!;
   if (!isDenseDataArray(methodTypeParameters) || methodTypeParameters.length !== 0 ||
     !isDenseDataArray(parameters) || parameterAbis.some((parameter) =>

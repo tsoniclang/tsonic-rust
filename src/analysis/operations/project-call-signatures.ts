@@ -223,11 +223,17 @@ export function acceptProjectSourceCall(
     : selectedParameters;
   if (selectedParameters === undefined || nativeParameters === undefined) return rejectSelectedOperation(request.source.call, context,
     "RUST_SOURCE_CALL_BINDINGS_MISSING", "A selected source call requires exact checked value-parameter declarations.");
+  const parameterSelections = nativeParameters.map(parameter =>
+    options.sourceCallableAbi.resolveParameterAbi(parameter, context, options));
+  const rejectedParameter = parameterSelections.find(selection => selection?.kind === "rejected");
+  if (rejectedParameter?.kind === "rejected") return rejectSelectedOperation(request.source.call, context,
+    "RUST_FORMAL_MEMBER_WRITE_DEMAND_NOT_PROVEN", rejectedParameter.reason);
   const parameters = nativeParameters.map((parameter, index) => {
     if (parameter === undefined) {
       return undefined;
     }
-    const abi = options.sourceCallableAbi.resolveParameterAbi(parameter, context, options);
+    const selection = parameterSelections[index];
+    const abi = selection?.kind === "resolved" ? selection.abi : undefined;
     if (abi === undefined) {
       return undefined;
     }

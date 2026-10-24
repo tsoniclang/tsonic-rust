@@ -15,16 +15,27 @@ import { requireDenseSourceNodes } from "../source-evidence/dense-nodes.js";
 import { reconcileRequiredCarrier } from "../conversions/contextual-values.js";
 
 export function resolveParameterAbi(walk: RustFactWalk, parameter: Node) {
-  return walk.sourceCallableAbi.resolveParameterAbi(
+  const selection = walk.sourceCallableAbi.resolveParameterAbi(
     parameter,
     rustResolutionContext(walk, parameter),
     walk.operationOptions,
   );
+  if (selection?.kind === "rejected") {
+    refuseRustParameterCarrier(walk, parameter, selection.reason);
+    return undefined;
+  }
+  return selection?.abi;
 }
 
 export function recordParameterAbiFacts(walk: RustFactWalk, parameter: Node, selectedCarrier?: TargetTypeRef): void {
-  const parameterAbi = selectedCarrier === undefined ? resolveParameterAbi(walk, parameter)
+  const selection = selectedCarrier === undefined
+    ? walk.sourceCallableAbi.resolveParameterAbi(parameter, rustResolutionContext(walk, parameter), walk.operationOptions)
     : resolveRustContextualParameterAbi(parameter, selectedCarrier, rustResolutionContext(walk, parameter), walk.operationOptions);
+  if (selection?.kind === "rejected") {
+    refuseRustParameterCarrier(walk, parameter, selection.reason);
+    return;
+  }
+  const parameterAbi = selection?.abi;
   if (parameterAbi === undefined) {
     refuseRustParameterCarrier(walk, parameter);
     return;
@@ -32,11 +43,11 @@ export function recordParameterAbiFacts(walk: RustFactWalk, parameter: Node, sel
   recordRustParameterAbiSelection(walk, parameter, parameterAbi);
 }
 
-function refuseRustParameterCarrier(walk: RustFactWalk, parameter: Node): void {
+export function refuseRustParameterCarrier(walk: RustFactWalk, parameter: Node, reason?: string): void {
   appendRustDiagnostic(
     walk,
-    "RUST_PARAMETER_CARRIER_UNSUPPORTED",
-    "Parameter type has no closed Rust runtime carrier under the selected source-profile and surface policy.",
+    reason === undefined ? "RUST_PARAMETER_CARRIER_UNSUPPORTED" : "RUST_FORMAL_MEMBER_WRITE_DEMAND_NOT_PROVEN",
+    reason ?? "Parameter type has no closed Rust runtime carrier under the selected source-profile and surface policy.",
     parameter,
     ["target.capability=rust.callable.parameter-carrier"],
   );
@@ -48,7 +59,10 @@ export function refuseRustUnresolvedParameterCarriers(walk: RustFactWalk, declar
   if (parameters === undefined) return;
   for (const parameter of parameters) {
     if (parameter === undefined || walk.context.records.sourceParameterAbi.get(parameter) !== undefined) continue;
-    if (resolveParameterAbi(walk, parameter) === undefined) refuseRustParameterCarrier(walk, parameter);
+    const selection = walk.sourceCallableAbi.resolveParameterAbi(
+      parameter, rustResolutionContext(walk, parameter), walk.operationOptions);
+    if (selection === undefined || selection.kind === "rejected")
+      refuseRustParameterCarrier(walk, parameter, selection?.reason);
   }
 }
 

@@ -6,7 +6,7 @@ import { appendRustDiagnostic } from "../program/walk.js";
 import { KindBlock, KindFunctionExpression, KindBindingElement, KindParameter, KindVariableDeclaration, Node_Initializer, Node_Name, Node_Type, sourceLexicalEnvironment, sourceCallableValueParameters } from "@tsonic/target-api/source";
 
 import { rustSourceOptionalTargetType, rustOptionElementCarrier, rustCallableProtocol, rustCallableInputProtocol, rustCallableTargetType, rustClosureProtocol, rustUnitTargetType } from "../../target-model/types/index.js";
-import { recordRustParameterAbiSelection, recordCallableDefaultParameterFacts } from "./parameter-facts.js";
+import { recordRustParameterAbiSelection, recordCallableDefaultParameterFacts, refuseRustParameterCarrier } from "./parameter-facts.js";
 import { recordStatementFacts } from "../control-flow/statements.js";
 import { requireDenseSourceNodes } from "../source-evidence/dense-nodes.js";
 import { resolveExpressionCarrier } from "../source-evidence/types/resolution/expression-carriers.js";
@@ -189,7 +189,7 @@ export function resolveFunctionExpressionCarrier(
       (targetParameterCarrier.kind === "opaque" && targetParameterCarrier.id === "tsonic.rust.infer")) {
       return undefined;
     }
-    const parameterAbi = resolveRustContextualParameterAbi(
+    const parameterSelection = resolveRustContextualParameterAbi(
       parameter,
       targetParameterCarrier,
       rustResolutionContext(walk, parameter),
@@ -198,6 +198,11 @@ export function resolveFunctionExpressionCarrier(
       selectedExpected.kind === "closure" && selectedExpected.callTrait !== undefined
         ? targetParameterCarrier : undefined,
     );
+    if (parameterSelection?.kind === "rejected") {
+      refuseRustParameterCarrier(walk, parameter, parameterSelection.reason);
+      return undefined;
+    }
+    const parameterAbi = parameterSelection?.abi;
     if (parameterAbi === undefined ||
       (sourceParameterCarrier !== undefined &&
         !rustTargetTypeRefEquals(parameterAbi.valueCarrier, parameterAbi.form === "default"

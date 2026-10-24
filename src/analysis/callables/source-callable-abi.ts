@@ -1,9 +1,9 @@
-import { rustParameterModeForCarriers, selectRustSourceParameterAbi, selectRustSourceParameterBorrowCarrier } from "../../policy/ownership/source-parameter-contracts.js";
+import { rustParameterModeForCarriers, selectRustSourceParameterAbi, selectRustSourceParameterBorrowCarrier, selectRustSourceParameterStructuralCarrier } from "../../policy/ownership/source-parameter-contracts.js";
 import type { RustSourceParameterAbiFact } from "../../target-model/records/callables-and-resources.js";
 import { flowStateFactKey } from "@tsonic/tsts";
 import { selectRustParameterEntryConversion } from "../../policy/ownership/parameter-entry-conversion.js";
 import type { Node, Type } from "@tsonic/tsts";
-import { isRustVecCarrier, isRustStringCarrier, isRustUnitCarrier, isRustNeverCarrier, rustUnitTargetType, rustOptionElementCarrier, rustSourceOptionalTargetType, isRustJsValueCarrier, rustProgramErrorTargetType, rustTsValueTargetType, rustEmptyObjectTargetType, rustObjectIdentityTargetType, rustCallableInputProtocol } from "../../target-model/types/index.js";
+import { isRustVecCarrier, isRustStringCarrier, isRustUnitCarrier, isRustNeverCarrier, rustUnitTargetType, rustOptionElementCarrier, rustSourceOptionalTargetType, isRustJsValueCarrier, rustProgramErrorTargetType, rustTsValueTargetType, rustEmptyObjectTargetType, rustObjectIdentityTargetType, rustCallableInputProtocol, rustStructuralObjectCarrierValue, rustStructuralObjectTargetType } from "../../target-model/types/index.js";
 import { isRustCopyCarrier } from "../../policy/constraints/native-traits.js";
 import { rustTargetTypeRefEquals, rustTargetTypeRefEqualsWithinLifetimeBinders } from "../../target-model/types/equality.js";
 
@@ -173,6 +173,10 @@ export function recordRustSourceCallableReturn(walk: RustFactWalk, declaration: 
   return true;
 }
 
+export type RustSourceParameterAbiSelection =
+  | { readonly kind: "resolved"; readonly abi: RustSourceParameterAbiFact }
+  | { readonly kind: "rejected"; readonly reason: string };
+
 export interface RustSourceCallableAbiResolver {
   canUseSharedBorrow(
     parameter: Node,
@@ -184,7 +188,7 @@ export interface RustSourceCallableAbiResolver {
     context: RustTargetTypeResolutionContext,
     options: RustTargetTypeResolutionOptions,
     contextualValueCarrier?: TargetTypeRef,
-  ): RustSourceParameterAbiFact | undefined;
+  ): RustSourceParameterAbiSelection | undefined;
 }
 
 export function createRustSourceCallableAbiResolver(input: {
@@ -200,13 +204,14 @@ export function createRustSourceCallableAbiResolver(input: {
     resolveParameterAbi(parameter, context, options, contextualValueCarrier) {
       const finalized = input.parameterAbiFor(parameter);
       if (finalized !== undefined) return contextualValueCarrier === undefined ||
-        rustTargetTypeRefEquals(finalized.valueCarrier, contextualValueCarrier) ? finalized : undefined;
+        rustTargetTypeRefEquals(finalized.valueCarrier, contextualValueCarrier)
+        ? Object.freeze({ kind: "resolved" as const, abi: finalized }) : undefined;
       const owner = context.ast.parent(parameter);
       if (owner === undefined || sourceCallableValueParameters(context.ast, owner,
         context.currentSemantics, { kind: "declaration" })?.includes(parameter) !== true) return undefined;
       const cached = contextualValueCarrier === undefined ? cache.get(parameter) : undefined;
       if (cached !== undefined) {
-        return cached;
+        return Object.freeze({ kind: "resolved" as const, abi: cached });
       }
       const typeNode = Node_Type(context.ast, parameter);
       let base = contextualValueCarrier ?? (typeNode === undefined
@@ -233,6 +238,9 @@ export function createRustSourceCallableAbiResolver(input: {
         parameterOnlyForwardsThrownValue(parameter, context)) {
         base = rustProgramErrorTargetType();
       }
+      const native = selectRustSourceParameterFormalCarrier(parameter, base, context, options, { kind: "implementation" });
+      if (native === undefined || native.kind === "rejected") return native;
+      base = native.carrier;
       const requiresOwnedValue = parameterUsesFlowState(
         parameter,
         "moved",
@@ -253,9 +261,99 @@ export function createRustSourceCallableAbiResolver(input: {
       }
       const named = finalizeRustSourceParameterStorage(parameter, abi, context, options);
       if (named !== undefined && contextualValueCarrier === undefined) cache.set(parameter, named);
-      return named;
+      return named === undefined ? undefined : Object.freeze({ kind: "resolved" as const, abi: named });
     },
   };
+}
+
+function selectRustSourceParameterFormalCarrier(
+  parameter: Node,
+  carrier: TargetTypeRef,
+  context: RustTargetTypeResolutionContext,
+  options: RustTargetTypeResolutionOptions,
+  selectionContext: { readonly kind: "implementation" | "selected-native" },
+): { readonly kind: "resolved"; readonly carrier: TargetTypeRef } |
+  Extract<RustSourceParameterAbiSelection, { readonly kind: "rejected" }> | undefined {
+  const optional = rustOptionElementCarrier(carrier);
+  if (optional !== undefined) {
+    const present = selectRustSourceParameterFormalCarrier(parameter, optional, context, options, selectionContext);
+    return present === undefined || present.kind === "rejected" ? present
+      : { kind: "resolved", carrier: rustTargetTypeRefEquals(optional, present.carrier)
+        ? carrier : rustSourceOptionalTargetType(present.carrier) };
+  }
+  const owner = context.ast.parent(parameter);
+  const structural = rustStructuralObjectCarrierValue(carrier);
+  if (structural === undefined || owner === undefined || context.ast.body(owner) === undefined)
+    return { kind: "resolved", carrier };
+  const shape = options.sourceTypes.structuralObjectForCarrier(carrier);
+  if (shape === undefined) return undefined;
+  const demand = context.sourceStorage.formalMemberWriteDemand(owner, parameter);
+  if (demand.kind === "unresolved") return Object.freeze({ kind: "rejected", reason: demand.reason });
+  const writableFields = new Set<number>();
+  for (const member of demand.members) {
+    const fields = shape.fields.filter(field => field.declarations.includes(member));
+    if (fields.length !== 1 || fields[0]!.symbols.length === 0)
+      return Object.freeze({ kind: "rejected", reason:
+        "Formal member-write demand requires one exact original checked native field correspondence." });
+    writableFields.add(fields[0]!.storageIndex);
+  }
+  const selected = selectRustSourceParameterStructuralCarrier(carrier, writableFields, selectionContext);
+  if (selected === undefined) return Object.freeze({ kind: "rejected", reason:
+    "Formal member-write demand requires an actually writable native member at every selected field." });
+  if (rustTargetTypeRefEquals(carrier, selected)) return { kind: "resolved", carrier };
+  const native = rustStructuralObjectCarrierValue(selected)!;
+  const fields = shape.fields.map(field => {
+    const selectedField = native.fields[field.storageIndex];
+    return selectedField === undefined || selectedField.sourceName !== field.sourceName ||
+      !rustTargetTypeRefEquals(selectedField.type, field.resultCarrier) || selectedField.presence !== field.presence
+      ? undefined : Object.freeze({ ...field, readonly: selectedField.readonly,
+        ...(selectedField.accessor === undefined ? {} : { accessor: selectedField.accessor }) });
+  });
+  if (fields.some(field => field === undefined) || !options.sourceTypes.registerStructuralObject({
+    ...shape, carrier: selected, fields: fields as NonNullable<typeof fields[number]>[],
+  }, carrier)) return Object.freeze({ kind: "rejected", reason:
+    "The selected native formal view has no exact registered checked source/member contract." });
+  return { kind: "resolved", carrier: selected };
+}
+
+function sourceParameterNativeRoleCorresponds(
+  authored: TargetTypeRef,
+  selected: TargetTypeRef,
+  options: RustTargetTypeResolutionOptions,
+  carriersEqual: (left: TargetTypeRef, right: TargetTypeRef) => boolean,
+): boolean {
+  const authoredOptional = rustOptionElementCarrier(authored);
+  const selectedOptional = rustOptionElementCarrier(selected);
+  if (authoredOptional !== undefined || selectedOptional !== undefined)
+    return authoredOptional !== undefined && selectedOptional !== undefined &&
+      sourceParameterNativeRoleCorresponds(authoredOptional, selectedOptional, options, carriersEqual);
+  const source = rustStructuralObjectCarrierValue(authored);
+  const native = rustStructuralObjectCarrierValue(selected);
+  const sourceShape = options.sourceTypes.structuralObjectForCarrier(authored);
+  const nativeShape = options.sourceTypes.structuralObjectForCarrier(selected);
+  if (source === undefined || native === undefined || sourceShape === undefined || nativeShape === undefined ||
+    sourceShape.sourceType !== nativeShape.sourceType || sourceShape.sourceAlias !== nativeShape.sourceAlias ||
+    sourceShape.storage !== nativeShape.storage || source.fields.length !== native.fields.length ||
+    sourceShape.fields.length !== nativeShape.fields.length ||
+    !options.sourceTypes.structuralInstantiations().some(instance =>
+      carriersEqual(instance.template, authored) && carriersEqual(instance.instance, selected))) return false;
+  for (const [index, field] of sourceShape.fields.entries()) {
+    const target = nativeShape.fields[index];
+    const sourceField = source.fields[field.storageIndex];
+    const nativeField = target === undefined ? undefined : native.fields[target.storageIndex];
+    if (target === undefined || sourceField === undefined || nativeField === undefined ||
+      field.storageIndex !== target.storageIndex || field.sourceType !== target.sourceType ||
+      field.declarations.length !== target.declarations.length ||
+      field.declarations.some((declaration, index) => declaration !== target.declarations[index]) ||
+      field.symbols.length !== target.symbols.length || field.symbols.some((symbol, index) => symbol !== target.symbols[index]) ||
+      sourceField.readonly && !nativeField.readonly ||
+      sourceField.accessor?.setter === false && nativeField.accessor?.setter === true) return false;
+  }
+  const restored = rustStructuralObjectTargetType(native.ownerFileName,
+    native.fields.map((field, index) => Object.freeze({ ...field, readonly: source.fields[index]!.readonly,
+      ...(source.fields[index]!.accessor === undefined ? {} : { accessor: source.fields[index]!.accessor }) })),
+    native.representation, native.construction, native.bases, native.implementation);
+  return carriersEqual(authored, restored);
 }
 
 export function resolveRustContextualParameterAbi(
@@ -268,7 +366,7 @@ export function resolveRustContextualParameterAbi(
     readonly selected: RustLifetimeBinder;
   },
   contextualValueCarrier?: TargetTypeRef,
-): RustSourceParameterAbiFact | undefined {
+): RustSourceParameterAbiSelection | undefined {
   const declaration = context.ast.as.AsParameterDeclaration(parameter);
   if (declaration === undefined) {
     return undefined;
@@ -290,18 +388,6 @@ export function resolveRustContextualParameterAbi(
   const authoredTypeAcceptsContextualCarrier = authoredSemanticType !== undefined &&
     (context.currentSemantics.types.isAny(authoredSemanticType) ||
       context.currentSemantics.types.isUnknown(authoredSemanticType));
-  const selectedValueCarrier = form === "optional"
-    ? selectedParameterCarrier
-    : form === "default"
-      ? rustOptionElementCarrier(selectedParameterCarrier)
-      : contextualValueCarrier !== undefined
-        ? contextualValueCarrier
-      : selectedParameterCarrier.kind === "reference"
-        ? authoredCarrier
-        : selectedParameterCarrier;
-  if (selectedValueCarrier === undefined) {
-    return undefined;
-  }
   const carriersEqual = lifetimeBinders === undefined
     ? rustTargetTypeRefEquals
     : (left: TargetTypeRef | undefined, right: TargetTypeRef | undefined): boolean =>
@@ -311,17 +397,34 @@ export function resolveRustContextualParameterAbi(
           lifetimeBinders.authored,
           lifetimeBinders.selected,
         );
+  const selectedValueCarrier = form === "optional"
+    ? selectedParameterCarrier
+    : form === "default"
+      ? rustOptionElementCarrier(selectedParameterCarrier)
+      : contextualValueCarrier !== undefined
+        ? contextualValueCarrier
+      : selectedParameterCarrier.kind === "reference"
+        ? authoredCarrier !== undefined && sourceParameterNativeRoleCorresponds(
+            authoredCarrier, selectedParameterCarrier.referent, options, carriersEqual)
+          ? selectedParameterCarrier.referent : authoredCarrier
+        : selectedParameterCarrier;
+  if (selectedValueCarrier === undefined) {
+    return undefined;
+  }
+  const native = selectRustSourceParameterFormalCarrier(parameter, selectedValueCarrier, context, options, { kind: "selected-native" });
+  if (native === undefined || native.kind === "rejected") return native;
+  const authoredValue = authoredCarrier === undefined ? undefined
+    : form === "optional" ? rustSourceOptionalTargetType(authoredCarrier) : authoredCarrier;
   if (authoredType !== undefined && !authoredTypeAcceptsContextualCarrier &&
-    (authoredCarrier === undefined ||
-      !carriersEqual(
-        form === "optional" ? rustSourceOptionalTargetType(authoredCarrier) : authoredCarrier,
-        selectedValueCarrier,
-      ))) {
+    (authoredValue === undefined || !carriersEqual(authoredValue, selectedValueCarrier) &&
+      !sourceParameterNativeRoleCorresponds(authoredValue, selectedValueCarrier, options, carriersEqual))) {
     if (form === "required" && authoredCarrier !== undefined) {
       const conversion = selectRustParameterEntryConversion(selectedParameterCarrier, authoredCarrier, context.typeDefinitions);
       if (conversion !== undefined) {
-        return { form, valueCarrier: authoredCarrier, parameterCarrier: selectedParameterCarrier,
-          mode: "value", entryConversion: conversion };
+        return Object.freeze({ kind: "resolved" as const, abi: {
+          form, valueCarrier: authoredCarrier, parameterCarrier: selectedParameterCarrier,
+          mode: "value" as const, entryConversion: conversion,
+        } });
       }
     }
     return undefined;
@@ -336,12 +439,13 @@ export function resolveRustContextualParameterAbi(
   if (mode === undefined) {
     return undefined;
   }
-  return finalizeRustSourceParameterStorage(parameter, {
+  const finalized = finalizeRustSourceParameterStorage(parameter, {
     form,
     valueCarrier: selectedValueCarrier,
     parameterCarrier: selectedParameterCarrier,
     mode,
   }, context, options);
+  return finalized === undefined ? undefined : Object.freeze({ kind: "resolved" as const, abi: finalized });
 }
 
 function finalizeRustSourceParameterStorage(

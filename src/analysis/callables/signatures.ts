@@ -6,7 +6,7 @@ import { KindFunctionExpression, KindFunctionDeclaration, KindNonNullExpression,
 import { rustSourceOptionalTargetType, rustCallableProtocol, rustClosureProtocol } from "../../target-model/types/index.js";
 import { rustResolutionContext } from "../program/walk.js";
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
-import { recordRustParameterAbiSelection } from "./parameter-facts.js";
+import { recordRustParameterAbiSelection, refuseRustParameterCarrier } from "./parameter-facts.js";
 import { requireDenseSourceNodes } from "../source-evidence/dense-nodes.js";
 import { resolveRustContextualParameterAbi } from "./source-callable-abi.js";
 import { resolveRustTargetTypeRef } from "../source-evidence/types/resolution/source.js";
@@ -267,19 +267,29 @@ function recordCallableValueSignatureFacts(
     const parameterCarrier = Node_Initializer(ast, parameter) === undefined
       ? sourceParameterCarrier
       : rustSourceOptionalTargetType(sourceParameterCarrier);
-    const contextualAbi = resolveRustContextualParameterAbi(
+    const contextualSelection = resolveRustContextualParameterAbi(
       parameter,
       parameterCarrier,
       rustResolutionContext(walk, parameter),
       walk.operationOptions,
     );
-    const parameterAbi = contextualAbi === undefined ? undefined
+    if (contextualSelection?.kind === "rejected") {
+      refuseRustParameterCarrier(walk, parameter, contextualSelection.reason);
+      return;
+    }
+    const contextualAbi = contextualSelection?.abi;
+    const parameterSelection = contextualAbi === undefined ? undefined
       : nativeCallable?.callableDeclaration === expression
         ? walk.sourceCallableAbi.resolveParameterAbi(
             parameter, rustResolutionContext(walk, parameter), walk.operationOptions,
             contextualAbi.valueCarrier,
           )
-        : contextualAbi;
+        : contextualSelection;
+    if (parameterSelection?.kind === "rejected") {
+      refuseRustParameterCarrier(walk, parameter, parameterSelection.reason);
+      return;
+    }
+    const parameterAbi = parameterSelection?.abi;
     if (parameterAbi === undefined) {
       return;
     }

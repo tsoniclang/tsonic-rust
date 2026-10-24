@@ -2,7 +2,7 @@ import { Node_Initializer, sourceCallableValueParameters } from "@tsonic/target-
 import type { Node } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
 import { rustResolutionContext } from "../program/walk.js";
-import { recordRustParameterAbiSelection } from "./parameter-facts.js";
+import { recordRustParameterAbiSelection, refuseRustParameterCarrier } from "./parameter-facts.js";
 import { requireDenseSourceNodes } from "../source-evidence/dense-nodes.js";
 import { resolveRustTargetTypeRef } from "../source-evidence/types/resolution/source.js";
 import { resolveRustContextualParameterAbi } from "./source-callable-abi.js";
@@ -33,8 +33,12 @@ export function recordCallableParameterInputFacts(
   }
   state.inputActive = true;
   try {
-    const declared = parameters.map(parameter => walk.sourceCallableAbi.resolveParameterAbi(
+    const selections = parameters.map(parameter => walk.sourceCallableAbi.resolveParameterAbi(
       parameter, rustResolutionContext(walk, parameter), walk.operationOptions));
+    for (const [index, selection] of selections.entries()) {
+      if (selection?.kind === "rejected") refuseRustParameterCarrier(walk, parameters[index]!, selection.reason);
+    }
+    const declared = selections.map(selection => selection?.kind === "resolved" ? selection.abi : undefined);
     if (declared.some(parameter => parameter === undefined)) return undefined;
     const logical = (rustCallableProtocol(selectedSignature) ?? rustClosureProtocol(selectedSignature))?.parameters ??
       declared.map(abi => abi!.form === "default" ? abi!.parameterCarrier : abi!.valueCarrier);
@@ -43,11 +47,15 @@ export function recordCallableParameterInputFacts(
     const abis = parameters.map((parameter, index) => {
       const input = selected[index]!;
       const parameterContext = rustResolutionContext(walk, parameter);
-      return rustTargetTypeRefEquals(input, logical[index])
-        ? declared[index]
-        : resolveRustContextualParameterAbi(parameter,
-          Node_Initializer(ast, parameter) === undefined ? input : rustSourceOptionalTargetType(input),
-          parameterContext, walk.operationOptions);
+      if (rustTargetTypeRefEquals(input, logical[index])) return declared[index];
+      const contextual = resolveRustContextualParameterAbi(parameter,
+        Node_Initializer(ast, parameter) === undefined ? input : rustSourceOptionalTargetType(input),
+        parameterContext, walk.operationOptions);
+      if (contextual?.kind === "rejected") {
+        refuseRustParameterCarrier(walk, parameter, contextual.reason);
+        return undefined;
+      }
+      return contextual?.abi;
     });
     if (abis.some(abi => abi === undefined)) return undefined;
     for (const [index, parameter] of parameters.entries()) {
