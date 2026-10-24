@@ -5,6 +5,7 @@ import type { RustGenericParameter, RustCallGenericArgument } from "../../target
 import { rustTypeFromCarrierInContext, type RustTypeRenderingContext } from "./render.js";
 import { rustGenericRequirementBounds } from "./generic-bounds.js";
 import { failRustPlannerInvariant } from "../diagnostics.js";
+import { closedMetadataKey } from "../../../target-model/metadata/closed-data.js";
 
 export function rustOptionalStorageParameters(
   requirements: readonly RustOptionalStorageRequirement[], context: RustTypeRenderingContext,
@@ -30,7 +31,7 @@ export function rustOptionalStorageTypeArguments(
   carrier: TargetTypeRef, context: RustTypeRenderingContext, parameterIndexes?: readonly number[],
 ): readonly RustCallGenericArgument[] {
   const selected = context.input.program.records.optionalStorageTypeArguments.get(carrier, parameterIndexes);
-  if (selected === undefined) failRustPlannerInvariant("An admitted native type requires its exact sealed optional storage arguments.");
+  if (selected === undefined) failRustPlannerInvariant(`An admitted native type requires its exact sealed optional storage arguments. key=${closedMetadataKey([carrier, parameterIndexes ?? null])}`);
   return renderOptionalStorageArguments(selected, context);
 }
 
