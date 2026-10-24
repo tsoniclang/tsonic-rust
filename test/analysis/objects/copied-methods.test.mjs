@@ -100,8 +100,9 @@ for (const receiverDependent of [false, true]) {
         : [{ storageIndex: 0 }, { storageIndex: 1, method: true, declarations: [method] }] }) } }, [root], () => "app");
     for (const [carrier, index] of [[original, 0], [template, 1], [instance, 1]]) {
       const identity = `${structuralStorageKey(carrier, () => "app")}#${index}`;
-      assert.equal(selected.demands.has(identity), true, "each actual method-flow slot participates");
-      assert.equal(selected.proven.has(identity), !receiverDependent,
+      const decision = selected.decisions.get(identity);
+      assert.equal(decision !== undefined, true, "each actual method-flow slot participates");
+      assert.equal(decision.kind === "proven", !receiverDependent,
         "template instantiation retains the original body receiver dependence");
     }
   });

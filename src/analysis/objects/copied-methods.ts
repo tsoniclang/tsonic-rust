@@ -10,17 +10,21 @@ import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustCopiedMethodReceiverIsPreserved } from "../../policy/ownership/copied-methods.js";
 import { rustStructuralMethodProducers } from "../callables/structural-method-producers.js";
 
+export type RustCopiedMethodDecision =
+  | { readonly kind: "proven"; readonly subject: Node }
+  | { readonly kind: "rejected"; readonly subject: Node; readonly reason: string };
+
 export function selectRustCopiedMethods(
   walk: RustFactWalk, files: readonly SourceFile[], componentForFile: (fileName: string) => string,
 ): {
-  readonly proven: ReadonlySet<string>;
-  readonly demands: ReadonlyMap<string, Node>;
+  readonly decisions: ReadonlyMap<string, RustCopiedMethodDecision>;
   readonly implementations: ReadonlyMap<string, readonly { readonly node: Node; readonly carrier: TargetTypeRef }[]>;
 } {
   const demands = new Map<string, Node>();
   const implementations = new Map<string, { readonly node: Node; readonly carrier: TargetTypeRef }[]>();
   const incoming = new Map<string, Set<string>>();
-  const independent = new Map<string, boolean>();
+  const independent = new Map<string, { readonly kind: "proven" } |
+    { readonly kind: "rejected"; readonly reason: string }>();
   const originalSlots = new Map<Node, Set<string>>();
   const requests = new Map<string, { readonly subject: SourceStorageSubject; readonly bindings: SourceStorageBindings }[]>();
   const { ast, sourceStorage: storage, records } = walk.context;
@@ -29,7 +33,7 @@ export function selectRustCopiedMethods(
     demands.set(identity, node);
     const bindings = storage.bindingsForLexicalOwner(node);
     if (bindings.kind === "unresolved") {
-      independent.set(identity, false);
+      independent.set(identity, { kind: "rejected", reason: bindings.reason });
       return;
     }
     const selected = requests.get(identity) ?? [];
@@ -40,20 +44,30 @@ export function selectRustCopiedMethods(
     carrier: TargetTypeRef, index: number): void => {
     demands.set(identity, node);
     const subject = storage.subjectFor(receiver);
-    const typed = subject.kind === "unresolved" ? subject : storage.typeFor(subject.subject);
-    const sourceType = typed.kind === "unresolved" ? undefined
-      : storage.source.semantics.forFile(typed.sourceFile).types.nonNullableType(typed.type);
+    if (subject.kind === "unresolved") {
+      independent.set(identity, { kind: "rejected", reason: subject.reason });
+      return;
+    }
+    const typed = storage.typeFor(subject.subject);
+    if (typed.kind === "unresolved") {
+      independent.set(identity, { kind: "rejected", reason: typed.reason });
+      return;
+    }
+    const sourceType = storage.source.semantics.forFile(typed.sourceFile).types.nonNullableType(typed.type);
     const shape = sourceType === undefined ? undefined : walk.sourceTypes.structuralObjectForType(sourceType, carrier);
     const field = shape?.fields[index];
-    if (subject.kind === "unresolved" || field?.method !== true || field.storageIndex !== index ||
+    if (sourceType === undefined || shape === undefined || field?.method !== true || field.storageIndex !== index ||
       field.declarations.length === 0) {
-      independent.set(identity, false);
+      independent.set(identity, { kind: "rejected", reason: sourceType === undefined
+        ? "The copied method receiver has no exact checked present source type."
+        : shape === undefined ? "The copied method receiver has no registered source shape for its exact selected carrier."
+          : `The copied method receiver has no exact checked method declaration at storage index ${index}.` });
       return;
     }
     for (const declaration of field.declarations) {
       const selected = storage.subject(subject.subject.node, subject.subject.kind,
         [...subject.subject.projection, { kind: "method-value", declaration }]);
-      if (selected.kind === "unresolved") independent.set(identity, false);
+      if (selected.kind === "unresolved") independent.set(identity, { kind: "rejected", reason: selected.reason });
       else request(identity, node, selected.subject);
     }
   };
@@ -87,7 +101,8 @@ export function selectRustCopiedMethods(
       const declaration = asSourceNode(provenance?.sourceSelectedDeclaration, ast);
       const subject = receiver === undefined || declaration === undefined ? undefined
         : storage.storageSubjectFor(receiver, [{ kind: "method-value", declaration }]);
-      if (subject?.kind !== "resolved") independent.set(identity, false);
+      if (subject?.kind !== "resolved") independent.set(identity, { kind: "rejected", reason: subject?.reason ??
+        "The selected method read has no original checked receiver and member provenance." });
       else request(identity, node, subject.subject);
     }
     if (operation?.kind === "record-literal" && operation.storage === "structural-object") {
@@ -124,8 +139,13 @@ export function selectRustCopiedMethods(
     incoming.set(identity, sources);
     for (const requested of selected) {
       const producers = rustStructuralMethodProducers(storage, requested.subject, requested.bindings, undefined);
-      if (producers.kind !== "complete" || producers.producers.length === 0) {
-        independent.set(identity, false);
+      if (producers.kind !== "complete") {
+        independent.set(identity, { kind: "rejected", reason: producers.kind === "unresolved" ? producers.reason
+          : `The original method implementation domain remains open (${[...new Set(producers.boundaries?.map(boundary => boundary.kind) ?? ["unqualified-input"])].join(", ")}).` });
+        continue;
+      }
+      if (producers.producers.length === 0) {
+        independent.set(identity, { kind: "rejected", reason: "The checked method producer domain contains no original callable implementation." });
         continue;
       }
       for (const producer of producers.producers) {
@@ -133,7 +153,8 @@ export function selectRustCopiedMethods(
         const slots = original.kind === "value" && original.projection.length === 0
           ? originalSlots.get(original.node) : undefined;
         if (slots === undefined || slots.size === 0) {
-          independent.set(identity, false);
+          independent.set(identity, { kind: "rejected", reason:
+            `The checked method producer has no admitted original literal construction (${original.kind}; ${ast.kindName(original.node)}; projection depth ${original.projection.length}).` });
           continue;
         }
         for (const slot of slots) sources.add(slot);
@@ -152,18 +173,28 @@ export function selectRustCopiedMethods(
   }
   for (const identity of demands.keys()) {
     const methods = implementations.get(identity) ?? [];
-    if (methods.length === 0 || independent.get(identity) === false) continue;
-    independent.set(identity, methods.every(method => {
+    if (methods.length === 0 || independent.get(identity)?.kind === "rejected") continue;
+    const receiverIndependent = methods.every(method => {
       let used = receiverUsage.get(method.node);
       if (used === undefined) {
         used = sourceCallableUsesLexicalThis(walk.context.ast, method.node);
         receiverUsage.set(method.node, used);
       }
       return !used;
-    }));
+    });
+    independent.set(identity, receiverIndependent ? { kind: "proven" }
+      : { kind: "rejected", reason: "An original method implementation uses the original receiver." });
   }
-  const proven = proveRustCopiedMethodFlow([...demands.keys()], incoming, independent);
-  return { proven, demands, implementations };
+  const proven = proveRustCopiedMethodFlow([...demands.keys()], incoming,
+    new Map([...independent].map(([identity, decision]) => [identity, decision.kind === "proven"])));
+  const decisions = new Map<string, RustCopiedMethodDecision>();
+  for (const [identity, subject] of demands) {
+    const selected = independent.get(identity);
+    decisions.set(identity, proven.has(identity) ? { kind: "proven", subject }
+      : { kind: "rejected", subject, reason: selected?.kind === "rejected" ? selected.reason
+        : "A reaching copied-method source has no grounded receiver-independent implementation." });
+  }
+  return { decisions, implementations };
 }
 
 export function proveRustCopiedMethodFlow(
