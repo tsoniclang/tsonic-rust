@@ -76,6 +76,43 @@ test("indexed string append selects one immutable borrowed read for emission and
   assert.doesNotMatch(output, /get_number|\.clone\(\)|iter_cloned|format!|\bf64\b/u);
 });
 
+test("captured native String append uses the selected cell itself, not its address", () => {
+  for (const surfaces of [[], ["js"]]) {
+    const options = { surfaces, files: { "index.ts": `
+export function captured(value: string): () => string {
+  return () => { value += "!"; return value; };
+}
+export function wrapped(value: string): () => string {
+  return () => { ((value)) += "!"; return value; };
+}
+export function direct(value: string): string { value += "!"; return value; }
+` } };
+    const { source, program } = analyzeRust(options);
+    for (const name of ["captured", "wrapped", "direct"]) {
+      const nodes = functionNodes(source, program, name);
+      const completion = nodes.map(node => program.records.assignmentWrite.get(node))
+        .find(selected => selected?.stringAppend !== undefined);
+      assert.equal(completion !== undefined, true, `${surfaces.join()} ${name} has one admitted native append`);
+      assert.equal(completion.stringAppend.receiver, name === "direct" ? "direct" : "borrow-cell",
+        `${surfaces.join()} ${name} retains its physical storage owner`);
+      assert.deepEqual(completion.stringAppend.parts, [{ kind: "character", value: "!" }]);
+      if (name !== "direct") {
+        const root = program.records.locationStorageRoot.get(completion.target);
+        assert.equal(root !== undefined && root !== null, true, `${name} requires a selected native location root`);
+        assert.equal(program.records.bindingStorage.get(root.declaration)?.storage, "borrow-cell",
+          `${name} uses the actual native cell declaration`);
+      }
+    }
+    const { result } = compileRust(options);
+    assert.equal(result.diagnostics.length, 0, result.diagnostics.map(diagnostic => diagnostic.message).join("\n"));
+    const output = artifactText(result, "src/index.rs");
+    assert.equal(output.match(/\.borrow_mut\(\)\.push\('!'\)/gu)?.length, 2,
+      `${surfaces.join()} both captured native cells append directly`);
+    assert.doesNotMatch(output, /\(&[^\n]*\)\.borrow_mut\(\)/u);
+    assert.match(output, /value\.push\('!'\)/u);
+  }
+});
+
 test("a merely available borrowed operation cannot establish counted-loop purity", () => {
   const { source, program } = analyzeRust({ surfaces: ["js"], files: { "index.ts": sourceText } });
   const { loop, element } = selectedNodes(source, program, "combine");

@@ -5,6 +5,8 @@ import {
   planRustPromotedStorageLocation,
   planRustPromotedStorageWrite,
   planRustModuleBindingStore,
+  findRustLocationStorageRoot,
+  rustRawLocationRoot,
 } from "../expressions/typed-locations.js";
 
 import { allocateRustSyntheticName } from "../names/synthetic.js";
@@ -522,10 +524,11 @@ export function planRustAssignmentWrite(
     const append = completion.stringAppend;
     let receiver = target;
     if (append.receiver === "borrow-cell") {
-      const location = planRustPromotedStorageLocation(left, context, planExpression, false);
-      if (location.kind !== "promoted" || location.expression === undefined)
+      const root = findRustLocationStorageRoot(left, context);
+      const location = root === undefined ? undefined : rustRawLocationRoot(root.expression, context);
+      if (location === undefined)
         failRustPlannerInvariant("An admitted string append requires its selected promoted receiver.", left);
-      receiver = { kind: "method-call", receiver: location.expression, method: "borrow_mut", args: [] };
+      receiver = { kind: "method-call", receiver: location, method: "borrow_mut", args: [] };
     }
     if (receiver === undefined) failRustPlannerInvariant("An admitted string append requires its selected native receiver.", left);
     return append.parts.map(part => {
