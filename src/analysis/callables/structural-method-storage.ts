@@ -72,7 +72,7 @@ export function analyzeRustStructuralMethodExposures(input: {
   const candidates = new Map<string, { readonly declarations: Set<Node>; writes: "none" | "present" | "unresolved";
     boundary: "none" | "export-only" | "opaque"; extracted: boolean; presence: "required" | "optional" }>();
   const keyFor = (carrier: TargetTypeRef, index: number): string =>
-    `${structuralStorageKey(rustStructuralGenericCarrier(carrier).carrier, input.componentForFile)}#${index}`;
+    `${structuralStorageKey(rustStructuralGenericCarrier(carrier, "fields").carrier, input.componentForFile)}#${index}`;
   const retain = (carrier: TargetTypeRef, index: number, declaration: Node): void => {
     const key = keyFor(carrier, index);
     const selected = candidates.get(key);
@@ -628,7 +628,7 @@ export function createRustStructuralMethodStorage(input: {
             structuralShapes.field(root.spread.sourceValueCarrier, sourceField.storageIndex)?.method !== true)
             failTargetAnalysisInvariant("tsonic-rust", "Structural method spread lost its exact source field and destination contribution.");
         }
-        const source = rustStructuralGenericCarrier(root.carrier).carrier;
+        const source = rustStructuralGenericCarrier(root.carrier, "fields").carrier;
         const refs = rustTargetGenericReferences(source);
         const shape = rustStructuralObjectCarrierValue(source)!;
         const aligned = rustStructuralObjectTargetType(root.definition.ownerFileName, shape.fields, shape.representation, shape.construction, shape.bases, shape.implementation);
