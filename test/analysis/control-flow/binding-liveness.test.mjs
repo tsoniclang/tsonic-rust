@@ -276,3 +276,40 @@ export function inspect(count: int32): int32 {
     assert.match(output, /total/, `${label}: the loop body and its writes remain`);
   }
 });
+
+for (const [label, body, mutable, written] of [
+  ["discarded direct write", "(() => owned++); return owned;", false, true],
+  ["discarded mutable borrow", "(() => mut(owned)); return owned;", false, false],
+  ["live direct write", "owned += 1; return owned;", true, true],
+  ["live mutable borrow", "change(mut(owned)); return owned;", true, false],
+]) test(`native lexical mutability follows emitted uses: ${label}`, () => {
+  const { source, program } = analyzeRust({ files: { "index.ts": `
+import { mut, load, store } from "@tsonic/rust/lang.js";
+import type { Mut } from "@tsonic/rust/types.js";
+function change(target: Mut<number>): void { store(target, load(target) + 1); }
+export function inspect(input: number): number { let owned = input; ${body} }
+` } });
+  const ast = program.source.ast;
+  const nodes = [];
+  const visit = node => { nodes.push(node); ast.forEachChild(node, child => { if (child !== undefined) visit(child); }); };
+  program.sourceFiles.forEach(visit);
+  const declaration = nodes.find(node => ast.is.IsVariableDeclaration(node) && ast.text(ast.name(node)) === "owned");
+  assert.equal(declaration !== undefined, true, `${label}: use the actual checked local declaration`);
+  assert.equal(source.navigation.declarationUseSummary(declaration).bindingWritten, written,
+    `${label}: source assignments remain whole and native reference calls remain distinct`);
+  const selected = program.records.localBinding.get(declaration);
+  assert.equal(selected?.kind, "value", `${label}: the native local binding is selected before publication`);
+  assert.equal(selected.mutable, mutable, `${label}: only an actual emitted native write or mutable borrow requires mut`);
+  if (label === "live mutable borrow") {
+    const expression = nodes.find(node => ast.is.IsCallExpression(node) && ast.is.IsIdentifier(ast.as.AsCallExpression(node).Expression) &&
+      ast.text(ast.as.AsCallExpression(node).Expression) === "mut");
+    const argument = expression === undefined ? undefined : ast.arguments(expression)[0];
+    const read = program.records.readOwnership.get(argument);
+    assert.equal(read?.source.kind === "borrow" && read.source.mutable, true,
+      "a native mutable reference has a real selected ownership obligation even without source assignment syntax");
+  } else if (!mutable) {
+    const definition = nodes.find(node => ast.is.IsArrowFunction(node));
+    assert.equal(program.records.nativeParticipation.get(definition), "erased",
+      `${label}: the single source-body owner actually erases this uninvoked definition`);
+  }
+});

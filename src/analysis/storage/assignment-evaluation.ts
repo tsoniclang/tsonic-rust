@@ -10,7 +10,16 @@ import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustTargetOperationText } from "../../target-model/operations/text.js";
 import { isRustAssignmentOperator } from "../../target-model/syntax/tokens.js";
 import { rustTargetOperationIsDirectLocation } from "../../policy/operations/members/native-contracts.js";
-import { rustEffectiveValueCarrier } from "../conversions/value-carrier-queries.js";
+import { rustFinalizedSourceInputs } from "../../target-model/operations/finalized-inputs.js";
+import type { RustFinalizedOperationAbi } from "../../target-model/records/finalized-operation.js";
+import type { TargetTypeRef } from "../../target-model/types/model.js";
+
+function hasSharedIdentityReceiver(abi: RustFinalizedOperationAbi, carrier: TargetTypeRef): boolean {
+  if (abi.sourceReceiver.kind !== "receiver" || abi.sourceReceiver.disposition !== "runtime") return false;
+  const inputs = rustFinalizedSourceInputs(abi).filter(input => input.source.kind === "receiver");
+  return inputs.length !== 0 && inputs.every(input => input.mode === "ref" && input.conversion.kind === "identity" &&
+    rustTargetTypeRefEquals(input.sourceCarrier, carrier));
+}
 
 export function analyzeRustAssignmentEvaluation(program: Omit<RustAnalysisProgram, "reachability">,
   nodes: readonly Node[], producer: RustAssignmentEvaluationProducer): readonly TargetDiagnostic[] {
@@ -45,18 +54,28 @@ export function analyzeRustAssignmentEvaluation(program: Omit<RustAnalysisProgra
     const target = program.records.targetOperation.get(left);
     const receiver = target?.kind === "source-static-field" || target?.kind === "source-accessor" && target.receiver.kind === "static" ? undefined : Node_Expression(ast, left);
     const index = program.records.computedMember.get(left) === undefined && ast.is.IsElementAccessExpression(left) ? ElementAccessExpression_ArgumentExpression(ast, left) : undefined;
+    const receiverCarrier = program.records.valueRead.get(receiver)?.value;
+    const receiverRead = program.records.readOwnership.get(receiver);
+    const setter = program.records.compoundWrite.get(node);
+    const sharedReceiver = compound && receiverCarrier !== undefined && receiverRead?.readsStorage === true &&
+      receiverRead.source.kind === "borrow" && !receiverRead.source.mutable && receiverRead.borrowedAcross.has(right) &&
+      (index === undefined || receiverRead.borrowedAcross.has(index)) &&
+      target?.kind === "provider-operation" && target.abi.result.kind === "sync" && setter !== undefined &&
+      hasSharedIdentityReceiver(target.abi, receiverCarrier) && hasSharedIdentityReceiver(setter.abi, receiverCarrier);
     const operands: RustAssignmentEvaluation["operands"][number][] = [];
     if (!valueField) for (const operand of [receiver, index]) {
       if (operand === undefined) continue;
       const direct = compound && operand === receiver && rustTargetOperationIsDirectLocation(target) ? program.records.directStorage.get(operand) : undefined;
-      const storage = direct === undefined || direct.kind === "unavailable" ? "value" : direct.kind === "identifier" || direct.kind === "this" ? "direct-identifier" : "direct";
-      const carrier = storage === "value" && compound ? rustEffectiveValueCarrier(program.records, operand) : program.records.runtimeCarrier.get(operand)?.carrier;
+      const storage = sharedReceiver && operand === receiver ? "shared-reference"
+        : direct === undefined || direct.kind === "unavailable" ? "value" : direct.kind === "identifier" || direct.kind === "this" ? "direct-identifier" : "direct";
+      const carrier = compound && (storage === "value" || storage === "shared-reference")
+        ? program.records.valueRead.get(operand)?.value : program.records.runtimeCarrier.get(operand)?.carrier;
       if (carrier === undefined) { refuse(operand, "rust.backend.assignment", "Assignment receiver evaluation requires its exact finalized native carrier."); continue; }
       operands.push(Object.freeze({ node: operand, carrier, role: operand === receiver ? "receiver" : "index", storage }));
     }
     const common = { left, right, valueField, operands: Object.freeze(operands) };
     if (fact.kind === "nullish-assignment") producer.publish(node, { ...common, kind: "nullish", fact, copy: isRustCopyCarrier(fact.rightCarrier),
-      rightForm: rustTargetTypeRefEquals(fact.rightCarrier, rustEffectiveValueCarrier(program.records, right)) ? "value" : "before-context" });
+      rightForm: rustTargetTypeRefEquals(fact.rightCarrier, program.records.valueRead.get(right)?.value) ? "value" : "before-context" });
     else if (fact.kind === "operator-token" || fact.kind === "operator-call") producer.publish(node, { ...common, kind: "compound", fact, copy: isRustCopyCarrier(fact.resultCarrier) });
   }
   return Object.freeze(issues);

@@ -42,11 +42,14 @@ export function planCompoundAssignmentExpression(node: Node, context: RustPlanCo
     }
     const storage = operand.storage === "direct" ? planRustDirectStorage(operand.node, context) : undefined;
     if (operand.storage === "direct" && storage === undefined) failRustPlannerInvariant("An admitted native assignment receiver requires its direct place.", operand.node);
-    const value = storage === undefined ? planExpression(operand.node, context) : { kind: "reference" as const, expr: storage };
+    const value = storage === undefined
+      ? planExpression(operand.node, context, "value", operand.storage === "shared-reference" ? "shared-reference" : "value")
+      : { kind: "reference" as const, expr: storage };
     if (value === undefined) return undefined;
     const name = allocateRustSyntheticName(names, operand.role === "receiver" ? "assignment_receiver" : "assignment_index");
     bindings.push({ name, value });
-    overrides.set(operand.node, { expression: { kind: "path", path: name }, carrier: operand.carrier, valueForm: storage === undefined ? "value" : "shared-reference" });
+    overrides.set(operand.node, { expression: { kind: "path", path: name }, carrier: operand.carrier,
+      valueForm: storage !== undefined || operand.storage === "shared-reference" ? "shared-reference" : "value" });
   }
   const current = location?.read ?? planExpression(left, scoped);
   const value = planExpression(right, context);

@@ -1,5 +1,5 @@
 import type { AstReader, Node } from "@tsonic/tsts";
-import type { SourceProgramNavigation } from "@tsonic/target-api/source";
+import { sourceEnclosingCallable, type SourceProgramNavigation } from "@tsonic/target-api/source";
 import { failTargetAnalysisInvariant, type TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { RustNamePlan } from "../../target-model/names/model.js";
@@ -14,6 +14,7 @@ import type { RustLexicalFunctionQueries } from "../../target-model/records/lexi
 import type { RustLocalBindingProducer } from "../program/records/local-bindings.js";
 import { requireRustRecord, type RustRequiredRecord } from "../program/records/required-records.js";
 import type { RustRuntimeValueUsePlan } from "../program/runtime-value-uses.js";
+import { rustBindingUseIsEmitted } from "../control-flow/binding-liveness.js";
 
 export function analyzeRustLocalBindings(input: {
   readonly ast: AstReader; readonly nodes: readonly Node[]; readonly records: RustProgramRecords;
@@ -92,17 +93,16 @@ export function analyzeRustLocalBindings(input: {
     const representation = input.representations.representationFor(input.projectTypes.definitionForCarrier(carrier));
     const liveness = input.records.bindingLiveness.get(node);
     const resource = input.records.resourceManagement.get(node);
-    // Only a write the native program executes needs a mutable binding: a write in a branch a decided guard removes
-    // (nativeUnreachable) is never emitted.
-    const nativelyWritten = summary.bindingWritten && input.navigation.declarationUses(node).some(use => {
-      if (use.role !== "write") return false;
-      for (let current: Node | undefined = use.reference; current !== undefined && current !== node; current = input.ast.parent(current))
-        if (input.records.nativeUnreachable.get(current) === true) return false;
-      return true;
+    const ownerCallable = sourceEnclosingCallable(node, input.ast);
+    const nativelyWritten = input.navigation.declarationUses(node).some(use => {
+      if (!rustBindingUseIsEmitted(input.ast, input.records, use.reference, node, ownerCallable)) return false;
+      const read = input.records.readOwnership.get(use.reference);
+      return summary.bindingWritten && use.role === "write" || read?.readsStorage === true &&
+        read.source.kind === "borrow" && read.source.mutable;
     });
     const mutable = nativeArray !== undefined ? nativelyWritten : storage?.iterationScope !== undefined || storage === undefined &&
       (input.aliases.requiresMutableOwner(node) || (initializer !== undefined || absenceInitializer ||
-        liveness?.multipleWrites !== false) && (nativelyWritten || input.records.mutatedBinding.get(node) !== undefined) ||
+        liveness?.multipleWrites !== false) && nativelyWritten ||
         representation?.kind === "value" && representation.mutable && summary.memberWritten ||
         carrier.kind !== "pointer" && carrier.kind !== "reference" && input.records.mutatedReferentBinding.get(node) !== undefined ||
         resource?.disposal.target.receiverMode === "mut-ref");

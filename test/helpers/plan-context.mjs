@@ -78,7 +78,7 @@ export function rustProgramWithTypeEmissions(carriers, { source = "export functi
   analyzeRustProjectEmission({ program: input, nodes: [], producer: projects });
   const admitted = { ...input, records: { ...program.records, ...projects.records } };
   const producer = createRustTypeEmissionProducer(() => {});
-  analyzeRustTypeEmission(admitted, [], producer, selectedCarriers);
+  analyzeRustTypeEmission(admitted, [], producer, selectedCarriers, projects);
   const reads = createRustCarrierReadProducer(() => {});
   analyzeRustCarrierReads(admitted, [], reads);
   return { ...admitted, records: { ...admitted.records, ...producer.records, ...reads.records } };

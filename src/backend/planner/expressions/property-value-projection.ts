@@ -24,7 +24,7 @@ export function planRustPropertyValueProjection(
   if (selected === undefined || context.syntheticNames === undefined)
     failRustPlannerInvariant("An admitted native property projection requires its sealed member reads and native bindings.", node);
   const { projection } = selected;
-  const receiverName = allocateRustSyntheticName(context.syntheticNames, "property_source");
+  const receiverName = allocateRustSyntheticName(context.syntheticNames, selected.contract.fields.length === 0 ? "_property_source" : "property_source");
   const receiver: RustExpr = { kind: "path", path: receiverName };
   const entries: RustExpr[] = [];
   for (const [index, field] of selected.contract.fields.entries()) {

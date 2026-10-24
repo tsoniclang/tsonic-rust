@@ -1,4 +1,4 @@
-import type { Node } from "@tsonic/tsts";
+import type { AstReader, Node } from "@tsonic/tsts";
 import { analyzeSourceWrites, solveSourceFlow, type SourceFlowWork } from "@tsonic/target-api/analysis";
 import { ForStatement_Condition, ForStatement_Incrementor, Node_Expression, sourceEnclosingCallable, type TargetSourceProgram } from "@tsonic/target-api/source";
 import { failTargetAnalysisInvariant, type TargetDiagnostic } from "@tsonic/target-api/artifacts";
@@ -40,7 +40,7 @@ export function analyzeRustBindingLiveness(
       const operation = point.operation;
       // A discarded callable is erased from the native program, so its capture never reads the binding; an unemitted
       // read and a statically decided comparison operand are not evaluated natively.
-      if (operation.kind === "read" && (point.source === undefined || rustLivenessReadEmitted(source, records, point.source, operation.binding, graph.declaration) &&
+      if (operation.kind === "read" && (point.source === undefined || rustBindingUseIsEmitted(source.ast, records, point.source, operation.binding, graph.declaration) &&
           !rustStaticComparisonSkipsOperand(source.ast, records, point.source)) ||
         operation.kind === "capture" &&
         (point.source === undefined || records.nativeParticipation.get(point.source) !== "erased")) reads.add(operation.binding);
@@ -124,7 +124,7 @@ function collectRustConstructionWriteLiveness(
     for (const preparation of plan.emission.preparations.values()) {
       if (preparation.layer !== layer) continue;
       const point = preparation.point;
-      if (!rustLivenessReadEmitted(source, records, point.node, graph.declaration, graph.declaration)) continue;
+      if (!rustBindingUseIsEmitted(source.ast, records, point.node, graph.declaration, graph.declaration)) continue;
       const before = new Set<Node>(point.publishBefore ? fields : []);
       if (plan.emission.exposure?.expression === point.node)
         for (const binding of plan.emission.frame?.bindings ?? []) before.add(binding.declaration);
@@ -174,7 +174,7 @@ function collectRustConstructionWriteLiveness(
     for (const point of graph.points) {
       if (!liveness.reachable.has(point.id) || point.operation.kind !== "write-location") continue;
       const target = point.operation.location;
-      if (!rustLivenessReadEmitted(source, records, target, graph.declaration, graph.declaration) ||
+      if (!rustBindingUseIsEmitted(source.ast, records, target, graph.declaration, graph.declaration) ||
         plan.emission.preparations.get(target)?.retainsFrame !== false) continue;
       const projection = projectionFor(target);
       if (projection?.kind !== "local" || projection.expression.kind !== "field") continue;
@@ -213,7 +213,7 @@ function collectRustConstructionWriteLiveness(
           const field = plainWrites.get(point.operation.location);
           if (field !== undefined) live.delete(field);
         }
-        if (point.source !== undefined && rustLivenessReadEmitted(source, records, point.source, graph.declaration, graph.declaration)) {
+        if (point.source !== undefined && rustBindingUseIsEmitted(source.ast, records, point.source, graph.declaration, graph.declaration)) {
           const projection = projectionFor(point.source);
           const operation = records.targetOperation.get(point.source);
           if (projection?.expression.declaration !== undefined && operation?.kind === "source-field" && operation.accessMode !== "write" &&
@@ -230,7 +230,7 @@ function collectRustConstructionWriteLiveness(
     for (const point of graph.points) {
       if (!solution.reachable.has(point.id) || point.operation.kind !== "write-location") continue;
       const target = point.operation.location;
-      if (!rustLivenessReadEmitted(source, records, target, graph.declaration, graph.declaration)) continue;
+      if (!rustBindingUseIsEmitted(source.ast, records, target, graph.declaration, graph.declaration)) continue;
       const projection = projectionFor(target);
       if (projection?.expression.kind !== "field" || projection.expression.declaration === undefined) continue;
       const field = projection.expression.declaration;
@@ -251,23 +251,23 @@ function copyConstructionLiveFields(input: ReadonlySet<Node>, work: SourceFlowWo
   return selected;
 }
 
-function rustLivenessReadEmitted(source: TargetSourceProgram, records: RustProgramRecords,
-  reference: Node, binding: Node, owner: Node): boolean {
+export function rustBindingUseIsEmitted(ast: AstReader, records: RustProgramRecords,
+  reference: Node, binding: Node, owner: Node | undefined): boolean {
   let child = reference;
   for (let current: Node | undefined = reference; current !== undefined && current !== owner;
-    child = current, current = source.ast.parent(current)) {
+    child = current, current = ast.parent(current)) {
     if (records.nativeUnreachable.get(current) === true || records.compileTimeSource.get(current) !== undefined ||
       records.nativeParticipation.get(current) === "erased") return false;
-    if (source.ast.is.IsIfStatement(current) && Node_Expression(source.ast, current) === child &&
+    if (ast.is.IsIfStatement(current) && Node_Expression(ast, current) === child &&
       records.nativeGuardResult.get(child) !== undefined) return false;
-    if (source.ast.is.IsBinaryExpression(current) && source.ast.as.AsBinaryExpression(current)?.Right === child) {
+    if (ast.is.IsBinaryExpression(current) && ast.as.AsBinaryExpression(current)?.Right === child) {
       const operation = records.targetOperation.get(current);
       if (operation?.kind === "sequence" && isRustNeverCarrier(operation.leftCarrier)) return false;
     }
-    if (source.ast.is.IsForStatement(current)) {
+    if (ast.is.IsForStatement(current)) {
       const counted = records.countedLoop.get(current);
       if (counted?.counterDeclaration === binding &&
-        (child === ForStatement_Condition(source.ast, current) || child === ForStatement_Incrementor(source.ast, current))) return false;
+        (child === ForStatement_Condition(ast, current) || child === ForStatement_Incrementor(ast, current))) return false;
     }
   }
   return true;
