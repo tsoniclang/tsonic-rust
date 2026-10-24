@@ -1,4 +1,5 @@
 import type { Node, SourceFile } from "@tsonic/tsts";
+import { sourceCallableUsesLexicalThis } from "@tsonic/target-api/source";
 import type { RustFactWalk } from "../program/walk.js";
 
 import { structuralStorageKey } from "../../policy/types/objects/structural-storage.js";
@@ -78,9 +79,6 @@ export function selectRustCopiedMethods(
     walk.context.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
   };
   for (const file of files) visit(file);
-  // An instantiated structural shape stores the method values its template's constructions created: each method slot
-  // of an instance takes a constructed template slot as a source. A template slot with no construction (an authored
-  // type) contributes no values.
   for (const { template, instance } of walk.sourceTypes.structuralInstantiations()) {
     const templateFields = rustStructuralObjectCarrierValue(template)?.fields;
     const instanceFields = rustStructuralObjectCarrierValue(instance)?.fields;
@@ -89,7 +87,7 @@ export function selectRustCopiedMethods(
       if (field.method !== true || templateFields[index]?.method !== true) continue;
       const target = key(instance, index);
       const source = key(template, index);
-      if (target === source || !implementations.has(source)) continue;
+      if (target === source) continue;
       const sources = incoming.get(target) ?? new Set<string>();
       sources.add(source);
       incoming.set(target, sources);
@@ -113,7 +111,7 @@ export function selectRustCopiedMethods(
     independent.set(identity, methods.every(method => {
       let used = receiverUsage.get(method.node);
       if (used === undefined) {
-        used = usesReceiver(method.node);
+        used = sourceCallableUsesLexicalThis(walk.context.ast, method.node);
         receiverUsage.set(method.node, used);
       }
       return !used;
@@ -122,21 +120,6 @@ export function selectRustCopiedMethods(
   const proven = proveRustCopiedMethodFlow([...demands.keys()], incoming, independent);
   return { proven, demands, implementations };
 
-  function usesReceiver(root: Node): boolean {
-    let used = false;
-    const scan = (node: Node): void => {
-      const kind = walk.context.ast.kindName(node);
-      if (kind === "KindThisExpression" || kind === "KindThisKeyword" || kind === "KindSuperKeyword" || kind === "KindSuperExpression") {
-        used = true;
-        return;
-      }
-      if (node !== root && ["KindFunctionDeclaration", "KindFunctionExpression", "KindMethodDeclaration",
-        "KindClassDeclaration", "KindClassExpression", "KindGetAccessor", "KindSetAccessor"].includes(kind)) return;
-      if (!used) walk.context.ast.forEachChild(node, child => { if (child !== undefined) scan(child); });
-    };
-    scan(root);
-    return used;
-  }
 }
 
 export function proveRustCopiedMethodFlow(
