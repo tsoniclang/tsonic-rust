@@ -64,7 +64,8 @@ for (const receiverDependent of [false, true]) {
         contributions: [{ kind: "structural-method", targetStorageIndex: 0, expression: method }] }],
       [copyNode, { kind: "record-literal", storage: "structural-object", resultCarrier: template, fields: [],
         contributions: [{ kind: "spread", sourceStorage: "structural-object", sourceValueCarrier: original,
-          property: copyNode, fields: [{ method: true, sourceStorageIndex: 0, targetStorageIndex: 1 }] }] }],
+          property: copyNode, expression: originalNode,
+          fields: [{ method: true, sourceStorageIndex: 0, targetStorageIndex: 1 }] }] }],
       [readNode, { kind: "source-field", storage: "structural-object", receiverCarrier: instance,
         storageIndex: 1, valueSemantics: { kind: "method" } }],
     ]);
@@ -72,13 +73,31 @@ for (const receiverDependent of [false, true]) {
       body: node => node.body,
       children: node => node.children ?? [],
       kindName: node => node.kind,
+      kind: node => node === method || node === copyNode ? 1 : undefined,
       forEachChild: (node, visit) => { for (const child of node.children ?? []) visit(child); },
     };
+    const bindings = {};
+    const sourceFile = {};
+    const subject = (node, kind = "value", projection = []) => ({ kind: "resolved", subject: { node, kind, projection } });
+    const storage = {
+      source: { ast, semantics: { forFile: () => ({ types: { nonNullableType: type => type } }) } },
+      subject,
+      subjectFor: node => subject(node),
+      storageSubjectFor: (node, projection) => subject(node, "value", projection),
+      typeFor: selected => ({ kind: "resolved", type: selected.node === originalNode ? original : instance, sourceFile }),
+      bindingsForLexicalOwner: () => ({ kind: "resolved", bindings }),
+      storageProducersFor: () => ({ kind: "complete", producers: [{ subject: { kind: "value", node: method, projection: [] },
+        type: methodCarrier, sourceFile, bindings }] }),
+    };
     const missing = { get: () => undefined };
-    const selected = selectRustCopiedMethods({ context: { ast, isNativeNode: () => true,
+    const selected = selectRustCopiedMethods({ context: { ast, sourceStorage: storage, isNativeNode: () => true,
       records: { targetOperation: { get: node => operations.get(node) }, bindingProjection: missing,
+        selectedOperation: { get: node => node === readNode
+          ? { provenance: { sourceReceiver: copyNode, sourceSelectedDeclaration: method } } : undefined },
         objectReferenceView: missing } },
-      sourceTypes: { structuralInstantiations: () => [{ template, instance }] } }, [root], () => "app");
+      sourceTypes: { structuralObjectForType: type => ({ fields: type === original
+        ? [{ storageIndex: 0, method: true, declarations: [method] }]
+        : [{ storageIndex: 0 }, { storageIndex: 1, method: true, declarations: [method] }] }) } }, [root], () => "app");
     for (const [carrier, index] of [[original, 0], [template, 1], [instance, 1]]) {
       const identity = `${structuralStorageKey(carrier, () => "app")}#${index}`;
       assert.equal(selected.demands.has(identity), true, "each actual method-flow slot participates");
