@@ -205,7 +205,8 @@ export function analyzeRustErrorRegions(input: RustErrorTypeContext & {
         const plannedRegion = input.ast.is.IsSourceFile(node) || sourceEnclosingCallable(node, input.ast) === node;
         const asynchronous = input.records.asyncFunction.get(node);
         const settledPromise = asynchronous?.kind === "js-promise" && asynchronous.lowering.kind === "settled";
-        if (effects.nativeErrors.length > 0 && plannedRegion && !settledPromise) {
+        const nativeRegion = selected?.jsRejection === undefined || input.promiseBodies.declarations.has(node);
+        if (effects.nativeErrors.length > 0 && plannedRegion && !settledPromise && nativeRegion) {
           const arity = effects.nativeErrors.length + (effects.localErrors ? 1 : 0);
           if (arity > 1) arities.add(arity);
           if (effects.localErrors) registerRuntimeArm(fileName, arity, 0, node);
