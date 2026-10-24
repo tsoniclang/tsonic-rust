@@ -27,14 +27,16 @@ export function createRustReceiverIndependentMethodProducer(
     finalize(walk: RustFactWalk, files: readonly SourceFile[], componentForFile: (fileName: string) => string): ReadonlySet<string> {
       assertOpen();
       const selection = selectRustCopiedMethods(walk, files, componentForFile);
+      const proven = new Set<string>();
       const candidates = new Map<Node, TargetTypeRef>();
-      for (const [identity, subject] of selection.demands) {
-        if (!selection.proven.has(identity)) {
+      for (const [identity, decision] of selection.decisions) {
+        if (decision.kind === "rejected") {
           appendRustDiagnostic(walk, "RUST_COPIED_METHOD_RECEIVER_NOT_PROVEN",
-            "A retained own method requires a closed callable value whose implementations do not use the original receiver.", subject,
+            `A retained own method requires a closed callable value whose implementations do not use the original receiver. ${decision.reason}`, decision.subject,
             ["target.capability=rust.object-rest.method-value"]);
           continue;
         }
+        proven.add(identity);
         for (const method of selection.implementations.get(identity) ?? []) {
           const operation = walk.context.records.targetOperation.get(method.node);
           const retained = operation?.kind === "closure" ? rustCallableProtocol(operation.resultCarrier) : undefined;
@@ -54,7 +56,7 @@ export function createRustReceiverIndependentMethodProducer(
         }
       }
       for (const [node, carrier] of candidates) family.writer.set(node, Object.freeze({ carrier }));
-      return selection.proven;
+      return proven;
     },
   });
 }

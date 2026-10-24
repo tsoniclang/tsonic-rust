@@ -1,10 +1,18 @@
-import { createRustRecordFixture, rustNativeFixtureNodes } from "./records.mjs";
 import assert from "node:assert/strict";
 import { nativeClosureProducerFixture, nativeClosureProducerFailurePackage } from "./native-closure-producers.mjs";
-
-
+import { rustNativeFixtureNodes } from "./records.mjs";
+import { createRustProgramRecordBuilder } from "../../dist/analysis/program/records/create.js";
+import { recordRustValueCarrierReconciliation } from "../../dist/analysis/program/records/value-carrier-admission.js";
 import { createRustPlanningContext } from "../../dist/backend/planner/context.js";
 import { analyzeRustErrorRegions } from "../../dist/analysis/errors/regions.js";
+import { analyzeRustGenericErrorEmission } from "../../dist/analysis/callables/generic-error-emission.js";
+import { createRustErrorEmissionProducer } from "../../dist/analysis/program/records/error-emission.js";
+import { analyzeRustCallableEmission } from "../../dist/analysis/conversions/callable-emission.js";
+import { createRustCallableConversionProducer } from "../../dist/analysis/program/records/callable-conversions.js";
+import { analyzeRustProjectEmission } from "../../dist/analysis/project-types/emission.js";
+import { createRustProjectEmissionProducer } from "../../dist/analysis/program/records/project-emission.js";
+import { analyzeRustTypeEmission } from "../../dist/analysis/source-evidence/types/emission.js";
+import { createRustTypeEmissionProducer } from "../../dist/analysis/program/records/type-emission.js";
 import { rustNamedTargetType } from "../../dist/target-model/types/carriers/native.js";
 import { rustCallableTargetType } from "../../dist/target-model/types/carriers/callables.js";
 import { selectRustCallableConversion } from "../../dist/policy/conversions/callable.js";
@@ -29,17 +37,50 @@ export function create(): (value: int32) => int64 {
   const conversion = selectRustCallableConversion(source, target, selectRustExactIntegerConversion, current.program.typeDefinitions);
   assert.equal(conversion !== undefined, true, "checked integer adaptation selected");
   const records = current.program.records;
-  const selectedRecords = createRustRecordFixture({ contextualValueConversion: { get: node => node === current.node
-    ? { sourceCarrier: source, targetCarrier: target, conversion } : records.contextualValueConversion.get(node) } }, records);
-  const nativeNodes = new Set(rustNativeFixtureNodes(current.program));
-  const regions = analyzeRustErrorRegions({ ast: current.program.source.ast, sourceFiles: current.program.records.sourceArtifacts.get().map(artifact => artifact.sourceFile),
-    isNativeNode: node => nativeNodes.has(node), records: selectedRecords, names: current.program.names,
+  const builder = createRustProgramRecordBuilder(current.program.typeDefinitions, records);
+  const required = [];
+  recordRustValueCarrierReconciliation(builder, required, current.node, { kind: "conversion",
+    fact: { sourceCarrier: source, targetCarrier: target, conversion } });
+  const contextual = builder.seal(required);
+  const selectedRecords = { ...records, contextualValueConversion: contextual.contextualValueConversion };
+  const nativeNodes = rustNativeFixtureNodes(current.program);
+  const nativeDomain = new Set(nativeNodes);
+  const nativeTasks = nativeNodes.flatMap(node => {
+    const selected = records.nativeTaskUse.get(node);
+    return selected?.kind === "spawn" ? [{ node, operand: selected.operand, selection: selected.completion }] : [];
+  });
+  const sourceFiles = current.program.records.sourceArtifacts.get().map(artifact => artifact.sourceFile);
+  const regions = analyzeRustErrorRegions({ ast: current.program.source.ast, sourceFiles,
+    isNativeNode: node => nativeDomain.has(node), records: selectedRecords, names: current.program.names,
     components: current.program.sourcePackageComponents, producers: current.program.callableValues.nativeProducers,
     definitions: current.program.typeDefinitions, callables: current.program.callableValues,
-    promiseBodies: current.program.promiseBodies });
+    promiseBodies: current.program.promiseBodies, nativeTasks, binaryHooks: current.program.binaryHooks });
   assert.equal(regions.kind, "resolved", "the exact constructed adapter inputs publish their required native error joins");
-  const program = { ...current.program, records: selectedRecords,
-    errorRegions: { ...regions.value, initialization: current.program.errorRegions.initialization } };
+  const initialization = current.program.errorRegions.initialization;
+  const owner = initialization.binary.lifecycle.region.localOwner;
+  assert.equal(owner !== undefined, true, "the actual synchronous adapter fixture has its selected lifecycle owner");
+  const lifecycle = regions.value.lifecycleFor([initialization.root,
+    ...initialization.workers.map(worker => worker.initializer)], owner);
+  assert.equal(lifecycle.kind, "resolved", "the actual initializer and task inventory select their native lifecycle");
+  const errorRegions = regions.value.complete(initialization);
+  const errors = createRustErrorEmissionProducer(() => {});
+  analyzeRustGenericErrorEmission({ ast: current.program.source.ast, sourceFiles, nodes: nativeNodes,
+    regions: errorRegions, index: current.program.genericCallableErrors,
+    physical: current.program.callableValues.generic.physical, producer: errors });
+  const program = { ...current.program, errorRegions, records: { ...selectedRecords,
+    ...errors.records, nativeErrorRegion: errors.regions } };
+  const adapters = createRustCallableConversionProducer(() => {});
+  analyzeRustCallableEmission(program, nativeNodes, adapters);
+  program.records = { ...program.records, ...adapters.records };
+  const admitted = program.records.callableContract.get(current.node, conversion);
+  assert.equal(admitted !== undefined, true, "the native conversion owner admits the exact selected adapter");
+  const projects = createRustProjectEmissionProducer(() => {});
+  analyzeRustProjectEmission({ program, nodes: nativeNodes, producer: projects });
+  program.records = { ...program.records, ...projects.records };
+  const types = createRustTypeEmissionProducer(() => {});
+  analyzeRustTypeEmission(program, nativeNodes, types, [admitted.physical.carrier, admitted.physical.error,
+    ...admitted.physical.parameters, admitted.physical.result], projects);
+  program.records = { ...program.records, ...types.records };
   current.context.input = createRustPlanningContext(program);
   const expression = current.plan();
   assert.equal(expression !== undefined, true, "physical fallible producer plans");
