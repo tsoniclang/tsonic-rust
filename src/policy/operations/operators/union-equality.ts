@@ -10,10 +10,12 @@ import { isRustUnitCarrier } from "../../../target-model/types/carriers/js.js";
 import { rustSourceOptionalElementCarrier } from "../../../target-model/types/carriers/optional.js";
 
 export function selectRustUnionEquality(
+  operator: "===" | "!==",
   left: TargetTypeRef,
   right: TargetTypeRef,
   definitions: RustTypeDefinitions,
 ): { readonly arms: readonly RustUnionEqualityArm[]; readonly exhaustive: boolean } | undefined {
+  if (operator !== "===" && operator !== "!==") return undefined;
   const leftPresent = sourceOptionElement(left) ?? left;
   const rightPresent = sourceOptionElement(right) ?? right;
   const leftUnion = rustUnionAlternatives(leftPresent, definitions);
@@ -26,11 +28,11 @@ export function selectRustUnionEquality(
   for (const left of leftLeaves) for (const right of rightLeaves) {
     if (isRustUnitCarrier(left.carrier) !== isRustUnitCarrier(right.carrier)) continue;
     if (isRustUnitCarrier(left.carrier)) {
-      arms.push({ left, right, operation: { kind: "operator-token", rustOperator: "==",
+      arms.push({ left, right, operation: { kind: "operator-token", rustOperator: operator === "===" ? "==" : "!=",
         resultCarrier: rustSourcePrimitiveTargetType("bool"), operandModes: ["ref", "ref"] } });
       continue;
     }
-    const operation = selectRustBinaryOperator("===", left.carrier, right.carrier);
+    const operation = selectRustBinaryOperator(operator, left.carrier, right.carrier);
     if (operation !== undefined && operation.kind !== "string-concat" &&
       (operation.kind !== "operator-call" || !operation.fallible)) {
       arms.push({ left, right, operation });

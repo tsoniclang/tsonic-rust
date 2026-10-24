@@ -11,7 +11,8 @@ export interface RustUnionEqualityOperand {
 
 export interface RustUnionEqualityEmission {
   readonly fact: Extract<RustTargetOperationFact, { readonly kind: "union-equality" }>;
-  readonly form: "constant" | "matches" | "match";
+  readonly form: { readonly kind: "constant"; readonly value: boolean } | { readonly kind: "matches" | "match" };
+  readonly fallback: boolean;
   readonly arms: readonly {
     readonly left: RustUnionEqualityOperand;
     readonly right: RustUnionEqualityOperand;

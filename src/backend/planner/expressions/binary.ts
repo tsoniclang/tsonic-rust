@@ -43,7 +43,7 @@ export function planSelectedRustProjectTypeTest(node: Node, context: RustPlanCon
   const selected = context.input.program.records.binaryEmission.get(node);
   if (selected?.fact.kind !== "project-type-test") return undefined;
   const fact = selected.fact;
-  const left = planExpression(selected.left, context);
+  const left = planExpression(selected.left, context, "value", selected.leftShared ? "shared-receiver" : "value");
   if (left === undefined) return undefined;
   const selection = selected.selectionTest ? planRustProjectTypeTestSelection(node, left, fact, context) : undefined;
   if (selected.selectionTest && selection === undefined) failRustPlannerInvariant("An admitted native type test requires its sealed dispatch selection.", node);
@@ -147,8 +147,10 @@ export function planBinaryExpression(node: Node, context: RustPlanContext, resul
     }
     return rustStringConcat(parts);
   }
-  const left = planExpression(leftNode, context, "value", selected.leftShared ? "shared-place" : "value");
-  const right = planExpression(rightNode, context, "value", selected.rightShared ? "shared-place" : "value");
+  const leftReference = fact.kind === "operator-call" && selected.leftShared;
+  const rightReference = fact.kind === "operator-call" && selected.rightShared;
+  const left = planExpression(leftNode, context, "value", leftReference ? "shared-reference" : selected.leftShared ? "shared-place" : "value");
+  const right = planExpression(rightNode, context, "value", rightReference ? "shared-reference" : selected.rightShared ? "shared-place" : "value");
   if (left === undefined || right === undefined) return undefined;
   if (fact.kind === "program-error-equality") return planRustProgramErrorEquality(node, left, right, fact, context);
   if (fact.kind === "constant-equality") {
@@ -158,7 +160,8 @@ export function planBinaryExpression(node: Node, context: RustPlanContext, resul
     return value;
   }
   if (fact.kind === "operator-call") return planRustOperatorCallExpression(fact,
-    { expression: left, form: "value", node: leftNode }, { expression: right, form: "value", node: rightNode }, node, context);
+    { expression: left, form: leftReference ? "shared-reference" : "value", node: leftNode },
+    { expression: right, form: rightReference ? "shared-reference" : "value", node: rightNode }, node, context);
   if (fact.kind !== "operator-token") failRustPlannerInvariant("An admitted binary form requires its selected native operator.", node);
   const operator = selected.operator ?? failRustPlannerInvariant("An admitted binary form requires its native binary token.", node);
   const first = applyRustValueConversion(context, { stage: "source", expression: left, node: leftNode }, fact.leftConversion, leftNode);

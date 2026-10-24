@@ -34,17 +34,22 @@ export function analyzeRustUnionEquality(program: Omit<RustAnalysisProgram, "rea
       if (operation.leftConversion !== undefined && (leftConversion === undefined || leftConversion.fallible) ||
         operation.rightConversion !== undefined && (rightConversion === undefined || rightConversion.fallible))
         failTargetAnalysisInvariant("tsonic-rust", "An admitted union equality arm requires its exact infallible native input conversions.", node);
-      const constant = left.absence && right.absence ? true : operation.kind === "operator-token" &&
+      const constant = left.absence && right.absence ? !fact.negated : operation.kind === "operator-token" &&
         leftConversion === undefined && rightConversion === undefined && left.value.kind === "constant" && right.value.kind === "constant"
-          ? left.value.value === right.value.value : undefined;
+          ? (left.value.value === right.value.value) !== fact.negated : undefined;
       const booleanOperand = operation.kind === "operator-token" && leftConversion === undefined && rightConversion === undefined &&
         isRustBoolCarrier(arm.left.carrier) && isRustBoolCarrier(arm.right.carrier)
-        ? left.value.kind === "constant" ? Object.freeze({ side: "right" as const, negated: !left.value.value })
-          : right.value.kind === "constant" ? Object.freeze({ side: "left" as const, negated: !right.value.value }) : undefined : undefined;
+        ? left.value.kind === "constant" ? Object.freeze({ side: "right" as const, negated: left.value.value === fact.negated })
+          : right.value.kind === "constant" ? Object.freeze({ side: "left" as const, negated: right.value.value === fact.negated }) : undefined : undefined;
       return Object.freeze({ left, right, operation, constant, booleanOperand, leftConversion, rightConversion });
     });
     const allTrue = arms.every(arm => arm.constant === true);
-    const form: RustUnionEqualityEmission["form"] = allTrue ? fact.exhaustive || arms.length === 0 ? "constant" : "matches" : "match";
-    producer.publish(node, { fact, arms: Object.freeze(arms), form });
+    const allFalse = arms.every(arm => arm.constant === false);
+    const fallback = fact.negated;
+    const form: RustUnionEqualityEmission["form"] = arms.length === 0 ? { kind: "constant", value: fallback }
+      : allTrue && (fact.exhaustive || fallback) ? { kind: "constant", value: true }
+      : allFalse && (fact.exhaustive || !fallback) ? { kind: "constant", value: false }
+      : { kind: allTrue ? "matches" : "match" };
+    producer.publish(node, { fact, arms: Object.freeze(arms), form: Object.freeze(form), fallback });
   }
 }
