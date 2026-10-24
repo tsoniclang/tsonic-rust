@@ -12,6 +12,7 @@ import { finalizeRustNativeParameterStorage } from "../../../dist/analysis/calla
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 import { rustCallableInputTargetType, rustCallableProtocol } from "../../../dist/target-model/types/carriers/callables.js";
 import { rustCallablePhysicalSignature } from "../../../dist/target-model/conversions/callable-physical.js";
+import { rustNamedTypeCarrierValue } from "../../../dist/target-model/types/carriers/native.js";
 import { rustLifetimesEqual } from "../../../dist/target-model/lifetimes/index.js";
 import { prepareRustGenericCallableIdentitySources, prepareRustGenericCallableIdentityRequests,
   createRustGenericCallableIdentityPlan } from "../../../dist/analysis/callables/generic-identities.js";
@@ -368,8 +369,10 @@ test("explicit producer requests retain every actual checked source corresponden
       result.value.nativeProducers.invocationResultFor(request.declaration)), true, "the actual completed result is retained");
     assert.equal(rustTargetTypeRefEquals(signature.error,
       result.value.nativeProducers.errorFor(request.declaration, "invoke")), true, "the exact native invocation error identity is retained");
-    assert.equal(physical.genericArguments?.[0]?.kind === "lifetime" &&
-      rustLifetimesEqual(physical.genericArguments[0].lifetime, logical.lifetime), true,
+    const native = rustNamedTypeCarrierValue(physical);
+    assert.equal(native !== undefined, true, "the actual retained producer has its canonical native named carrier");
+    assert.equal(native.genericArguments[0]?.kind === "lifetime" &&
+      rustLifetimesEqual(native.genericArguments[0].lifetime, logical.lifetime), true,
     "the selected native construction lifetime is retained, never defaulted");
   }
   assert.equal(current.calls.length, 0, "producer correspondence never becomes a synthetic runtime storage request");

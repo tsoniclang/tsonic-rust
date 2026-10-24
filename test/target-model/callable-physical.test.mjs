@@ -5,7 +5,7 @@ import { rustCallablePhysicalSignature } from "../../dist/target-model/conversio
 import { selectRustCallableConversion } from "../../dist/policy/conversions/callable.js";
 import { selectRustExactIntegerConversion } from "../../dist/policy/conversions/exact-integer.js";
 import { rustCallableTargetType, rustCallableInputTargetType } from "../../dist/target-model/types/carriers/callables.js";
-import { rustNamedTargetType, rustNamedTypeCarrierValue } from "../../dist/target-model/types/carriers/native.js";
+import { rustNamedTargetType, rustNamedTypeCarrierValue, isRustNamedTypeTraitContract } from "../../dist/target-model/types/carriers/native.js";
 import { rustInfallibleTargetId } from "../../dist/target-model/types/carriers/source-types.js";
 import { rustFutureTargetType } from "../../dist/target-model/types/carriers/primitives.js";
 import { rustNativeErrorJoinReference } from "../../dist/target-model/types/native-error-joins.js";
@@ -33,7 +33,10 @@ test("native retained Callable Clone and identity equality have no parameter, re
     { kind: "type", type: parameter }, { kind: "type", type: failure },
   ]);
   const carrier = rustRuntimeCallableTargetType(lifetime, parameters, completion);
+  assert.equal(isRustNamedTypeTraitContract(carrier.value.traits), true,
+    "the producer publishes the exact native implementations in the canonical contract order");
   const named = rustNamedTypeCarrierValue(carrier);
+  assert.equal(named !== undefined, true, "the actual physical carrier is admitted by its canonical native metadata reader");
   assert.equal(named.genericArguments[0].lifetime === lifetime, true, "the actual selected borrowed construction lifetime is unchanged");
   assert.equal(named.genericArguments[1].type.elements === parameters, true, "every native invocation parameter remains in the original tuple");
   assert.equal(named.genericArguments[2].type === completion, true, "the native return and exact error completion are unchanged");
