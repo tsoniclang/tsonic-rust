@@ -1,6 +1,6 @@
 import type { RustSourceParameterAbiFact } from "../../target-model/records/callables-and-resources.js";
 
-import { inferRustTargetGenericBindings, rustTargetGenericReferences, substituteRustTargetGenerics, isRustVecCarrier, isRustStringCarrier, rustSourceOptionalTargetType, rustSliceElementCarrier, rustSliceRefTargetType, rustStructuralObjectCarrierValue, rustStructuralObjectTargetType, rustSourceTypeCarrierValue } from "../../target-model/types/index.js";
+import { inferRustTargetGenericBindings, rustTargetGenericReferences, substituteRustTargetGenerics, isRustVecCarrier, isRustStringCarrier, rustSourceOptionalTargetType, rustSliceElementCarrier, rustSliceRefTargetType, rustStructuralObjectCarrierValue, rustSourceTypeCarrierValue } from "../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import type { RustArgumentMode } from "../../target-model/operations/model.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
@@ -84,23 +84,12 @@ export function selectRustSourceParameterBorrowCarrier(
 export function selectRustSourceParameterStructuralCarrier(
   carrier: TargetTypeRef,
   writableFields: ReadonlySet<number>,
-  context: { readonly kind: "implementation" | "selected-native" },
 ): TargetTypeRef | undefined {
   const structural = rustStructuralObjectCarrierValue(carrier);
   if (structural === undefined || [...writableFields].some(index =>
     !Number.isSafeInteger(index) || index < 0 || structural.fields[index] === undefined ||
     structural.fields[index]!.readonly || structural.fields[index]!.accessor?.setter === false)) return undefined;
-  if (context.kind === "selected-native") return carrier;
-  const fields = structural.fields.map((field, index) => Object.freeze({
-    ...field,
-    readonly: !writableFields.has(index),
-    ...(field.accessor === undefined ? {} : { accessor: Object.freeze({
-      ...field.accessor, setter: writableFields.has(index),
-    }) }),
-  }));
-  const selected = rustStructuralObjectTargetType(structural.ownerFileName, fields,
-    structural.representation, structural.construction, structural.bases, structural.implementation);
-  return rustTargetTypeRefEquals(carrier, selected) ? carrier : selected;
+  return carrier;
 }
 
 export function selectRustSourceParameterAbi(
