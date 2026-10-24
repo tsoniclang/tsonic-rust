@@ -74,7 +74,7 @@ function fixture(text, options = {}) {
       physical.carrierFor(carrier, ownerFileName, subject, bindings, producers) };
   const genericImplementations = new Set(generic.definitions.flatMap(definition => definition.implementations.map(implementation => implementation.declaration)));
   const native = createRustNativeCallableInputPlan({ ...input, sourcePackages: program.host.sourcePackages, usedNames: new Set(),
-    genericImplementations, ownedRetainedParameter: program.callableValues.native.isNativeRetainedParameter,
+    ownedRetainedParameter: program.callableValues.native.isNativeRetainedParameter,
     declaresGenericInputs: owner => source.ast.is.IsFunctionDeclaration(owner) || source.ast.is.IsMethodDeclaration(owner) ||
       source.ast.is.IsConstructorDeclaration(owner) || source.ast.is.IsGetAccessorDeclaration(owner) ||
       source.ast.is.IsSetAccessorDeclaration(owner) || genericImplementations.has(owner) ||
