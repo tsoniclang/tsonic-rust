@@ -149,7 +149,10 @@ test("statement planning respects the same erased and compile-time domain as adm
 });
 
 test("native provider error renderability remains a precise diagnostic rather than an unproven invariant", () => {
-  const program = programFixture();
+  const { program } = analyzeRust({ surfaces: ["js"], files: { "index.ts": `
+    class ProgramFailure { code: number = 1; }
+    export function throwing(): void { throw new ProgramFailure(); }
+  ` } });
   const node = nodeIn(program, "throwing", (ast, candidate) => ast.is.IsThrowStatement(candidate));
   const context = planContext(program, node);
   const errorCarrier = { kind: "target-named", id: "fixture.UnresolvedError" };

@@ -35,7 +35,7 @@ import { rustCallableTargetId } from "../../target-model/types/carriers/source-t
 
 import { rustNativeCallableInvocationArguments } from "../../policy/types/callables/native-invocations.js";
 import { createRustNativeStorageGenericSelection, rustNativeStorageProjectionSteps, rustNativeStorageProjectionDepth } from "./native-storage-generics.js";
-import { createRustNativeFutureInputPlan } from "./native-future-inputs.js";
+import { createRustNativeFutureInputPlan, selectRustNativeStorageTypeDemand } from "./native-future-inputs.js";
 import { selectRustNativeConversionBoundaries } from "./native-storage-witnesses.js";
 import { createRustRecordMemberProducers } from "./native-storage-members.js";
 
@@ -627,7 +627,12 @@ export function createRustNativeStorageSelection(
       }
       const variants = rustUnionAlternatives(current, input.definitions);
       if (variants !== undefined) {
-        const payloads = variants.map(variant => visit(variant.carrier, selectedSubject, bindings, depth + 1, permitsAbsence, position));
+        const payloads = variants.map(variant => {
+          const demand = selectRustNativeStorageTypeDemand(variant.carrier, input.definitions, step, depth + 1);
+          if (demand.kind === "unresolved") return fail(demand.reason);
+          return demand.future || demand.implementation
+            ? visit(variant.carrier, selectedSubject, bindings, depth + 1, permitsAbsence, position) : variant.carrier;
+        });
         if (payloads.some(payload => payload === undefined)) return undefined;
         if (payloads.every((payload, index) => payload === variants[index]!.carrier)) return current;
         const selected = rustSourceUnionCarrierValue(current) === undefined
