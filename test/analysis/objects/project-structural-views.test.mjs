@@ -281,6 +281,11 @@ ${order === "open-first" ? `${open}\n${closed}` : order === "closed-first" ? `${
       const view = views[0];
       const shape = rustStructuralObjectCarrierValue(view.targetCarrier);
       assert.equal(shape !== undefined, true);
+      const physical = program.structuralShapes.definitionForCarrier(view.targetCarrier);
+      assert.equal(physical !== undefined, true, "the exact native view has its canonical physical layout");
+      for (const field of physical.fields) assert.equal(field.method === true
+        ? field.methodPlan?.kind === "native-dispatch" : field.storage === "property", true,
+      `${field.sourceName}: the native implementation owns its dispatch or getter, not a callable payload`);
       assert.equal(rustTargetTypeRefEquals(view.sourceCarrier, program.projectTypes.openCarrier(definition)), true);
       for (const [name, parameterIndex] of [["readFirst", 1], ["readSecond", 0]]) {
         const field = shape.fields.find(field => field.sourceName === name);
@@ -316,6 +321,11 @@ ${order === "open-first" ? `${open}\n${closed}` : order === "closed-first" ? `${
       const view = views[0];
       assert.equal(rustTargetTypeRefEquals(view.sourceCarrier, program.projectTypes.openCarrier(definition)), true);
       assert.equal(rustTargetGenericReferences(view.targetCarrier).typeIdentities.length, 0);
+      const physical = program.structuralShapes.definitionForCarrier(view.targetCarrier);
+      assert.equal(physical !== undefined, true, "the non-generic native view has its canonical physical layout");
+      for (const field of physical.fields) assert.equal(field.method === true
+        ? field.methodPlan?.kind === "native-dispatch" : field.storage === "property", true,
+      `${field.sourceName}: native method and optional getter selections have no stored callable environment`);
       const method = view.fields.find(field => field.callable !== undefined);
       const optional = view.fields.find(field => field.readAdapter !== undefined);
       assert.equal(method !== undefined && optional !== undefined, true);

@@ -518,6 +518,12 @@ export function createRustNativeStorageSelection(
             return fail("A physical structural carrier requires its exact admitted canonical definition.");
           return completed.carrier;
         }
+        if (structural.implementation === undefined && completed.fields.every(field => field.method === true
+          ? field.methodPlan?.kind === "native-dispatch" : field.storage !== "stored")) {
+          const storedCallable = containsCallable(current, depth + 1);
+          if (storedCallable === undefined) return undefined;
+          if (!storedCallable) return completed.carrier;
+        }
         const operation = selectedSubject.kind === "value" && selectedSubject.projection.length === 0
           ? input.records.targetOperation.get(selectedSubject.node) : undefined;
         if (operation?.kind === "source-call") {
