@@ -5,9 +5,11 @@ import { createRustNativeCallableProtocolRegistry } from "../../../../dist/analy
 import { emptyRustTypeDefinitions } from "../../../../dist/target-model/types/source-union-definitions.js";
 import { createRustTypeDefinitionRegistry } from "../../../../dist/analysis/project-types/type-definitions.js";
 import { rustSourcePrimitiveTargetType, rustFutureTargetType, rustJsPromiseTargetType,
-  rustSourceOptionalTargetType, rustSourceUnionTargetType, rustCallableTargetType, rustStrTargetType }
+  rustSourceOptionalTargetType, rustSourceUnionTargetType, rustSourceUnionCarrierValue, rustCallableTargetType, rustStrTargetType }
   from "../../../../dist/target-model/types/index.js";
 import { rustGenericCallableTargetType } from "../../../../dist/target-model/types/carriers/generic-callables.js";
+import { rustTargetTypeChildren } from "../../../../dist/target-model/types/carriers/children.js";
+import { closedMetadataKey } from "../../../../dist/target-model/metadata/closed-data.js";
 import { nativeProducerFixture, nativeProducerItems, printNativeProducerItems }
   from "../../../helpers/native-producer-bridges.mjs";
 
@@ -26,7 +28,7 @@ const borrowed = { kind: "reference", referent: rustStrTargetType(), mutable: fa
 
 test("native output unions use the canonical generated declaration and sealed physical payloads", () => {
   const payloads = [borrowed, rustFutureTargetType(borrowed), rustFutureTargetType(integer)];
-  const carrier = rustSourceUnionTargetType("/src/index.ts", "MixedOutput", [], "generated",
+  const carrier = rustSourceUnionTargetType("/src/index.ts", "Union3", [], "generated",
     { kind: "physical", types: payloads });
   const definitions = createRustTypeDefinitionRegistry();
   assert.equal(definitions.registerSourceUnion({ carrier,
@@ -45,6 +47,27 @@ test("native output unions use the canonical generated declaration and sealed ph
     "TYPE publication names the actual generated declaration");
   assert.equal(emitted.structural.arguments.length, payloads.length,
     "each ready or suspended output retains its physical payload slot");
+  const producer = fixture.program.records.nativeProtocol.get(fixture.protocol)?.producer;
+  assert.equal(producer !== undefined, true, "the actual native bridge publishes its completed output contract");
+  const pending = [producer.concreteResult, producer.implementationResult];
+  const seen = new Set();
+  let derivedUnion = false;
+  for (let index = 0; index < pending.length; index++) {
+    const selected = pending[index];
+    const key = closedMetadataKey(selected);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    if (rustSourceUnionCarrierValue(selected)?.origin === "generated") {
+      assert.equal(fixture.program.records.sourceUnion.get(selected) === union, true,
+        "every exact producer-output instantiation retains the same canonical native declaration");
+      assert.equal(fixture.program.records.typeEmission.get(selected)?.structural !== undefined, true,
+        "the same completed output key owns its physical payload emission");
+      if (key !== closedMetadataKey(carrier)) derivedUnion = true;
+    }
+    pending.push(...rustTargetTypeChildren(selected));
+  }
+  assert.equal(derivedUnion, true,
+    "the native bridge really introduces an output instantiation beyond the original source-carrier scan");
   const printed = printNativeProducerItems(nativeProducerItems(fixture));
   assert.match(printed, /crate::shapes::Union3</u,
     "the native bridge uses the canonical generated declaration module");
@@ -56,7 +79,7 @@ test("native output unions use the canonical generated declaration and sealed ph
 
 test("native output union admission refuses a foreign source owner instead of inventing a declaration", () => {
   const payloads = [integer, borrowed];
-  const carrier = rustSourceUnionTargetType("/foreign/index.ts", "ForeignOutput", [], "generated",
+  const carrier = rustSourceUnionTargetType("/foreign/index.ts", "Union2", [], "generated",
     { kind: "physical", types: payloads });
   const definitions = createRustTypeDefinitionRegistry();
   assert.equal(definitions.registerSourceUnion({ carrier,

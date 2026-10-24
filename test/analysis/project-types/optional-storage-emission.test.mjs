@@ -172,6 +172,7 @@ export function read(): string { const value: Named<string> = new Child("ready")
         projectionWrites.set(key, (projectionWrites.get(key) ?? 0) + 1);
         projects.checkedProjection(carrier, projection);
       },
+      union: (carrier, definition) => projects.union(carrier, definition),
     };
     analyzeRustTypeEmission(admitted, [], emission, [late, late], producer);
     assert.equal(writes.get(closedMetadataKey([late, null])), 1, "duplicate late seeds publish their full row once");

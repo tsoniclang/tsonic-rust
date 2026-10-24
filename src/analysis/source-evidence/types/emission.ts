@@ -42,7 +42,7 @@ import { selectRustCheckedProjectProjection } from "../../../policy/types/object
 
 export function analyzeRustTypeEmission(program: Omit<RustAnalysisProgram, "reachability">,
   nodes: readonly Node[], producer: RustTypeEmissionProducer, extraTypes: readonly TargetTypeRef[],
-  projectEmissionProducer: Pick<RustProjectEmissionProducer, "optionalType" | "checkedProjection">): void {
+  projectEmissionProducer: Pick<RustProjectEmissionProducer, "optionalType" | "checkedProjection" | "union">): void {
   const typeArguments = (arguments_: readonly RustTargetGenericArgument[]): readonly TargetTypeRef[] =>
     arguments_.flatMap(argument => argument.kind === "type" ? [argument.type] : []);
   const retainedCarriersFor = (node: Node): readonly TargetTypeRef[] => {
@@ -200,6 +200,9 @@ export function analyzeRustTypeEmission(program: Omit<RustAnalysisProgram, "reac
     const union = rustSourceUnionCarrierValue(carrier);
     const unionArguments = union === undefined ? undefined : rustSourceUnionPayloadArguments(carrier, program.typeDefinitions);
     const unionDefinition = union?.origin === "generated" ? program.structuralShapes.unionForCarrier(carrier) : undefined;
+    if (union?.origin === "generated" && unionDefinition === undefined)
+      failTargetAnalysisInvariant("tsonic-rust", "An admitted generated union requires its exact native declaration owner.");
+    if (unionDefinition !== undefined) projectEmissionProducer.union(carrier, unionDefinition);
     const shape = program.structuralShapes.definitionForCarrier(carrier);
     const optionalValue = rustOptionalStorageValue(carrier);
     const optionalElement = rustOptionElementCarrier(carrier);

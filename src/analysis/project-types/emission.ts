@@ -54,8 +54,6 @@ export function analyzeRustProjectEmission(input: {
     const source = rustSourceTypeCarrierValue(carrier) ?? rustSourceUnionCarrierValue(carrier);
     if (source !== undefined) sourceType(source.fileName, source.typeName);
     if (carrier.kind === "trait-ref" && carrier.sourceItem !== undefined) sourceType(carrier.sourceItem.fileName, carrier.sourceItem.typeName);
-    const union = program.structuralShapes.unionForCarrier(carrier);
-    if (union !== undefined) producer.union(carrier, union);
     unionCarriers.push(...rustTargetTypeChildren(carrier));
   }
   // After the carrier scan: it may instantiate a planned shape over a generic callable family's environment parameters.
