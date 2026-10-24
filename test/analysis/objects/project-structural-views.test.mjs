@@ -524,16 +524,26 @@ export function main(): string { return view(new Box<string>("value")).identity(
       const original = rustStructuralObjectCarrierValue(logical.targetCarrier).fields.find(field => field.sourceName === name);
       const native = shape.fields.find(field => field.sourceName === name);
       const member = selected.fields.find(field => field.storageIndex === shape.fields.indexOf(native));
-      assert.equal(rustCallableProtocol(original.type).lifetime.kind, "placeholder", `${name}: logical inference is preserved`);
-      assert.equal(rustCallableProtocol(native.carrier).lifetime.kind, "static", `${name}: actual capture-free producer closes the stored environment`);
-      assert.equal(rustTargetTypeRefEquals(native.carrier, member.readAdapter.targetCarrier), true,
-        `${name}: native trait, getter result and selected adaptation share the exact error/parameter/lifetime contract`);
+      const originalProtocol = rustCallableProtocol(original.type);
+      const nativeProtocol = rustCallableProtocol(native.carrier);
+      const adapterProtocol = rustCallableProtocol(member.readAdapter.targetCarrier);
+      assert.equal(originalProtocol.lifetime.kind, "parameter", `${name}: exported view has an actual retained environment parameter`);
+      assert.deepEqual(nativeProtocol.lifetime, originalProtocol.lifetime, `${name}: native getters preserve the selected retained lifetime identity`);
+      assert.equal(rustTargetTypeRefEquals(native.carrier, rustCallableTargetType(adapterProtocol.parameters,
+        adapterProtocol.result, nativeProtocol.lifetime, adapterProtocol.error)), true,
+        `${name}: native getter preserves the complete selected error, parameter and result contract`);
+      assert.equal(selected.nativeOutlives.some(requirement =>
+        rustTargetTypeRefEquals(requirement.carrier, member.readAdapter.sourceCarrier) &&
+        requirement.lifetime.identity === nativeProtocol.lifetime.identity), true,
+        `${name}: the actual physical storage outlives the published native getter environment`);
+      assert.equal(selected.nativeLifetimes.some(lifetime => lifetime.identity === nativeProtocol.lifetime.identity), true,
+        `${name}: the implementation declares its actual additional native lifetime`);
     }
     const template = program.structuralShapes.templateForCarrier(selected.nativeTargetCarrier);
     const dispatch = program.records.structuralShapeEmission.get(template).dispatch;
-    assert.equal(dispatch.lifetime.kind, "parameter", "one real receiver lifetime survives alongside the two data environments");
-    assert.equal(template.genericParameters.filter(parameter => parameter.kind === "lifetime").length, 3,
-      "the receiver and two independent data callable lifetimes remain independent");
+    assert.equal(dispatch.lifetime, undefined, "an already selected receiver lifetime does not fabricate an additional placeholder binder");
+    assert.equal(template.genericParameters.filter(parameter => parameter.kind === "lifetime").length, 1,
+      "this exported logical view intentionally shares its one selected environment identity");
     assert.equal(Object.isFrozen(selected), true, "the native renderer consumes the completed immutable publication");
   });
 

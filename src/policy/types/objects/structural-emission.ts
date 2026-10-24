@@ -107,7 +107,7 @@ export function selectRustStructuralEmission(input: RustStructuralEmissionPolicy
   return { kind: "selected", value: Object.freeze({ dispatch: undefined, bases: Object.freeze([]), fields: Object.freeze(fields), derives: Object.freeze(derives) }) };
 }
 
-function structuralDispatchSignature(definition: RustStructuralShapeDefinition): {
+export function structuralDispatchSignature(definition: RustStructuralShapeDefinition): {
   readonly members: RustConstructorShapeEmission["members"];
   readonly bases: readonly TargetTypeRef[];
   readonly carriers: readonly TargetTypeRef[];

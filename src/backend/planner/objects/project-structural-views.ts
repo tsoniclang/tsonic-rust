@@ -56,7 +56,7 @@ export function planRustProjectStructuralImplementations(declaration: Node, cont
   const items: RustItem[] = [];
   for (const view of views) {
     const baseContext = context;
-    context = rustStructuralViewImplementationContext(view.sourceCarrier, representation, baseContext);
+    context = rustStructuralViewImplementationContext(view, representation, baseContext);
     const generics = rustStructuralViewImplementationGenerics(view, representation, context);
     const target = rustStructuralViewRootType(view.sourceCarrier, representation, context);
     const trait = rustStructuralDispatchType(view.nativeTargetCarrier, context);

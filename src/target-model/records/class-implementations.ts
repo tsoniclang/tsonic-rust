@@ -19,13 +19,14 @@ export interface RustClassImplementationGenerics {
 
 export interface RustClassStructuralViewEmission extends RustProjectStructuralViewImplementation {
   readonly nativeTargetCarrier: TargetTypeRef;
+  readonly nativeLifetimes: readonly Extract<RustLifetimeRef, { readonly kind: "parameter" }>[];
+  readonly nativeOutlives: readonly { readonly carrier: TargetTypeRef; readonly lifetime: RustLifetimeRef }[];
 }
 
 export interface RustClassConstructorViewEmission {
   readonly sourceCarrier: TargetTypeRef;
   readonly targetCarrier: TargetTypeRef;
   readonly genericCarrier: TargetTypeRef;
-  readonly dispatchName: string;
   readonly construction: { readonly callable: RustClassValueCallable; readonly name: string } | undefined;
   readonly fields: readonly { readonly declaration: Node; readonly fileName: string; readonly targetName: string;
     readonly storage: RustStructuralShapeField; readonly callable: RustClassValueCallable | undefined }[];

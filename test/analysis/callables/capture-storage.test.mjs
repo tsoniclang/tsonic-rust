@@ -19,7 +19,7 @@ test("single captured native strings retain inline storage through exact pure bo
   const borrowed = rustBorrowedStrTargetType();
   const size = { kind: "source-primitive", name: "native-uint" };
   const conversion = { kind: "identity", sourceCarrier: size, targetCarrier: size, fallible: false };
-  const input = { source: { kind: "receiver" }, sourceCarrier: stringCarrier, mode: "value",
+  const input = { source: { kind: "receiver" }, sourceCarrier: stringCarrier, mode: "value", sharedConversion: true, elementView: "value",
     parameterCarrier: borrowed, conversion: { kind: "semantic",
       conversion: { kind: "semantic-conversion", id: "borrowed-str-from-owned-string" },
       sourceCarrier: stringCarrier, targetCarrier: borrowed, fallible: false } };
@@ -41,8 +41,8 @@ test("single captured native strings retain inline storage through exact pure bo
       awaitedRawCarrier: size, awaitedConversion: conversion, awaitedCarrier: size } } }, "location"],
     ["retained result", { ...original, abi: { ...original.abi, result: { ...original.abi.result, carrier: stringCarrier } } }, "location"],
     ["missing receiver", { ...original, abi: { ...original.abi, targetReceiver: { kind: "none" } } }, "location"],
-    ["mutable mode", { ...original, abi: { ...original.abi, targetReceiver: { kind: "input", input: { ...input, mode: "mut-ref" } } } }, "location"],
-    ["wrong view", { ...original, abi: { ...original.abi, targetReceiver: { kind: "input", input: { ...input, parameterCarrier: stringCarrier } } } }, "location"],
+    ["mutable mode", { ...original, abi: { ...original.abi, targetReceiver: { kind: "input", input: { ...input, mode: "mut-ref", sharedConversion: false } } } }, "location"],
+    ["wrong view", { ...original, abi: { ...original.abi, targetReceiver: { kind: "input", input: { ...input, parameterCarrier: stringCarrier, sharedConversion: false } } } }, "location"],
   ]) {
     const current = fixture(`export function outer(seed: string) {
       const callback = () => { seed += "!"; return seed.length; }; return callback;
@@ -69,7 +69,7 @@ test("selected native borrowed method receivers retain the same single-owner pro
     effects: { evaluation: "pure", safety: "safe", invocation: "infallible", awaiting: "not-applicable", errorBoundary: "none" },
     result: { kind: "sync", rawCarrier: result, carrier: result,
       conversion: { kind: "identity", sourceCarrier: result, targetCarrier: result, fallible: false } },
-    targetReceiver: { kind: "input", input: { source: { kind: "receiver" }, sourceCarrier: stringCarrier, mode: "value",
+    targetReceiver: { kind: "input", input: { source: { kind: "receiver" }, sourceCarrier: stringCarrier, mode: "value", sharedConversion: true, elementView: "value",
       parameterCarrier: borrowed, conversion: { kind: "semantic", conversion: { kind: "semantic-conversion", id: "borrowed-str-from-owned-string" },
         sourceCarrier: stringCarrier, targetCarrier: borrowed, fallible: false } } }, targetArguments: [],
   } };
@@ -79,7 +79,7 @@ test("selected native borrowed method receivers retain the same single-owner pro
     ["observable receiver", { ...original, abi: { ...original.abi, effects: { ...original.abi.effects, evaluation: "observable" } } }, "location"],
     ["fallible receiver", { ...original, abi: { ...original.abi, effects: { ...original.abi.effects, invocation: "fallible" } } }, "location"],
     ["owned receiver", { ...original, abi: { ...original.abi, targetReceiver: { kind: "input", input: {
-      ...original.abi.targetReceiver.input, parameterCarrier: stringCarrier } } } }, "location"],
+      ...original.abi.targetReceiver.input, parameterCarrier: stringCarrier, sharedConversion: false } } } }, "location"],
   ]) {
     const current = fixture(`export function outer(seed: string) {
       const callback = () => { seed += "!"; return ${wrapped ? "((seed))" : "seed"}.indexOf("7"); }; return callback;

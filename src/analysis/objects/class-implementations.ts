@@ -19,8 +19,13 @@ import { mapRustTargetTypes } from "../../target-model/types/carriers/substituti
 import { rustProducerErrorReference } from "../../target-model/types/carriers/producer-errors.js";
 import { selectRustCallableValueAdapter } from "../../policy/conversions/callable-adapters.js";
 import { rustCallableTargetForSourceLifetime } from "../../policy/conversions/value-carrier-reconciliation.js";
+import type { RustStructuralShapePlanRegistry } from "./shapes/structural-shape-plan.js";
+import { structuralDispatchSignature } from "../../policy/types/objects/structural-emission.js";
 
-export function analyzeRustClassImplementations(program: Omit<RustAnalysisProgram, "reachability">, producer: RustClassEmissionProducer, nodes: readonly Node[]): void {
+export function analyzeRustClassImplementations(
+  program: Omit<RustAnalysisProgram, "reachability">, producer: RustClassEmissionProducer, nodes: readonly Node[],
+  structuralShapes: Pick<RustStructuralShapePlanRegistry, "completePhysicalCarrier">,
+): void {
   const contexts = new WeakMap<Node, Map<string, RustClassImplementationContext>>();
   const genericCarriers = new Set<string>();
   const contextFor = (definition: RustProjectTypeDefinition, carrier: TargetTypeRef): RustClassImplementationContext => {
@@ -90,7 +95,7 @@ export function analyzeRustClassImplementations(program: Omit<RustAnalysisProgra
     if (files === undefined) { files = new Map(); constructors.set(view.declaration, files); }
     const emitted = files.get(view.ownerFileName) ?? [];
     emitted.push(Object.freeze({ sourceCarrier: view.sourceCarrier, targetCarrier: view.targetCarrier, genericCarrier,
-      dispatchName: shape.dispatchName, fields: Object.freeze(fields), construction: view.construction === undefined ? undefined
+      fields: Object.freeze(fields), construction: view.construction === undefined ? undefined
         : Object.freeze({ callable: view.construction, name: shape.construction!.targetName }) }));
     files.set(view.ownerFileName, emitted);
   }
@@ -124,17 +129,44 @@ export function analyzeRustClassImplementations(program: Omit<RustAnalysisProgra
       return Object.freeze({ ...member, readAdapter });
     });
     const logical = rustStructuralObjectCarrierValue(view.targetCarrier);
-    if (logical === undefined)
+    const template = program.structuralShapes.templateForCarrier(view.targetCarrier);
+    if (logical === undefined || template === undefined)
       failTargetAnalysisInvariant("tsonic-rust", "An admitted structural view requires its exact logical member contract.", view.declaration);
+    const nativeHeader = rustStructuralObjectCarrierValue(rustCallableTargetForSourceLifetime(template.carrier, view.targetCarrier));
+    if (nativeHeader === undefined)
+      failTargetAnalysisInvariant("tsonic-rust", "An admitted structural view requires its canonical native member lifetime inventory.", view.declaration);
     const nativeTargetCarrier = rustStructuralObjectTargetType(logical.ownerFileName,
       logical.fields.map((field, storageIndex) => {
         const member = fields.find(member => member.storageIndex === storageIndex);
-        return member?.readAdapter === undefined ? field : Object.freeze({ ...field,
-          type: rustCallableTargetForSourceLifetime(member.readAdapter.targetCarrier, field.type) });
+        const native = nativeHeader.fields[storageIndex];
+        if (native === undefined)
+          failTargetAnalysisInvariant("tsonic-rust", "An admitted structural getter requires its exact canonical native field.", view.declaration);
+        return member?.readAdapter === undefined ? native : Object.freeze({ ...field,
+          type: field.readonly ? native.type : rustCallableTargetForSourceLifetime(member.readAdapter.targetCarrier, field.type) });
       }), logical.representation, logical.construction, logical.bases, logical.implementation);
-    if (program.structuralShapes.definitionForCarrier(nativeTargetCarrier) === undefined)
+    const completed = structuralShapes.completePhysicalCarrier(view.targetCarrier, nativeTargetCarrier);
+    const shape = completed.kind === "resolved" ? program.structuralShapes.definitionForCarrier(completed.carrier) : undefined;
+    const signature = shape === undefined ? undefined : structuralDispatchSignature(shape);
+    if (shape === undefined || signature === undefined)
       failTargetAnalysisInvariant("tsonic-rust", "An admitted structural view requires its complete physical getter and native dispatch contract.", view.declaration);
-    const published = Object.freeze({ ...view, nativeTargetCarrier, fields: Object.freeze(fields) });
+    const sourceLifetimes = new Set(rustTargetGenericReferences(view.sourceCarrier).lifetimeIdentities);
+    const lifetimeNames = new Set(rustTargetGenericReferences(view.sourceCarrier).lifetimes.map(lifetime => lifetime.name));
+    const nativeLifetimes = rustTargetGenericReferences({ kind: "tuple", elements: [...signature.carriers, ...signature.bases] }).lifetimes
+      .filter((lifetime): lifetime is Extract<RustLifetimeRef, { readonly kind: "parameter" }> =>
+        lifetime.kind === "parameter" && !sourceLifetimes.has(rustLifetimeKey(lifetime))).map(lifetime => {
+        let name = lifetime.name;
+        for (let index = 0; lifetimeNames.has(name); index += 1) name = `${lifetime.name}${index}`;
+        lifetimeNames.add(name);
+        return Object.freeze({ ...lifetime, name });
+      });
+    const nativeOutlives = fields.flatMap(member => {
+      const field = shape.fields[member.storageIndex];
+      const lifetime = field === undefined ? undefined : rustCallableProtocol(rustOptionElementCarrier(field.carrier) ?? field.carrier)?.lifetime;
+      return field?.readonly !== true || member.readAdapter === undefined || lifetime?.kind !== "parameter" ? []
+        : [Object.freeze({ carrier: member.readAdapter.sourceCarrier, lifetime })];
+    });
+    const published = Object.freeze({ ...view, nativeTargetCarrier, fields: Object.freeze(fields),
+      nativeLifetimes: Object.freeze(nativeLifetimes), nativeOutlives: Object.freeze(nativeOutlives) });
     producer.structuralViewRequirements(published, requirements);
     const definition = program.projectTypes.definitionForDeclaration(view.declaration);
     const representation = program.objectRepresentations.representationFor(definition);
