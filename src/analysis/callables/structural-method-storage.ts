@@ -50,7 +50,6 @@ import type { RustObjectRepresentationPlan } from "../project-types/object-repre
 import { rustCallablePhysicalSignature } from "../../target-model/conversions/callable-physical.js";
 import { structuralStorageKey, bindRustStructuralImplementationContract } from "../../policy/types/objects/structural-storage.js";
 import { selectRustStructuralMethodExposure } from "../../policy/types/objects/structural-emission.js";
-import { rustStructuralMethodProducers } from "./structural-method-producers.js";
 
 
 function structuralBoundariesAreExportOnly(source: TargetSourceProgram,
@@ -136,7 +135,7 @@ export function analyzeRustStructuralMethodExposures(input: {
         for (const declaration of original.declarations) {
           const subject = input.sourceStorage.subject(node, "value", [{ kind: "method-value", declaration }]);
           const producers = subject.kind === "unresolved" ? subject
-            : rustStructuralMethodProducers(input.sourceStorage, subject.subject, bindings.bindings, undefined);
+            : input.sourceStorage.storageProducersFor(subject.subject, bindings.bindings);
           if (producers.kind !== "complete" || producers.producers.length === 0) {
             complete = false;
             break;
@@ -167,7 +166,7 @@ export function analyzeRustStructuralMethodExposures(input: {
       const subject = input.sourceStorage.subjectFor(method.expression);
       const bindings = input.sourceStorage.bindingsForLexicalOwner(method.expression);
       const producers = subject.kind === "unresolved" ? subject : bindings.kind === "unresolved" ? bindings
-        : rustStructuralMethodProducers(input.sourceStorage, subject.subject, bindings.bindings, undefined);
+        : input.sourceStorage.storageProducersFor(subject.subject, bindings.bindings);
       if (candidate !== undefined) {
         if (producers.kind === "unresolved" || producers.kind === "open" &&
           !structuralBoundariesAreExportOnly(input.source, producers.boundaries)) candidate.boundary = "opaque";
@@ -345,8 +344,6 @@ export function createRustStructuralMethodStorage(input: {
       else register(node, destination, subject.subject);
     }
   }
-  const producersFor = (root: RustStructuralMethodRoot) =>
-    rustStructuralMethodProducers(sourceStorage, root.subject, root.bindings, root.construction?.expression);
   let complete = false;
   const producerErrors = new Map<import("../../target-model/types/carriers/producer-errors.js").RustProducerErrorReference, TargetTypeRef>();
   const retainedRequirements: { readonly declaration: Node; readonly bindings: RustTargetGenericBindings | undefined;
@@ -382,14 +379,24 @@ export function createRustStructuralMethodStorage(input: {
       }
       const covered = new Set<RustStructuralMethodRoot>();
       for (const root of roots) {
-        const selected = producersFor(root);
-        if (selected.kind !== "complete") return reject(root.subject.node, selected.kind === "unresolved" ? selected.reason
-          : "Retained constructor selection requires its exact admitted source producer domain.");
-        const admitted = selected.producers.filter(producer => !selected.transported.has(producer) ||
-          constructed.get(producer.subject.node)?.has(root.definition) !== true);
-        if (admitted.length === 0 && selected.producers.length !== 0) {
-          covered.add(root);
-          continue;
+        let admitted: readonly SourceStorageProducer[];
+        if (root.construction !== undefined) {
+          const subject = sourceStorage.subject(root.construction.expression, "value");
+          if (subject.kind === "unresolved") return reject(root.construction.expression, subject.reason);
+          const typed = sourceStorage.typeFor(subject.subject);
+          if (typed.kind === "unresolved") return reject(root.construction.expression, typed.reason);
+          admitted = Object.freeze([Object.freeze({ subject: subject.subject, type: typed.type,
+            sourceFile: typed.sourceFile, bindings: root.bindings })]);
+        } else {
+          const selected = sourceStorage.storageProducersFor(root.subject, root.bindings);
+          if (selected.kind !== "complete") return reject(root.subject.node, selected.kind === "unresolved" ? selected.reason
+            : "Retained constructor selection requires its exact admitted source producer domain.");
+          admitted = selected.producers.filter(producer =>
+            constructed.get(producer.subject.node)?.has(root.definition) !== true);
+          if (admitted.length === 0 && selected.producers.length !== 0) {
+            covered.add(root);
+            continue;
+          }
         }
         admittedProducers.set(root, admitted);
         const fields = slots.get(root.definition) ?? new Map<number, Node>();

@@ -4,6 +4,7 @@ import type { RustStructuralShapeDefinition, RustStructuralShapeField } from "./
 
 export interface RustConstructorShapeEmission {
   readonly lifetime: RustLifetimeRef | undefined;
+  readonly genericParameterIndices: readonly number[];
   readonly members: readonly {
     readonly name: string;
     readonly parameters: readonly TargetTypeRef[];

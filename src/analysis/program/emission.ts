@@ -278,7 +278,7 @@ export function finalizeRustNativeEmission(
   if (propertyReadIssues.length !== 0) return rejectedTargetStage(propertyReadIssues);
   const lambdaEmissionIssues = analyzeRustLambdaEmission(program, context.nativeNodes, context.records.lambdaEmissionPlans);
   if (lambdaEmissionIssues.length !== 0) return rejectedTargetStage(lambdaEmissionIssues);
-  analyzeRustCallableEmission(program, context.nativeNodes, context.records.callableConversionPlans);
+  const callableEmissionTypes = analyzeRustCallableEmission(program, context.nativeNodes, context.records.callableConversionPlans);
   const recordFieldIssues = analyzeRustRecordFieldStorage(program, context.nativeNodes, context.records.callableConversionPlans);
   if (recordFieldIssues.length !== 0) return rejectedTargetStage(recordFieldIssues);
   const sourceCallIssues = analyzeRustSourceCalls(program, context.nativeNodes, context.records.sourceCallPlans);
@@ -338,7 +338,7 @@ export function finalizeRustNativeEmission(
   const errorObservationIssues = admitRustErrorObservations(program, context.nativeNodes);
   if (errorObservationIssues.length !== 0) return rejectedTargetStage(errorObservationIssues);
   analyzeRustTypeEmission(program, context.nativeNodes, context.records.typeEmissionPlans,
-    [...nativeLayoutTypes, ...sourceCallableEmission.types, ...objectReferenceEmission.types], context.records.projectEmissionPlans);
+    [...nativeLayoutTypes, ...sourceCallableEmission.types, ...objectReferenceEmission.types, ...callableEmissionTypes], context.records.projectEmissionPlans);
   const errorModuleIssues = analyzeRustProgramErrorModuleEmission(program, errorEmission.plan, context.records.errorTransportEmissionPlans);
   if (errorModuleIssues.length !== 0) return rejectedTargetStage(errorModuleIssues);
   // Storage visibility covers every declaration a native class layout stores: members, constructor parameter

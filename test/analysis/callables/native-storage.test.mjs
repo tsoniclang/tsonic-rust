@@ -90,6 +90,7 @@ function fixture(text, options = {}) {
   const queries = guardedQueries.proxy;
   const captures = createRustNativeCapturePlan({ ...input, nativeStorage: queries });
   physical = genericRegistry.initializePhysical({ ...input, native, captures,
+    genericBindingsFor: queries.genericBindingsFor,
     boundSubjectFor: (subject, carrier, bindings) => queries.boundSubjectFor(subject, carrier, bindings) });
   const plan = finalizeRustNativeParameterStorage(input, queries);
   const declaration = name => storage.nodes.find(node => source.ast.name(node) !== undefined &&

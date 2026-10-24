@@ -23,7 +23,8 @@ import type { RustCallableValueAdapter } from "../../target-model/records/callab
 import { rustNativeCallablePhysicalSource } from "../../policy/conversions/native-callables.js";
 
 export function analyzeRustCallableEmission(program: Omit<RustAnalysisProgram, "reachability">,
-  nodes: readonly Node[], producer: RustCallableConversionProducer): void {
+  nodes: readonly Node[], producer: RustCallableConversionProducer): readonly TargetTypeRef[] {
+  const types: TargetTypeRef[] = [];
   const operand = (node: Node, source: TargetTypeRef | undefined): RustCallableOperandEmission | undefined => {
     if (source === undefined) return undefined;
     const previous = producer.records.callableOperand.get(node, source);
@@ -57,9 +58,14 @@ export function analyzeRustCallableEmission(program: Omit<RustAnalysisProgram, "
       const nested = new Map<RustCallablePhysicalConversion, RustCallableConversionEmission>();
       for (const value of [...selected.arguments, selected.resultPlan]) if (value.kind === "callable")
         nested.set(value.conversion, compile(value.conversion, { carrier: actual.signature.result, signature: value.conversion.source }));
-      return Object.freeze({ physical: selected, source: actual, fileName,
+      const value: RustCallableConversionEmission = Object.freeze({ physical: selected, source: actual, fileName,
         target: selected.logical.target.kind === "closure" ? "closure" : rustCallableInputProtocol(selected.logical.target) !== undefined ? "input" : "callable",
         invocation: rustCallableInputProtocol(selected.logical.source) === undefined ? "call" : "invoke", nested });
+      types.push(selected.carrier, ...selected.parameters, selected.result, selected.error,
+        actual.carrier, ...actual.signature.parameters, actual.signature.result, actual.signature.error,
+        ...selected.errors.map(error => error.errorType));
+      if (value.target !== "closure") types.push(Object.freeze({ kind: "tuple" as const, elements: selected.parameters }));
+      return value;
     };
     producer.contract(node, conversion, compile(physical, source));
   };
@@ -132,4 +138,5 @@ export function analyzeRustCallableEmission(program: Omit<RustAnalysisProgram, "
         : input.conversion.kind === "sequence" ? input.conversion.steps : [];
       for (const step of steps) if (step.conversion.kind === "callable-input") operand(slot.node, step.sourceCarrier);
     }
+  return Object.freeze(types);
 }
