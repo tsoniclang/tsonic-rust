@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { analyzeRust } from "../../helpers/rust-session.mjs";
+import { analyzeRust, compileRust } from "../../helpers/rust-session.mjs";
+import { analyzeRustCheckedContext } from "../../helpers/rust-session-analysis-context.mjs";
 import { selectRustStructuralMethodExposure } from "../../../dist/policy/types/objects/structural-emission.js";
 import { rustFixedStructuralMethodDeclarations } from "../../../dist/analysis/callables/generic-values.js";
 import { selectRustStructuralFactoryReceiver } from "../../../dist/policy/ownership/retained-storage.js";
@@ -40,6 +41,36 @@ test("fixed native methods require complete readonly, required and exact body ev
   ]) assert.equal(selectRustStructuralMethodExposure({ ...selected, ...change }), "stored", name);
 });
 
+for (const surfaces of [[], ["js"]]) {
+  for (const [label, suffix, expected] of [
+    ["direct native invocation", "export function read(): number { return source.value(); }", "fixed"],
+    ["actual member write", "source.value = function(): number { return 9; };", "stored"],
+    ["extracted method identity", "export const extracted = source.value;", "stored"],
+    ["opaque formal receiver", "export function read(other: typeof source, flag: boolean): number { return (flag ? source : other).value(); }", "stored"],
+  ]) test(`checked exported method exposure retains ${label} (${surfaces[0] ?? "native"})`, () => {
+    let methods;
+    compileRust({ surfaces, files: { "index.ts": `
+export const source = { value(): number { return 7; } };
+${suffix}
+` }, compileTarget(request) {
+      const context = analyzeRustCheckedContext(request, original => {
+        const structuralShapes = Object.create(original.structuralShapes, { initialize: { value(...inputs) {
+          original.structuralShapes.initialize(...inputs);
+          methods = original.structuralShapes.definitions.flatMap(definition => definition.fields
+            .filter(field => field.sourceName === "value" && field.method === true).map(field => field.methodPlan));
+        } } });
+        return Object.defineProperties({}, { ...Object.getOwnPropertyDescriptors(original),
+          structuralShapes: { value: structuralShapes, enumerable: true } });
+      });
+      return { kind: "resolved", value: { artifacts: [] }, diagnostics: context.diagnostics };
+    } });
+    assert.equal(methods !== undefined && methods.length !== 0, true,
+      `${label}: the real checked source reaches the pre-seal native representation owner`);
+    for (const method of methods) assert.equal(method?.kind, expected,
+      `${label}: actual writes/extraction stay distinct from the exported native body boundary`);
+  });
+}
+
 test("only universally fixed actual bodies leave the retained generic family", () => {
   const { program } = analyzeRust({ files: { "index.ts": `
 export function create() {
@@ -72,6 +103,29 @@ export function create() {
       receiver: field.methodPlan.receiver, constructions: [] } }) };
   assert.equal(rustFixedStructuralMethodDeclarations(ast, { definitions: [...definitions, retained] }).has(method.declaration), false,
     "one retained instantiation of the same actual body keeps its needed family");
+});
+
+for (const surfaces of [[], ["js"]]) test(`fixed calls bind the complete receiver context, not only their own captures (${surfaces[0] ?? "native"})`, () => {
+  const { program } = analyzeRust({ surfaces, files: { "index.ts": `
+export function create(callback: () => number) {
+  return {
+    invoke(): number { return callback(); },
+    read(): number { return 7; },
+  };
+}
+export function run(callback: () => number): number { return create(callback).read(); }
+` } });
+  const definition = program.structuralShapes.definitions.find(definition =>
+    definition.fields.some(field => field.sourceName === "invoke") && definition.fields.some(field => field.sourceName === "read"));
+  assert.equal(definition !== undefined, true, "the real receiver retains both checked native method bodies");
+  const invoke = definition.fields.find(field => field.sourceName === "invoke")?.methodPlan;
+  const read = definition.fields.find(field => field.sourceName === "read")?.methodPlan;
+  assert.equal(invoke?.kind === "fixed" && read?.kind === "fixed", true,
+    "both exact methods remain concrete rather than gaining a retained wrapper");
+  assert.equal(invoke.payload.captures.length, 1, "the invoking method keeps its actual callback context");
+  assert.equal(read.payload.captures.length, 0, "the read method does not acquire its sibling's capture");
+  assert.equal(definition.genericParameters.some(parameter => parameter.kind === "type"), true,
+    "the complete physical receiver template still declares the sibling context's actual native type parameter");
 });
 
 test("only an actual retained factory receiver or physical context requires native ownership", () => {

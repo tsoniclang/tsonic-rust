@@ -228,6 +228,34 @@ test("physical method installation completes canonical and already indexed borro
   assert.throws(() => builder.finalizeMethodStorage(new Map()), /exactly once/u);
 });
 
+test("completed source aliases publish one exact physical structural instance per native carrier", () => {
+  const carrier = (file, primitive) => rustStructuralObjectTargetType(file, [{
+    sourceName: "count", type: { kind: "source-primitive", name: primitive }, presence: "required", readonly: true,
+  }]);
+  const original = carrier("/original.ts", "int32");
+  const alias = carrier("/alias.ts", "int32");
+  const wide = carrier("/wide.ts", "int64");
+  const builder = createRustStructuralShapePlanRegistry();
+  builder.initialize([original, alias, wide].map(carrier => ({ carrier })), [], () => "source", [], [], new Map());
+  for (const source of [original, alias]) {
+    const selected = builder.completePhysicalCarrier(source, original);
+    assert.equal(selected.kind, "resolved", "the existing component owner admits the actual complete physical layout");
+    assert.equal(selected.carrier === original, true, "source lookup identity is distinct from the single selected native carrier");
+  }
+  builder.initializeUnions([]);
+  builder.finalizeMethodStorage(new Map());
+  const plan = builder.seal();
+  const physical = plan.definitionForCarrier(original);
+  assert.equal(physical !== undefined, true, "the actual physical carrier has its canonical published owner");
+  assert.equal(plan.definitionForCarrier(alias) === physical, true, "both original lookup keys share that exact completed native instance");
+  assert.equal(plan.instances.filter(instance => rustTargetTypeRefEquals(instance.carrier, original)).length, 1,
+    "source aliases never become duplicate native shape publications");
+  assert.equal(plan.instances.length, 2, "the genuinely different native width retains its independent physical instance");
+  assert.equal(plan.definitionForCarrier(wide) !== physical, true, "canonicalization cannot erase native field width or identity");
+  assert.equal(Object.isFrozen(plan.instances) && plan.instances.every(Object.isFrozen), true,
+    "the final native inventory is immutable and contains only completed physical instances");
+});
+
 test("physical method witnesses reject mismatched complete signatures before publishing any field", () => {
   const integer = { kind: "source-primitive", name: "int32" };
   const floating = { kind: "source-primitive", name: "float64" };

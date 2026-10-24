@@ -137,7 +137,8 @@ export function collectRustSourceCallRequirements(input: RustCallableRequirement
           const physicalTemplate = physicalReceiver === undefined ? undefined : input.structuralShapes.templateForCarrier(physicalReceiver);
           const physicalBindings = !fixedBody || physicalTemplate === undefined || physicalReceiver === undefined ? undefined
             : bindRustStructuralReceiverParameters(physicalTemplate.carrier, physicalReceiver,
-              new Set([...callee.capturedTypeParameters.map(parameter => parameter.identity),
+              new Set([...physicalTemplate.genericParameters.flatMap(parameter => parameter.kind === "type" ? [parameter.identity] : []),
+                ...callee.capturedTypeParameters.map(parameter => parameter.identity),
                 ...capturedInputs.map(parameter => parameter.implementation.identity)]));
           if (fixedBody && physicalBindings === undefined)
             return "A fixed structural call requires its exact admitted physical receiver and captured native bindings.";

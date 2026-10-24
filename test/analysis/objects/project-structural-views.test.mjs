@@ -23,7 +23,8 @@ const text = { kind: "target-named", id: "rust.std.String" };
 const number = { kind: "source-primitive", name: "float64" };
 const source = (type, name = "Box") => rustSourceTypeCarrier("/model.ts", name, "object", [{ kind: "type", type }]);
 const target = (type, options = {}) => rustStructuralObjectTargetType(options.file ?? "/view.ts", [
-  { sourceName: "value", type, presence: options.presence ?? "required", readonly: options.readonly ?? true },
+  { sourceName: "value", type, presence: options.presence ?? "required", readonly: options.readonly ?? true,
+    ...(options.accessor === undefined ? {} : { accessor: options.accessor }) },
 ]);
 
 test("structural supertrait arguments close only inferred header lifetimes from the native object contract", () => {
@@ -78,7 +79,8 @@ test("monomorphic structural views retain exact carriers without introducing a g
   assert.equal(rustProjectViewMatches(view, source(number), target(number)), false);
 });
 
-function structuralFieldSelection({ callable = false, sourceParameter = type => type,
+function structuralFieldSelection({ callable = false, accessor = false, nativeReadonly = true,
+  optional = !callable, sourceParameter = type => type,
   destinationParameter = type => type, result = type => type } = {}) {
   const declaration = { kind: "KindClassDeclaration" };
   const name = { kind: "KindIdentifier", text: "value" };
@@ -89,12 +91,15 @@ function structuralFieldSelection({ callable = false, sourceParameter = type => 
   const destinationType = {};
   const nativeText = rustStringTargetType();
   const sourceCarrier = callable ? rustCallableTargetType([sourceParameter(parameter)], result(parameter)) : parameter;
-  const destinationCarrier = type => callable ? rustCallableTargetType([destinationParameter(type), number], result(type)) : rustSourceOptionalTargetType(type);
-  const presence = callable ? "required" : "optional";
-  const template = target(destinationCarrier(otherParameter), { presence });
-  const carrier = target(destinationCarrier(nativeText), { presence });
+  const destinationCarrier = type => callable ? rustCallableTargetType([destinationParameter(type), number], result(type))
+    : optional ? rustSourceOptionalTargetType(type) : type;
+  const presence = optional ? "optional" : "required";
+  const access = accessor ? { getter: true, setter: !nativeReadonly } : undefined;
+  const template = target(destinationCarrier(otherParameter), { presence, readonly: nativeReadonly, accessor: access });
+  const carrier = target(destinationCarrier(nativeText), { presence, readonly: nativeReadonly, accessor: access });
   const shape = { sourceType: destinationType, carrier, fields: [{ symbols: [symbol], declarations: [destination],
-    storageIndex: 0, resultCarrier: destinationCarrier(nativeText), readonly: true, presence }] };
+    storageIndex: 0, resultCarrier: destinationCarrier(nativeText), readonly: nativeReadonly, presence,
+    ...(access === undefined ? {} : { accessor: access }) }] };
   const definition = { declaration };
   const ast = { kindName: node => node.kind, name: node => node.name, text: node => node.text,
     parent: node => node.parent, members: node => node === declaration ? [member] : [],
@@ -134,7 +139,8 @@ function structuralFieldSelection({ callable = false, sourceParameter = type => 
   assert.equal(sources !== undefined, true, "the exact selected source field exists");
   const fields = selectRustProjectStructuralViewFields(sources, shape, walk);
   assert.equal(fields !== undefined, true, "the canonical selected optional adapter exists");
-  return { view: { declaration, sourceCarrier: selectedSource, targetCarrier: carrier, fields }, shape, walk, sources, member, nativeText };
+  return { view: { declaration, sourceCarrier: selectedSource, targetCarrier: carrier, fields },
+    shape, walk, sources, member, nativeText, template, registrations };
 }
 
 test("closed optional views select their open adapter without any earlier request", () => {
@@ -147,6 +153,62 @@ test("closed optional views select their open adapter without any earlier reques
   assert.equal(rustTargetTypeRefEquals(generalized.fields[0].readAdapter.element.sourceCarrier, parameter), true);
   assert.equal(rustTargetTypeRefEquals(generalized.fields[0].readAdapter.targetCarrier, rustSourceOptionalTargetType(parameter)), true);
   assert.equal(rustProjectViewMatches(generalized, view.sourceCarrier, view.targetCarrier), true);
+});
+
+for (const accessor of [false, true]) for (const nativeReadonly of [false, true]) {
+  test(`generic native ${accessor ? "accessor" : "field"} views preserve their ${nativeReadonly ? "read" : "write"} role without rewriting the logical template`, () => {
+    const { view, shape, walk, sources, template, registrations } = structuralFieldSelection({ accessor,
+      nativeReadonly, optional: nativeReadonly });
+    const logical = rustStructuralObjectCarrierValue(template);
+    assert.equal(logical !== undefined, true, "the original generic native template is closed data");
+    const logicalTemplate = rustStructuralObjectTargetType(logical.ownerFileName, logical.fields.map(field => ({
+      ...field, readonly: false,
+      ...(field.accessor === undefined ? {} : { accessor: { ...field.accessor, setter: true } }),
+    })), logical.representation, logical.construction, logical.bases, logical.implementation);
+    const originalField = shape.fields[0];
+    walk.sourceTypes.structuralInstantiations = () => [{ template: logicalTemplate, instance: shape.carrier }];
+    const generalized = generalizeRustProjectStructuralView(view, shape, walk, sources);
+    assert.equal(generalized !== undefined, true, "the selected native role survives generic inference");
+    const physical = rustStructuralObjectCarrierValue(generalized.targetCarrier);
+    assert.equal(physical?.fields[0].readonly, nativeReadonly, "generalization retains exactly the selected native writer requirement");
+    if (accessor) assert.equal(physical.fields[0].accessor.setter, !nativeReadonly, "the selected native accessor capability is unchanged");
+    assert.equal(rustProjectViewMatches(generalized, view.sourceCarrier, view.targetCarrier), true,
+      "all native type and role correspondence remains exact");
+    const registration = registrations[0];
+    assert.equal(registration !== undefined, true, "the generalized native instance is registered before publication");
+    assert.equal(registration.template === logicalTemplate, true, "the original logical template is the existing registration seam");
+    assert.equal(registration.shape.sourceType === shape.sourceType, true, "the checked logical source type is unchanged");
+    assert.equal(registration.shape.fields[0].declarations === originalField.declarations, true, "member declarations are unchanged");
+    assert.equal(registration.shape.fields[0].symbols === originalField.symbols, true, "member symbols are unchanged");
+    assert.equal(registration.shape.fields[0].readonly, nativeReadonly, "only the selected native field contract is published");
+    assert.equal(rustStructuralObjectCarrierValue(logicalTemplate).fields[0].readonly, false, "logical source mutability is untouched");
+    if (accessor) assert.equal(rustStructuralObjectCarrierValue(logicalTemplate).fields[0].accessor.setter, true,
+      "the original logical accessor remains writable");
+    const wrongRole = target(rustStructuralObjectCarrierValue(view.targetCarrier).fields[0].type, {
+      presence: originalField.presence, readonly: !nativeReadonly,
+      ...(accessor ? { accessor: { getter: true, setter: nativeReadonly } } : {}),
+    });
+    assert.equal(rustProjectViewMatches(generalized, view.sourceCarrier, wrongRole), false,
+      "a different native writer requirement still fails exact matching");
+  });
+}
+
+test("native structural sibling roles and generic identities remain independent", () => {
+  const fields = (type, readonlyRoles) => ["first", "second"].map((sourceName, index) => ({
+    sourceName, type, presence: "required", readonly: readonlyRoles[index],
+  }));
+  const native = (type, readonlyRoles) => rustStructuralObjectTargetType("/view.ts", fields(type, readonlyRoles));
+  const template = native(otherParameter, [false, false]);
+  const view = { sourceCarrier: source(parameter), targetCarrier: native(parameter, [true, false]) };
+  assert.equal(rustProjectViewMatches(view, source(text), native(text, [true, false])), true,
+    "each sibling retains its actual selected native role under the same generic substitution");
+  for (const roles of [[true, true], [false, false], [false, true]]) assert.equal(
+    rustProjectViewMatches(view, source(text), native(text, roles)), false,
+    `sibling native roles ${roles.join(",")} cannot replace the selected contract`);
+  assert.equal(rustProjectViewMatches(view, source(text), native(otherParameter, [true, false])), false,
+    "native role agreement cannot hide a different generic identity");
+  assert.equal(rustStructuralObjectCarrierValue(template).fields.every(field => field.readonly === false), true,
+    "neither sibling changes the original writable logical template");
 });
 
 test("open structural selection rejects malformed identity and contradictory adapter evidence", () => {
@@ -281,6 +343,11 @@ ${order === "open-first" ? `${open}\n${closed}` : order === "closed-first" ? `${
       const view = views[0];
       const shape = rustStructuralObjectCarrierValue(view.targetCarrier);
       assert.equal(shape !== undefined, true);
+      const physical = program.structuralShapes.definitionForCarrier(view.targetCarrier);
+      assert.equal(physical !== undefined, true, "the exact native view has its canonical physical layout");
+      for (const field of physical.fields) assert.equal(field.method === true
+        ? field.methodPlan?.kind === "native-dispatch" : field.storage === "property", true,
+      `${field.sourceName}: the native implementation owns its dispatch or getter, not a callable payload`);
       assert.equal(rustTargetTypeRefEquals(view.sourceCarrier, program.projectTypes.openCarrier(definition)), true);
       for (const [name, parameterIndex] of [["readFirst", 1], ["readSecond", 0]]) {
         const field = shape.fields.find(field => field.sourceName === name);
@@ -316,6 +383,11 @@ ${order === "open-first" ? `${open}\n${closed}` : order === "closed-first" ? `${
       const view = views[0];
       assert.equal(rustTargetTypeRefEquals(view.sourceCarrier, program.projectTypes.openCarrier(definition)), true);
       assert.equal(rustTargetGenericReferences(view.targetCarrier).typeIdentities.length, 0);
+      const physical = program.structuralShapes.definitionForCarrier(view.targetCarrier);
+      assert.equal(physical !== undefined, true, "the non-generic native view has its canonical physical layout");
+      for (const field of physical.fields) assert.equal(field.method === true
+        ? field.methodPlan?.kind === "native-dispatch" : field.storage === "property", true,
+      `${field.sourceName}: native method and optional getter selections have no stored callable environment`);
       const method = view.fields.find(field => field.callable !== undefined);
       const optional = view.fields.find(field => field.readAdapter !== undefined);
       assert.equal(method !== undefined && optional !== undefined, true);

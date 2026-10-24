@@ -32,6 +32,7 @@ import { rustNativePropertyNameIssue } from "../../../objects/computed-field-nam
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 
 import { applyRustOptionalValueCarrier } from "../../../conversions/contextual-values.js";
+import { checkRustAmbientVariableUse } from "../../../declarations/type-only.js";
 
 export function resolveExpressionCarrier(
   walk: RustFactWalk,
@@ -44,6 +45,14 @@ export function resolveExpressionCarrier(
   walk.context.records.assertOpen();
   if (walk.rejectedExpressions.has(expression)) return undefined;
   const { ast } = walk.context;
+  const reference = walk.context.source.navigation.sourceReferenceFor(expression);
+  const declaration = reference?.declaration;
+  if (reference !== undefined && !reference.project && declaration !== undefined &&
+    (ast.is.IsVariableDeclaration(declaration) || ast.is.IsBindingElement(declaration))) {
+    const use = walk.context.source.navigation.declarationUses(declaration).find(use => use.reference === expression);
+    if (use !== undefined) checkRustAmbientVariableUse(walk, declaration, use);
+    if (walk.rejectedExpressions.has(expression)) return undefined;
+  }
   const names = ast.is.IsObjectLiteralExpression(expression)
     ? ast.as.AsObjectLiteralExpression(expression)?.Properties?.Nodes.flatMap(member => {
         const name = member === undefined ? undefined : ast.name(member);

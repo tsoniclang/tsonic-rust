@@ -1,6 +1,6 @@
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { AstReader, Node } from "@tsonic/tsts";
-import type { SourceStorageBindings, SourceStorageProducer, SourceStorageQueries, SourceStorageSubject } from "@tsonic/target-api/analysis";
+import type { SourceStorageBindings, SourceStorageDomainBoundary, SourceStorageProducer, SourceStorageQueries, SourceStorageSubject } from "@tsonic/target-api/analysis";
 import { Node_Expression, sourceEnclosingCallable, asSourceNode } from "@tsonic/target-api/source";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
@@ -59,9 +59,12 @@ import { selectRustStructuralMethodExposure } from "../../policy/types/objects/s
 
 function rustStructuralMethodProducers(sourceStorage: SourceStorageQueries, subject: SourceStorageSubject, bindings: SourceStorageBindings):
   { readonly kind: "complete"; readonly producers: readonly SourceStorageProducer[]; readonly transported: ReadonlySet<SourceStorageProducer> } |
-  { readonly kind: "open" } | { readonly kind: "unresolved"; readonly reason: string } {
+  { readonly kind: "open"; readonly producers: readonly SourceStorageProducer[];
+    readonly boundaries: readonly SourceStorageDomainBoundary[] | undefined } |
+  { readonly kind: "unresolved"; readonly reason: string } {
   const { ast } = sourceStorage.source;
   const producers: SourceStorageProducer[] = [];
+  const boundaries: SourceStorageDomainBoundary[] = [];
   const transported = new Set<SourceStorageProducer>();
   const visited = new Map<SourceStorageSubject, Set<SourceStorageBindings>>();
   const pending: { readonly subject: SourceStorageSubject; readonly bindings: SourceStorageBindings;
@@ -73,7 +76,11 @@ function rustStructuralMethodProducers(sourceStorage: SourceStorageQueries, subj
     visits.add(current.bindings);
     visited.set(current.subject, visits);
     const selected = sourceStorage.storageProducersFor(current.subject, current.bindings);
-    if (selected.kind !== "complete") return selected.kind === "unresolved" ? selected : { kind: "open" };
+    if (selected.kind === "unresolved") return selected;
+    if (selected.kind === "open") {
+      if (selected.boundaries.length === 0) return { kind: "open", producers: Object.freeze(producers), boundaries: undefined };
+      boundaries.push(...selected.boundaries);
+    }
     for (const producer of selected.producers) {
       if (producer.subject.kind !== "input") {
         producers.push(producer);
@@ -95,14 +102,14 @@ function rustStructuralMethodProducers(sourceStorage: SourceStorageQueries, subj
           invocations.push(activation);
           continue;
         }
-        if ("nativeEntry" in activation && activation.nativeEntry !== undefined) return { kind: "open" };
+        if ("nativeEntry" in activation && activation.nativeEntry !== undefined) return { kind: "open", producers: Object.freeze(producers), boundaries: undefined };
         const summary = sourceStorage.source.navigation.declarationUseSummary(declaration);
-        if (summary.exported || summary.bindingWritten) return { kind: "open" };
+        if (summary.exported || summary.bindingWritten) return { kind: "open", producers: Object.freeze(producers), boundaries: undefined };
         for (const use of sourceStorage.source.navigation.declarationUses(declaration)) {
           if (use.kind === "type-only") continue;
           const call = ast.parent(use.reference);
           if (use.kind !== "direct-call" || call === undefined || !ast.is.IsCallExpression(call) ||
-            Node_Expression(ast, call) !== use.reference) return { kind: "open" };
+            Node_Expression(ast, call) !== use.reference) return { kind: "open", producers: Object.freeze(producers), boundaries: undefined };
           const caller = sourceStorage.bindingsForLexicalOwner(call);
           if (caller.kind === "unresolved") return caller;
           const bound = sourceStorage.bindingsForInvocation(declaration, call, caller.bindings);
@@ -110,11 +117,20 @@ function rustStructuralMethodProducers(sourceStorage: SourceStorageQueries, subj
           invocations.push({ bindings: bound.bindings, callerBindings: caller.bindings });
         }
       }
-      if (invocations.length === 0) return { kind: "open" };
+      if (invocations.length === 0) return { kind: "open", producers: Object.freeze(producers), boundaries: undefined };
       for (const activation of invocations) pending.push({ subject: producer.subject, bindings: activation.bindings, transported: true });
     }
   }
-  return { kind: "complete", producers: Object.freeze(producers), transported };
+  return boundaries.length === 0 ? { kind: "complete", producers: Object.freeze(producers), transported }
+    : { kind: "open", producers: Object.freeze(producers), boundaries: Object.freeze(boundaries) };
+}
+
+function structuralBoundariesAreExportOnly(source: TargetSourceProgram,
+  boundaries: readonly Pick<SourceStorageDomainBoundary, "kind" | "exposure">[] | undefined): boolean {
+  const { ast } = source;
+  return boundaries !== undefined && boundaries.length !== 0 && boundaries.every(boundary => boundary.kind === "external-write" &&
+    (ast.is.IsVariableDeclaration(boundary.exposure) || ast.is.IsFunctionDeclaration(boundary.exposure) ||
+      ast.is.IsClassDeclaration(boundary.exposure)) && source.navigation.declarationUseSummary(boundary.exposure).exported);
 }
 
 export function analyzeRustStructuralMethodExposures(input: {
@@ -143,9 +159,7 @@ export function analyzeRustStructuralMethodExposures(input: {
     else {
       if (writes.writes.length !== 0 && selected.writes !== "unresolved") selected.writes = "present";
       if (writes.kind === "open") {
-        const exported = writes.boundaries.every(boundary => boundary.kind === "external-write" &&
-          (ast.is.IsVariableDeclaration(boundary.exposure) || ast.is.IsFunctionDeclaration(boundary.exposure) ||
-            ast.is.IsClassDeclaration(boundary.exposure)) && input.source.navigation.declarationUseSummary(boundary.exposure).exported);
+        const exported = structuralBoundariesAreExportOnly(input.source, writes.boundaries);
         if (!exported) selected.boundary = "opaque";
         else if (selected.boundary === "none") selected.boundary = "export-only";
       }
@@ -227,11 +241,15 @@ export function analyzeRustStructuralMethodExposures(input: {
       const producers = subject.kind === "unresolved" ? subject : bindings.kind === "unresolved" ? bindings
         : rustStructuralMethodProducers(input.sourceStorage, subject.subject, bindings.bindings);
       if (candidate !== undefined) {
-        if (producers.kind !== "complete") candidate.boundary = "opaque";
-        else for (const producer of producers.producers) {
-          if (producer.subject.kind !== "value" || producer.subject.projection.length !== 0 ||
-            !ast.is.IsMethodDeclaration(producer.subject.node) || ast.body(producer.subject.node) === undefined) candidate.boundary = "opaque";
-          else retain(method.carrier, method.index, producer.subject.node);
+        if (producers.kind === "unresolved" || producers.kind === "open" &&
+          !structuralBoundariesAreExportOnly(input.source, producers.boundaries)) candidate.boundary = "opaque";
+        else {
+          if (producers.kind === "open" && candidate.boundary === "none") candidate.boundary = "export-only";
+          for (const producer of producers.producers) {
+            if (producer.subject.kind !== "value" || producer.subject.projection.length !== 0 ||
+              !ast.is.IsMethodDeclaration(producer.subject.node) || ast.body(producer.subject.node) === undefined) candidate.boundary = "opaque";
+            else retain(method.carrier, method.index, producer.subject.node);
+          }
         }
       }
     }

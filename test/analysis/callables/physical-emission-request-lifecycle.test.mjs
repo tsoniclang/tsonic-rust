@@ -11,6 +11,7 @@ import { createRustNativeStorageQueries } from "../../../dist/analysis/callables
 import { finalizeRustNativeParameterStorage } from "../../../dist/analysis/callables/native-parameters.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 import { rustCallableInputTargetType, rustCallableProtocol } from "../../../dist/target-model/types/carriers/callables.js";
+import { rustGenericCallableValue } from "../../../dist/target-model/types/carriers/generic-callables.js";
 import { rustCallablePhysicalSignature } from "../../../dist/target-model/conversions/callable-physical.js";
 import { rustNamedTypeCarrierValue } from "../../../dist/target-model/types/carriers/native.js";
 import { rustLifetimesEqual } from "../../../dist/target-model/lifetimes/index.js";
@@ -31,7 +32,9 @@ export function read(values: boolean[]): boolean {
   const [head = false, ...tail] = values;
   const functions = [identity];
   const record = { read(): boolean { return head; } };
-  return functions[0](record.read()) && tail.length === 0;
+  ${surfaces.includes("js") ? "return functions[0](record.read()) && tail.length === 0;" : `if (!functions[0](record.read())) return false;
+  for (const _entry of tail) return false;
+  return true;`}
 }
 ` } });
   const { ast } = program.source;
@@ -72,6 +75,8 @@ export function zero(): boolean { return true; }
 export function expose(): typeof owner { return owner; }
 export function exposeZero(): typeof zero { return zero; }
 export const stored = owner(true);
+const quantified = <Value>(value: Value): Value => value;
+export const invoked = quantified<boolean>(true);
 `;
 
 function checkedSource(text, options = { surfaces: [] }) {
@@ -135,10 +140,17 @@ export function inspect(value: string, word: string): boolean { return value.inc
   const declaration = sourceStorage.nodes.find(node => ast.is.IsVariableDeclaration(node) && ast.text(ast.name(node)) === "stored");
   const owner = sourceStorage.nodes.find(node => ast.is.IsFunctionDeclaration(node) && ast.text(ast.name(node)) === "owner");
   const metadata = sourceStorage.nodes.find(node => ast.is.IsTypeAliasDeclaration(node));
-  const invocation = declaration === undefined ? undefined : ast.as.AsVariableDeclaration(declaration)?.Initializer;
+  const invoked = sourceStorage.nodes.find(node => ast.is.IsVariableDeclaration(node) && ast.text(ast.name(node)) === "invoked");
+  const invocation = invoked === undefined ? undefined : ast.as.AsVariableDeclaration(invoked)?.Initializer;
   const operand = invocation === undefined ? undefined : ast.arguments(invocation)[0];
   assert.equal(declaration !== undefined && owner !== undefined && metadata !== undefined &&
     invocation !== undefined && operand !== undefined, true, "all request subjects are actual checked source nodes");
+  const operation = records.targetOperation.get(invocation);
+  assert.equal(operation?.kind === "source-call" && operation.target.form === "callable" &&
+    rustGenericCallableValue(operation.target.carrier) !== undefined, true,
+  "the invocation subject has the actual quantified callable storage selected by the canonical request owner");
+  assert.equal(context.callableValues.native.callFor(invocation) === undefined, true,
+    "the retained invocation subject is not a native input Fn call with a different request contract");
   const construction = physicalConstruction(checked, { constructionErrorsReady: !pendingErrors,
     unavailableReturns: missingResult ? new Set([owner]) : new Set() });
   const storage = construction.storage;
@@ -461,8 +473,12 @@ test("a genuine native input Fn keeps its native closure ABI without a retained 
 });
 
 test("ordinary direct native declarations do not invent a required retained constructor", () => {
-  const checked = checkedSource("export function direct(value: boolean): boolean { return value; }");
+  const checked = checkedSource("export function direct(value: boolean): boolean { return value; } export const stored = direct(true);");
   const { context, input } = checked;
+  const invocation = context.sourceStorage.nodes.find(node => context.ast.is.IsCallExpression(node));
+  const operation = context.records.targetOperation.get(invocation);
+  assert.equal(operation?.kind === "source-call" && operation.target.form === "function", true,
+    "the actual ordinary direct invocation is not a quantified callable storage request");
   const { storage, producers, physical, sourceOccurrences } = physicalConstruction(checked, { constructionErrorsReady: false });
   const result = completeLifecycle({ ast: context.ast, records: context.records, sourceStorage: context.sourceStorage,
     requests: Object.freeze([]), sourceOccurrences, typeDefinitions: context.typeDefinitions, lexicalFunctions: input.lexicalFunctions,
@@ -470,6 +486,8 @@ test("ordinary direct native declarations do not invent a required retained cons
     nativeProducers: producers }, physical);
   assert.equal(result.kind, "resolved", "a declaration alone is not a stored retained callable demand");
   assert.equal(result.value.nativeProducers.producers.length, 1, "the real direct native declaration remains published");
+  assert.equal(result.value.nativeStorage.invocationCallableFor(invocation).kind, "unresolved",
+    "the original direct call does not invent an unrequested retained invocation selection");
 });
 
 test("native producer finalization rejects its removed declaration-to-carrier map API", () => {

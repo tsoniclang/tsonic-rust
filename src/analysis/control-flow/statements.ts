@@ -226,14 +226,18 @@ function recordVariableDeclarationValueFacts(
   const initializerCarrier = initializer === undefined
     ? undefined
     : resolveExpressionCarrier(walk, initializer, sourceFile, selected ?? inferredContext);
-  if (initializer !== undefined && annotated !== undefined && initializerCarrier !== undefined &&
-    !reconcileRequiredCarrier(walk, initializer, initializerCarrier, annotated)) {
+  const initializerReady = initializer !== undefined && initializerCarrier !== undefined &&
+    !walk.rejectedExpressions.has(initializer);
+  const initializerAdmitted = initializerReady && (annotated === undefined ||
+    reconcileRequiredCarrier(walk, initializer, initializerCarrier, annotated));
+  if (initializerReady && annotated !== undefined && !initializerAdmitted) {
     appendRustDiagnostic(walk, "RUST_INITIALIZER_CARRIER_MISMATCH",
       "The initializer cannot be represented by the declaration's exact Rust carrier.", initializer,
       ["target.capability=rust.initializer-carrier"]);
   }
-  const effective = initializer === undefined ? selected ?? predeclared
-    : rustEffectiveValueCarrier(walk.context.records, initializer) ?? initializerCarrier ?? selected ?? predeclared;
+  const effective = initializerAdmitted
+    ? rustEffectiveValueCarrier(walk.context.records, initializer) ?? initializerCarrier
+    : selected ?? predeclared;
   if (effective === undefined && !walk.rejectedExpressions.has(declaration) &&
     (initializer === undefined || !walk.rejectedExpressions.has(initializer))) {
     appendRustDiagnostic(walk, "RUST_BINDING_CARRIER_NOT_PROVEN",

@@ -18,7 +18,7 @@ import { rustSourceOptionalTargetType } from "../../target-model/types/projectio
 import { isRustAbsenceCarrier } from "../../target-model/types/carriers/native.js";
 import { isRustNativeFutureCarrier, rustFutureOutputCarrier } from "../../target-model/types/carriers/primitives.js";
 import { rustUnionAlternatives } from "../../target-model/types/union-relations.js";
-import { rustSourceUnionCarrierValue, rustStructuralObjectCarrierValue, rustStructuralObjectTargetType } from "../../target-model/types/carriers/source-types.js";
+import { rustSourceUnionCarrierValue, rustStructuralObjectCarrierValue, rustStructuralObjectTargetType, rustStructuralObjectCarrierName } from "../../target-model/types/carriers/source-types.js";
 import { instantiateRustRuntimeUnionPayloads } from "../../target-model/types/carriers/runtime-unions.js";
 
 import { mapRustTargetTypes, substituteRustTargetGenerics } from "../../target-model/types/carriers/substitution.js";
@@ -510,13 +510,20 @@ export function createRustNativeStorageSelection(
           : Object.freeze({ ...current, elements: Object.freeze(elements) });
       }
       const structural = rustStructuralObjectCarrierValue(current);
-      if (structural !== undefined) {
+      if (current.kind === "target-specific" && current.target === "rust" && current.name === rustStructuralObjectCarrierName) {
+        if (structural === undefined) return fail("A structural value requires its actual checked physical layout owner.");
         const completed = input.structuralShapes.definitionForCarrier(current);
         if (completed === undefined) return fail("A structural value requires its actual checked physical layout owner.");
         if (structural.implementation?.kind === "physical") {
           if (!rustTargetTypeRefEquals(current, completed.carrier))
             return fail("A physical structural carrier requires its exact admitted canonical definition.");
           return completed.carrier;
+        }
+        if (structural.implementation === undefined && completed.fields.every(field => field.method === true
+          ? field.methodPlan?.kind === "native-dispatch" : field.storage !== "stored")) {
+          const storedCallable = containsCallable(current, depth + 1);
+          if (storedCallable === undefined) return undefined;
+          if (!storedCallable) return completed.carrier;
         }
         const operation = selectedSubject.kind === "value" && selectedSubject.projection.length === 0
           ? input.records.targetOperation.get(selectedSubject.node) : undefined;
