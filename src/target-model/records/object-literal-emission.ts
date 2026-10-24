@@ -25,13 +25,18 @@ export interface RustStructuralLiteralEmission {
   readonly fields: readonly RustStructuralLiteralFieldEmission[];
 }
 
-export type RustObjectLiteralEmission =
-  | { readonly kind: "project"; readonly node: Node; readonly selection: RustProjectLiteralEmission;
-      readonly sourceFields: readonly { readonly storageIndex: number; readonly value: Node | undefined }[] }
-  | { readonly kind: "structural"; readonly node: Node; readonly selection: RustStructuralLiteralEmission;
-      readonly sourceFields: readonly { readonly storageIndex: number; readonly value: Node | undefined }[] };
+export interface RustObjectLiteralEmission {
+  readonly node: Node;
+  readonly carrier: TargetTypeRef;
+  readonly sourceFields: readonly { readonly storageIndex: number; readonly value: Node | undefined }[];
+  readonly implementation:
+    | { readonly kind: "project"; readonly selection: RustProjectLiteralEmission }
+    | { readonly kind: "structural"; readonly selection: RustStructuralLiteralEmission }
+    | undefined;
+}
 
-export type RustObjectLiteralEmissionRequest = RustObjectLiteralEmission |
+export type RustObjectLiteralEmissionRequest =
+  (NonNullable<RustObjectLiteralEmission["implementation"]> & { readonly node: Node }) |
   { readonly kind: "reference"; readonly node: Node; readonly selection: RustStructuralLiteralEmission };
 
 export interface RustObjectLiteralEmissionRecords {

@@ -95,7 +95,7 @@ export interface RustObjectLiteralImplementationRegistry {
 }
 
 export function rustObjectLiteralRequiresDispatchImplementation(node: Node, context: RustPlanContext): boolean {
-  return context.input.program.records.objectLiteralEmission.get(node) !== undefined;
+  return context.input.program.records.objectLiteralEmission.get(node)?.implementation !== undefined;
 }
 
 export function createRustObjectLiteralImplementationRegistry(
