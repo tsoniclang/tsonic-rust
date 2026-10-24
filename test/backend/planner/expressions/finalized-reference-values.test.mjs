@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { Node_Initializer } from "@tsonic/target-api/source";
+import { Node_Expression, Node_Initializer } from "@tsonic/target-api/source";
 import { jsonNativeProjectionSource } from "../../../../../tsonic/test/fixtures/json-native-projection.mjs";
 import { closedInstanceFiles } from "../../../../../tsonic/test/fixtures/closed-instance-tests.mjs";
-import { analyzeRust, acmeVectorsPackage } from "../../../helpers/rust-session.mjs";
+import { analyzeRust, acmeLogsinkCapability, acmeVectorsPackage } from "../../../helpers/rust-session.mjs";
 import { rustSourceFilePlanContext } from "../../../helpers/plan-context.mjs";
 import { createRustRecordFixture } from "../../../helpers/records.mjs";
 import { applyFinalizedRustArgumentMode, applyRustArgumentMode, createRustSharedReferenceArgument,
@@ -27,11 +27,13 @@ test("an already selected borrowed union field receiver uses native field autode
   const ast = program.source.ast;
   const node = sourceNodes(program).find(node => {
     if (!ast.is.IsPropertyAccessExpression(node)) return false;
-    const access = ast.as.AsPropertyAccessExpression(node);
-    return ast.text(access.Name) === "count" && ast.is.IsIdentifier(access.Expression) && ast.text(access.Expression) === "value";
+    const receiver = Node_Expression(ast, node);
+    return ast.text(ast.name(node)) === "count" && receiver !== undefined &&
+      ast.is.IsIdentifier(receiver) && ast.text(receiver) === "value";
   });
   assert.equal(node !== undefined, true, "the actual narrowed nominal source field is present");
-  const receiver = ast.as.AsPropertyAccessExpression(node).Expression;
+  const receiver = Node_Expression(ast, node);
+  assert.equal(receiver !== undefined, true, "the selected native field retains its exact source receiver");
   assert.equal(program.records.targetOperation.get(node)?.kind, "source-field", "the selected operation reads actual native storage");
   assert.equal(program.records.readOwnership.get(receiver)?.value.kind, "borrow", "the ownership producer already selected the nonconsuming receiver");
   const projection = program.records.valueProjection.get(receiver);
@@ -102,15 +104,15 @@ test("stabilized native inputs preserve their exact shared, exclusive and by-val
 });
 
 test("an actual readonly String parameter preserves its admitted non-stabilized reference", () => {
-  const { program } = analyzeRust({ surfaces: ["js"], files: { "index.ts": `
-    export function read(value: string): number { return value.indexOf("x"); }
-    console.log(read("x"));
+  const { program } = analyzeRust({ packages: [acmeLogsinkCapability()], files: { "index.ts": `
+    import { openSinkNamed } from "logsink";
+    export function read(value: string): void { openSinkNamed(value); }
   ` } });
   const inputs = program.physicalEmissionContexts.sourceOccurrences
     .filter(occurrence => occurrence.operation.abi.operationKind === "method")
     .flatMap(occurrence => occurrence.inputs)
-    .filter(({ input }) => input.source.kind === "receiver");
-  assert.equal(inputs.length, 1, "one actual checked readonly String receiver supplies the inverse");
+    .filter(({ input }) => input.source.kind === "argument" && input.source.sourceIndex === 0);
+  assert.equal(inputs.length, 1, "one actual checked readonly String parameter supplies the native identity inverse");
   const borrowed = inputs[0];
   assert.equal(borrowed.input.mode, "ref", "the provider accepts the exact native shared String input");
   assert.equal(borrowed.input.conversion.kind, "identity", "no conversion replaces the original borrowed String");

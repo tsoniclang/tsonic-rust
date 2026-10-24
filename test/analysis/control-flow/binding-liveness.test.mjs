@@ -98,7 +98,7 @@ export function inspect(): number { ${initial} ${body} }
   const effect = nodes.find(node => ast.is.IsCallExpression(node) && ast.text(ast.as.AsCallExpression(node).Expression) === "step");
   assert.equal(effect !== undefined && ast.as.AsBinaryExpression(write).Right === effect, true,
     `${name}: the effect remains the exact one source RHS`);
-  const output = rustSourceText(result.artifacts);
+  const output = rustSourceText(result);
   assert.equal((output.match(/step\(\)/gu) ?? []).length, 2, `${name}: one function declaration and one actual evaluation`);
   assert.equal(output.includes('expect(unused_assignments, reason = "checked source evaluation order")'), dead,
     `${name}: only the selected dead store has the existing checked warning disposition`);
@@ -235,6 +235,71 @@ export function inspect(): string { return ${abstractBase ? "" : "new Base().val
   assert.equal(finalObservation.layers.get(derivedLayer), false, `${name}: final materialization observes the derived store`);
 });
 
+for (const [label, initializer, constructorBody, argument, expected] of [
+  ["a following body reads the inherited value before overwriting", "", `constructor() {
+    super(); const previous = this.value; this.value = "done"; this.observed = previous;
+  }`, "", false],
+  ["a following body overwrites before reading", "", `constructor() {
+    super(); this.value = "done"; this.observed = this.value;
+  }`, "", true],
+  ["one following branch reads before the common overwrite", "", `constructor(keep: boolean) {
+    super(); this.observed = keep ? this.value : "unused"; this.value = "done";
+  }`, "keep", false],
+  ["an implicit layer initializer reads the inherited value", " = this.value", "", "", false],
+  ["an implicit layer initializer overwrites the inherited value", ' = (this.value = "done")', "", "", true],
+  ["implicit initializers read before a later field overwrites", ' = this.value; later: string = (this.value = "done")', "", "", false],
+  ["implicit initializers overwrite before a later field reads", ' = (this.value = "done"); later: string = this.value', "", "", true],
+]) test(`constructor continuation observes actual native layers: ${label}`, () => {
+  const sourceText = `
+class Base {
+  value: string;
+  constructor() { this.value = "kept"; }
+}
+class Derived extends Base {
+  observed: string${initializer};
+  ${constructorBody}
+}
+export function inspect(keep: boolean): string {
+  const value = new Derived(${argument});
+  return value.observed + value.value;
+}
+`;
+  const { result } = compileRust({ files: { "index.ts": sourceText } });
+  const { program } = result;
+  assert.deepEqual(result.diagnostics.map(({ code, message }) => ({ code, message })), [],
+    `${label}: the complete constructor source remains admitted`);
+  assert.equal(program !== undefined, true, `${label}: the actual native-emission program is available`);
+  const { ast } = program.source;
+  const base = program.projectTypes.definitions.find(definition => ast.text(ast.name(definition.declaration)) === "Base");
+  const derived = program.projectTypes.definitions.find(definition => ast.text(ast.name(definition.declaration)) === "Derived");
+  assert.equal(base !== undefined && derived !== undefined, true, `${label}: both exact source definitions remain`);
+  const plan = program.records.classConstruction.get(derived.declaration);
+  assert.equal(plan !== undefined, true, `${label}: the complete actual derived construction is sealed`);
+  const layer = plan.layers.find(selected => selected.definition === base);
+  assert.equal(layer?.constructor !== undefined, true, `${label}: the exact replayed base constructor is retained`);
+  const assignments = [];
+  const visit = node => {
+    if (ast.is.IsBinaryExpression(node)) {
+      const expression = ast.as.AsBinaryExpression(node);
+      if (ast.is.IsStringLiteral(expression.Right) && ast.text(expression.Right) === "kept") assignments.push(expression);
+    }
+    ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+  };
+  visit(layer.constructor);
+  assert.equal(assignments.length, 1, `${label}: the original base store occurs exactly once in checked source`);
+  const target = assignments[0].Left;
+  const observation = program.records.unobservedWrite.get(target);
+  assert.equal(observation?.kind, "construction", `${label}: the existing family owns the actual layer disposition`);
+  assert.equal(observation.layers.get(layer), expected, `${label}: actual later native reads determine the inherited store`);
+  const field = plan.fields.find(selected => ast.text(ast.name(selected.declaration)) === "value");
+  assert.equal(field !== undefined, true, `${label}: retain the inherited physical field`);
+  assert.equal(plan.localFieldDeclarations.has(field.declaration), false,
+    `${label}: no tuple-export read is invented for the deferred outer native binding`);
+  const output = rustSourceText(result);
+  assert.match(output, /field_value\s*=\s*String::from\("kept"\)/u,
+    `${label}: the store and native String construction are never removed`);
+});
+
 for (const [label, declaration, body, after, expectedUnused, expectedCounted] of [
   ["native unused counter", "let index: int32 = 0", "total += 1;", "", true, true],
   ["number unused counter", "let index: number = 0", "total += 1;", "", true, true],
@@ -270,7 +335,7 @@ export function inspect(count: int32): int32 {
   if (expectedUnused) {
     const { result } = compileRust({ files: { "index.ts": source } });
     assert.equal(result.diagnostics.length, 0, `${label}: the same source is admitted for native emission`);
-    const output = rustSourceText(result.artifacts);
+    const output = rustSourceText(result);
     assert.match(output, /for _ in /, `${label}: the unobserved counter needs no native binding`);
     assert.doesNotMatch(output, /let index\s*=/, `${label}: no unused float-counter conversion is emitted`);
     assert.match(output, /total/, `${label}: the loop body and its writes remain`);

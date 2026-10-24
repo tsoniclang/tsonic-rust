@@ -266,7 +266,7 @@ export function finalizeRustNativeEmission(
   if (arrayLiteralIssues.length !== 0) return rejectedTargetStage(arrayLiteralIssues);
   const propertyProjectionIssues = analyzeRustPropertyValueProjection(program, context.nativeNodes, context.records.propertyValueProjectionPlans);
   if (propertyProjectionIssues.length !== 0) return rejectedTargetStage(propertyProjectionIssues);
-  const optionalChainIssues = analyzeRustOptionalChainEmission(program, context.nativeNodes, context.records.optionalChainEmissionPlans);
+  const optionalChainIssues = analyzeRustOptionalChainEmission(program, context.nativeNodes, context.records.optionalChainEmissionPlans, context.requiredRecords);
   if (optionalChainIssues.length !== 0) return rejectedTargetStage(optionalChainIssues);
   analyzeRustExpressionExits(program, context.nativeNodes, context.records.expressionExitPlans);
   analyzeRustCompletionBindings(program, context.nativeNodes, context.records.completionBindingPlans);
@@ -301,7 +301,7 @@ export function finalizeRustNativeEmission(
   if (projectUnionMappingIssues.length !== 0) return rejectedTargetStage(projectUnionMappingIssues);
   const receiverCaptureIssues = analyzeRustReceiverCaptureEmission(program, context.nativeNodes, context.records.receiverCaptureEmissionPlans);
   if (receiverCaptureIssues.length !== 0) return rejectedTargetStage(receiverCaptureIssues);
-  const errorFieldIssues = analyzeRustErrorFieldBorrows(program, context.nativeNodes, context.records.errorFieldPlans);
+  const errorFieldIssues = analyzeRustErrorFieldBorrows(program, context.nativeNodes, context.records.errorFieldPlans, context.requiredRecords);
   if (errorFieldIssues.length !== 0) return rejectedTargetStage(errorFieldIssues);
   admitRustUnionProjections(program, context.nativeNodes);
   analyzeRustUnionEquality(program, context.nativeNodes, context.records.unionEqualityPlans);

@@ -5,12 +5,13 @@ import { Node_Expression } from "@tsonic/target-api/source";
 import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustOptionalChainEmission } from "../../target-model/records/optional-chain-emission.js";
 import type { RustOptionalChainEmissionProducer } from "../program/records/optional-chain-emission.js";
+import { requireRustRecord, type RustRequiredRecord } from "../program/records/required-records.js";
 import { isRustUnitCarrier, rustOptionElementCarrier, rustOptionNestingDepth, rustStructuralMethodCallableCarrier } from "../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustSourceOptionalTargetType } from "../../target-model/types/projections.js";
 
 export function analyzeRustOptionalChainEmission(program: Omit<RustAnalysisProgram, "reachability">,
-  nodes: readonly Node[], producer: RustOptionalChainEmissionProducer): readonly TargetDiagnostic[] {
+  nodes: readonly Node[], producer: RustOptionalChainEmissionProducer, required: RustRequiredRecord[]): readonly TargetDiagnostic[] {
   const issues: TargetDiagnostic[] = [];
   const { ast } = program.source;
   const refuse = (node: Node, capability: string, message: string): void => {
@@ -65,6 +66,7 @@ export function analyzeRustOptionalChainEmission(program: Omit<RustAnalysisProgr
     const closure = unit || !presentBranchIsPure(node, fact.guard) ? undefined
       : fact.lowering === "map" ? "map" as const : "and_then" as const;
     producer.publish(node, { fact, structuralGuard, unit, closure });
+    requireRustRecord(required, "optionalChainEmission", node, "optional-chain", "analysis/operations/optional-chains.ts");
   }
   return Object.freeze(issues);
 

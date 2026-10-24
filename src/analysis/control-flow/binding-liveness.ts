@@ -1,6 +1,6 @@
 import type { AstReader, Node } from "@tsonic/tsts";
-import { analyzeSourceWrites, solveSourceFlow, type SourceFlowWork } from "@tsonic/target-api/analysis";
-import { ForStatement_Condition, ForStatement_Incrementor, Node_Expression, sourceEnclosingCallable, type TargetSourceProgram } from "@tsonic/target-api/source";
+import { analyzeSourceWrites, createSourceControlFlow, solveSourceFlow, type SourceControlFlowGraph, type SourceFlowWork } from "@tsonic/target-api/analysis";
+import { ForStatement_Condition, ForStatement_Incrementor, Node_Expression, Node_Initializer, sourceEnclosingCallable, sourceParameterIsProperty, type TargetSourceProgram } from "@tsonic/target-api/source";
 import { failTargetAnalysisInvariant, type TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustOwnershipFlow } from "../../target-model/records/ownership-flow.js";
 import type { RustBindingLivenessProducer } from "../program/records/binding-liveness.js";
@@ -93,33 +93,132 @@ function collectRustConstructionWriteLiveness(
   contexts: RustCallableEmissionContexts, writesBySource: Map<Node, Map<RustConstructionLayer, boolean>>,
 ): readonly TargetDiagnostic[] {
   const completion = createRustCompletionLivenessQueries(source);
-  const layers = new Map<object, { readonly plan: RustAdmittedConstruction; readonly layer: RustConstructionLayer; readonly index: number }>();
+  const plans = new Set<RustAdmittedConstruction>();
+  const layers = new Map<object, RustConstructionLayer>();
   for (const context of contexts.contexts) {
     if (context.use.role !== "constructor") continue;
     const plan = records.classConstruction.get(context.declaration);
     if (plan === undefined) failTargetAnalysisInvariant("tsonic-rust",
       "Construction write liveness requires its complete admitted physical constructor.", context.declaration);
-    for (const [index, layer] of plan.layers.entries()) layers.set(layer, { plan, layer, index });
+    plans.add(plan);
+    for (const layer of plan.layers) layers.set(layer, layer);
   }
+  const emittedLayers = new Set<RustConstructionLayer>();
   for (const context of contexts.contexts) {
     if (context.use.role !== "constructor-layer") continue;
     const selected = layers.get(context.use.subject);
     if (selected === undefined) failTargetAnalysisInvariant("tsonic-rust",
       "Construction write liveness requires the identical admitted native constructor layer.", context.declaration);
-    const { plan, layer, index: layerIndex } = selected;
-    if (layer.constructor === undefined) continue;
-    const region = flow.regions.find(value => value.graph.declaration === layer.constructor);
-    if (region === undefined) failTargetAnalysisInvariant("tsonic-rust",
-      "Construction write liveness requires the existing checked source constructor flow.", layer.constructor);
-    const { graph, liveness } = region;
+    emittedLayers.add(selected);
+  }
+  for (const plan of plans) {
     const fields = new Set(plan.fields.map(field => field.declaration));
-    const readsAfter = new Map<number, Set<Node>>();
+    const finalPoint = plan.points.get(plan.definition.declaration);
+    if (finalPoint === undefined) failTargetAnalysisInvariant("tsonic-rust",
+      "Construction write liveness requires the admitted final native materialization point.", plan.definition.declaration);
+    let continuation: ReadonlySet<Node> = new Set(plan.completesNormally && (!plan.publishesReceiver || !finalPoint.published) ? fields : []);
+    for (let layerIndex = plan.layers.length - 1; layerIndex >= 0; layerIndex -= 1) {
+      const layer = plan.layers[layerIndex]!;
+      if (!emittedLayers.has(layer)) failTargetAnalysisInvariant("tsonic-rust",
+        "Construction write liveness requires every identical admitted native layer context.", layer.definition.declaration);
+      const completed = new Set(continuation);
+      if (layerIndex < plan.layers.length - 1) for (const selected of plan.layers.slice(0, layerIndex + 1))
+        for (const field of selected.fields) {
+          const physical = physicalField(plan, field.declaration);
+          if (plan.localFieldDeclarations.has(physical)) completed.add(physical);
+        }
+      if (layer.constructor === undefined) {
+        continuation = completed;
+        for (let fieldIndex = layer.fields.length - 1; fieldIndex >= 0; fieldIndex -= 1) {
+          const field = layer.fields[fieldIndex]!;
+          if (field.externallyInitialized || field.initializer === undefined) continue;
+          if (!source.ast.is.IsPropertyDeclaration(field.declaration) || Node_Initializer(source.ast, field.declaration) !== field.initializer)
+            failTargetAnalysisInvariant("tsonic-rust", "An implicit native layer requires its identical checked field initializer.", field.declaration);
+          const selected = createSourceControlFlow(source, field.declaration, { domain: { kind: "source" } });
+          if (selected.kind === "unresolved") return flowIssues(selected.reason, selected.source ?? field.declaration);
+          const analyzed = analyzeGraph(plan, layer, selected.graph, continuation);
+          if (analyzed.kind === "unresolved") return flowIssues(analyzed.reason, analyzed.source ?? field.declaration);
+          const before = analyzed.solution.before.get(selected.graph.entry);
+          if (before === undefined) failTargetAnalysisInvariant("tsonic-rust",
+            "A native initializer continuation requires its actual checked flow entry.", field.declaration);
+          continuation = before;
+        }
+        continue;
+      }
+      const region = flow.regions.find(value => value.graph.declaration === layer.constructor);
+      if (region === undefined) failTargetAnalysisInvariant("tsonic-rust",
+        "Construction write liveness requires the existing checked source constructor flow.", layer.constructor);
+      const analyzed = analyzeGraph(plan, layer, region.graph, completed);
+      if (analyzed.kind === "unresolved") return flowIssues(analyzed.reason, analyzed.source ?? layer.constructor);
+      if (layer.baseCall === undefined) {
+        if (layerIndex !== 0) failTargetAnalysisInvariant("tsonic-rust",
+          "An explicit inherited native layer requires its admitted base invocation.", layer.constructor);
+        continue;
+      }
+      const following = new Set<Node>();
+      let completions = 0;
+      for (const id of region.graph.sourcePoints.get(layer.baseCall) ?? []) {
+        const point = region.graph.points[id]!;
+        if (point.operation.kind !== "evaluate" || !analyzed.solution.reachable.has(id)) continue;
+        const normal = new Set<Node>();
+        for (const edge of point.successors) {
+          if (edge.kind === "exception" || !analyzed.solution.reachable.has(edge.to)) continue;
+          const before = analyzed.solution.before.get(edge.to);
+          if (before === undefined) failTargetAnalysisInvariant("tsonic-rust",
+            "A native base continuation requires its actual checked normal successor.", layer.baseCall);
+          for (const field of before) normal.add(field);
+        }
+        for (const field of analyzed.afterNative(id, normal, undefined)) following.add(field);
+        completions += 1;
+      }
+      if (completions === 0) failTargetAnalysisInvariant("tsonic-rust",
+        "An admitted native base invocation requires its identical checked completion point.", layer.baseCall);
+      continuation = following;
+    }
+  }
+  return [];
+
+  function physicalField(plan: RustAdmittedConstruction, declaration: Node): Node {
+    const physical = plan.physicalDeclarations.get(declaration);
+    if (physical === undefined) failTargetAnalysisInvariant("tsonic-rust",
+      "Construction write liveness requires its identical admitted physical field.", declaration);
+    return physical;
+  }
+
+  function flowIssues(reason: string, node: Node): readonly TargetDiagnostic[] {
+    return [{ code: "RUST_LIVENESS_FLOW_UNRESOLVED", source: "tsonic-rust", category: "error", message: reason,
+      sourceNode: node, evidence: ["target.capability=rust.analysis.liveness"] }];
+  }
+
+  function analyzeGraph(plan: RustAdmittedConstruction, layer: RustConstructionLayer,
+    graph: SourceControlFlowGraph, completedFields: ReadonlySet<Node>) {
+    const fields = new Set(plan.fields.map(field => field.declaration));
+    const observations = new Map<number, { readonly order: number; readonly reads: ReadonlySet<Node>;
+      readonly written: Node | undefined }[]>();
     const boundaries = new Map<Node, { readonly before: ReadonlySet<Node>; readonly after: ReadonlySet<Node> }>();
     const captureReads = new Map<Node, Set<Node>>();
-    const addReads = (index: Map<number, Set<Node>>, point: number, selected: ReadonlySet<Node>): void => {
-      let reads = index.get(point);
-      if (reads === undefined) { reads = new Set(); index.set(point, reads); }
-      for (const field of selected) reads.add(field);
+    const initializers = layer.fields.map((field, index) => ({ field, index })).filter(({ field }) =>
+      !field.externallyInitialized && field.initializer !== undefined &&
+      (layer.constructor !== undefined || field.declaration === graph.declaration));
+    const propertyInitializers = new Map<Node, number>();
+    const parameterInitializers = new Set<Node>();
+    for (const { index, field } of initializers) {
+      if (field.initializer === undefined) failTargetAnalysisInvariant("tsonic-rust",
+        "An admitted native initialization requires its checked expression.", field.declaration);
+      if (sourceParameterIsProperty(source.ast, field.declaration)) parameterInitializers.add(field.initializer);
+      else propertyInitializers.set(field.initializer, index);
+    }
+    const addObservation = (point: number, order: number, reads: ReadonlySet<Node>, written: Node | undefined): void => {
+      let selected = observations.get(point);
+      if (selected === undefined) { selected = []; observations.set(point, selected); }
+      selected.push({ order, reads, written });
+    };
+    const nativeOrder = (node: Node, after: boolean): number => {
+      for (let owner: Node | undefined = node; owner !== undefined && owner !== graph.declaration; owner = source.ast.parent(owner)) {
+        const index = propertyInitializers.get(owner);
+        if (index !== undefined) return index * 3 + (owner === node ? after ? 2 : 0 : 0.5);
+      }
+      return Number.POSITIVE_INFINITY;
     };
     for (const preparation of plan.emission.preparations.values()) {
       if (preparation.layer !== layer) continue;
@@ -129,9 +228,9 @@ function collectRustConstructionWriteLiveness(
       if (plan.emission.exposure?.expression === point.node)
         for (const binding of plan.emission.frame?.bindings ?? []) before.add(binding.declaration);
       const after = new Set<Node>(point.publishAfter ? fields : []);
-      if (before.size !== 0 || after.size !== 0) boundaries.set(point.node, { before, after });
+      if (!parameterInitializers.has(point.node) && (before.size !== 0 || after.size !== 0)) boundaries.set(point.node, { before, after });
       if (point.publishMissingElse) for (const id of graph.sourcePoints.get(point.node) ?? [])
-        if (graph.points[id]?.operation.kind === "branch") addReads(readsAfter, id, fields);
+        if (graph.points[id]?.operation.kind === "branch") addObservation(id, nativeOrder(point.node, true), fields, undefined);
       for (const projection of preparation.projections) {
         if (projection.expression.kind !== "capture" || projection.expression.declaration === undefined) continue;
         let callable = source.ast.parent(projection.expression.node);
@@ -140,12 +239,14 @@ function collectRustConstructionWriteLiveness(
         if (callable === undefined || callable === graph.declaration) continue;
         let captured = captureReads.get(callable);
         if (captured === undefined) { captured = new Set(); captureReads.set(callable, captured); }
-        captured.add(projection.expression.declaration);
+        captured.add(physicalField(plan, projection.expression.declaration));
       }
     }
-    const subtrees = new Map<Node, Set<number>>([...boundaries.keys()].map(node => [node, new Set()]));
+    const parameters = layer.constructor === undefined ? [] : source.ast.parameters(layer.constructor)
+      .filter((parameter): parameter is Node => parameter !== undefined && graph.bindings.has(parameter));
+    const subtrees = new Map<Node, Set<number>>([...boundaries.keys(), ...propertyInitializers.keys(), ...parameters]
+      .map(node => [node, new Set()]));
     for (const point of graph.points) {
-      if (!liveness.reachable.has(point.id)) continue;
       for (let node = point.source; node !== undefined && node !== graph.declaration; node = source.ast.parent(node))
         subtrees.get(node)?.add(point.id);
     }
@@ -154,25 +255,72 @@ function collectRustConstructionWriteLiveness(
       for (const id of subtree) {
         const point = graph.points[id]!;
         if (boundary.before.size !== 0) for (const edge of point.predecessors)
-          if (!subtree.has(edge.from) && liveness.reachable.has(edge.from)) addReads(readsAfter, edge.from, boundary.before);
+          if (!subtree.has(edge.from)) addObservation(edge.from, nativeOrder(node, false), boundary.before, undefined);
         if (boundary.after.size !== 0 && point.successors.some(edge => !subtree.has(edge.to) &&
           edge.kind !== "exception" && edge.kind !== "return" &&
-          edge.kind !== "break" && edge.kind !== "continue")) addReads(readsAfter, id, boundary.after);
+          edge.kind !== "break" && edge.kind !== "continue")) addObservation(id, nativeOrder(node, true), boundary.after, undefined);
       }
     }
-    const finalLayer = layerIndex === plan.layers.length - 1;
-    const finalPoint = plan.points.get(plan.definition.declaration);
-    if (finalPoint === undefined) failTargetAnalysisInvariant("tsonic-rust",
-      "Construction write liveness requires the admitted final native materialization point.", plan.definition.declaration);
-    const completedFields = finalLayer ? new Set(plan.completesNormally && (!plan.publishesReceiver || !finalPoint.published) ? fields : [])
-      : new Set(plan.layers.slice(0, layerIndex + 1)
-      .flatMap(selected => selected.fields).map(field => plan.physicalDeclarations.get(field.declaration))
-      .filter((field): field is Node => field !== undefined && plan.localFieldDeclarations.has(field)));
+    const exits = (node: Node): readonly number[] => {
+      const subtree = subtrees.get(node);
+      if (subtree === undefined) failTargetAnalysisInvariant("tsonic-rust",
+        "Construction write liveness requires its original checked initializer or parameter region.", node);
+      return [...subtree].filter(id => graph.points[id]!.successors.some(edge => !subtree.has(edge.to) &&
+        edge.kind !== "exception" && edge.kind !== "return" && edge.kind !== "break" && edge.kind !== "continue"));
+    };
+    const plainField = (declaration: Node): boolean => {
+      const binding = records.frameBindingDeclaration.get(declaration);
+      return binding === undefined ? records.capturedFieldStorage.get(declaration) === undefined
+        : binding.storage === "value" && binding.initialization === "ready";
+    };
+    let preceding: readonly number[] | undefined;
+    if (layer.constructor !== undefined) {
+      if (layer.baseCall !== undefined) preceding = (graph.sourcePoints.get(layer.baseCall) ?? [])
+        .filter(id => graph.points[id]?.operation.kind === "evaluate");
+      else {
+        const last = parameters[parameters.length - 1];
+        preceding = last === undefined ? [graph.entry] : exits(last);
+      }
+    }
+    for (const { index, field } of initializers) {
+      if (field.initializer === undefined) failTargetAnalysisInvariant("tsonic-rust",
+        "An admitted native initialization requires its checked expression.", field.declaration);
+      const parameter = parameterInitializers.has(field.initializer);
+      const points = parameter ? preceding : exits(field.initializer);
+      if (points === undefined || points.length === 0) failTargetAnalysisInvariant("tsonic-rust",
+        "A native field initializer requires its actual checked predecessor.", field.declaration);
+      const preparation = plan.emission.preparations.get(field.initializer);
+      if (preparation === undefined || preparation.layer !== layer) failTargetAnalysisInvariant("tsonic-rust",
+        "Construction write liveness requires its admitted field initialization preparation.", field.initializer);
+      const physical = physicalField(plan, field.declaration);
+      for (const id of points) {
+        if (parameter) {
+          const before = new Set<Node>(preparation.point.publishBefore ? fields : []);
+          if (plan.emission.exposure?.expression === field.initializer)
+            for (const binding of plan.emission.frame?.bindings ?? []) before.add(binding.declaration);
+          addObservation(id, index * 3, before, undefined);
+        }
+        if (!preparation.retainsFrame && plainField(physical)) addObservation(id, index * 3 + 1, new Set(), physical);
+        if (parameter) addObservation(id, index * 3 + 2,
+          new Set(preparation.point.publishAfter ? fields : []), undefined);
+      }
+      if (!parameter) preceding = points;
+    }
+    for (const selected of observations.values()) selected.sort((left, right) => right.order - left.order);
+    const afterNative = (point: number, input: ReadonlySet<Node>, work: SourceFlowWork | undefined): Set<Node> => {
+      const live = work === undefined ? new Set(input) : copyConstructionLiveFields(input, work);
+      for (const observation of observations.get(point) ?? []) {
+        work?.step();
+        if (observation.written !== undefined) live.delete(observation.written);
+        for (const field of observation.reads) { work?.step(); live.add(field); }
+      }
+      return live;
+    };
     const projectionFor = (expression: Node) => plan.emission.preparations.get(expression)?.projections
       .find(projection => projection.expression.node === expression);
     const plainWrites = new Map<Node, Node>();
     for (const point of graph.points) {
-      if (!liveness.reachable.has(point.id) || point.operation.kind !== "write-location") continue;
+      if (point.operation.kind !== "write-location") continue;
       const target = point.operation.location;
       if (!rustBindingUseIsEmitted(source.ast, records, target, graph.declaration, graph.declaration) ||
         plan.emission.preparations.get(target)?.retainsFrame !== false) continue;
@@ -207,8 +355,7 @@ function collectRustConstructionWriteLiveness(
         },
       },
       transfer(point, input, work) {
-        const live = copyConstructionLiveFields(input, work);
-        for (const field of readsAfter.get(point.id) ?? []) { work.step(); live.add(field); }
+        const live = afterNative(point.id, input, work);
         if (point.operation.kind === "write-location") {
           const field = plainWrites.get(point.operation.location);
           if (field !== undefined) live.delete(field);
@@ -218,31 +365,32 @@ function collectRustConstructionWriteLiveness(
           const operation = records.targetOperation.get(point.source);
           if (projection?.expression.declaration !== undefined && operation?.kind === "source-field" && operation.accessMode !== "write" &&
             !rustStaticComparisonSkipsOperand(source.ast, records, point.source))
-            live.add(projection.expression.declaration);
+            live.add(physicalField(plan, projection.expression.declaration));
           for (const field of captureReads.get(point.source) ?? []) { work.step(); live.add(field); }
         }
         return live;
       },
     });
-    if (solution.kind === "unresolved") return [{ code: "RUST_LIVENESS_FLOW_UNRESOLVED", source: "tsonic-rust",
-      category: "error", message: solution.reason, sourceNode: solution.source ?? graph.declaration,
-      evidence: ["target.capability=rust.analysis.liveness"] }];
+    if (solution.kind === "unresolved") return solution;
     for (const point of graph.points) {
       if (!solution.reachable.has(point.id) || point.operation.kind !== "write-location") continue;
       const target = point.operation.location;
       if (!rustBindingUseIsEmitted(source.ast, records, target, graph.declaration, graph.declaration)) continue;
       const projection = projectionFor(target);
       if (projection?.expression.kind !== "field" || projection.expression.declaration === undefined) continue;
-      const field = projection.expression.declaration;
+      const field = physicalField(plan, projection.expression.declaration);
+      const after = solution.after.get(point.id);
+      if (after === undefined) failTargetAnalysisInvariant("tsonic-rust",
+        "A construction write requires its actual completed source-flow state.", target);
       const unobserved = plainWrites.has(target) &&
-        !solution.after.get(point.id)?.has(field) && !readsAfter.get(point.id)?.has(field) &&
+        !afterNative(point.id, after, undefined).has(field) &&
         !completion.observed(target, field, graph.declaration, false) && !completion.repeated(target, field, graph.declaration);
       let selectedLayers = writesBySource.get(target);
       if (selectedLayers === undefined) { selectedLayers = new Map(); writesBySource.set(target, selectedLayers); }
       selectedLayers.set(layer, (selectedLayers.get(layer) ?? true) && unobserved);
     }
+    return { kind: "resolved" as const, solution, afterNative };
   }
-  return [];
 }
 
 function copyConstructionLiveFields(input: ReadonlySet<Node>, work: SourceFlowWork): Set<Node> {

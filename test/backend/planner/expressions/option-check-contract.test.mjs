@@ -83,7 +83,7 @@ export function read(values: (string | undefined)[]): void {
 optionalChain: { get: (subject) => subject === node
     ? { ...fact, guardDepth } : program.records.optionalChain.get(subject) }}, program.records);
     const producer = createRustOptionalChainEmissionProducer(() => {});
-    const issues = analyzeRustOptionalChainEmission({ ...program, records }, [node], producer);
+    const issues = analyzeRustOptionalChainEmission({ ...program, records }, [node], producer, []);
     assert.equal(issues.length, 1);
     assert.equal(issues[0].code, "RUST_MISSING_TARGET_FACT");
     assert.ok(issues[0].evidence.includes("target.capability=rust.backend.optional-chain-contract"));

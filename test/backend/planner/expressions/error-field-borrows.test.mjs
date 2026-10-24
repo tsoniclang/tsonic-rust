@@ -4,6 +4,7 @@ import { analyzeRust, compileRust, rustSourceText } from "../../../helpers/rust-
 import { rustNativeFixtureNodes } from "../../../helpers/records.mjs";
 import { analyzeRustErrorFieldBorrows } from "../../../../dist/analysis/operations/error-field-borrows.js";
 import { createRustErrorFieldProducer } from "../../../../dist/analysis/program/records/error-field-borrows.js";
+import { assertRustRequiredRecords } from "../../../../dist/analysis/program/records/required-records.js";
 
 // Error property reads in comparisons borrow the Error's field where nothing later can change it, and take an
 // owned value first where a later operand writes the same Error. Analysis seals the decision
@@ -26,7 +27,8 @@ function borrowDecisions(source, answer, surfaces = []) {
   const selected = { ...program, errorStorageDemands: { ...program.errorStorageDemands,
     invalidationFor: (subject, expression, pure) => { queries.push({ subject, expression, pure }); return answer(expression); } } };
   const producer = createRustErrorFieldProducer(() => {});
-  const issues = analyzeRustErrorFieldBorrows(selected, rustNativeFixtureNodes(program), producer);
+  const required = [];
+  const issues = analyzeRustErrorFieldBorrows(selected, rustNativeFixtureNodes(program), producer, required);
   const { ast } = program.source;
   let comparison;
   const visit = node => {
@@ -38,6 +40,9 @@ function borrowDecisions(source, answer, surfaces = []) {
   assert.equal(comparison !== undefined, true, "one Error property comparison");
   const left = ast.as.AsBinaryExpression(comparison).Left;
   const right = ast.as.AsBinaryExpression(comparison).Right;
+  assert.equal(required.some(requirement => requirement.subject === left && requirement.family === "errorFieldEmission"), true,
+    "the real observation owner registers its final publication before sealing");
+  assertRustRequiredRecords({ ...program.records, ...producer.records }, required);
   return { program, ast, queries, issues, left, right, records: producer.records };
 }
 
@@ -56,7 +61,9 @@ export function probe(error: Error): boolean { return error.${property} === read
 test("actual same-owner writes consume guarded fields before mutation", () => {
   for (const property of ["name", "message"]) {
     const body = probe(`${mutate}export function probe(error: Error): boolean { return error.${property} === mutate(error); }`);
-    assert.match(body, new RegExp(`let error_snapshot = String::from\\(rt::ErrorObject::error_${property}\\(&error(?:\\.clone\\(\\))?\\)\\);\\s*error_snapshot\\s*\\}\\) == mutate\\(error`, "u"));
+    assert.match(body, new RegExp(`let error_snapshot = String::from\\(rt::ErrorObject::error_${property}\\(&error(?:\\.clone\\(\\))?\\)\\);\\s*error_snapshot\\s*\\}\\) == core::convert::AsRef::<str>::as_ref\\(&mutate\\(error\\)\\)`, "u"));
+    assert.equal(Array.from(body.matchAll(/mutate\(error\)/gu)).length, 1,
+      `${property}: the owned snapshot precedes exactly one same-owner mutation`);
   }
   const stack = probe(`${mutate}export function probe(error: Error): boolean { return error.stack === mutate(error); }`);
   assert.match(stack, /error_stack\(&error(?:\.clone\(\))?\)\s*\.map\(String::from\)[\s\S]*mutate\(error/u, "the stack is owned before the write");

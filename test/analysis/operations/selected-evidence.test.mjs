@@ -149,11 +149,11 @@ export const dog = animal as Dog;
 
   assert.deepEqual(result.artifacts, []);
   assert.deepEqual(result.diagnostics.map(({ code, message }) => ({ code, message })), [{
-    code: "RUST_ASSERTION_UNSUPPORTED",
-    message: "Checked source assertion does not map to an identity or explicit Rust runtime conversion.",
-  }, {
     code: "RUST_AMBIENT_VALUE_IMPLEMENTATION_MISSING",
     message: "A runtime read of an authored ambient variable requires an exact native implementation.",
+  }, {
+    code: "RUST_ASSERTION_UNSUPPORTED",
+    message: "Checked source assertion does not map to an identity or explicit Rust runtime conversion.",
   }]);
 });
 
@@ -314,13 +314,15 @@ export function read(value: Counter | undefined): int32 {
   const source = artifactText(result, "src/index.rs");
   assert.match(
     source,
-    /let dispatch_receiver(?:_\d+)? = &match value\.as_ref\(\) \{[\s\S]*Some\(flow_value(?:_\d+)?\) => flow_value(?:_\d+)?\.clone\(\),[\s\S]*None => unreachable!\("checked flow selected a missing optional value"\),[\s\S]*\};[\s\S]*dispatch_receiver(?:_\d+)?\.dispatch\.read_counter_value\(\)/su,
+    /let dispatch_receiver(?:_\d+)? = &match value\.as_ref\(\) \{[\s\S]*Some\(flow_value(?:_\d+)?\) => flow_value(?:_\d+)?,[\s\S]*None => unreachable!\("checked flow selected a missing optional value"\),[\s\S]*\};[\s\S]*dispatch_receiver(?:_\d+)?\.dispatch\.read_counter_value\(\)/su,
   );
   assert.equal(
     source.match(/match value\.as_ref\(\)/gsu)?.length,
     2,
   );
   assert.doesNotMatch(source, /value\.clone\(\)\.as_ref\(\)/u);
+  assert.doesNotMatch(source, /flow_value(?:_\d+)?\.clone\(\)/u,
+    "both receiver projections retain their native shared payload without a snapshot");
   validateGeneratedProject("selected-narrowed-project-property", result.artifacts);
 });
 
