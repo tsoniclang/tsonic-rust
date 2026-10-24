@@ -68,7 +68,12 @@ await schedule();`));
   assert.equal(graph.spawns.length, 1, "the existing inner void is the one spawned task");
   assert.equal(graph.calls.length, 1, "the directly awaited source call has one hidden scope argument");
   assert.equal(ast.is.IsSourceFile(graph.calls[0].owner), true, "the call belongs to the actual entry module");
-  assert.equal(ast.text(graph.calls[0].node), "schedule()", "the scope use preserves the original checked invocation");
+  const invocation = graph.calls[0].node;
+  assert.equal(ast.is.IsCallExpression(invocation), true, "the scope use preserves the original checked invocation");
+  const callee = ast.as.AsCallExpression(invocation).Expression;
+  assert.equal(ast.is.IsIdentifier(callee) && ast.text(callee) === "schedule", true,
+    "the original scheduling call retains its exact authored callee");
+  assert.equal(ast.arguments(invocation).length, 0, "the checked scheduling invocation has no authored value arguments");
   assert.equal(graph.entries.length, 1, "the executable entry retains its aggregate lifetime");
 });
 

@@ -4,7 +4,7 @@ import test from "node:test";
 import { rustCallableInputLifetimeParameters } from "../../../dist/analysis/callables/source-input-lifetimes.js";
 
 import { rustCallableInputTargetType } from "../../../dist/target-model/types/carriers/callables.js";
-import { rustSourcePrimitiveTargetType } from "../../../dist/target-model/types/index.js";
+import { rustSourcePrimitiveTargetType, rustStringTargetType } from "../../../dist/target-model/types/index.js";
 import { analyzeRust } from "../../helpers/rust-session.mjs";
 
 test("physical callback lifetimes come only from matching sealed parameter ABI evidence", () => {
@@ -15,7 +15,8 @@ test("physical callback lifetimes come only from matching sealed parameter ABI e
   const carrier = rustCallableInputTargetType([integer], integer, lifetime);
   const ast = { parameters: declaration => declaration === owner ? [parameter] : [],
     is: { IsClassDeclaration: () => false, IsClassExpression: () => false } };
-  let selected = { parameterCarrier: carrier, inputLifetime: lifetime };
+  const valid = { form: "required", valueCarrier: carrier, parameterCarrier: carrier, mode: "value", inputLifetime: lifetime };
+  let selected = valid;
   const records = createRustRecordFixture({sourceParameterAbi: { get: (node) => node === parameter ? selected : undefined }});
   const contract = rustCallableInputLifetimeParameters(owner, ast, records);
   assert.equal(contract.length, 1);
@@ -30,13 +31,26 @@ test("physical callback lifetimes come only from matching sealed parameter ABI e
     ? selected : undefined }});
   assert.equal(rustCallableInputLifetimeParameters(owner, sharedAst, sharedFacts).length, 1,
     "one shared physical lifetime contributes one native generic binder");
-  for (const mutation of [undefined, { parameterCarrier: carrier },
-    { parameterCarrier: integer, inputLifetime: lifetime },
-    { parameterCarrier: { ...carrier, referent: integer }, inputLifetime: lifetime },
-    { parameterCarrier: carrier, inputLifetime: { ...lifetime, identity: "foreign/input" } }]) {
+  for (const [label, mutation] of [
+    ["missing ABI", undefined],
+    ["missing input lifetime", { ...valid, inputLifetime: undefined }],
+    ["nonreference physical input", { ...valid, parameterCarrier: integer }],
+    ["unrelated physical referent", { ...valid, parameterCarrier: { ...carrier, referent: integer } }],
+    ["foreign input lifetime", { ...valid, inputLifetime: { ...lifetime, identity: "foreign/input" } }],
+  ]) {
     selected = mutation;
-    assert.equal(rustCallableInputLifetimeParameters(owner, ast, records).length, 0);
+    assert.equal(rustCallableInputLifetimeParameters(owner, ast, records).length, 0, label);
   }
+  const nativeValue = rustStringTargetType();
+  selected = { form: "required", valueCarrier: nativeValue, mode: "ref", inputLifetime: lifetime,
+    parameterCarrier: { kind: "reference", referent: nativeValue, mutable: false, lifetime } };
+  const borrowed = rustCallableInputLifetimeParameters(owner, ast, records);
+  assert.equal(borrowed.length, 1, "an ordinary native borrowed-return input retains its required header lifetime");
+  assert.equal(borrowed[0].declaration === parameter && borrowed[0].lifetime === lifetime, true,
+    "native value loans retain their exact source parameter and named lifetime identity");
+  selected = { ...selected, mode: "value" };
+  assert.equal(rustCallableInputLifetimeParameters(owner, ast, records).length, 0,
+    "a mismatched native input mode cannot publish a borrowed header binder");
 });
 
 test("owned suspended callable inputs and JS promise payload requirements retain distinct exact owners", () => {

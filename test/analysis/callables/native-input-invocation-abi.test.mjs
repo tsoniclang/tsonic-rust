@@ -5,9 +5,15 @@ import { rustNativeCallableInvocationArguments } from "../../../dist/policy/type
 
 function invocation(program) {
   const calls = [];
+  const ast = program.source.ast;
   const visit = node => {
-    if (program.source.ast.is.IsCallExpression(node) && program.source.ast.text(node) === "callback(value)") calls.push(node);
-    program.source.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+    if (ast.is.IsCallExpression(node)) {
+      const expression = ast.as.AsCallExpression(node).Expression;
+      const arguments_ = ast.arguments(node);
+      if (ast.is.IsIdentifier(expression) && ast.text(expression) === "callback" && arguments_.length === 1 &&
+        ast.is.IsIdentifier(arguments_[0]) && ast.text(arguments_[0]) === "value") calls.push(node);
+    }
+    ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
   };
   for (const artifact of program.records.sourceArtifacts.get()) visit(artifact.sourceFile);
   assert.equal(calls.length, 1, "the actual checked callback invocation is unique");

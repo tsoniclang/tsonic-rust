@@ -35,6 +35,8 @@ import { recordRustComputedCallEvaluation } from "./computed-members.js";
 import { requireRustRecord } from "../program/records/required-records.js";
 import { rustPromiseBodyInvocationCarrier } from "../callables/promise-bodies.js";
 import { rustSpreadElementCarrier } from "../../target-model/operations/rest-assembly.js";
+import { rustFixedArrayCarrierValue } from "../../target-model/types/carriers/native.js";
+import { rustTargetConstInteger } from "../../target-model/types/generic-arguments.js";
 
 export function applySelectedProjectSourceCall(
   walk: RustFactWalk,
@@ -190,10 +192,12 @@ export function applySelectedProjectSourceCall(
       : targetParameter.passingMode === "borrow-shared"
         ? "ref" as const
         : "value" as const;
+    const tupleRest = parameterAbi.form === "rest" && valueCarrier.kind === "tuple" ? valueCarrier : undefined;
+    const fixedRest = parameterAbi.form === "rest" ? rustFixedArrayCarrierValue(valueCarrier) : undefined;
     const inputs = parameterInputs.map((binding, inputIndex) => {
       const carrier = parameterAbi.form === "rest" &&
           binding.sourceParameterForm === "rest-element"
-        ? valueCarrier.kind === "tuple" ? rustSpreadElementCarrier(valueCarrier, inputIndex)
+        ? tupleRest !== undefined || fixedRest !== undefined ? rustSpreadElementCarrier(valueCarrier, inputIndex)
           : valueCarrier.kind === "array" ? valueCarrier.element : rustJsArrayLikeElementTargetType(valueCarrier)
         : parameterAbi.form === "default" || parameterAbi.form === "optional" && mode === "value"
           ? parameterCarrier
@@ -210,9 +214,9 @@ export function applySelectedProjectSourceCall(
               : { spreadElementIndex: binding.spreadElementIndex }),
           };
     });
-    const tupleRest = parameterAbi.form === "rest" && valueCarrier.kind === "tuple" ? valueCarrier : undefined;
-    const wholeTupleSequence = tupleRest !== undefined && parameterInputs.length === 1 &&
+    const wholeTupleSequence = (tupleRest !== undefined || fixedRest !== undefined) && parameterInputs.length === 1 &&
       parameterInputs[0]?.sourceParameterForm === "rest-sequence";
+    const fixedRestLength = fixedRest === undefined ? undefined : rustTargetConstInteger(fixedRest.length);
     const omittedTupleElements = tupleRest === undefined || wholeTupleSequence ? [] : tupleRest.elements.slice(inputs.length);
     const authoredRestType = omittedTupleElements.length === 0 || parameterDeclaration === undefined ? undefined
       : Node_Type(ast, parameterDeclaration);
@@ -221,6 +225,8 @@ export function applySelectedProjectSourceCall(
     if (inputs.some((input) => input === undefined) ||
       (parameterAbi.form !== "rest" && inputs.length > 1) ||
       (parameterAbi.form === "required" && inputs.length !== 1) ||
+      (fixedRest !== undefined && !wholeTupleSequence && (fixedRestLength === undefined ||
+        BigInt(inputs.length) !== fixedRestLength || parameterInputs.some(binding => binding.sourceParameterForm !== "rest-element"))) ||
       (tupleRest !== undefined && !wholeTupleSequence && (inputs.length > tupleRest.elements.length ||
         parameterInputs.some(binding => binding.sourceParameterForm !== "rest-element") ||
         omittedTupleElements.length !== 0 && (checkedTupleElements?.length !== tupleRest.elements.length ||

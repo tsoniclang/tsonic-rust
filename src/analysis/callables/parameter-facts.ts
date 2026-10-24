@@ -8,11 +8,11 @@ import { requireRustRecord } from "../program/records/required-records.js";
 import { closedMetadataEquals } from "../../target-model/metadata/closed-data.js";
 import { resolveRustContextualParameterAbi } from "./source-callable-abi.js";
 import type { RustSourceParameterAbiFact } from "../../target-model/records/callables-and-resources.js";
-import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { setCarrierFact } from "../operations/project-calls.js";
 import { recordBindingPatternFacts } from "../control-flow/binding-patterns.js";
 import { resolveExpressionCarrier } from "../source-evidence/types/resolution/expression-carriers.js";
 import { requireDenseSourceNodes } from "../source-evidence/dense-nodes.js";
+import { reconcileRequiredCarrier } from "../conversions/contextual-values.js";
 
 export function resolveParameterAbi(walk: RustFactWalk, parameter: Node) {
   return walk.sourceCallableAbi.resolveParameterAbi(
@@ -124,7 +124,7 @@ function recordDefaultParameterInitializerFacts(
         abi.valueCarrier,
       );
   if (initializer !== undefined && resolved !== undefined &&
-    rustTargetTypeRefEquals(resolved, abi.valueCarrier)) {
+    reconcileRequiredCarrier(walk, initializer, resolved, abi.valueCarrier)) {
     return true;
   }
   appendRustDiagnostic(

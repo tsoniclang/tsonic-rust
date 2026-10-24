@@ -24,7 +24,13 @@ function analyze(body) {
     program.source.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
   };
   for (const file of program.sourceFiles) visit(file);
-  const literal = text => nodes.find(node => program.source.ast.is.IsObjectLiteralExpression(node) && program.source.ast.text(node) === text);
+  const literal = text => nodes.find(node => {
+    const ast = program.source.ast;
+    if (!ast.is.IsObjectLiteralExpression(node)) return false;
+    const range = ast.authoredRange(node);
+    const file = ast.getSourceFile(node);
+    return range.kind === "authored" && file !== undefined && ast.getSourceText(file).slice(range.start, range.end) === text;
+  });
   const fields = node => {
     const emission = program.records.objectLiteralEmission.get(node);
     const fact = program.records.targetOperation.get(node);

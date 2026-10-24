@@ -4,6 +4,7 @@ import { type RustProgramRecords } from "../../target-model/records/program.js";
 import { rustLifetimeKey, rustLifetimesEqual, type RustSourceGenericParameterContract, type RustLifetimeRef } from "../../target-model/lifetimes/index.js";
 import { type RustTargetTypeResolutionContext } from "../source-evidence/types/resolution/model.js";
 import { allocateRustGeneratedName } from "../../target-model/names/generated.js";
+import { rustParameterModeForCarriers } from "../../policy/ownership/source-parameter-contracts.js";
 
 export function rustCallableImplicitLifetimeParameters(
   declaration: Node,
@@ -31,7 +32,8 @@ export function rustCallableInputLifetimeParameters(
     const abi = parameter === undefined ? undefined : records.sourceParameterAbi.get(parameter);
     const lifetime = abi?.inputLifetime;
     if (parameter === undefined || lifetime === undefined || abi?.parameterCarrier.kind !== "reference" ||
-      !rustLifetimesEqual(lifetime, abi.parameterCarrier.lifetime)) return [];
+      !rustLifetimesEqual(lifetime, abi.parameterCarrier.lifetime) ||
+      rustParameterModeForCarriers(abi.valueCarrier, abi.parameterCarrier) !== abi.mode) return [];
     const identity = rustLifetimeKey(lifetime);
     if (retained.has(identity)) return [];
     retained.add(identity);

@@ -26,9 +26,17 @@ function originalOrigin(context, node) {
   assert.equal(selected.kind === "resolved", true, "the catch or rejection parameter has an owned storage subject");
   const origins = context.sourceStorage.closedOriginsFor(selected.subject);
   assert.equal(origins.kind === "complete", true, origins.reason ?? "the rejection channel is closed");
-  const original = context.sourceStorage.nodes.find(candidate => context.ast.is.IsNewExpression(candidate) &&
-    context.ast.text(candidate) === "new Failure(7)");
-  assert.equal(original !== undefined, true, "the original project-error allocation is present");
+  const ast = context.ast;
+  const declaration = context.sourceStorage.nodes.find(candidate => ast.is.IsVariableDeclaration(candidate) &&
+    ast.is.IsIdentifier(ast.name(candidate)) && ast.text(ast.name(candidate)) === "original");
+  const original = declaration === undefined ? undefined : ast.as.AsVariableDeclaration(declaration).Initializer;
+  assert.equal(ast.is.IsNewExpression(original), true, "the original project-error allocation is present");
+  const constructor = ast.as.AsNewExpression(original).Expression;
+  const arguments_ = ast.arguments(original);
+  assert.equal(ast.is.IsIdentifier(constructor) && ast.text(constructor) === "Failure", true,
+    "the original allocation keeps its checked constructor rather than a reconstructed error");
+  assert.equal(arguments_.length === 1 && ast.is.IsNumericLiteral(arguments_[0]) && ast.text(arguments_[0]) === "7", true,
+    "the exact authored error payload is retained");
   assert.equal(origins.origins.some(origin => origin.subject.node === original), true,
     "the original allocation, not a reconstructed nominal error, reaches the handler");
 }

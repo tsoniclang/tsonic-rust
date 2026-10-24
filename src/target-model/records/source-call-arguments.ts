@@ -15,7 +15,7 @@ export type RustSourceParameterEmission = {
   readonly form: "required" | "optional" | "default" | "rest";
   readonly carrier: TargetTypeRef;
   readonly inputs: readonly RustSourceCallInputEmission[];
-} & ({ readonly rest: "native" | "js" } |
+} & ({ readonly rest: "native" | "js" | "fixed" } |
   { readonly rest: "tuple"; readonly omitted: readonly TargetTypeRef[] });
 
 export interface RustSourceCallEvaluationEmission {

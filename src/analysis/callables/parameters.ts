@@ -35,8 +35,8 @@ export function analyzeRustCallableParameterEmission(input: {
       ? closeRustRetainedCallableCarrier(abi.parameterCarrier, rustStaticLifetime) : abi.parameterCarrier);
     const sourceCarrier = program.records.runtimeCarrier.get(parameter)?.carrier;
     const storage = program.records.bindingStorage.get(parameter);
-    if (pattern !== undefined && (abi.mode !== "value" || sourceCarrier === undefined || !rustTargetTypeRefEquals(sourceCarrier, abi.valueCarrier) || storage !== undefined))
-      failTargetAnalysisInvariant("tsonic-rust", "Binding-pattern parameters require one exact by-value Rust source and initialized value carrier.", parameter);
+    if (pattern !== undefined && (sourceCarrier === undefined || !rustTargetTypeRefEquals(sourceCarrier, abi.valueCarrier) || storage !== undefined))
+      failTargetAnalysisInvariant("tsonic-rust", "Binding-pattern parameters require their exact Rust source value and selected native entry carrier.", parameter);
     if (storage !== undefined && !rustTargetTypeRefEquals(abi.valueCarrier, storage.valueCarrier))
       failTargetAnalysisInvariant("tsonic-rust", "An admitted promoted parameter requires its exact finalized value carrier.", parameter);
     const owned = carrier.kind !== "pointer" && carrier.kind !== "reference";

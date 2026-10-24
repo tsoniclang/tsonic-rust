@@ -3,6 +3,8 @@ import test from "node:test";
 import { analyzeRust } from "../../helpers/rust-session.mjs";
 
 import { rustCallableInputProtocol } from "../../../dist/target-model/types/index.js";
+import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
+import { rustEffectiveValueCarrier } from "../../../dist/analysis/conversions/value-carrier-queries.js";
 
 for (const surfaces of [[], ["js"]]) {
   test(`invocation-only source formals borrow while retained and reassigned formals keep ownership in ${surfaces[0] ?? "native"}`, () => {
@@ -36,6 +38,12 @@ export function main(): void {
           if (name === "direct") {
             assert.equal(abi.mode, "value", "the selected carrier is already the native borrowed input");
             assert.equal(abi.parameterCarrier.kind, "reference");
+          }
+          if (name === "defaultInput") {
+            const initializer = ast.as.AsParameterDeclaration(node).Initializer;
+            assert.equal(ast.is.IsArrowFunction(initializer), true, "the actual authored default callback is retained");
+            assert.equal(rustTargetTypeRefEquals(rustEffectiveValueCarrier(program.records, initializer), abi.valueCarrier), true,
+              "the default initializer consumes its admitted native value conversion, not a raw carrier equality guess");
           }
           found.add(name);
         }

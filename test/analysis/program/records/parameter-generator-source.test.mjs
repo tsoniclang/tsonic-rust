@@ -90,7 +90,15 @@ for (const surfaces of [[], ["js"]]) {
     for (const kind of ["KindObjectBindingPattern", "KindArrayBindingPattern"]) {
       const pattern = nodes.find(node => ast.kindName(node) === kind);
       assert.equal(pattern !== undefined, true, kind);
-      assert.equal(records.sourceParameterAbi.get(ast.parent(pattern))?.form, "required", kind);
+      const parameter = ast.parent(pattern);
+      const abi = records.sourceParameterAbi.get(parameter);
+      assert.equal(abi?.form, "required", kind);
+      const native = records.callableParameter.get(parameter);
+      assert.equal(native !== undefined && native.pattern === pattern, true, `${kind}: the original pattern reaches native parameter emission`);
+      assert.equal(rustTargetTypeRefEquals(native.carrier, abi.parameterCarrier), true,
+        `${kind}: the header consumes the actual selected native borrow or owned ABI`);
+      assert.equal(rustTargetTypeRefEquals(native.sourceCarrier, abi.valueCarrier), true,
+        `${kind}: the source binding value remains distinct from its native entry carrier`);
     }
     const leaves = nodes.filter(node => ast.kindName(node) === "KindBindingElement");
     assert.equal(leaves.length, 2);

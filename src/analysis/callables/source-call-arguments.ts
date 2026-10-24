@@ -19,6 +19,7 @@ import { rustSourceCallArgumentCarriers } from "./source-call-lifetimes.js";
 import { rustRetainedCallSubstitutions } from "./retained-call-lifetimes.js";
 import { rustArgumentPassingMode } from "../../policy/ownership/argument-passing.js";
 import type { RustSourceCallInputEmission, RustSourceParameterEmission, RustSourceCallEvaluationEmission } from "../../target-model/records/source-call-arguments.js";
+import { rustTargetConstInteger } from "../../target-model/types/generic-arguments.js";
 
 export function analyzeRustSourceCallArguments(program: Omit<RustAnalysisProgram, "reachability">,
   nodes: readonly Node[], producer: RustSourceCallArgumentProducer, source: TargetSourceProgram): readonly TargetDiagnostic[] {
@@ -134,6 +135,14 @@ export function analyzeRustSourceCallArguments(program: Omit<RustAnalysisProgram
           candidate.subject.node === declarationParameters[parameterIndex]);
       const witness = omitted === undefined ? undefined : program.callableValues.nativeStorage.invocationWitnessFor(omitted, call);
       const carrier = witness === undefined ? parameter.parameterCarrier : rustSourceOptionalTargetType(witness);
+      const fixedRest = parameter.form === "rest" ? rustFixedArrayCarrierValue(parameter.parameterCarrier) : undefined;
+      if (fixedRest !== undefined) {
+        const wholeSequence = inputs.length === 1 && inputs[0]?.sequence !== "value";
+        const length = rustTargetConstInteger(fixedRest.length);
+        if (!wholeSequence && (length === undefined || BigInt(inputs.length) !== length || inputs.some(input => input.sequence !== "value")))
+          failTargetAnalysisInvariant("tsonic-rust", "An admitted fixed-array rest requires its exact checked native element count and ordered assembly.", call);
+        return Object.freeze({ form: parameter.form, carrier, rest: "fixed", inputs: Object.freeze(inputs) });
+      }
       if (parameter.form === "rest" && parameter.parameterCarrier.kind === "tuple") {
         const wholeSequence = inputs.length === 1 && inputs[0]?.sequence !== "value";
         if (!wholeSequence && (inputs.length > parameter.parameterCarrier.elements.length || inputs.some(input => input.sequence !== "value")))

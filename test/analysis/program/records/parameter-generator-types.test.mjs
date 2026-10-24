@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
@@ -35,6 +35,10 @@ function check(directory, body) {
 }
 
 test("parameter, generator and binding producer types expose exact domain inputs and reject every retired form", () => {
+  assert.equal(existsSync(join(root, "src/analysis/declarations/types-and-bindings.ts")), false,
+    "the retired parameter ABI forwarding module is absent from the current source architecture");
+  assert.equal(existsSync(join(root, "dist/analysis/declarations/types-and-bindings.js")), false,
+    "a stale built forwarding module cannot keep the retired API callable");
   mkdirSync(temporary, { recursive: true });
   const directory = mkdtempSync(join(temporary, "case-"));
   writeFileSync(join(directory, "tsconfig.json"), JSON.stringify({
@@ -62,7 +66,7 @@ builder.sourceBinding.get(subject);
     ["generator key", `import { rustGeneratorFactKey } from "${join(root, "dist/analysis/program/records/keys/callables-and-resources.js")}";`, /Cannot find module/u],
     ["parameter ABI key", `import { rustSourceParameterAbiFactKey } from "${join(root, "dist/analysis/program/records/keys/callables-and-resources.js")}";`, /Cannot find module/u],
     ["source binding key", `import { rustSourceBindingFactKey } from "${join(root, "dist/analysis/program/records/keys/value-projections.js")}";`, /Cannot find module.*\/keys\/value-projections\.js/u],
-    ["parameter ABI forwarder", `import { setParameterAbiFact } from "${join(root, "dist/analysis/declarations/types-and-bindings.js")}";`, /has no exported member|no exported member named/u],
+    ["parameter ABI forwarder", `import { setParameterAbiFact } from "${join(root, "dist/analysis/declarations/types-and-bindings.js")}";`, /Cannot find module.*\/declarations\/types-and-bindings\.js/u],
     ["generator foreign declaration", "builder.generators.suspend({}, protocol, retention);", /missing.*properties.*Node/u],
     ["generator missing protocol", "builder.generators.suspend(subject, {}, retention);", /missing.*properties.*RustGeneratorProtocol/u],
     ["generator unknown kind", "builder.generators.suspend(subject, { ...protocol, kind: 'iterator' }, retention);", /not assignable/u],
