@@ -127,10 +127,12 @@ test("await-source selection rejects an unrelated exact Future branch", () => {
     assert.equal(failure === undefined, true);
     return result;
   };
-  assert.equal(select([channel.carrier])?.length, 1);
+  const selected = select([channel.carrier]);
+  assert.equal(selected.kind, "resolved");
+  assert.equal(selected.branches.length, 1);
   const unrelated = { ...channel.carrier, genericArguments: channel.carrier.genericArguments.map((argument, index) =>
     index === 1 ? { kind: "type", type: rustSourcePrimitiveTargetType("bool") } : argument) };
-  assert.equal(select([unrelated]) === undefined, true, "source error correspondence cannot attach to a different carrier");
+  assert.equal(select([unrelated]).kind, "rejected", "source error correspondence cannot attach to a different carrier");
 });
 
 test("pure source awaits stay pure while caught source errors retain inner correspondence", () => {

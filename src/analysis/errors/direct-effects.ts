@@ -159,15 +159,17 @@ export function createRustDirectErrorEffects(
       if (branches.some(branch => branch.future !== undefined &&
         rustFutureValueForSourceStorage(branch.carrier) !== undefined)) selected.push({ localErrors: false,
         nativeErrors: [{ identity: rustJsRejectionErrorIdentity, errorType: rustJsValueTargetType() }] });
-      const sourceEdges = operand === undefined || sourceBranches.length === 0 ? []
+      const source = operand === undefined || sourceBranches.length === 0
+        ? { kind: "resolved" as const, branches: [] }
         : selectRustAwaitSourceErrors(walk, operand, sourceBranches
           .map(branch => branch.carrier), declarationEffects, selectSourceErrors, budget);
-      if (sourceEdges === undefined) {
+      if (source.kind === "rejected") {
         appendRustDiagnostic(walk, "RUST_AWAIT_SOURCE_ERRORS_NOT_EXACT",
-          "Awaited source futures require exact producer activations and branch error correspondence.", node,
+          `Awaited source futures require exact producer activations and branch error correspondence. ${source.reason}`, node,
           ["target.capability=rust.async.exact-source-errors"]);
         return undefined;
       }
+      const sourceEdges = source.branches;
       awaitSourceEdges.set(node, Object.freeze(sourceEdges.map(({ carrier, edge }) => Object.freeze({ carrier, edge }))));
       for (const branch of sourceBranches) {
         if (operand === undefined || branch.future === undefined) continue;
