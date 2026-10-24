@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createRustSourceCallableAbiResolver } from "../../../dist/analysis/callables/source-callable-abi.js";
-import { rustSourcePrimitiveTargetType, rustStructuralObjectTargetType, rustStructuralObjectCarrierValue } from "../../../dist/target-model/types/index.js";
+import { rustCallableTargetType, rustSourcePrimitiveTargetType, rustStructuralObjectTargetType, rustStructuralObjectCarrierValue } from "../../../dist/target-model/types/index.js";
+import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 import { analyzeRust, compileRust } from "../../helpers/rust-session.mjs";
 import { analyzeRustOperations } from "../../helpers/rust-operation-analysis.mjs";
 import { rustResolutionContext } from "../../../dist/analysis/program/walk.js";
-import { selectRustSourceParameterStructuralCarrier } from "../../../dist/policy/ownership/source-parameter-contracts.js";
+import { rustSourceParameterSupportsMemberWrites } from "../../../dist/policy/ownership/source-parameter-contracts.js";
 
 import { borrowedCallbackInputSource } from "../../../../tsonic/test/fixtures/borrowed-callback-inputs.mjs";
 
@@ -30,40 +31,66 @@ test("published native parameter ABI supersedes a pre-finalization missing cache
     "a rejected contextual lookup never replaces the published ABI");
 });
 
-test("native formal facets preserve complete source geometry and honor an already-selected native protocol", () => {
+test("native formals preserve original data and method geometry when their contracts already satisfy demand", async () => {
+  const policy = await import("../../../dist/policy/ownership/source-parameter-contracts.js");
+  assert.equal(Object.hasOwn(policy, "selectRustSourceParameterStructuralCarrier"), false,
+    "the obsolete carrier-selecting API is absent, not a compatibility alias");
+  assert.equal(policy.rustSourceParameterSupportsMemberWrites === rustSourceParameterSupportsMemberWrites, true,
+    "one current native member-write predicate owns the admission decision");
   const value = rustSourcePrimitiveTargetType("int32");
   const logical = rustStructuralObjectTargetType("index.ts", [
     { sourceName: "first", type: value, presence: "required", readonly: false },
     { sourceName: "second", type: value, presence: "optional", readonly: false,
       accessor: { getter: true, setter: true } },
   ]);
-  const read = selectRustSourceParameterStructuralCarrier(logical, new Set(), { kind: "implementation" });
-  const readFields = rustStructuralObjectCarrierValue(read)?.fields;
+  assert.equal(rustSourceParameterSupportsMemberWrites(logical, new Set()), true,
+    "an empty demand validates the original native carrier without selecting a replacement");
+  const readFields = rustStructuralObjectCarrierValue(logical)?.fields;
   assert.equal(readFields?.length, 2, "the native read role keeps every original physical field");
-  assert.equal(readFields.every(field => field.readonly), true, "complete empty demand selects a read native role");
+  assert.equal(readFields.every(field => !field.readonly), true, "data-only formals do not acquire gratuitous readonly facets");
   assert.equal(readFields[0].type === value && readFields[1].type === value, true, "exact native value carriers are not widened");
   assert.equal(readFields[0].presence, "required", "required source presence is unchanged");
   assert.equal(readFields[1].presence, "optional", "native absence remains one optional state");
-  assert.equal(readFields[1].accessor.setter, false, "a read role needs no physical setter");
+  assert.equal(readFields[1].accessor.setter, true, "the original data accessor contract is unchanged");
   assert.equal(rustStructuralObjectCarrierValue(logical).fields.every(field => !field.readonly), true,
     "the globally declared logical contract is never rewritten");
-  const write = selectRustSourceParameterStructuralCarrier(logical, new Set([1]), { kind: "implementation" });
-  const writeFields = rustStructuralObjectCarrierValue(write)?.fields;
-  assert.equal(writeFields?.[0].readonly === true && writeFields[1].readonly === false, true,
-    "the selected native writer is an exact subset, not all members mutable");
-  assert.equal(writeFields[1].accessor.setter, true, "only the demanded native setter is retained");
-  assert.equal(selectRustSourceParameterStructuralCarrier(read, new Set([1]), { kind: "selected-native" }) === undefined, true,
+  assert.equal(rustSourceParameterSupportsMemberWrites(logical, new Set([1])), true,
+    "the original native data contract supports its exact demanded member");
+  const writeFields = rustStructuralObjectCarrierValue(logical)?.fields;
+  assert.equal(writeFields?.[0].readonly === false && writeFields[1].readonly === false, true,
+    "a demanded data write does not alter any original native field");
+  assert.equal(writeFields[1].accessor.setter, true, "the demanded native setter remains available");
+  const readonly = rustStructuralObjectTargetType("index.ts", [
+    { sourceName: "first", type: value, presence: "required", readonly: true },
+    { sourceName: "second", type: value, presence: "optional", readonly: true,
+      accessor: { getter: true, setter: false } },
+  ]);
+  assert.equal(rustSourceParameterSupportsMemberWrites(readonly, new Set([1])), false,
     "an actually readonly native protocol cannot satisfy a write demand");
-  assert.equal(selectRustSourceParameterStructuralCarrier(logical, new Set(), { kind: "selected-native" }) === logical, true,
-    "an independent selected native protocol is consumed without silently rewriting its input ABI");
+  assert.equal(rustSourceParameterSupportsMemberWrites(logical, new Set()), true,
+    "an independent native protocol is validated without silently rewriting its input ABI");
   for (const invalid of [-1, 2, 0.5, Number.NaN])
-    assert.equal(selectRustSourceParameterStructuralCarrier(logical, new Set([invalid]), { kind: "implementation" }) === undefined, true,
+    assert.equal(rustSourceParameterSupportsMemberWrites(logical, new Set([invalid])), false,
       "invalid original field index is rejected: " + invalid);
+  const direct = rustStructuralObjectTargetType("index.ts", rustStructuralObjectCarrierValue(logical).fields, "value");
+  assert.equal(rustSourceParameterSupportsMemberWrites(direct, new Set([1])), true,
+    "a native value carrier supports its exact write without a replacement representation");
+  const method = rustCallableTargetType([], value);
+  const methods = rustStructuralObjectTargetType("index.ts", [
+    { sourceName: "first", type: method, presence: "required", readonly: false, method: true },
+    { sourceName: "second", type: method, presence: "required", readonly: false, method: true },
+  ]);
+  assert.equal(rustSourceParameterSupportsMemberWrites(methods, new Set()), true,
+    "a no-write method formal validates its original native contract");
+  assert.equal(rustSourceParameterSupportsMemberWrites(methods, new Set([0])), true,
+    "a demanded native method validates the original already-writable contract");
+  assert.equal(rustStructuralObjectCarrierValue(methods).fields[1].readonly, false,
+    "a write demand never gratuitously rewrites an unrelated method contract");
 });
 
 for (const surfaces of [[], ["js"]]) {
   const label = surfaces[0] ?? "native";
-  test(`${label} one original formal owns distinct read and member-write native contracts`, () => {
+  test(`${label} one original data formal preserves its native contract for read and member-write uses`, () => {
     const { context, walk } = analyzeRustOperations(`
 type Reader = { first: number; second: number; };
 export function read(owner: Reader): number { return owner.first + owner.second; }
@@ -82,8 +109,8 @@ export function replace(owner: Reader): void { const alias = owner; alias.second
     assert.equal(writeSelection?.kind, "resolved", "the aliased writer formal has its native ABI");
     const readFields = rustStructuralObjectCarrierValue(readSelection.abi.valueCarrier)?.fields;
     const writeFields = rustStructuralObjectCarrierValue(writeSelection.abi.valueCarrier)?.fields;
-    assert.equal(readFields?.every(field => field.readonly), true, "reading does not inherit another formal's producer mutations");
-    assert.equal(writeFields?.find(field => field.sourceName === "first")?.readonly, true, "the unrelated member needs no writer");
+    assert.equal(readFields?.every(field => !field.readonly), true, "a data-only reader retains its original native field contract");
+    assert.equal(writeFields?.find(field => field.sourceName === "first")?.readonly, false, "a data-only writer does not rewrite unrelated fields");
     assert.equal(writeFields?.find(field => field.sourceName === "second")?.readonly, false, "the identical original aliased member requires a writer");
     const readShape = walk.sourceTypes.structuralObjectForCarrier(readSelection.abi.valueCarrier);
     const writeShape = walk.sourceTypes.structuralObjectForCarrier(writeSelection.abi.valueCarrier);
@@ -97,16 +124,67 @@ export function replace(owner: Reader): void { const alias = owner; alias.second
     "all native roles retain the identical original checked member Symbols");
     const canonical = walk.sourceTypes.structuralObjectForType(readShape.sourceType);
     assert.equal(canonical?.fields.every(field => !field.readonly), true, "the bare logical Reader template remains untouched");
+    assert.equal(rustTargetTypeRefEquals(canonical.carrier, readSelection.abi.valueCarrier), true,
+      "the data reader consumes the original complete native carrier");
+    assert.equal(rustTargetTypeRefEquals(canonical.carrier, writeSelection.abi.valueCarrier), true,
+      "the data writer consumes the same original complete native carrier");
+    assert.equal(walk.sourceTypes.structuralObjects().some(shape => shape.sourceType === readShape.sourceType &&
+      !rustTargetTypeRefEquals(shape.carrier, canonical.carrier)), false,
+    "data-only formals publish no gratuitous replacement shape");
     assert.equal(context.records.sourceParameterAbi.get(readParameter) === readSelection.abi, true, "body bindings retain the published read ABI identity");
     assert.equal(context.records.sourceParameterAbi.get(writeParameter) === writeSelection.abi, true, "body bindings retain the published writer ABI identity");
+  });
+
+  test(`${label} demanded methods retain original member identity and an already-sufficient native ABI`, () => {
+    const { context, walk } = analyzeRustOperations(`
+type Reader = { first(): number; second(): number; };
+export function read(owner: Reader): number { return owner.first() + owner.second(); }
+export function replace(owner: Reader): void { const alias = owner; alias.second = () => 9; }
+`, { surfaces });
+    const { ast } = context;
+    const declarations = context.sourceStorage.nodes.filter(node => ast.is.IsFunctionDeclaration(node) && ast.body(node) !== undefined);
+    const read = declarations.find(node => ast.text(ast.name(node)) === "read");
+    const replace = declarations.find(node => ast.text(ast.name(node)) === "replace");
+    assert.equal(read !== undefined && replace !== undefined, true, "both genuine method-bearing implementation bodies exist");
+    const readParameter = ast.parameters(read)[0];
+    const writeParameter = ast.parameters(replace)[0];
+    const readDemand = context.sourceStorage.formalMemberWriteDemand(read, readParameter);
+    const writeDemand = context.sourceStorage.formalMemberWriteDemand(replace, writeParameter);
+    assert.equal(readDemand.kind, "complete", "the reader has complete shared write-demand evidence");
+    assert.equal(readDemand.members.length, 0, "a reader is not polluted by a sibling writer's demand");
+    assert.equal(writeDemand.kind, "complete", "the qualified local alias has complete shared write-demand evidence");
+    assert.equal(writeDemand.members.length, 1, "the alias demands exactly its original written method");
+    const readSelection = walk.sourceCallableAbi.resolveParameterAbi(readParameter, rustResolutionContext(walk, readParameter), walk.operationOptions);
+    const writeSelection = walk.sourceCallableAbi.resolveParameterAbi(writeParameter, rustResolutionContext(walk, writeParameter), walk.operationOptions);
+    assert.equal(readSelection?.kind, "resolved", "the actual no-write method formal has an admitted native ABI");
+    assert.equal(writeSelection?.kind, "resolved", "the actual demanded method formal has an admitted native ABI");
+    const readShape = walk.sourceTypes.structuralObjectForCarrier(readSelection.abi.valueCarrier);
+    const writeShape = walk.sourceTypes.structuralObjectForCarrier(writeSelection.abi.valueCarrier);
+    const written = writeShape.fields.find(field => field.sourceName === "second");
+    assert.equal(written?.method, true, "the demand targets the actual native method, not an unrelated data field");
+    assert.equal(written.readonly, false, "the demanded native method remains writable");
+    assert.equal(written.declarations.includes(writeDemand.members[0]), true, "the shared demand retains its exact original member declaration");
+    assert.equal(readShape.sourceType === writeShape.sourceType, true, "the two method uses retain one checked source identity");
+    assert.equal(readShape.fields.every((field, index) => field.declarations.length === writeShape.fields[index].declarations.length &&
+      field.declarations.every((declaration, memberIndex) => declaration === writeShape.fields[index].declarations[memberIndex]) &&
+      field.symbols.length === writeShape.fields[index].symbols.length &&
+      field.symbols.every((symbol, symbolIndex) => symbol === writeShape.fields[index].symbols[symbolIndex])), true,
+    "all method fields retain the original complete declaration and symbol correspondence");
+    const canonical = walk.sourceTypes.structuralObjectForType(readShape.sourceType);
+    assert.equal(rustTargetTypeRefEquals(canonical.carrier, readSelection.abi.valueCarrier), true,
+      "a no-write method formal retains its original native contract");
+    assert.equal(rustTargetTypeRefEquals(canonical.carrier, writeSelection.abi.valueCarrier), true,
+      "an already-sufficient writable method contract is not replaced by a narrower facet");
+    assert.equal(context.records.sourceParameterAbi.get(readParameter) === readSelection.abi, true, "the reader retains its exact published ABI");
+    assert.equal(context.records.sourceParameterAbi.get(writeParameter) === writeSelection.abi, true, "the writer retains its exact published ABI");
   });
 }
 
 test("native formal refusal retains the exact unknown and budget reasons and rejects same-spelled foreign members", () => {
   const { context, walk } = analyzeRustOperations(`
-type Reader = { value: number; };
-type Other = { value: number; };
-export function read(owner: Reader): number { return owner.value; }
+type Reader = { value(): number; };
+type Other = { value(): number; };
+export function read(owner: Reader): number { return owner.value(); }
 `);
   const { ast } = context;
   const declaration = context.sourceStorage.nodes.find(node => ast.is.IsFunctionDeclaration(node) && ast.body(node) !== undefined);
