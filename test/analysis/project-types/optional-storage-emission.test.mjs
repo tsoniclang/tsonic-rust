@@ -15,46 +15,40 @@ import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equali
 import { closedMetadataKey } from "../../../dist/target-model/metadata/closed-data.js";
 import { analyzeRust } from "../../helpers/rust-session.mjs";
 import { structuralMemberWritesSource } from "../../../../tsonic/test/fixtures/structural-member-writes.mjs";
+import { rustDeclarationEmissionCarriers } from "../../../dist/analysis/source-evidence/types/emission-inventory.js";
 
 for (const surfaces of [[], ["js"]]) {
   test(`complete late TYPE admission includes selected structural native output carriers on ${surfaces[0] ?? "native"}`, () => {
     const { program } = analyzeRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } },
       files: { "index.ts": structuralMemberWritesSource + "\nmain();\n" } });
-    const shapes = new Set([...program.structuralShapes.definitions, ...program.structuralShapes.instances]);
+    const definition = program.projectTypes.definitions.find(candidate => candidate.sourceName === "Value");
+    assert.equal(definition !== undefined, true, "the real checked class owns the writable callable field");
+    const emission = program.records.nativeClass.get(definition.declaration);
+    assert.equal(emission !== undefined, true, "the class has its actual native output producer");
     let nativeFields = 0;
-    let transformedFields = 0;
-    for (const [index, shape] of [...shapes].entries()) {
-      const emission = program.records.structuralShapeEmission.get(shape);
-      assert.equal(emission !== undefined, true, `shape ${index} has its actual native emission owner`);
-      const carriers = [...emission.bases, ...emission.dispatch?.members.flatMap(member =>
-        [...member.parameters, member.result]) ?? []];
-      for (const field of emission.fields) {
-        nativeFields++;
-        carriers.push(field.carrier);
-        if (!rustTargetTypeRefEquals(field.carrier, field.field.carrier)) transformedFields++;
-        if (field.property !== undefined) {
-          transformedFields++;
-          carriers.push(field.property.stored, field.property.getter);
-          if (field.property.setter !== undefined) carriers.push(field.property.setter);
-        }
-      }
-      for (const [carrierIndex, carrier] of carriers.entries()) {
-        assert.equal(program.records.typeEmission.get(carrier)?.positions !== undefined, true,
-          `shape ${index} native field/dispatch carrier ${carrierIndex} has sealed position evidence`);
-        assert.equal(program.records.optionalStorageTypeArguments.get(carrier) !== undefined, true,
-          `shape ${index} native field/dispatch carrier ${carrierIndex} has its explicit optional argument row`);
-      }
+    for (const field of emission.fields) {
+      nativeFields++;
+      const key = closedMetadataKey(field.carrier);
+      assert.equal(program.records.typeEmission.get(field.carrier)?.positions !== undefined, true,
+        `native class field ${field.sourceName} has sealed position evidence; key=${key}`);
+      assert.equal(program.records.optionalStorageTypeArguments.get(field.carrier) !== undefined, true,
+        `native class field ${field.sourceName} has its explicit optional argument row; key=${key}`);
     }
-    assert.equal(nativeFields > 0, true, "the positive checks actual emitted structural field storage");
-    assert.equal(transformedFields > 0, true, "native field/property wrappers differ from the original source field carrier");
+    assert.equal(nativeFields > 0, true, "the positive checks actual emitted native class field storage");
+    const nodes = [definition.declaration];
+    const actual = rustDeclarationEmissionCarriers(program, nodes);
     const rejected = { ...program, records: { ...program.records,
-      structuralShapeEmission: Object.freeze({ get: () => undefined }) } };
-    const types = createRustTypeEmissionProducer(() => {});
-    const projects = createRustProjectEmissionProducer(() => {});
-    assert.throws(() => analyzeRustTypeEmission(rejected, [], types, [], projects), failure =>
-      failure?.diagnostic?.code === "TSONIC_INTERNAL_ANALYSIS_INVARIANT" &&
-      failure.message === "An emitted structural shape requires its complete native field and dispatch selection.",
-      "a missing physical producer is not repaired by inventing or reselecting a field carrier");
+      nativeClass: Object.freeze({ get: () => undefined }) } };
+    const omitted = new Set(rustDeclarationEmissionCarriers(rejected, nodes).map(carrier => closedMetadataKey(carrier)));
+    const nativeOnly = actual.filter(carrier => !omitted.has(closedMetadataKey(carrier)));
+    assert.equal(nativeOnly.length > 0, true,
+      "omitting the actual native class producer loses its selected output types instead of reconstructing them from source fields");
+    for (const carrier of nativeOnly) {
+      assert.equal(program.records.typeEmission.get(carrier)?.positions !== undefined, true,
+        `every class-only selected output has sealed type evidence; key=${closedMetadataKey(carrier)}`);
+      assert.equal(program.records.optionalStorageTypeArguments.get(carrier) !== undefined, true,
+        `every class-only selected output has its exact optional argument row; key=${closedMetadataKey(carrier)}`);
+    }
   });
 }
 
