@@ -9,7 +9,6 @@ import { rustTargetGenericReferences, rustSourceTypeCarrierValue, rustSourceUnio
 import type { RustProjectGenericEmission } from "../../target-model/records/project-emission.js";
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
-import { selectRustCheckedProjectProjection } from "../../policy/types/objects/checked-project-projections.js";
 import { rustSourceItemIdentity } from "../../target-model/names/source-output-identities.js";
 import type { RustProjectMemberSlotRole } from "../../target-model/types/project-types.js";
 
@@ -55,13 +54,6 @@ export function analyzeRustProjectEmission(input: {
     const source = rustSourceTypeCarrierValue(carrier) ?? rustSourceUnionCarrierValue(carrier);
     if (source !== undefined) sourceType(source.fileName, source.typeName);
     if (carrier.kind === "trait-ref" && carrier.sourceItem !== undefined) sourceType(carrier.sourceItem.fileName, carrier.sourceItem.typeName);
-    const union = program.structuralShapes.unionForCarrier(carrier);
-    if (union !== undefined) producer.union(carrier, union);
-    const definition = program.projectTypes.definitionForCarrier(carrier);
-    const shape = program.structuralShapes.definitionForCarrier(carrier);
-    const projection = selectRustCheckedProjectProjection({ project: definition !== undefined, structural: shape !== undefined,
-      hasDispatch: shape?.dispatchName !== undefined, lifetimeParameters: definition?.genericParameters.some(parameter => parameter.kind === "lifetime") === true });
-    if (projection !== undefined) producer.checkedProjection(carrier, projection);
     unionCarriers.push(...rustTargetTypeChildren(carrier));
   }
   // After the carrier scan: it may instantiate a planned shape over a generic callable family's environment parameters.

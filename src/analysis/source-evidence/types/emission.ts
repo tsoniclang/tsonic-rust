@@ -37,16 +37,31 @@ import { isRustClosedValueCarrier } from "../../../target-model/types/carriers/c
 import { rustCarrierProvidesErrorObservation } from "../../../policy/constraints/error-protocols.js";
 import { rustCapturedLifetimeEmissionCarriers, rustDeclarationEmissionCarriers } from "./emission-inventory.js";
 import { rustProgramNodeIsOutsideNativeCode } from "../../control-flow/compile-time-statements.js";
-import { substituteRustTargetTypeParameters } from "../../../target-model/types/carriers/substitution.js";
+import { substituteRustTargetGenerics } from "../../../target-model/types/carriers/substitution.js";
+import { selectRustCheckedProjectProjection } from "../../../policy/types/objects/checked-project-projections.js";
 
 export function analyzeRustTypeEmission(program: Omit<RustAnalysisProgram, "reachability">,
   nodes: readonly Node[], producer: RustTypeEmissionProducer, extraTypes: readonly TargetTypeRef[],
-  optionalStorageProducer: Pick<RustProjectEmissionProducer, "optionalType">): void {
+  projectEmissionProducer: Pick<RustProjectEmissionProducer, "optionalType" | "checkedProjection" | "union">): void {
+  const typeArguments = (arguments_: readonly RustTargetGenericArgument[]): readonly TargetTypeRef[] =>
+    arguments_.flatMap(argument => argument.kind === "type" ? [argument.type] : []);
+  const retainedCarriersFor = (node: Node): readonly TargetTypeRef[] => {
+    const selected = program.records.nativeGenerics.get(node);
+    return [...selected?.retention?.source ?? [], ...selected?.retention?.body ?? [],
+      ...selected?.inputs.flatMap(input => [
+        ...input.retained === undefined ? [] : [input.retained.error, ...input.retained.targets],
+        ...input.caught === undefined ? [] : [input.caught.error, input.caught.target],
+      ]) ?? []];
+  };
   const pending = [...extraTypes, ...nodes.flatMap(node => rustPhysicalEmissionRecordCarriers(program.records, node)), rustProgramErrorTargetType(), rustUnitTargetType()];
   pending.push(program.errorRegions.initialization.binary.lifecycle.carrier);
   pending.push(...program.providerErrorCarriers, ...rustDeclarationEmissionCarriers(program, nodes));
+  pending.push(...program.structuralShapes.unionDefinitions.flatMap(union => union.sourceCarriers));
+  for (const view of program.classValues.constructorViewImplementations) pending.push(view.sourceCarrier, view.targetCarrier);
+  for (const protocol of program.callableValues.native.protocols) pending.push(protocol.trait, ...protocol.method.parameters, protocol.result);
   pending.push(...rustCapturedLifetimeEmissionCarriers(program, nodes, node =>
-    [...rustPhysicalEmissionRecordCarriers(program.records, node), ...rustDeclarationEmissionCarriers(program, [node])]));
+    [...rustPhysicalEmissionRecordCarriers(program.records, node), ...rustDeclarationEmissionCarriers(program, [node]),
+      ...retainedCarriersFor(node)]));
   for (const sourceFile of program.sourceFiles) for (const protocol of program.records.nativeProtocols.get(sourceFile) ?? []) {
     pending.push(...protocol.method.parameters, protocol.method.result, protocol.result, protocol.trait);
     const emission = program.records.nativeProtocol.get(protocol);
@@ -70,7 +85,9 @@ export function analyzeRustTypeEmission(program: Omit<RustAnalysisProgram, "reac
     pending.push(...roots.map(root => root.carrier));
   }
   for (const context of program.physicalEmissionContexts.contexts) pending.push(...context.operands, ...context.bindings.types.values(),
-    ...(context.returnDestination.kind === "value" ? [context.returnDestination.carrier] : []));
+    ...(context.returnDestination.kind === "value" ? [context.returnDestination.carrier] : []),
+    ...retainedCarriersFor(context.declaration).map(carrier => substituteRustTargetGenerics(carrier,
+      context.bindings.types, context.bindings.lifetimes, context.bindings.consts)));
   for (const operand of program.physicalEmissionContexts.operands) pending.push(operand.carrier,
     ...(operand.destination === undefined ? [] : [operand.destination]));
   for (const definition of program.projectTypes.definitions) pending.push(program.projectTypes.openCarrier(definition));
@@ -88,14 +105,38 @@ export function analyzeRustTypeEmission(program: Omit<RustAnalysisProgram, "reac
   }
   for (const shape of program.structuralShapes.instances) pending.push(shape.carrier, ...shape.fields.flatMap(field =>
     [field.carrier, ...(field.methodPlan?.carrier === undefined ? [] : [field.methodPlan?.carrier])]));
-  for (const definition of program.callableValues.generic.physical.definitions()) pending.push(definition.carrier,
-    ...definition.signature.parameters, definition.signature.result, ...definition.members.flatMap(member => member.arguments.flatMap(argument => argument.kind === "type" ? [argument.type] : [])));
-  // A generic implementation renders its retained outlives bounds over the family environment it is emitted in.
-  for (const definition of program.callableValues.generic.physical.definitions()) for (const member of definition.members) {
-    const retained = program.records.nativeGenerics.get(member.implementation.declaration)?.retention;
-    const substitutions = new Map(member.implementation.substitutions);
-    if (retained !== undefined) pending.push(...[...retained.source, ...retained.body].map(carrier =>
-      substituteRustTargetTypeParameters(carrier, substitutions)));
+  for (const view of program.classValues.instanceViewImplementations) pending.push(view.sourceCarrier, view.targetCarrier);
+  for (const sourceFile of program.sourceFiles) {
+    const inventory = program.records.genericDeclarations.get(sourceFile);
+    if (inventory === undefined) failTargetAnalysisInvariant("tsonic-rust", "An emitted source module requires its finalized generic declaration inventory.", sourceFile);
+    for (const implementation of inventory.implementations) {
+      const emission = program.records.genericImplementation.get(implementation);
+      if (emission === undefined) failTargetAnalysisInvariant("tsonic-rust", "An emitted generic implementation requires its finalized physical environment.", implementation.declaration);
+      const environment = emission.environment;
+      const bindings = environment.substitutions;
+      pending.push(...typeArguments(emission.arguments),
+        ...[...environment.captures, ...environment.receiverFields, ...environment.receivers].map(capture =>
+          substituteRustTargetGenerics(capture.storageCarrier, bindings.types, bindings.lifetimes, bindings.consts)),
+        ...environment.inputs.flatMap(input => [input.carrier, input.implementation, input.trait, ...input.environment]).map(carrier =>
+          substituteRustTargetGenerics(carrier, bindings.types, bindings.lifetimes, bindings.consts)));
+    }
+  }
+  for (const definition of program.callableValues.generic.physical.definitions()) {
+    pending.push(definition.carrier, ...definition.signature.parameters, definition.signature.result,
+      ...definition.members.flatMap(member => typeArguments(member.arguments)));
+    const emission = program.records.genericDefinition.get(definition);
+    if (emission === undefined) failTargetAnalysisInvariant("tsonic-rust", "An emitted generic family requires its finalized native definition.");
+    if (emission.invoked) pending.push(...emission.parameters, emission.result);
+    for (const member of definition.members) {
+      const environment = member.environment.substitutions;
+      pending.push(...retainedCarriersFor(member.implementation.declaration).map(carrier =>
+        substituteRustTargetGenerics(carrier, environment.types, environment.lifetimes, environment.consts)));
+      if (!emission.invoked) continue;
+      const bindings = member.bindings;
+      if (bindings === undefined) failTargetAnalysisInvariant("tsonic-rust", "An emitted generic member requires its finalized native environment bindings.", member.implementation.declaration);
+      pending.push(...member.environment.inputs.flatMap(input => [input.implementation, input.trait]).map(carrier =>
+        substituteRustTargetGenerics(carrier, bindings.types, bindings.lifetimes, bindings.consts)));
+    }
   }
   for (const node of nodes) {
     if (rustProgramNodeIsOutsideNativeCode(program, node)) continue;
@@ -115,14 +156,7 @@ export function analyzeRustTypeEmission(program: Omit<RustAnalysisProgram, "reac
     if (callable !== undefined) pending.push(callable.returnCarrier,
       ...(callable.errorCarrier === undefined ? [] : [callable.errorCarrier]));
     // A retained callable renders an outlives bound for each retained carrier in its source and Promise-body items.
-    const nativeGenerics = program.records.nativeGenerics.get(node);
-    const retained = nativeGenerics?.retention;
-    if (retained !== undefined) pending.push(...retained.source, ...retained.body);
-    // A retained native input renders a where predicate from its invocation error into each error target.
-    for (const input of nativeGenerics?.inputs ?? []) {
-      if (input.retained !== undefined) pending.push(input.retained.error, ...input.retained.targets);
-      if (input.caught !== undefined) pending.push(input.caught.error, input.caught.target);
-    }
+    pending.push(...retainedCarriersFor(node));
     // A generic invocation propagates through its native error join, which renders every source error carrier.
     const invocation = program.records.genericCallableInvocation.get(node);
     if (invocation !== undefined) pending.push(...invocation.invocation.map(source => source.errorType),
@@ -155,7 +189,7 @@ export function analyzeRustTypeEmission(program: Omit<RustAnalysisProgram, "reac
     const carrier = pending[index]!;
     const key = closedMetadataKey(carrier);
     if (selections.has(key)) continue;
-    const optionalArguments = analyzeRustOptionalStorageTypeEmission(program, carrier, optionalStorageProducer);
+    const optionalArguments = analyzeRustOptionalStorageTypeEmission(program, carrier, projectEmissionProducer);
     const generic = rustGenericCallableValue(carrier);
     const physical = generic === undefined ? undefined : program.callableValues.generic.physical.existingSelectionFor(carrier);
     // A carrier that still names source type parameters is rendered only after its emission context substitutes them;
@@ -166,7 +200,10 @@ export function analyzeRustTypeEmission(program: Omit<RustAnalysisProgram, "reac
     const union = rustSourceUnionCarrierValue(carrier);
     const unionArguments = union === undefined ? undefined : rustSourceUnionPayloadArguments(carrier, program.typeDefinitions);
     const unionDefinition = union?.origin === "generated" ? program.structuralShapes.unionForCarrier(carrier) : undefined;
-    const shape = union?.origin === "generated" ? undefined : program.structuralShapes.definitionForCarrier(carrier);
+    if (union?.origin === "generated" && unionDefinition === undefined)
+      failTargetAnalysisInvariant("tsonic-rust", "An admitted generated union requires its exact native declaration owner.");
+    if (unionDefinition !== undefined) projectEmissionProducer.union(carrier, unionDefinition);
+    const shape = program.structuralShapes.definitionForCarrier(carrier);
     const optionalValue = rustOptionalStorageValue(carrier);
     const optionalElement = rustOptionElementCarrier(carrier);
     const payloadView = (string: boolean): RustOptionPayloadView => string && !isRustStringCarrier(rustOptionValueCarrier(carrier))
@@ -228,17 +265,49 @@ export function analyzeRustTypeEmission(program: Omit<RustAnalysisProgram, "reac
               })) }) : rustUnitTargetType() }) });
     const frame = program.records.frameType.get(carrier);
     const constructed = rustClassConstructorInstance(carrier);
+    const definition = program.projectTypes.definitionForCarrier(carrier);
+    const projection = selectRustCheckedProjectProjection({ project: definition !== undefined, structural: shape !== undefined,
+      hasDispatch: shape?.dispatchName !== undefined, lifetimeParameters: definition?.genericParameters.some(parameter => parameter.kind === "lifetime") === true });
+    if (projection !== undefined) projectEmissionProducer.checkedProjection(carrier, projection);
+    const parents = definition === undefined ? [] : program.projectTypes.directSupertypes(carrier);
+    if (parents === undefined) failTargetAnalysisInvariant("tsonic-rust", "An admitted native project type requires its exact checked parent carriers.", definition?.declaration);
+    const state = definition === undefined ? undefined : program.records.projectClassState.get(definition, carrier);
+    const fields = definition === undefined ? undefined : program.records.projectClassFields.get(definition, carrier);
+    const properties = definition === undefined ? undefined : program.records.projectMethodProperties.get(definition, carrier);
+    const contracts = program.records.projectInstanceContracts.get(carrier);
+    const root = program.records.projectRootEmission.get(carrier);
+    const dispatch = definition === undefined || closedMetadataKey(program.projectTypes.openCarrier(definition)) !== key
+      ? undefined : program.records.projectDispatchEmission.get(definition);
+    const rootMethodArguments = root?.contracts.flatMap(contract => contract.methods.flatMap(method =>
+      [method.virtual, ...method.exact === undefined ? [] : [method.exact]].flatMap(selected => {
+        const arguments_ = program.records.projectMethodArguments.get(selected.declaration, selected.variant.targetTypeArguments, carrier);
+        if (arguments_ === undefined) failTargetAnalysisInvariant("tsonic-rust", "An admitted root method requires its finalized receiver-specialized arguments.", selected.declaration);
+        return [...selected.variant.targetTypeArguments, ...arguments_];
+      }))) ?? [];
     const children = [...rustTargetTypeChildren(carrier), ...(producerError === undefined ? [] : [producerError]),
       ...(constructed === undefined ? [] : [constructed]),
       ...(unionArguments ?? []).flatMap(argument => argument.kind === "type" ? [argument.type] : []),
       ...(value.generic?.arguments ?? []).flatMap(argument => argument.kind === "type" ? [argument.type] : []),
+      ...(value.structural === undefined ? [] : typeArguments(value.structural.arguments)),
       ...(value.structural?.context === undefined ? [] : [value.structural.context]),
       ...(frame?.environment ?? []), ...(frame?.independentCarrier === undefined ? [] : [frame.independentCarrier]),
-      ...optionalArguments];
+      ...optionalArguments, ...parents,
+      ...fields?.map(field => field.carrier) ?? [],
+      ...properties?.map(property => property.ownerCarrier) ?? [],
+      ...state?.flatMap(layer => [layer.carrier, ...layer.fields.map(field => field.carrier),
+        ...layer.methodProperties.map(property => property.ownerCarrier)]) ?? [],
+      ...contracts?.map(contract => contract.carrier) ?? [],
+      ...root === undefined ? [] : [...root.projections, ...root.contracts.flatMap(contract => [contract.carrier,
+        ...contract.routes.map(route => route.targetCarrier), ...contract.methods.flatMap(method =>
+          method.write === undefined ? [] : [method.write.property.ownerCarrier])])],
+      ...rootMethodArguments,
+      ...dispatch === undefined ? [] : [...dispatch.projectSupers,
+        ...dispatch.structuralSupers.flatMap(supertrait => [supertrait.carrier, ...typeArguments(supertrait.genericArguments)]),
+        ...dispatch.routes.map(selected => selected.route.targetCarrier),
+        ...dispatch.methodWrites.map(write => write.property.ownerCarrier),
+        ...dispatch.methods.flatMap(method => method.variant.targetTypeArguments)]];
     selections.set(key, { carrier, value, children, optionalArguments });
     pending.push(...children);
-    const definition = program.projectTypes.definitionForCarrier(carrier);
-    if (definition !== undefined) pending.push(...(program.records.projectClassFields.get(definition, carrier) ?? []).map(field => field.carrier));
   }
   const positions = new Map<string, RustTypePositions>();
   const active = new Set<string>();

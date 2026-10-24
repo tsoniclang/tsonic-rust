@@ -2,9 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createRustSourceTypeFamilyRegistry } from "../../../../dist/analysis/project-types/type-families.js";
 import { rustSourceOptionalTargetType } from "../../../../dist/target-model/types/projections.js";
-import { analyzeRustOptionalStorageCallEmission } from "../../../../dist/analysis/project-types/optional-storage-emission.js";
+import { analyzeRustOptionalStorageCallEmission, analyzeRustOptionalStorageTypeEmission } from "../../../../dist/analysis/project-types/optional-storage-emission.js";
 import { createRustProjectEmissionProducer } from "../../../../dist/analysis/program/records/project-emission.js";
-import { rustOptionalStorageCallArguments } from "../../../../dist/backend/planner/types/type-projections.js";
+import { rustOptionalStorageCallArguments, rustOptionalStorageTypeArguments } from "../../../../dist/backend/planner/types/type-projections.js";
+import { closedMetadataKey } from "../../../../dist/target-model/metadata/closed-data.js";
 import { createRustRecordFixture } from "../../../helpers/records.mjs";
 
 // A source call's optional storage arguments are substituted and normalized in analysis
@@ -42,4 +43,23 @@ test("optional call storage consumes the sealed native family output after exact
   assert.deepEqual(sealed("other-identity").optionalStorageCallArguments.get(call), [carrier]);
   assert.throws(() => rustOptionalStorageCallArguments({}, { input: { program: { records: sealed(parameter.identity) } } }),
     /exact sealed optional storage arguments/u);
+});
+
+test("missing optional TYPE rows report their exact full or indexed key without fabricating an empty row", () => {
+  const carrier = { kind: "source-primitive", name: "int32" };
+  const producer = createRustProjectEmissionProducer(() => {});
+  const context = { input: { program: { records: producer.records } } };
+  for (const indexes of [undefined, [], [1, 0]]) {
+    const key = closedMetadataKey([carrier, indexes ?? null]);
+    assert.throws(() => rustOptionalStorageTypeArguments(carrier, context, indexes), error =>
+      error?.diagnostic?.code === "TSONIC_INTERNAL_PLANNER_INVARIANT" && error.diagnostic.message ===
+        `An admitted native type requires its exact sealed optional storage arguments. key=${key}`);
+    assert.equal(producer.records.optionalStorageTypeArguments.get(carrier, indexes) === undefined, true,
+      "a missing native argument key remains absent after its invariant failure");
+  }
+  analyzeRustOptionalStorageTypeEmission({ projectTypes: { definitionForCarrier: () => undefined } }, carrier, producer);
+  assert.deepEqual(rustOptionalStorageTypeArguments(carrier, context), [],
+    "a proven native empty row retains its ordinary successful rendering");
+  assert.equal(producer.records.optionalStorageTypeArguments.get(carrier, []) === undefined, true,
+    "publishing the full native row does not invent an indexed row");
 });

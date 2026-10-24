@@ -38,12 +38,16 @@ function fixtureSource(projectRoot) {
     result: rustJsPromiseTargetType(borrowed) });
   const definitions = createRustTypeDefinitionRegistry();
   const payloads = [borrowed, rustFutureTargetType(borrowed), rustFutureTargetType(integer)];
-  const union = rustSourceUnionTargetType("/index.ts", "Union3", [], "generated", { kind: "physical", types: payloads });
+  const union = rustSourceUnionTargetType("/src/index.ts", "Union3", [], "generated", { kind: "physical", types: payloads });
   assert.equal(definitions.registerSourceUnion({ carrier: union,
     variants: payloads.map((carrier, index) => ({ name: `Variant${index}`, carrier })),
   }, false), true, "mixed completion definition registers");
   const mixed = nativeProducerFixture({ identity: "mixed", parameters: [borrowed, byte],
     result: rustSourceOptionalTargetType(union), definitions });
+  const emittedUnion = mixed.program.records.sourceUnion.get(union);
+  assert.equal(emittedUnion !== undefined, true, "mixed completion has its canonical emitted union declaration");
+  const shapesModule = mixed.context.structuralShapesModuleName;
+  assert.equal(shapesModule.length > 0, true, "mixed completion uses the actual emitted shape module");
   const all = [ordinary, second, environment, asynchronous, borrowing, js, mixed,
     borrowedEnvironment, pendingEnvironment, borrowedJs];
   const names = all.map(fixture => fixture.protocol.targetName);
@@ -68,9 +72,12 @@ pub struct AwaitFailure<'input>(&'input str);
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct OtherAwaitFailure<'input>(&'input str);
 
-pub enum Union3<Ready, First, Second> {
-    Variant0(Ready), Variant1(First), Variant2(Second),
+pub mod ${shapesModule} {
+    pub enum ${emittedUnion.targetName}<Ready, First, Second> {
+        Variant0(Ready), Variant1(First), Variant2(Second),
+    }
 }
+use ${shapesModule}::${emittedUnion.targetName};
 
 ${generated}
 

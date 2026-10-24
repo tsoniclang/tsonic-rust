@@ -26,6 +26,8 @@ import { createRustPlanningContext } from "../../../../dist/backend/planner/cont
 import { createRustSyntheticNameState } from "../../../../dist/backend/planner/names/synthetic.js";
 import { analyzeRustProjectEmission } from "../../../../dist/analysis/project-types/emission.js";
 import { createRustProjectEmissionProducer } from "../../../../dist/analysis/program/records/project-emission.js";
+import { analyzeRustTypeEmission } from "../../../../dist/analysis/source-evidence/types/emission.js";
+import { createRustTypeEmissionProducer } from "../../../../dist/analysis/program/records/type-emission.js";
 import { analyzeRustValueReads } from "../../../../dist/analysis/conversions/value-reads.js";
 import { createRustValueReadProducer } from "../../../../dist/analysis/program/records/value-read.js";
 import { createRustValueProjectionProducer } from "../../../../dist/analysis/program/records/value-projection.js";
@@ -318,12 +320,17 @@ test("dispatcher fuses finalized narrowing and heritage without intermediate enu
   Object.assign(ast.is, { IsIdentifier: current => current === node, IsAsExpression: () => false,
     IsSatisfiesExpression: () => false, IsNonNullExpression: () => false, IsTypeAssertion: () => false });
   const base = rustProgramWithTypeEmissions([source, target, root, inner, derived, baseCarrier, stringCarrier,
-    rustOptionTargetType(root)], { typeDefinitions: definitions });
+    rustOptionTargetType(root)], { typeDefinitions: definitions, source: `
+export class Base {}
+export class Derived extends Base {}
+export class Second extends Base {}
+export function probe(): void {}
+` });
   const prepare = raw => {
     const ownership = createRustOwnershipEmissionProducer(() => {});
     ownership.publish(raw.ownership);
     const program = { ...base, ...raw, source: { ...base.source, ast },
-      projectTypes: { ...base.projectTypes, ...projectTypes },
+      projectTypes: base.projectTypes,
       callableValues: base.callableValues, classValues: base.classValues,
       declarationGenericRequirements: base.declarationGenericRequirements,
       names: { ...base.names, nameForSourceType: (_file, name) => name },
@@ -332,7 +339,11 @@ test("dispatcher fuses finalized narrowing and heritage without intermediate enu
         conversion: raw.records.conversion, ...ownership.records }, base.records) };
     const projects = createRustProjectEmissionProducer(() => {});
     analyzeRustProjectEmission({ program, nodes: [], producer: projects });
-    const admitted = { ...program, records: { ...program.records, ...projects.records } };
+    const catalogued = { ...program, records: { ...program.records, ...projects.records } };
+    const types = createRustTypeEmissionProducer(() => {});
+    analyzeRustTypeEmission(catalogued, [], types, [source, target, root, inner, derived, baseCarrier, stringCarrier,
+      rustOptionTargetType(root)], projects);
+    const admitted = { ...catalogued, records: { ...catalogued.records, ...types.records } };
     const reads = createRustValueReadProducer(() => {});
     const projections = createRustValueProjectionProducer(() => {});
     const conversions = createRustConversionEmissionProducer(() => {});
