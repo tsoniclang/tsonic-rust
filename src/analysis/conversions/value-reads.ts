@@ -37,8 +37,13 @@ export function analyzeRustValueReads(program: Omit<RustAnalysisProgram, "reacha
   const entry = (node: Node, source: TargetTypeRef, target: TargetTypeRef,
     read: RustValueReadOwnership["kind"] | undefined): void => {
     if (rejectedEntries.has(node)) return;
+    const root = program.records.locationStorageRoot.get(node);
+    const declaration = root === undefined || root === null
+      ? program.records.sourceBinding.get(node)?.sourceDeclaration : root.declaration;
+    const stored = declaration !== undefined && (program.records.bindingStorage.get(declaration) !== undefined ||
+      program.records.moduleBinding.get(declaration)?.storage === "module-cell");
     const issue = rustUnionEntryTransferIssue(source, target, read,
-      program.records.nativeArrayStorage.get(node)?.kind === "reference", program.typeDefinitions);
+      stored || program.records.nativeArrayStorage.get(node)?.kind === "reference", program.typeDefinitions);
     if (issue !== undefined) {
       rejectedEntries.add(node);
       issues.push({ code: "RUST_UNION_ENTRY_STORAGE_IDENTITY_NOT_PRESERVED", category: "error", source: "tsonic-rust", sourceNode: node,
@@ -149,7 +154,8 @@ export function analyzeRustValueReads(program: Omit<RustAnalysisProgram, "reacha
       cast === undefined && downcast === undefined && lifetime === undefined && object === undefined ? flow : undefined;
     const ownership = program.records.readOwnership.get(node);
     const entrySource = contextual?.sourceCarrier ?? contextualInput;
-    const entryRead = providerClones.has(node) ? "clone" : ownership?.source.kind;
+    const entryRead = providerClones.has(node) && ownership !== undefined && ownership.source.kind !== "borrow"
+      ? "clone" : ownership?.source.kind;
     if (entrySource !== undefined && value !== undefined &&
       (runtime?.sourceMode === "value" && runtime.lowering !== "identity" || optional?.kind === "some" || entryRead === "clone"))
       entry(node, entrySource, value, entryRead);
@@ -203,7 +209,8 @@ export function analyzeRustValueReads(program: Omit<RustAnalysisProgram, "reacha
     if (result.kind === "sync") {
       if (result.conversion.kind === "semantic") convertedEntry(occurrence.node, result.conversion.conversion);
       else if (result.conversion.kind === "sequence") for (const step of result.conversion.steps) convertedEntry(occurrence.node, step.conversion);
-      else if (providerClones.has(occurrence.node)) entry(occurrence.node, result.rawCarrier, result.carrier, "clone");
+      else if (providerClones.has(occurrence.node) && program.records.readOwnership.get(occurrence.node)?.source.kind !== "borrow")
+        entry(occurrence.node, result.rawCarrier, result.carrier, "clone");
     }
   }
   return Object.freeze(issues);

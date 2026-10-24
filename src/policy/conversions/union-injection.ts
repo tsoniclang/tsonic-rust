@@ -3,6 +3,7 @@ import type { RustTypeDefinitions } from "../../target-model/types/source-union-
 import { rustUnionAlternatives, rustUnionLeaves, rustUnionPathsMatching, type RustUnionLeaf } from "../../target-model/types/union-relations.js";
 import type { RustValueReadOwnership } from "../../target-model/records/ownership.js";
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
+import { rustOptionElementCarrier } from "../../target-model/types/carriers/optional.js";
 import { rustNativeRepresentationMatches } from "./native-representation.js";
 import { isRustJsValueCarrier } from "../../target-model/types/carriers/js.js";
 import { rustTsValueTargetId } from "../../target-model/types/carriers/source-types.js";
@@ -35,7 +36,8 @@ export function rustUnionEntryTransferIssue(
   borrowedStorage: boolean,
   definitions: RustTypeDefinitions,
 ): string | undefined {
-  if (rustUnionAlternatives(target, definitions) === undefined || read === "move" && !borrowedStorage) return undefined;
+  if (rustUnionAlternatives(target, definitions) === undefined && rustOptionElementCarrier(target) === undefined ||
+    read === "move" && !borrowedStorage) return undefined;
   const pending = [source];
   const visited = new Set<string>();
   while (pending.length > 0) {
@@ -46,7 +48,9 @@ export function rustUnionEntryTransferIssue(
     if (carrier.kind === "array") {
       return "A native union entry requires an identity-preserving array transfer; the selected native read would copy borrowed or aliased array storage.";
     }
-    if (carrier.kind === "tuple") pending.push(...carrier.elements);
+    const optional = rustOptionElementCarrier(carrier);
+    if (optional !== undefined) pending.push(optional);
+    else if (carrier.kind === "tuple") pending.push(...carrier.elements);
     else {
       const alternatives = rustUnionLeaves(carrier, definitions);
       if (alternatives !== undefined) pending.push(...alternatives.map(alternative => alternative.carrier));

@@ -62,9 +62,25 @@ export function select(first: Body, second: Body): Body {
   }
 });
 
-for (const surfaces of [[], ["js"]]) {
-  test(`JSON-shaped union literals retain checked array push/read and every other arm on ${surfaces[0] ?? "native"}`, { timeout: 300_000 }, () => {
-    const { result } = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } }, files: { "index.ts": `
+test("native array union literals retain checked indexed mutation without selecting JS APIs", { timeout: 300_000 }, () => {
+  const { result } = compileRust({ target: { id: "rust", options: { outputType: "bin" } }, files: { "index.ts": `
+type Body = boolean | unknown[];
+function inspect(body: Body): boolean {
+  if (typeof body === "boolean") return body;
+  body[0] = 2;
+  return body[0] === 2;
+}
+export function main(): void {
+  if (!inspect([1]) || !inspect(true)) throw new Error("native array union storage changed");
+}
+main();
+` } });
+  assertNoTargetDiagnostics(result.diagnostics);
+  validateGeneratedProject("union-layout-native-indexed-storage", result.artifacts, { run: true });
+});
+
+test("JSON-shaped union literals retain checked array push/read and every other arm on the selected JS API", { timeout: 300_000 }, () => {
+    const { result } = compileRust({ surfaces: ["js"], target: { id: "rust", options: { outputType: "bin" } }, files: { "index.ts": `
 type Body = ${bodyType};
 function inspect(body: Body): boolean {
   if (Array.isArray(body)) {
@@ -86,26 +102,25 @@ main();
 ` } });
     assertNoTargetDiagnostics(result.diagnostics);
     assert.doesNotMatch(rustSourceText(result), /transmute|from_raw_parts/u, "layout identity is not repaired by unsafe reinterpretation");
-    validateGeneratedProject(`union-layout-identity-${surfaces[0] ?? "native"}`, result.artifacts, { run: true });
-  });
-}
+    validateGeneratedProject("union-layout-identity-js", result.artifacts, { run: true });
+});
 
 const aliasedEntries = [
-  ["declaration", "const body: Body = values; values.push(1); return Array.isArray(body) ? body.length : 0;"],
-  ["assignment", "let body: Body = false; body = values; values.push(1); return Array.isArray(body) ? body.length : 0;"],
-  ["return", "const read = (): Body => values; values.push(1); const body = read(); values.push(2); return Array.isArray(body) ? body.length : 0;"],
-  ["assertion", "const body = values as Body; values.push(1); return Array.isArray(body) ? body.length : 0;"],
-  ["source call", "const count = accept(values); values.push(1); return count;"],
-  ["provider input", "const bodies: Body[] = []; bodies.push(values); values.push(1); return bodies.length;"],
+  ["declaration", "const body: Body = values; values[0] = 1; return typeof body === 'boolean' ? 0 : body[0] === 1 ? 1 : 0;"],
+  ["assignment", "let body: Body = false; body = values; values[0] = 1; return typeof body === 'boolean' ? 0 : body[0] === 1 ? 1 : 0;"],
+  ["return", "const read = (): Body => values; values[0] = 1; const body = read(); values[0] = 2; return typeof body === 'boolean' ? 0 : body[0] === 2 ? 1 : 0;"],
+  ["assertion", "const body = values as Body; values[0] = 1; return typeof body === 'boolean' ? 0 : body[0] === 1 ? 1 : 0;"],
+  ["source call", "const count = accept(values); values[0] = 1; return count;"],
+  ["provider input", "const bodies: Body[] = [false]; bodies[0] = values; values[0] = 1; return typeof bodies[0] === 'boolean' ? 0 : bodies[0][0] === 1 ? 1 : 0;"],
 ];
 
 for (const [label, entry] of aliasedEntries) {
   test(`native ${label} refuses an aliased Vec entry at the exact pre-seal identity owner`, () => {
     const { source, result } = compileRust({ files: { "index.ts": `
 type Body = boolean | unknown[];
-function accept(body: Body): number { return Array.isArray(body) ? body.length : 0; }
+function accept(body: Body): number { return typeof body === "boolean" ? 0 : body[0] === 0 ? 1 : 0; }
 export function enter(): number {
-  const values: unknown[] = [];
+  const values: unknown[] = [0];
   ${entry}
 }
 ` } });
@@ -142,7 +157,18 @@ for (const surface of [undefined, "js"]) {
   test(`the CLR reference-array counterpart preserves union-entry alias identity on ${surface ?? "native"}`, { timeout: 300_000 }, async () => {
     const { compileCsharpSource, assertCsharpCompilationSucceeded } = await import("../../../../tsonic-csharp/test/helpers/direct-csharp-session.mjs");
     const { executeCsharpConstruction } = await import("../../../../tsonic-csharp/test/helpers/native-construction.mjs");
-    const compiled = compileCsharpSource({ surface, sourceText: `
+    const compiled = compileCsharpSource({ surface, sourceText: surface === undefined ? `
+type Body = boolean | unknown[];
+export function run(): boolean {
+  const values: unknown[] = [0];
+  const first: Body = values;
+  const second: Body = first;
+  values[0] = 1;
+  if (typeof second === "boolean" || second[0] !== 1) return false;
+  second[0] = 2;
+  return values[0] === 2;
+}
+` : `
 type Body = boolean | unknown[];
 export function run(): boolean {
   const values: unknown[] = [];
