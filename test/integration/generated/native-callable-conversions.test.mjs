@@ -15,6 +15,7 @@ import { rustCallableTargetType, rustCallableInputTargetType } from "../../../di
 import { selectRustCallableConversion } from "../../../dist/policy/conversions/callable.js";
 import { printRustExpr } from "../../../dist/print/source/expressions/core.js";
 import { nativeFallibleAdapterFixture } from "../../helpers/physical-callable-adapters.mjs";
+import { planRustErrorJoinDeclarations } from "../../../dist/backend/planner/program/error-regions.js";
 import { finalizeRustSourceStyle } from "../../../dist/backend/target-ast/normalization/source-style.js";
 import { printRustSourceFile } from "../../helpers/printed-rust-source.mjs";
 import { compileRust } from "../../helpers/rust-session.mjs";
@@ -278,8 +279,8 @@ test("checked adapters retain all error sources and match handwritten native all
   const expression = fixture.adapt();
   assert.equal(expression !== undefined, true);
   const emitted = printRustExpr(expression);
-  const file = fixture.program.source.ast.getFileName(fixture.program.source.ast.getSourceFile(fixture.node));
-  const declarations = printRustSourceFile(finalizeRustSourceStyle({ items: fixture.context.input.errorRegions.itemsFor(file) }));
+  const file = fixture.program.source.ast.getSourceFile(fixture.node);
+  const declarations = printRustSourceFile(finalizeRustSourceStyle({ items: planRustErrorJoinDeclarations(file, fixture.context.input) }));
   assert.doesNotMatch(emitted, /ConsumerFailure|\.clone\(|::from\(/u);
   const project = writeGeneratedProject("native-checked-callable-conversions", [
     { path: "Cargo.toml", text: `[package]\nname = "native_checked_callable_conversions"\nversion = "0.0.0"\nedition = "2024"\n

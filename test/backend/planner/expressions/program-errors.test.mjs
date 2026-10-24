@@ -5,16 +5,15 @@ import { createRustTypeDefinitionRegistry } from "../../../../dist/analysis/proj
 import { rustProgramErrorRuntimeRouteMatches, selectRustProgramErrorConversion } from "../../../../dist/policy/conversions/program-error.js";
 import { selectRustProgramErrorRoute } from "../../../../dist/analysis/errors/source-packages.js";
 import { planRustProgramErrorConstruction } from "../../../../dist/backend/planner/expressions/program-errors.js";
-import { rustJsErrorTargetType, rustSourceTypeCarrier, rustSourceUnionTargetType } from "../../../../dist/target-model/types/index.js";
+import { rustJsErrorTargetType, rustNamedTargetType, rustSourceTypeCarrier, rustSourceUnionTargetType } from "../../../../dist/target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../../dist/target-model/types/equality.js";
 import { createRustRecordFixture } from "../../../helpers/records.mjs";
 import { rustProgramWithTypeEmissions } from "../../../helpers/plan-context.mjs";
 
 test("native error union planning preserves nested paths, original payloads and exact package ownership", () => {
   const builtin = rustJsErrorTargetType();
-  const native = { kind: "target-named", id: "native.Failure" };
-  const project = rustSourceTypeCarrier("/src/failure.ts", "Failure", "object");
-  const definition = {};
+  const native = rustNamedTargetType("native.Failure", "NativeFailure");
+  const project = rustSourceTypeCarrier("/src/index.ts", "Failure", "object");
   const inner = rustSourceUnionTargetType("/src/index.ts", "Inner");
   const outer = rustSourceUnionTargetType("/src/index.ts", "Outer");
   const registry = createRustTypeDefinitionRegistry();
@@ -27,14 +26,18 @@ test("native error union planning preserves nested paths, original payloads and 
     { name: "Nested", carrier: inner }, { name: "Project", carrier: project },
   ] }, true), true);
   const definitions = registry.seal();
+  const conversion = selectRustProgramErrorConversion(outer, undefined, definitions);
+  assert.ok(conversion);
+  const program = rustProgramWithTypeEmissions([conversion.target, inner, outer], {
+    source: "export class Failure extends Error {}\n", typeDefinitions: definitions,
+  });
+  const definition = program.projectTypes.definitionForCarrier(project);
+  assert.equal(definition !== undefined, true, "the error fixture retains its actual checked class definition");
   const policy = {
     definitionForCarrier: carrier => rustTargetTypeRefEquals(carrier, project) ? definition : undefined,
     programErrorVariant: current => current === definition ? "Failure" : undefined,
     openCarrier: () => project,
   };
-  const conversion = selectRustProgramErrorConversion(outer, undefined, definitions);
-  assert.ok(conversion);
-  const program = rustProgramWithTypeEmissions([conversion.target, inner, outer], { typeDefinitions: definitions });
   const boundary = { componentId: "root", errorDomain: "project", errorTypePath: "rt::TsonicError" };
   function context(owner = "root", projectTypes = policy) {
     const sourcePackageErrors = {

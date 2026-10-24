@@ -13,6 +13,7 @@ import { selectRustCallableConversion } from "../../../../dist/policy/conversion
 import { printRustExpr } from "../../../../dist/print/source/expressions/core.js";
 import { nativeFallibleAdapterFixture } from "../../../helpers/physical-callable-adapters.mjs";
 import { planRustNativeInputInvocation, planRustNativeProtocolInvocation } from "../../../../dist/backend/planner/expressions/calls/native-input.js";
+import { planRustErrorJoinDeclarations } from "../../../../dist/backend/planner/program/error-regions.js";
 
 const integer = rustSourcePrimitiveTargetType("int32");
 
@@ -143,8 +144,8 @@ test("fallible adapters use the same canonical native error channels as their ph
   assert.match(text, /::Error0/u);
   assert.match(text, /::Error2/u);
   assert.equal((text.match(/rt::Callable::<[^\n]+>::new/gu) ?? []).length, 1);
-  const file = current.program.source.ast.getFileName(current.program.source.ast.getSourceFile(current.node));
-  assert.equal(current.context.input.errorRegions.itemsFor(file).filter(item => item.name === "NativeErrors3").length, 1);
+  const file = current.program.source.ast.getSourceFile(current.node);
+  assert.equal(planRustErrorJoinDeclarations(file, current.context.input).filter(item => item.name === "NativeErrors3").length, 1);
 });
 
 test("formal callable adaptation invokes the exact selected protocol rather than a runtime dictionary", () => {
