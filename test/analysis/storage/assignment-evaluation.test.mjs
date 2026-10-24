@@ -65,8 +65,10 @@ test("shared native compound receivers retain one identity through index, getter
     const read = program.records.readOwnership.get(receiver.node);
     assert.equal(read?.source.kind === "borrow" && !read.source.mutable, true,
       `${name}: the existing ownership producer selects the immutable native read`);
-    assert.equal(read.borrowedAcross.has(node), true,
-      `${name}: the existing proof covers the entire index/get/RHS/set assignment, not only the getter`);
+    assert.equal(read.borrowedAcross.has(index.node), true,
+      `${name}: the existing proof preserves the native receiver through index evaluation`);
+    assert.equal(read.borrowedAcross.has(plan.right), true,
+      `${name}: the existing proof extends through RHS evaluation before the setter, not only the getter`);
     const getter = program.records.targetOperation.get(plan.left);
     const setter = program.records.compoundWrite.get(node);
     assert.equal(getter?.kind === "provider-operation" && setter?.kind === "runtime-set", true,
@@ -84,8 +86,9 @@ test("shared native compound receivers retain one identity through index, getter
   const reboundRead = program.records.readOwnership.get(reboundReceiver.node);
   assert.equal(reboundReceiver.storage, "value", "receiver rebinding keeps its real owned snapshot before the index");
   assert.equal(reboundRead?.source.kind, "clone", "the existing owner preserves the original shared object when its binding changes");
-  assert.equal(reboundRead.borrowedAcross.has(rebound.node), false,
-    "a changing source binding cannot borrow across the complete compound interval");
+  const reboundIndex = rebound.plan.operands.find(operand => operand.role === "index");
+  assert.equal(reboundRead.borrowedAcross.has(reboundIndex.node), false,
+    "a changing source binding cannot borrow through the actual rebinding index evaluation");
   const fresh = selected.get("fresh");
   const freshReceiver = fresh.plan.operands.find(operand => operand.role === "receiver");
   assert.equal(freshReceiver.storage, "value", "an actual owned temporary remains alive through the complete assignment");
