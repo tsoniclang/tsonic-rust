@@ -21,7 +21,7 @@ test("native tail recipes eliminate only the adjacent returned immutable untyped
       { pattern: { kind: "tuple-variant", path: "Some", elements: [{ kind: "binding", name: "present" }] }, expression: path("present") },
       { pattern: { kind: "path", path: "None" }, expression: call("next") },
     ] }];
-  for (const [index, expression] of expressions.entries()) {
+  for (const [index, expression] of [...expressions, call("consume_owned", call("make_observed"))].entries()) {
     const prefix = { kind: "expr", expr: call("effect") };
     const actual = shaped(expression, {}, [prefix]);
     assert.equal(actual.statements.length, 2, `${index}: only the returned binding disappears`);
@@ -54,7 +54,7 @@ test("borrowing intermediate temporaries retain their original native statement 
   for (const [label, expression] of [
     ["RefCell borrow guard", method(borrowed, "len")],
     ["borrowed temporary argument", call("consume", temporary)],
-    ["opaque argument temporary", call("consume", call("make_observed"))],
+    ["borrowed argument from a temporary receiver", call("consume", method(call("make_observed"), "borrow"))],
     ["borrowed aggregate temporary", call("consume", { kind: "reference", expr: {
       kind: "tuple-literal", elements: [path("owned")],
     } })],
@@ -123,6 +123,8 @@ for (const edition of ["2021", "2024"]) {
         { kind: "type", type: { kind: "primitive", name: "u32" } },
       ] } }], returnType: { kind: "primitive", name: "u32" }, body: shaped(method(path("value"), "unwrap_or", integer(7))) },
       { name: "owned_value", params: [], returnType: { kind: "named", path: "Observed" }, body: shaped(call("make_observed")) },
+      { name: "owned_argument", params: [], returnType: { kind: "primitive", name: "u32" },
+        body: shaped(call("consume_owned", call("make_observed"))) },
       ...(edition === "2021" ? [{ name: "borrowed_length", params: [], returnType: { kind: "primitive", name: "usize" }, body: shaped(
         method(method(path("cell"), "borrow"), "len"), {}, [{ kind: "let", name: "cell", mutable: false,
           init: call("std::cell::RefCell::new", { kind: "str-literal", value: "abc" }) }]) },
@@ -145,6 +147,7 @@ impl Drop for Observed {
     fn drop(&mut self) { println!("drop:{}", self.0); }
 }
 fn make_observed() -> Observed { println!("effect:once"); Observed("owned") }
+fn consume_owned(_owned: Observed) -> u32 { 7 }
 ${edition === "2021" ? 'const TEMPORARY: Observed = Observed("constant");\nfn consume(_: &Observed) -> u32 { 7 }' : ""}
 fn main() {
     assert_eq!(default_value(None), 7);
@@ -153,6 +156,9 @@ fn main() {
     let owned = owned_value();
     println!("caller:owns");
     drop(owned);
+    println!("argument:start");
+    assert_eq!(owned_argument(), 7);
+    println!("argument:end");
     ${edition === "2021" ? 'println!("constant:start"); assert_eq!(constant_drop(), 7); println!("constant:end");' : ""}
 }
 ` },
@@ -161,7 +167,7 @@ fn main() {
     runCargo(project, ["check", "--all-targets", "--locked", "--offline"]);
     runCargo(project, ["clippy", "--all-targets", "--locked", "--offline", "--", "-D", "warnings"]);
     const result = runCargo(project, ["run", "--locked", "--offline"]);
-    assert.equal(result.stdout, "effect:once\ncaller:owns\ndrop:owned\n" + (edition === "2021"
+    assert.equal(result.stdout, "effect:once\ncaller:owns\ndrop:owned\nargument:start\neffect:once\ndrop:owned\nargument:end\n" + (edition === "2021"
       ? "constant:start\ndrop:constant\ndrop:local\nconstant:end\n" : ""),
     `${edition}: one effect, native ownership and exact Drop order`);
   });

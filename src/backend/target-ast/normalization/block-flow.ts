@@ -35,9 +35,9 @@ function rustTailInitializerHasNoIntermediateTemporary(expression: RustExpr, nat
     case "path": return true;
     case "string-literal": return true;
     case "call":
-    case "associated-call": return expression.args.every(operand);
-    case "invoke": return rustTailPlaceHasNoTemporary(expression.callee, nativeBindings) && expression.args.every(operand);
-    case "method-call": return rustTailPlaceHasNoTemporary(expression.receiver, nativeBindings) && expression.args.every(operand);
+    case "associated-call": return expression.args.every(result);
+    case "invoke": return rustTailPlaceHasNoTemporary(expression.callee, nativeBindings) && expression.args.every(result);
+    case "method-call": return rustTailPlaceHasNoTemporary(expression.receiver, nativeBindings) && expression.args.every(result);
     case "tuple-literal": return expression.elements.every(result);
     case "struct-literal": return (expression.base === undefined || operand(expression.base)) &&
       expression.fields.every(field => result(field.value));
