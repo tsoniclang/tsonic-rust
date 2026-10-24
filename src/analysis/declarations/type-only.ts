@@ -5,7 +5,7 @@ import { appendRustDiagnostic, rustOperationContext } from "../program/walk.js";
 import { resolveSelectedProviderDeclaration } from "../../policy/identities/selected-source.js";
 import { selectedRustProviderGlobal } from "../../policy/identities/provider-globals.js";
 import { selectRustProviderSourceReceiver } from "../operations/members/source-qualifiers.js";
-import { selectRustErrorTypePredicate } from "../operations/source-profiles/js/type-tests.js";
+import { requireRustRecord } from "../program/records/required-records.js";
 
 export function recordRustTypeOnlyDeclarations(walk: RustFactWalk, sourceFiles: readonly SourceFile[]): void {
   walk.context.records.typeOnlyDeclarations.finalize(walk, sourceFiles);
@@ -69,7 +69,12 @@ export function checkRustAmbientVariableUse(walk: RustFactWalk, declaration: Nod
       semanticsFor: walk.context.semanticsFor }, parent);
   if (nativeGuard?.kind === "nominal" && nativeGuard.sourceConstructor === use.reference &&
     nativeGuard.declaration === declaration &&
-    selectRustErrorTypePredicate(walk.context, declaration, walk.context.sourceProfiles) !== undefined) return;
+    walk.context.sourceProfiles.profileForNode(declaration, ast) !== undefined) {
+    requireRustRecord(walk.context.requiredRecords, "compileTimeSource", qualifier,
+      "native-type-qualifier", "checkRustAmbientVariableUse");
+    walk.context.records.compileTimeSources.erase(qualifier);
+    return;
+  }
   const provider = resolveSelectedProviderDeclaration(walk.context, declaration,
     [{ subject: use.reference, precision: "exact" }]);
   if (provider.kind !== "missing" || selectedRustProviderGlobal(declaration, walk.context,

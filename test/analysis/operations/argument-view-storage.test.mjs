@@ -20,6 +20,13 @@ for (const rawStorage of [false, true]) {
     const value = ${rawStorage ? '((seed)).indexOf("7")' : "parseInt(((seed)))"};
     update();
     return value;
+  }`, "plain"],
+    ["stored captured mutable source storage", `export function run(seed: string): () => number {
+    return () => {
+      const value = ${rawStorage ? '((seed)).indexOf("7")' : "parseInt(((seed)))"};
+      seed = "8";
+      return value;
+    };
   }`, "borrow-guard"],
   ]) {
     test(`argument views retain ${label} through every transparent source wrapper${rawStorage ? " with raw source storage" : ""}`, () => {
@@ -61,12 +68,19 @@ for (const rawStorage of [false, true]) {
       };
       program.sourceFiles.forEach(visit);
       assert.equal(selected.length, 3, "both wrappers and their original storage read are covered");
+      if (expected === "borrow-guard") {
+        const binding = program.records.sourceBinding.get(selected.at(-1))?.sourceDeclaration;
+        assert.equal(binding !== undefined, true, "the actual stored native capture has its checked binding");
+        assert.equal(program.records.bindingStorage.get(binding)?.storage, "borrow-cell",
+          "the borrow-guard inverse exercises finalized native cell storage rather than assuming every capture needs a cell");
+      }
       for (const node of selected) {
         const view = program.records.argumentView.get(node);
+        const contextual = program.records.contextualValueConversion.get(node);
         assert.equal(program.records.readOwnership.get(node)?.source.kind, "borrow",
           "the finalized native source conversion selects a borrow before storage views are sealed");
-        assert.equal(view?.borrowedStorage, rawStorage ? expected : undefined,
-          rawStorage ? "the physical source form is selected before sealing"
+        assert.equal(view?.borrowedStorage, contextual === undefined ? expected : undefined,
+          contextual === undefined ? "the physical source form is selected before sealing"
             : "the completed converted value is not relabelled as its original raw storage");
         assert.equal(Object.isFrozen(view), true, "the selected argument view is immutable");
       }

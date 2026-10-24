@@ -139,7 +139,8 @@ test("structural storage renders combined native method and bound-field carriers
     const carrier = rustStructuralObjectTargetType("checked.ts", [], "reference");
     const definition = { carrier, sourceCarriers: [carrier], targetName: "Checked", componentId: component,
       ownerFileName: base.source.ast.getFileName(base.sourceFiles[0]),
-      genericParameters: [], genericArguments: [], fields: [{ sourceName: "value", targetName: "value",
+      genericParameters: [], genericArguments: [], stateGenericParameters: [], stateGenericArguments: [],
+      contextMarker: undefined, contextConstructor: undefined, fields: [{ sourceName: "value", targetName: "value",
         presence: "required", readonly: false, ...extra }] };
     const shapes = { ...base.structuralShapes, definitions: [definition], instances: [definition], unionDefinitions: [],
       definitionForCarrier: selected => rustTargetTypeRefEquals(selected, carrier) ? definition : undefined,
@@ -149,10 +150,11 @@ test("structural storage renders combined native method and bound-field carriers
         contractForCarrier: () => ({ typeParameters: [], associatedTypes: [], optionalStorage: [], projectProjections: [] }) } };
     const projects = createRustProjectEmissionProducer(() => {});
     analyzeRustProjectEmission({ program, nodes: [], producer: projects });
+    const projected = { ...program, records: { ...program.records, ...projects.records } };
     const structural = createRustStructuralEmissionProducer(() => {});
-    const issues = analyzeRustStructuralEmission(program, structural);
+    const issues = analyzeRustStructuralEmission(projected, structural, projects);
     assert.equal(issues.length, 0, name + ": the actual structural owner admits the complete native storage");
-    const admitted = { ...program, records: { ...program.records, ...projects.records, ...structural.records } };
+    const admitted = { ...projected, records: { ...projected.records, ...structural.records } };
     const types = createRustTypeEmissionProducer(() => {});
     analyzeRustTypeEmission(admitted, [], types, structural.records.structuralShapeEmission.get(definition).fields.map(field => field.carrier), projects);
     const liveness = createRustNativeLivenessProducer(() => {});

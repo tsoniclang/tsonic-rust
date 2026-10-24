@@ -1,6 +1,9 @@
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
-import { rustUnionPathsMatching, type RustUnionLeaf } from "../../target-model/types/union-relations.js";
+import { rustUnionAlternatives, rustUnionLeaves, rustUnionPathsMatching, type RustUnionLeaf } from "../../target-model/types/union-relations.js";
+import type { RustValueReadOwnership } from "../../target-model/records/ownership.js";
+import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
+import { rustOptionElementCarrier } from "../../target-model/types/carriers/optional.js";
 import { rustNativeRepresentationMatches } from "./native-representation.js";
 import { isRustJsValueCarrier } from "../../target-model/types/carriers/js.js";
 import { rustTsValueTargetId } from "../../target-model/types/carriers/source-types.js";
@@ -24,4 +27,36 @@ export function rustUnionPayloadAdmission(
   const admitted = native.length > 0 ? native : converted.length > 0 ? converted : paths;
   return admitted.length === 1 && admitted[0]!.path.every(step => step.variant.kind === "payload")
     ? admitted[0] : undefined;
+}
+
+export function rustUnionEntryTransferIssue(
+  source: TargetTypeRef,
+  target: TargetTypeRef,
+  read: RustValueReadOwnership["kind"] | undefined,
+  borrowedStorage: boolean,
+  definitions: RustTypeDefinitions,
+): string | undefined {
+  if (rustUnionAlternatives(target, definitions) === undefined && rustOptionElementCarrier(target) === undefined ||
+    read === "move" && !borrowedStorage) return undefined;
+  const pending = [source];
+  const visited = new Set<string>();
+  while (pending.length > 0) {
+    const carrier = pending.pop()!;
+    const identity = closedMetadataKey(carrier);
+    if (visited.has(identity)) continue;
+    visited.add(identity);
+    if (carrier.kind === "array") {
+      return "A native union entry requires an identity-preserving array transfer; the selected native read would copy borrowed or aliased array storage.";
+    }
+    const optional = rustOptionElementCarrier(carrier);
+    if (optional !== undefined) pending.push(optional);
+    else if (carrier.kind === "tuple") pending.push(...carrier.elements);
+    else {
+      const alternatives = rustUnionLeaves(carrier, definitions);
+      if (alternatives !== undefined) pending.push(...alternatives.map(alternative => alternative.carrier));
+      else if (rustUnionAlternatives(carrier, definitions) !== undefined)
+        return "A native union entry requires a complete finite array-storage transfer proof.";
+    }
+  }
+  return undefined;
 }

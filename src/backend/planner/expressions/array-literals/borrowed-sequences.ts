@@ -9,6 +9,7 @@ import { lowerNestedRustValueConversion } from "../value-conversions.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import { failRustPlannerInvariant } from "../../diagnostics.js";
 import { rustAutoBorrowedReceiver } from "../auto-borrowed-receivers.js";
+import { planRustNativeOptionBranch } from "../option-branch.js";
 
 export function planRustBorrowedSequenceAppend(node: Node, fact: RustBorrowedSequenceInput, destination: RustExpr,
   elementCarrier: TargetTypeRef, context: RustPlanContext): RustExpr {
@@ -25,10 +26,9 @@ export function planRustBorrowedSequenceAppend(node: Node, fact: RustBorrowedSeq
     if (!input.optional) return consume(value);
     if (context.syntheticNames === undefined) failRustPlannerInvariant("An admitted optional sequence requires hygienic native bindings.", input.expression);
     const name = allocateRustSyntheticName(context.syntheticNames, "sequence");
-    return { kind: "match", expression: { kind: "method-call", receiver: rustAutoBorrowedReceiver(value), method: "as_ref", args: [] }, arms: [
-      { pattern: { kind: "tuple-variant", path: "Some", elements: [{ kind: "binding", name }] }, expression: consume({ kind: "path", path: name }) },
-      { pattern: { kind: "path", path: "None" }, expression: branch(index + 1) },
-    ] };
+    return planRustNativeOptionBranch(
+      { kind: "method-call", receiver: rustAutoBorrowedReceiver(value), method: "as_ref", args: [] },
+      name, consume({ kind: "path", path: name }), branch(index + 1));
   };
   return branch(0);
 }

@@ -122,8 +122,9 @@ export function resolveUnion(
   const absent = (member: Type): boolean => context.currentSemantics.types.isNullish(member) || context.currentSemantics.types.isVoidLike(member);
   const valueMembers = members.filter(member => !absent(member));
   const nullishMembers = members.filter(absent);
+  const typeContext = { ...context, sourceStorageSubject: undefined };
   const valueCarriers = valueMembers.map((member) =>
-    resolveRustTargetType(member, context, options, resolving));
+    resolveRustTargetType(member, typeContext, options, resolving));
   if (valueCarriers.some((carrier) => carrier === undefined)) {
     return undefined;
   }

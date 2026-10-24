@@ -280,7 +280,7 @@ function planConstructor(
   if (fallible) {
     context.usedAliases?.add("rt");
   }
-  const constructorContext: RustPlanContext = {
+  const parameterContext: RustPlanContext = {
     ...(environment === undefined ? context : rustClassEnvironmentContext(environment,
       { kind: "path", path: environment.parameterName }, context)),
     syntheticNames,
@@ -290,14 +290,16 @@ function planConstructor(
     fallibleBoundary: errorBoundary === undefined ? undefined : rustPackageFallibleBoundary(errorBoundary),
     returnResult: errorBoundary === undefined ? undefined : { errorType: rustErrorType(errorBoundary) },
   };
-  const parameterStatements = planRustCallableParameterPrelude(
+  const parameterPrelude = planRustCallableParameterPrelude(
     parameterPlan,
-    constructorContext,
+    parameterContext,
     planExpression,
   );
-  if (parameterStatements === undefined) {
+  if (parameterPrelude === undefined) {
     failRustPlannerInvariant("An admitted native class requires its complete syntax and native storage plan.", classDeclaration);
   }
+  const constructorContext = parameterPrelude.context;
+  const parameterStatements = parameterPrelude.statements;
   const definition = selected.definition;
   const constructionPlan = definition === undefined ? undefined
     : context.input.program.records.classConstruction.get(definition.declaration);

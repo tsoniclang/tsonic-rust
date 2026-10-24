@@ -17,7 +17,7 @@ import { rustOptionElementCarrier } from "../../../dist/target-model/types/carri
 
 function storedMethodExposures(carriers, componentForFile) {
   return new Map(carriers.flatMap(carrier => rustStructuralObjectCarrierValue(carrier).fields.flatMap((field, index) =>
-    field.method !== true ? [] : [[`${structuralStorageKey(rustStructuralGenericCarrier(carrier).carrier, componentForFile)}#${index}`,
+    field.method !== true ? [] : [[`${structuralStorageKey(rustStructuralGenericCarrier(carrier, "fields").carrier, componentForFile)}#${index}`,
       Object.freeze({ kind: "stored" })]])));
 }
 
