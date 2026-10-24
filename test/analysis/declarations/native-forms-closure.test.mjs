@@ -248,7 +248,7 @@ test("sealed family implementations have completed contracts and missing contrac
       elements: [implementation.owner, implementation.output] });
     assert.equal(contract !== undefined, true, "every implementation is covered by the completed generic-requirement closure");
   }
-  assert.equal(program.records.nativeDeclaration.implementations.length, program.typeFamilies.implementations.length,
+  assert.equal(program.nativeDeclarations.implementations.length, program.typeFamilies.implementations.length,
     "admission covers the complete finally sealed implementation domain in its existing order");
   assert.throws(() => analyzeRustNativeDeclarationForms({ ast: source.ast, sourceFiles: program.sourceFiles,
     semanticsFor: createTargetSourceProgram(source).semantics.forNode,
@@ -256,6 +256,7 @@ test("sealed family implementations have completed contracts and missing contrac
     typeDefinitions: program.typeDefinitions, sourceLifetimes: program.sourceLifetimes,
     objectRepresentations: program.objectRepresentations,
     typeFamilies: program.typeFamilies,
+    structuralShapes: program.structuralShapes,
     genericRequirements: { ...program.declarationGenericRequirements, contractForCarrier: () => undefined },
   }), error => error instanceof Error && error.message.includes(
     "A sealed type-family implementation has no completed native generic requirement contract."),

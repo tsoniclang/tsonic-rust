@@ -6,6 +6,9 @@ import { rustCallableTargetType, rustSourceTypeCarrier, rustStructuralObjectTarg
 import { rustClassConstructorTargetType } from "../../../../dist/target-model/types/carriers/class-constructors.js";
 import { createRustRecordFixture } from "../../../helpers/records.mjs";
 import { createRustObjectReferenceViewProducer } from "../../../../dist/analysis/program/records/object-reference-view.js";
+import { createCompilerSessionFromFiles, formatDiagnostics } from "@tsonic/tsts";
+import { createTargetSourceProgram } from "@tsonic/target-api/source";
+import { rustTargetTypeRefEquals } from "../../../../dist/target-model/types/equality.js";
 
 const integer = { kind: "source-primitive", name: "int32" };
 const wide = { kind: "source-primitive", name: "int64" };
@@ -48,7 +51,7 @@ function copiedFixture(builder, { method = { kind: "KindMethodDeclaration", chil
     contributions: [{ kind: "structural-method", targetStorageIndex: 0, expression: method }] };
   const records = createRustRecordFixture({ targetOperation: { get: node => node === literal ? operation : node === read
     ? { kind: "source-field", storage: "structural-object", receiverCarrier: shape, storageIndex: 0, valueSemantics: { kind: "method" } }
-    : undefined } }, builder);
+    : node === method ? { kind: "closure", resultCarrier: carrier } : undefined } }, builder);
   if (receiver) method.children = [{ kind: "KindThisExpression" }];
   const walk = { context: { requiredRecords: [], records, diagnostics: [], isNativeNode: () => true, ast: {
     forEachChild(node, visit) { for (const child of node.children ?? []) visit(child); },
@@ -62,7 +65,8 @@ test("copied-method producer admits only proved implementations and preserves in
   const original = copiedFixture(parent);
   assert.equal(original.finalize().size, 1);
   const fact = parent.receiverIndependentMethod.get(original.method);
-  assert.equal(fact?.carrier === callable, true);
+  assert.equal(rustTargetTypeRefEquals(fact?.carrier, callable), true, "the admitted closure retains its exact native signature, error and lifetime");
+  assert.equal(parent.receiverIndependentMethod.get(original.method) === fact, true, "the actual published record has one canonical identity");
   assert.equal(Object.isFrozen(fact), true);
   assert.equal(parent.receiverIndependentMethod.get({}) === undefined, true);
   assert.equal(parent.minimumFoundation(), "core");
@@ -143,11 +147,28 @@ test("contradictory copied-method candidates reject before publishing any new ba
   assert.equal(first.walk.context.diagnostics.length, 0);
 });
 
-function adapterFixture(builder, { expression = {}, implementation = {}, contract = {}, slot = "value", returnCarrier = integer } = {}) {
-  const declaration = {};
+const checkedAdapters = createCompilerSessionFromFiles({ currentDirectory: "/", compilerOptions: {
+  strict: true, target: "es2022", module: "esnext",
+}, files: { "/contract.ts": `
+  interface Contract { value(): number; }
+  interface Other { value(): number; }
+  class Concrete implements Contract { value(): number { return 1; } }
+  class Replacement implements Other { value(): number { return 2; } }
+` } }).checkSource();
+assert.equal(checkedAdapters.diagnostics.length, 0, formatDiagnostics(checkedAdapters.diagnostics));
+const adapterSource = createTargetSourceProgram(checkedAdapters);
+const [contractOwner, otherOwner, concreteOwner, replacementOwner] = adapterSource.ast.statements(
+  checkedAdapters.getSourceFile("/contract.ts"));
+const contractMethod = adapterSource.ast.members(contractOwner)[0];
+const otherMethod = adapterSource.ast.members(otherOwner)[0];
+const implementationMethod = adapterSource.ast.members(concreteOwner)[0];
+const replacementMethod = adapterSource.ast.members(replacementOwner)[0];
+
+function adapterFixture(builder, { expression = {}, implementation = implementationMethod, contract = contractMethod, slot = "value", returnCarrier = integer } = {}) {
+  const declaration = contractOwner;
   const ownerCarrier = rustSourceTypeCarrier("/contract.ts", "Contract", "object", []);
   const owner = { kind: "interface", declaration, carrier: ownerCarrier, typeParameterIdentities: [] };
-  const concrete = { kind: "class", declaration: {}, carrier: ownerCarrier, typeParameterIdentities: [] };
+  const concrete = { kind: "class", declaration: concreteOwner, carrier: ownerCarrier, typeParameterIdentities: [] };
   const operation = { kind: "record-literal", resultCarrier: ownerCarrier,
     contributions: [{ kind: "method", expression: implementation, contractDeclarations: [contract] }] };
   const returns = new Map([[implementation, { returnCarrier }], [contract, { returnCarrier }]]);
@@ -155,8 +176,7 @@ function adapterFixture(builder, { expression = {}, implementation = {}, contrac
     sourceCallableReturn: { get: node => returns.get(node) } }, builder);
   const variant = { declaration: contract, targetTypeArguments: [], sourceTypeParameterIdentities: [], virtualSlot: slot };
   const input = { requiredRecords: [],
-    ast: { typeParameters: () => [], parameters: () => [], members: () => [contract], hasModifierKind: () => false,
-      kindName: () => "KindMethodSignature" },
+    ast: adapterSource.ast, source: adapterSource,
     sourceLifetimes: { parameterFor: () => undefined }, records,
     projectTypes: { definitions: [concrete], isPolymorphic: () => true, contractsForClass: () => [owner],
       openCarrier: () => ownerCarrier, definitionContainingDeclaration: () => owner,
@@ -193,7 +213,7 @@ test("object-method producer retains exact implementation, contract and ABI evid
   const fresh = adapterFixture(child);
   assert.deepEqual(fresh.literal(), []);
   assert.equal(parent.objectLiteralMethodAdapter.get(fresh.expression) === undefined, true);
-  for (const replacement of [{ implementation: {} }, { contract: {} }, { slot: "foreign" }, { returnCarrier: wide }]) {
+  for (const replacement of [{ implementation: replacementMethod }, { contract: otherMethod }, { slot: "foreign" }, { returnCarrier: wide }]) {
     assertRustInheritedRecordConflict("objectLiteralMethodAdapter", selected.expression, fact,
       candidate => adapterFixture(candidate, { ...selected, ...replacement }).literal(),
       /Conflicting Rust semantic plan 'tsonic\.rust\.objectLiteralMethodAdapter'/u);
@@ -237,7 +257,7 @@ test("project-adapter producer owns declaration publication and exact contract/i
   equal.input.projectTypes.definitions = [selected.concrete];
   equal.project();
   assert.equal(child.projectCallableAdapters.get(selected.concrete.declaration) === fact, true);
-  for (const replacement of [{ implementation: {} }, { contract: {} }, { slot: "foreign" }, { returnCarrier: wide }]) {
+  for (const replacement of [{ implementation: replacementMethod }, { contract: otherMethod }, { slot: "foreign" }, { returnCarrier: wide }]) {
     assertRustInheritedRecordConflict("projectCallableAdapters", selected.concrete.declaration, fact, candidate => {
       const changed = adapterFixture(candidate, { ...selected, ...replacement });
       changed.input.projectTypes.definitions = [selected.concrete];

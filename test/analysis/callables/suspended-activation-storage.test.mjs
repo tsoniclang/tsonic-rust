@@ -21,7 +21,8 @@ test("suspended recursive entries prove the actual activation storage without re
     const suspension = program.records.asyncFunction.get(declaration);
     const body = program.records.sourceCallableReturn.get(declaration);
     assert.equal(suspension?.kind, "js-promise", "an entry has a completed suspension protocol");
-    assert.equal(suspension.storage.kind, "static", "the proven activation owns only native integer storage");
+    assert.equal(suspension.lowering.kind, "factory", "the actual suspended activation owns its retained factory");
+    assert.equal(suspension.lowering.storage.kind, "static", "the proven activation owns only native integer storage");
     assert.equal(rustTargetTypeRefEquals(body?.returnCarrier, rustSourcePrimitiveTargetType("int32")), true,
       "the body return is the exact integer, never its Promise invocation carrier");
     assert.equal(rustTargetTypeRefEquals(rustCallableInvocationResult(program.records, declaration), suspension.futureCarrier), true,
