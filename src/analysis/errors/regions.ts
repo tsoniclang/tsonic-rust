@@ -46,6 +46,7 @@ import { rustUninhabitedError } from "../../policy/conversions/callable-physical
 import { selectRustProducerError } from "../callables/producer-errors.js";
 import type { RustFrameCallablePlan } from "../../target-model/records/frame-callables.js";
 import { rustFrameCallableValue } from "../../target-model/types/carriers/frame-callables.js";
+import { rustFrameCallableEnvironmentBindings } from "../callables/frame-values.js";
 
 export interface RustAnalyzedErrorRegions extends Pick<RustErrorRegionRecords, "get" | "sourceFor" | "producerError"> {
   lifecycleFor(initializers: readonly RustInitializerSelection[], owner: RustPhysicalErrorOwner): TargetStageResult<RustLifecycleErrorSelection>;
@@ -168,10 +169,11 @@ export function selectRustFrameInvocationErrors(
 ): RustSourceErrorRegionSelection | undefined {
   const frame = rustFrameCallableValue(carrier);
   const entry = frame === undefined ? undefined : frames.entryFor(carrier);
-  if (frame === undefined || entry === undefined || frame.environment.length !== entry.signature.environmentParameters.length) return undefined;
+  const definition = frame === undefined ? undefined : frames.definitionFor(carrier);
+  const substitutions = frame === undefined || entry === undefined || definition === undefined ? undefined
+    : rustFrameCallableEnvironmentBindings(definition, entry, frame.environment);
+  if (entry === undefined || substitutions === undefined) return undefined;
   const selected = frames.entryErrors(entry);
-  const substitutions = new Map(entry.signature.environmentParameters.map((parameter, index) =>
-    [parameter.identity, frame.environment[index]!]));
   const sources = selected.region.sources.map(source => ({ ...source,
     errorType: substituteRustTargetGenerics(source.errorType, substitutions, new Map()) }));
   const operand = Object.freeze({ ...selected.region, sources: Object.freeze(sources) });

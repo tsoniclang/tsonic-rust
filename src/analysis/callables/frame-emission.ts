@@ -14,6 +14,7 @@ import { rustPhysicalEmissionRecordCarriers } from "./emission-contexts.js";
 import { rustCallableProtocol, rustCallableTargetType } from "../../target-model/types/carriers/callables.js";
 import { rustProgramNodeIsOutsideNativeCode } from "../control-flow/compile-time-statements.js";
 import { rustStaticLifetime } from "../../target-model/lifetimes/index.js";
+import { rustFrameCallableEnvironmentBindings } from "./frame-values.js";
 
 export function analyzeRustFrameEmission(input: {
   readonly program: Omit<RustAnalysisProgram, "reachability">;
@@ -126,13 +127,10 @@ export function analyzeRustFrameEmission(input: {
     const entry = frames.entryFor(carrier);
     if (definition === undefined || entry === undefined || value.environment.length !== entry.environmentIndexes.length)
       failTargetAnalysisInvariant("tsonic-rust", "An admitted native frame requires its exact physical entry and environment correspondence.");
-    const environment: (TargetTypeRef | undefined)[] = Array.from({ length: definition.environmentParameters.length }, () => undefined);
-    value.environment.forEach((parameter, index) => {
-      const destination = entry.environmentIndexes[index];
-      if (destination === undefined || destination < 0 || destination >= environment.length)
-        failTargetAnalysisInvariant("tsonic-rust", "An admitted native frame requires its exact environment parameter positions.");
-      environment[destination] = parameter;
-    });
+    const bindings = rustFrameCallableEnvironmentBindings(definition, entry, value.environment);
+    if (bindings === undefined)
+      failTargetAnalysisInvariant("tsonic-rust", "An admitted native frame requires its exact environment parameter positions.");
+    const environment = definition.environmentParameters.map(parameter => bindings.get(parameter.identity));
     if (environment.some(parameter => parameter === undefined))
       failTargetAnalysisInvariant("tsonic-rust", "An admitted native frame requires its complete environment parameter inventory.");
     let owner: import("../../target-model/records/frame-emission.js").RustFrameTypeEmission["owner"];

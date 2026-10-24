@@ -33,6 +33,23 @@ export interface RustFrameCallablePlanRegistry extends RustFrameCallablePlan {
   sealCounters(constructions: readonly RustProjectConstructionPlan[]): RustFrameCallablePlan;
 }
 
+export function rustFrameCallableEnvironmentBindings(
+  definition: Pick<RustFrameCallableDefinition, "environmentParameters">,
+  entry: Pick<RustFrameCallableEntryDefinition, "environmentIndexes">,
+  environment: readonly TargetTypeRef[],
+): ReadonlyMap<string, TargetTypeRef> | undefined {
+  if (entry.environmentIndexes.length !== environment.length) return undefined;
+  const bindings = new Map<string, TargetTypeRef>();
+  for (const [index, value] of environment.entries()) {
+    const parameter = definition.environmentParameters[entry.environmentIndexes[index]!];
+    if (parameter === undefined) return undefined;
+    const previous = bindings.get(parameter.identity);
+    if (previous !== undefined && !rustTargetTypeRefEquals(previous, value)) return undefined;
+    bindings.set(parameter.identity, value);
+  }
+  return bindings;
+}
+
 export function createRustFrameCallablePlan(input: {
   readonly ast: AstReader;
   readonly records: RustProgramRecords;
@@ -320,10 +337,12 @@ export function createRustFrameCallablePlan(input: {
       const frame = rustFrameCallableValue(carrier);
       if (frame === undefined) return undefined;
       const entry = selectedEntries.get(closedMetadataKey(carrier));
-      if (entry === undefined) failTargetAnalysisInvariant("tsonic-rust",
+      const definition = selectedDefinitions.get(closedMetadataKey(carrier));
+      const bindings = entry === undefined || definition === undefined ? undefined
+        : rustFrameCallableEnvironmentBindings(definition, entry, frame.environment);
+      if (entry === undefined || bindings === undefined) failTargetAnalysisInvariant("tsonic-rust",
         "A native frame error requires its exact admitted carrier and environment correspondence.");
-      return substituteRustTargetGenerics(entryErrors(entry).carrier,
-        new Map(entry.signature.environmentParameters.map((parameter, index) => [parameter.identity, frame.environment[index]!])), new Map());
+      return substituteRustTargetGenerics(entryErrors(entry).carrier, bindings, new Map());
     },
   });
   return Object.freeze({ ...producer.records,
