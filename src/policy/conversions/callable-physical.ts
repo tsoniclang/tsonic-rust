@@ -175,7 +175,8 @@ export function rustCallableErrorJoin(
 }
 
 export function rustUninhabitedError(error: TargetTypeRef): boolean {
-  return isRustNeverCarrier(error) || error.kind === "target-named" && error.id === rustInfallibleTargetId;
+  const named = error.kind === "target-named" ? error : rustNamedTypeCarrierValue(error);
+  return isRustNeverCarrier(error) || named?.id === rustInfallibleTargetId && (named.genericArguments?.length ?? 0) === 0;
 }
 
 // The same boxed callable carrying another error; an independent frame family member with an uninhabited error is

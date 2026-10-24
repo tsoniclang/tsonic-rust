@@ -26,7 +26,7 @@ import { resolveRustTargetTypeRef } from "../../../source-evidence/types/resolut
 import { createRustPropertyProjectionSelector } from "../../../conversions/property-projections.js";
 
 import { selectedCallArgumentCarriers, selectedCallArgumentNodes, selectedCallCalleeDeclaration } from "../operators.js";
-import { selectedCallProviderDeclaration } from "../../../../policy/identities/selected-source.js";
+import { selectedCallProviderDeclaration, selectedCallProviderDomain } from "../../../../policy/identities/selected-source.js";
 import { selectedValueCarrier } from "../../selected-values.js";
 import { selectJsSurfaceConstructorBySourceOwner } from "../../../../policy/operations/source-profiles/js/index.js";
 import { selectJsSurfaceOperation } from "../../../../policy/operations/source-profiles/js/selection.js";
@@ -101,6 +101,12 @@ export function resolveRustCheckedCall(
   }
   if (providerEvidence.kind === "selected" && selectedSourceMember === undefined) {
     const provider = providerEvidence.identity;
+    const domain = selectedCallProviderDomain(request, provider, context);
+    if (domain === undefined) return rejectSelectedOperation(request.source.call, context,
+      "RUST_SELECTED_PROVIDER_EVIDENCE_CONFLICT", "The selected provider invocation requires its exact retained callable signature and declaration owner.");
+    if (domain === "value") return acceptRuntimeCallableCall(request, context, options) ?? rejectSelectedOperation(
+      request.source.call, context, "RUST_SOURCE_CALLABLE_CARRIER_MISSING",
+      "The selected provider-origin callable value requires its exact native invocation carrier.");
     const sourceMarker = provider.exportId === undefined
       ? undefined
       : sourceCallMarkerByIdentity.get(`${provider.moduleSpecifier}::${provider.exportId}`);
