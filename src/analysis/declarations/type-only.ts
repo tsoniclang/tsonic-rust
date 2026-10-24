@@ -56,7 +56,7 @@ export function checkRustAmbientVariableUse(walk: RustFactWalk, declaration: Nod
     if (ast.kindName(current) === "KindPropertySignature" || sourceClassFieldIsTypeOnly(ast, current)) return;
     if (ast.is.IsSourceFile(current)) break;
   }
-  if (walk.context.source.semantics.forNode(use.reference).declarations.isDefaultLibraryDeclaration(declaration)) return;
+  if (walk.context.sourceProfiles.profileForNode(declaration, ast) !== undefined) return;
   const provider = resolveSelectedProviderDeclaration(walk.context, declaration,
     [{ subject: use.reference, precision: "exact" }]);
   if (provider.kind !== "missing" || selectedRustProviderGlobal(declaration, walk.context,

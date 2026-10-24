@@ -224,27 +224,26 @@ test("an unavailable captured-field query stays retryable until its receiver evi
     "an earlier unavailable query must not be cached as completed");
 });
 
-function ambientFixture(builder, { malformed = false, runtime = false, nativeReference = true, defaultLibrary = false } = {}) {
+function ambientFixture(builder, { malformed = false, runtime = false, nativeReference = true, sourceProfile = undefined } = {}) {
   const file = { kind: "KindSourceFile" };
   const statement = { kind: "KindVariableStatement", parent: file };
-  const declaration = { kind: "KindVariableDeclaration", parent: statement };
+  const declaration = { kind: "KindVariableDeclaration", name: { kind: "KindIdentifier", text: "external" }, parent: statement };
   const list = { kind: "KindVariableDeclarationList", Declarations: { Nodes: malformed ? [undefined] : [declaration] } };
   const reference = { kind: "KindIdentifier", parent: file };
   const events = [];
-  const ast = { statements: () => [statement], parent: node => node.parent, kindName: node => node?.kind,
+  const ast = { statements: () => [statement], parent: node => node.parent, kindName: node => node?.kind, name: node => node?.name,
     getSourceFile: () => file,
     hasModifierKind: () => true, is: { IsVariableStatement: node => node === statement,
       IsVariableDeclaration: node => node === declaration, IsVariableDeclarationList: node => node === list, IsSourceFile: node => node === file },
     as: { AsVariableStatement: () => ({ DeclarationList: list }), AsVariableDeclarationList: () => list } };
   const walk = { context: { requiredRecords: [], ast, records: builder, diagnostics: [], typeFamilies: { families: () => [] },
     isNativeNode: node => nativeReference && node === reference,
-    source: { semantics: { forNode(subject) {
-      assert.equal(subject === reference, true, "the demanded checked occurrence selects its source semantics");
-      return { declarations: { isDefaultLibraryDeclaration(subjectDeclaration) {
-        assert.equal(subjectDeclaration === declaration, true, "library ownership belongs to the exact checked declaration");
-        return defaultLibrary;
-      } } };
-    } }, sourceFacts: { getFact: () => undefined }, navigation: { declarationUses(subject) {
+    sourceProfiles: { profileForNode(subject, sourceAst) {
+      assert.equal(subject === declaration && sourceAst === ast, true,
+        "profile ownership belongs to the exact checked declaration in the original program");
+      return sourceProfile;
+    } },
+    source: { sourceFacts: { getFact: () => undefined }, navigation: { declarationUses(subject) {
       assert.equal(subject === declaration, true);
       events.push(builder.typeOnlyDeclaration.get(statement)?.reason);
       assert.equal(builder.typeOnlyDeclaration.get(declaration) === undefined, true, "use diagnostics precede declaration admission");
@@ -321,17 +320,17 @@ test("one demanded ambient reference shares the native-use owner without revisit
     builder.typeOnlyDeclaration.get(selected.declaration) === undefined, true, "a checked dependency read does not invent emitted statement or declaration facts");
 });
 
-test("default-library values retain their native operation owner rather than authored ambient admission", () => {
-  for (const defaultLibrary of [false, true]) {
-    const selected = ambientFixture(createRustProgramRecordBuilder(), { runtime: true, defaultLibrary });
-    if (defaultLibrary) selected.walk.context.source.sourceFacts.getFact = () =>
-      assert.fail("default-library values remain with their existing native operation admission");
+test("checked source-profile values retain their native operation owner rather than authored ambient admission", () => {
+  for (const sourceProfile of [undefined, "native", "js"]) {
+    const selected = ambientFixture(createRustProgramRecordBuilder(), { runtime: true, sourceProfile });
+    if (sourceProfile !== undefined) selected.walk.context.source.sourceFacts.getFact = () =>
+      assert.fail("source-profile values remain with their existing native operation admission");
     checkRustAmbientVariableUse(selected.walk, selected.declaration,
       { kind: "first-class", role: "value", reference: selected.reference, throughMember: false, captured: false });
-    assert.equal(selected.walk.context.diagnostics.length, defaultLibrary ? 0 : 1,
+    assert.equal(selected.walk.context.diagnostics.length, sourceProfile === undefined ? 1 : 0,
       "only actual authored ambient variables require an external native implementation");
-    assert.equal(selected.walk.rejectedExpressions.has(selected.reference), !defaultLibrary,
-      "library ownership never rejects an otherwise admitted checked value");
+    assert.equal(selected.walk.rejectedExpressions.has(selected.reference), sourceProfile === undefined,
+      "checked profile ownership never rejects an otherwise admitted native value");
   }
 });
 
@@ -411,11 +410,11 @@ for (const surfaces of [[], ["js"]]) {
     assert.equal(result.program !== undefined && result.plan !== undefined && result.artifacts.length !== 0, true,
       "no authored variable or native distinction between null and undefined is fabricated");
   });
-  test(`default-library Error constructors and guards keep native admission in ${surfaces[0] ?? "native"}`, () => {
+  test(`source-profile Error constructors and guards keep native admission in ${surfaces[0] ?? "native"}`, () => {
     const { result } = compileRust({ surfaces, files: {
       "index.ts": 'export function run(): boolean { const error = new Error("native"); return error instanceof Error && error.message === "native"; }',
     } });
-    assert.deepEqual(result.diagnostics.map(issue => issue.code), [], "the exact library constructor is not an authored ambient variable");
+    assert.deepEqual(result.diagnostics.map(issue => issue.code), [], "the exact source-profile constructor is not an authored ambient variable");
     assert.equal(result.program !== undefined && result.plan !== undefined && result.artifacts.length !== 0, true,
       "native error construction and exact checked runtime classification remain published");
     const output = result.artifacts.filter(artifact => artifact.path.endsWith(".rs")).map(artifact => artifact.text).join("\n");
@@ -429,7 +428,7 @@ test("an authored Error constructor lookalike retains its exact missing implemen
     "values.d.ts": "export interface Error { message: string; } export declare const Error: { new(message: string): Error };",
   } });
   assert.equal(result.diagnostics.filter(issue => issue.code === "RUST_AMBIENT_VALUE_IMPLEMENTATION_MISSING").length, 1,
-    "a matching constructor spelling and shape never acquire default-library ownership");
+    `a matching constructor spelling and shape never acquire checked profile ownership: ${result.diagnostics.map(issue => `${issue.code}: ${issue.message}`).join("\n")}`);
   assert.equal(result.program === undefined && result.plan === undefined && result.artifacts.length === 0, true,
     "no authored ambient constructor or error value is materialized");
 });
