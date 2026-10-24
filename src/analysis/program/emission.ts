@@ -84,7 +84,7 @@ import { analyzeRustConstructionEmission } from "../project-types/construction-e
 import { analyzeRustClassEmission } from "../declarations/classes/planning.js";
 import { analyzeRustNativeMemberVisibility } from "../names/native-member-names.js";
 import { analyzeRustProjectEmission } from "../project-types/emission.js";
-import { analyzeRustOptionalStorageEmission } from "../project-types/optional-storage-emission.js";
+import { analyzeRustOptionalStorageCallEmission } from "../project-types/optional-storage-emission.js";
 import { analyzeRustClassValueEmission } from "../objects/class-value-emission.js";
 import { analyzeRustCarrierReads } from "../ownership/carrier-reads.js";
 import { analyzeRustProviderMutableEmission } from "../storage/provider-mutable-emission.js";
@@ -129,10 +129,14 @@ export interface RustNativeEmissionResult {
 }
 import type { RustAnalysisContext } from "./context.js";
 import type { RustGenericCallableErrorIndex } from "../../target-model/records/generic-callable-errors.js";
+import type { RustOwnershipFlow } from "../../target-model/records/ownership-flow.js";
+import { analyzeRustBindingLiveness } from "../control-flow/binding-liveness.js";
+import { analyzeRustLocalBindings } from "../storage/local-bindings.js";
 
 export function finalizeRustNativeEmission(
   program: Omit<RustAnalysisProgram, "reachability" | "records"> & { readonly records: RustAnalysisRecords & SourceLiteralIndex },
   context: RustAnalysisContext, genericCallableErrors: RustGenericCallableErrorIndex,
+  flow: RustOwnershipFlow,
 ): TargetStageResult<RustNativeEmissionResult> {
   const { projectTypes, objectRepresentations, typeDefinitions } = program;
   const records = context.records.readers;
@@ -195,7 +199,7 @@ export function finalizeRustNativeEmission(
     context.records.errorTransportEmissionPlans, context.records.conversionEmissionPlans);
   if (closedErrorValueIssues.length !== 0) return rejectedTargetStage(closedErrorValueIssues);
   analyzeRustProjectEmission({ program, nodes: context.nativeNodes, producer: context.records.projectEmissionPlans });
-  analyzeRustOptionalStorageEmission(program, context.nativeNodes, context.records.projectEmissionPlans);
+  analyzeRustOptionalStorageCallEmission(program, context.nativeNodes, context.records.projectEmissionPlans);
   const structuralEmissionIssues = analyzeRustStructuralEmission(program, context.records.structuralEmissionPlans);
   if (structuralEmissionIssues.length !== 0) return rejectedTargetStage(structuralEmissionIssues);
   analyzeRustStoredFields(program, context.nativeNodes, context.records.storedFieldPlans);
@@ -213,6 +217,15 @@ export function finalizeRustNativeEmission(
   analyzeRustSuspendedCallableEmission({ program, sourceFiles: context.sourceFiles, producer: context.records.suspendedCallablePlans });
   const constructionEmissionIssues = analyzeRustConstructionEmission({ program, producer: context.records.constructionPlans });
   if (constructionEmissionIssues.length !== 0) return rejectedTargetStage(constructionEmissionIssues);
+  const bindingLivenessIssues = analyzeRustBindingLiveness(context.source, flow, records, context.names,
+    program.physicalEmissionContexts, context.records.bindingLivenessPlans);
+  if (bindingLivenessIssues.length !== 0) return rejectedTargetStage(bindingLivenessIssues);
+  const localBindingIssues = analyzeRustLocalBindings({ ast: context.ast, nodes: context.nativeNodes, records,
+    navigation: context.source.navigation, names: context.names, aliases: program.localStorageAliases,
+    representations: objectRepresentations, projectTypes, nativeStorage: program.callableValues.nativeStorage,
+    lexicalFunctions: program.lexicalFunctions, producer: context.records.localBindings, required: context.requiredRecords,
+    runtimeValueUses: context.runtimeValueUses });
+  if (localBindingIssues.length !== 0) return rejectedTargetStage(localBindingIssues);
   const classEmissionIssues = analyzeRustClassEmission({ program, source: context.source, reachability, producer: context.records.classEmissionPlans });
   if (classEmissionIssues.length !== 0) return rejectedTargetStage(classEmissionIssues);
   analyzeRustClassValueEmission({ program, nodes: context.nativeNodes, producer: context.records.classEmissionPlans });
@@ -325,7 +338,7 @@ export function finalizeRustNativeEmission(
   const errorObservationIssues = admitRustErrorObservations(program, context.nativeNodes);
   if (errorObservationIssues.length !== 0) return rejectedTargetStage(errorObservationIssues);
   analyzeRustTypeEmission(program, context.nativeNodes, context.records.typeEmissionPlans,
-    [...nativeLayoutTypes, ...sourceCallableEmission.types, ...objectReferenceEmission.types]);
+    [...nativeLayoutTypes, ...sourceCallableEmission.types, ...objectReferenceEmission.types], context.records.projectEmissionPlans);
   const errorModuleIssues = analyzeRustProgramErrorModuleEmission(program, errorEmission.plan, context.records.errorTransportEmissionPlans);
   if (errorModuleIssues.length !== 0) return rejectedTargetStage(errorModuleIssues);
   // Storage visibility covers every declaration a native class layout stores: members, constructor parameter

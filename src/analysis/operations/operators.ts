@@ -69,7 +69,7 @@ export function resolvePostCheckBinaryCarrier(
     ? selectRustProgramErrorEquality(walk, left, right, operatorKind === KindExclamationEqualsEqualsToken)
     : undefined;
   const unionEquality = strictEquality && optionNullishRelationship === undefined && left !== undefined && right !== undefined
-    ? selectRustUnionEquality(left, right, walk.context.typeDefinitions) : undefined;
+    ? selectRustUnionEquality(operatorKind === KindExclamationEqualsEqualsToken ? "!==" : "===", left, right, walk.context.typeDefinitions) : undefined;
   const absenceComparison = selectRustAbsenceComparisonOperation(operatorKind, left, right,
     leftComparisonCarrier, rightComparisonCarrier, optionNullishRelationship);
   let fact: RustTargetOperationFact | undefined;

@@ -37,7 +37,7 @@ export function planRustConstructionLayers(
     };
     const label = !plan.earlyReturnLayers.has(layer.definition) ? undefined
       : { id: controlFlow.nextLoopId++, label: allocateRustSyntheticName(syntheticNames, "constructor_layer") };
-    const layerContext = construction.contextForLayer(selectedContext, label);
+    const layerContext = construction.contextForLayer(selectedContext, layer, label);
     const prelude = planRustCallableParameterPrelude(parameterPlan, layerContext, planExpression);
     if (prelude === undefined) failRustPlannerInvariant("An admitted constructor layer requires its exact native body and initialization plan.", layer.definition.declaration);
     const statements: RustStmt[] = [...prelude];
@@ -56,7 +56,7 @@ export function planRustConstructionLayers(
       if (nativeBase === undefined) failRustPlannerInvariant("An admitted native base layer requires its sealed class parameters.", base.definition.declaration);
       const baseParameters = base.constructor === undefined
         ? planRustImplicitConstructorParameters(base.signature, baseStorage.carrier, baseContext)
-        : planRustCallableParameters(requireRustConstructorContract(nativeBase), baseContext, syntheticNames);
+        : planRustCallableParameters(requireRustConstructorContract(nativeBase), baseContext, syntheticNames, "source-body");
       const argumentsPlan = layer.baseCall === undefined
         ? { arguments: parameterPlan.params.map(parameter => ({ kind: "path" as const, path: parameter.name })), statements: [] }
         : planRustSelectedSourceCallArguments(layer.baseCall, layerContext);

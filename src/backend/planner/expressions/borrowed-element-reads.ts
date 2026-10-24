@@ -23,9 +23,10 @@ export function planRustBorrowedElementRead(
   const overrides = new Map(context.expressionOverrides ?? []);
   const append = context.input.program.records.borrowedElementAppend.get(node);
   if (append === undefined) failRustPlannerInvariant("An admitted borrowed element requires its selected consumption mode.", node);
-  const element: RustExpr = { kind: "dereference", pointer: { kind: "path", path: elementName } };
+  const guard: RustExpr = { kind: "path", path: elementName };
+  const element: RustExpr = { kind: "dereference", pointer: guard };
   overrides.set(read.receiver, append
-    ? { expression: { kind: "reference", expr: element }, carrier: rustStringTargetType(), valueForm: "shared-reference" }
+    ? { expression: { kind: "reference", expr: guard }, carrier: rustStringTargetType(), valueForm: "shared-reference" }
     : { expression: element, carrier: rustStringTargetType(), valueForm: "storage", storageForm: "borrow-guard" });
   const body = planRead(node, { ...context, expressionOverrides: overrides });
   return body === undefined ? undefined : rustValueBlock(bindings, body);

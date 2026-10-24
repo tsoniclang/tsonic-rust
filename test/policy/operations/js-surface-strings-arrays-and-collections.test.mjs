@@ -181,7 +181,7 @@ export function same(): boolean {
   assertNoTargetDiagnostics(result.diagnostics);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /js_abi::object_is\(\[[\s\S]*?JsValue::from\(js_abi::NUMBER_NAN\),[\s\S]*?JsValue::from\(js_abi::NUMBER_NAN\),[\s\S]*?\]\)/u);
-  assert.match(text, /!js_abi::object_is\(\[[\s\S]*?JsValue::from\(0\.0\),[\s\S]*?JsValue::from\(-0\.0\),?[\s\S]*?\]\)/u);
+  assert.match(text, /!js_abi::object_is\(\[[\s\S]*?JsValue::from\(0\.0_f64\),[\s\S]*?JsValue::from\(-0\.0_f64\),?[\s\S]*?\]\)/u);
   assert.match(text, /js_abi::object_is\(\[[\s\S]*?JsValue::from\(String::from\("same"\)\),[\s\S]*?JsValue::from\(String::from\("same"\)\),[\s\S]*?\]\)/u);
   assert.doesNotMatch(text, /clone_js_value/u);
 });
@@ -409,7 +409,7 @@ export function values(): string {
 
   assertNoTargetDiagnostics(result.diagnostics);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /left[\s\S]*\.concat\(\[[\s\S]*JsArrayConcatItem::Value\([\s\S]*f64_to_i32\(4\.0\)\?[\s\S]*JsArrayConcatItem::Array\(right\)[\s\S]*\]\)/u);
+  assert.match(text, /left[\s\S]*\.concat\(\[[\s\S]*JsArrayConcatItem::Value\([\s\S]*f64_to_i32\(4\.0_f64\)\?[\s\S]*JsArrayConcatItem::Array\(right\)[\s\S]*\]\)/u);
 });
 
 test("omitted array elements reject before native artifacts are published", () => {

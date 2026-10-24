@@ -170,9 +170,12 @@ export function analyzeRustBinaryEmission(program: Omit<RustAnalysisProgram, "re
     const concatParts: Node[] | undefined = fact.kind === "string-concat" ? [] : undefined;
     if (concatParts !== undefined) parts(node, concatParts);
     const comparison = fact.kind === "operator-token" && (fact.operator === "==" || fact.operator === "!=");
-    const callComparison = fact.kind === "operator-call" && (fact.operator === "==" || fact.operator === "!=");
-    const borrowedComparison = comparison || callComparison || fact.kind === "union-equality";
-    const shared = (operand: Node): boolean => {
+    const shared = (operand: Node, side: "left" | "right"): boolean => {
+      const conversion = fact.kind === "operator-token" || fact.kind === "operator-call"
+        ? side === "left" ? fact.leftConversion : fact.rightConversion : undefined;
+      const borrowed = fact.kind === "operator-call" ? fact.operandModes[side === "left" ? 0 : 1] === "ref" && conversion === undefined
+        : comparison ? conversion === undefined : fact.kind === "union-equality" || fact.kind === "project-type-test";
+      if (!borrowed) return false;
       const selected = program.ownership.reads.get(operand)?.value;
       return selected?.kind === "borrow" && !selected.mutable;
     };
@@ -181,8 +184,7 @@ export function analyzeRustBinaryEmission(program: Omit<RustAnalysisProgram, "re
       return value?.form === "string" || value?.form === "template" ? value.text : undefined;
     };
     producer.publish(node, { fact, left, right, leftUnit: isRustUnitCarrier(leftCarrier), rightUnit: isRustUnitCarrier(rightCarrier),
-      leftNever: isRustNeverCarrier(leftCarrier), leftShared: borrowedComparison && (!(comparison || callComparison) || fact.leftConversion === undefined) && shared(left),
-      rightShared: borrowedComparison && (!(comparison || callComparison) || fact.rightConversion === undefined) && shared(right),
+      leftNever: isRustNeverCarrier(leftCarrier), leftShared: shared(left, "left"), rightShared: shared(right, "right"),
       int32Remainder: program.numericRepresentations.int32Remainder.get(node),
       compound: (fact.kind === "operator-token" || fact.kind === "operator-call") && fact.operator !== "=" && isRustAssignmentOperator(fact.operator),
       operator: fact.kind === "operator-token" && isRustBinaryOperator(fact.operator) ? fact.operator : undefined,

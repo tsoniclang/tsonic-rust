@@ -31,7 +31,7 @@ test("native unit payloads admit one exact absence path and compare through the 
   assert.equal(admission?.path[0].variant.name, "Selected");
   assert.equal(admission?.path[1].variant.name, "Empty");
   for (const [left, right] of [[target, absence], [absence, target], [target, rustUnitTargetType()]]) {
-    const comparison = selectRustUnionEquality(left, right, definitions);
+    const comparison = selectRustUnionEquality("===", left, right, definitions);
     assert.equal(comparison?.arms.length, 1);
     assert.equal(comparison?.exhaustive, false);
   }

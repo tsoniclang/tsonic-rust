@@ -1,6 +1,6 @@
 import { rustLintAttributes } from "../../../target-ast/normalization/lint-policy.js";
 import type { Node } from "@tsonic/tsts";
-import type { RustAdmittedConstruction } from "../../../../target-model/records/construction.js";
+import type { RustAdmittedConstruction, RustConstructionLayer } from "../../../../target-model/records/construction.js";
 import type { RustProjectTypeDefinition } from "../../../../target-model/types/project-types.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import type { RustExpr, RustStmt, RustType } from "../../../target-ast/syntax/nodes.js";
@@ -34,7 +34,8 @@ export interface RustConstructionBody {
   input(declaration: Node, node: Node, context: RustPlanContext, planValue: () => RustExpr | undefined): RustExpr | undefined;
   exportInitialized(layer: RustProjectTypeDefinition, declarations: readonly Node[], statements: readonly RustStmt[]): readonly RustStmt[];
   prepare(node: Node, context: RustPlanContext): RustConstructionPreparation | undefined;
-  contextForLayer(context: RustPlanContext, returnLabel?: { readonly id: number; readonly label: string }): RustPlanContext;
+  contextForLayer(context: RustPlanContext, layer: RustConstructionLayer,
+    returnLabel?: { readonly id: number; readonly label: string }): RustPlanContext;
   finish(): readonly RustStmt[];
 }
 
@@ -169,9 +170,10 @@ export function planRustConstructionBody(
       },
     };
   };
-  const contextForLayer: RustConstructionBody["contextForLayer"] = (selectedContext, returnLabel) => ({
+  const contextForLayer: RustConstructionBody["contextForLayer"] = (selectedContext, layer, returnLabel) => ({
     ...selectedContext,
     construction: {
+      layer,
       prepare,
       returnFor(node, returnContext) {
         if (plan.returns.get(node) === undefined) return undefined;

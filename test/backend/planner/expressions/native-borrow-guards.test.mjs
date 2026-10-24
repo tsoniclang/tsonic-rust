@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createRustRecordFixture } from "../../../helpers/records.mjs";
+import { analyzeRust } from "../../../helpers/rust-session.mjs";
+import { rustSourceFilePlanContext } from "../../../helpers/plan-context.mjs";
 import { planRustSharedReceiver } from "../../../../dist/backend/planner/expressions/typed-locations.js";
-import { applyRustArgumentMode } from "../../../../dist/backend/planner/expressions/input-shaping.js";
+import { applyFinalizedRustArgumentMode, applyRustArgumentMode } from "../../../../dist/backend/planner/expressions/input-shaping.js";
 import { rustStringTargetType } from "../../../../dist/target-model/types/index.js";
 
 const carrier = rustStringTargetType();
@@ -51,11 +53,28 @@ test("a selected borrowed array element keeps the same guarded place for native 
 });
 
 test("ordinary native references retain reference elision without a guard or clone", () => {
+  const { program } = analyzeRust({ surfaces: ["js"], files: { "index.ts": `
+export function read(value: string): number { return value.indexOf("x"); }
+console.log(read("x"));
+` } });
+  const inputs = program.physicalEmissionContexts.sourceOccurrences
+    .filter(occurrence => occurrence.operation.abi.operationKind === "method")
+    .flatMap(occurrence => occurrence.inputs).filter(({ input }) => input.source.kind === "receiver");
+  assert.equal(inputs.length, 1, "the inverse is the actual checked native readonly String receiver");
+  const selected = inputs[0];
+  assert.equal(program.records.sourceParameterAbi.get(selected.slot.node)?.mode, "ref",
+    "a native reference is established at source ABI admission, never inferred from a dereference expression");
+  assert.equal(program.records.providerReference.get(selected.slot.node, selected.input), true,
+    "the selected unchanged native reference is admitted by the one provider-input owner");
   const pointer = { kind: "path", path: "reference" };
   const value = { kind: "dereference", pointer };
   const override = { expression: value, carrier, valueForm: "storage", storageForm: "plain" };
-  const planned = planRustSharedReceiver(node, value, context(undefined, override));
+  const planned = applyFinalizedRustArgumentMode(rustSourceFilePlanContext(program, selected.slot.node),
+    selected.slot.node, pointer, selected.input, true);
   assert.equal(planned === pointer, true, "native &T remains the existing reference, not &*reference");
+  const unproven = planRustSharedReceiver(node, value, context(undefined, override));
+  assert.equal(unproven.kind === "reference" && unproven.expr === value, true,
+    "plain storage and a borrowing use alone do not prove that an arbitrary pointer is a native reference");
   const copied = planRustSharedReceiver(node, value, context(undefined, override, { kind: "copy" }));
   assert.equal(copied.kind, "reference", "a non-borrowing native place is explicitly borrowed");
   assert.equal(copied.expr === value, true, "a genuine place is not globally unwrapped");

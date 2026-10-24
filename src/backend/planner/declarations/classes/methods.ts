@@ -88,7 +88,7 @@ export function planProjectMethod(
   const generatorFact = context.input.program.records.generator.get(member);
   const syntheticNames = context.syntheticNames ?? createRustSyntheticNameState(ast, member, []);
   const asyncFact = context.input.program.records.asyncFunction.get(member);
-  const parameterPlan = planRustCallableParameters(callable.contract, context, syntheticNames);
+  const parameterPlan = planRustCallableParameters(callable.contract, context, syntheticNames, "source-body");
   if (parameterPlan === undefined) {
     failRustPlannerInvariant("An admitted native method requires its complete syntax plan.", member);
   }
@@ -273,7 +273,7 @@ function planProjectPromiseObjectMethod(
   const syntheticNames = createRustSyntheticNameState(ast, member, []);
   const nativeTasks = planRustNativeTaskOwner(member, { ...genericPlan.context, syntheticNames });
   const context = nativeTasks.context;
-  const parameterPlan = planRustCallableParameters(callable.contract, context, syntheticNames);
+  const parameterPlan = planRustCallableParameters(callable.contract, context, syntheticNames, "signature");
   if (parameterPlan === undefined) failRustPlannerInvariant("An admitted Promise method requires its native parameter plan.", member);
   const isStatic = emission.isStatic;
   const selfMode = isStatic ? undefined : context.input.program.records.selfMode.get(member);

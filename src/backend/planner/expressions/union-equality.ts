@@ -9,7 +9,6 @@ import { planRustUnionPattern } from "./union-patterns.js";
 import { planExpression } from "./entry.js";
 import { lowerNestedRustValueConversion } from "./value-conversions.js";
 import { planRustOperatorCallExpression } from "./binary.js";
-import { negateRustPlannedBooleanExpression } from "./fundamentals.js";
 import { rustValueBlock, type RustValueBlockEntry } from "../../target-ast/syntax/value-block.js";
 
 export function planRustUnionEquality(node: Node,
@@ -62,22 +61,21 @@ export function planRustUnionEquality(node: Node,
       const convertedRight = arm.rightConversion === undefined ? right : lowerNestedRustValueConversion(arm.rightConversion, right, context, node);
       if (convertedLeft === undefined || convertedRight === undefined)
         failRustPlannerInvariant("An admitted union equality arm requires its native conversions.", node);
-      comparison = { kind: "binary", operator: "==", left: convertedLeft, right: convertedRight };
+      comparison = { kind: "binary", operator: arm.operation.rustOperator, left: convertedLeft, right: convertedRight };
     }
     if (comparison === undefined) failRustPlannerInvariant("An admitted union equality arm requires its native comparison.", node);
     arms.push({ pattern: { kind: "tuple", elements: [leftPattern, rightPattern] }, expression: comparison });
   }
   const input: RustExpr = { kind: "tuple-literal", elements: [left, right] };
   let result: RustExpr;
-  if (selected.form === "constant") result = { kind: "evaluate-then", effect: input, discard: "value", value: { kind: "bool-literal", value: fact.exhaustive } };
-  else if (selected.form === "matches") result = { kind: "matches", expression: input,
+  if (selected.form.kind === "constant") result = { kind: "evaluate-then", effect: input, discard: "value", value: { kind: "bool-literal", value: selected.form.value } };
+  else if (selected.form.kind === "matches") result = { kind: "matches", expression: input,
     pattern: arms.length === 1 ? arms[0]!.pattern : { kind: "or", alternatives: arms.map(arm => arm.pattern) } };
   else {
-    if (!fact.exhaustive) arms.push({ pattern: { kind: "wildcard" }, expression: { kind: "bool-literal", value: false } });
+    if (!fact.exhaustive) arms.push({ pattern: { kind: "wildcard" }, expression: { kind: "bool-literal", value: selected.fallback } });
     result = { kind: "match", expression: input, arms };
   }
-  const comparison = fact.negated ? negateRustPlannedBooleanExpression(node, result, context) : result;
-  return bindings.length === 0 ? comparison : rustValueBlock(bindings, comparison);
+  return bindings.length === 0 ? result : rustValueBlock(bindings, result);
 }
 
 function planEqualityPattern(side: RustUnionEqualityOperand, name: string, context: RustPlanContext): RustPattern {

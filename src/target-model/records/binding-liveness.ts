@@ -1,4 +1,5 @@
 import type { RustRecordFamily } from "./program.js";
+import type { RustConstructionLayer } from "./construction.js";
 
 export interface RustBindingLiveness {
   readonly unused: boolean;
@@ -6,8 +7,12 @@ export interface RustBindingLiveness {
   readonly multipleWrites: boolean;
 }
 
+export type RustUnobservedWrite =
+  | { readonly kind: "lexical"; readonly unobserved: boolean }
+  | { readonly kind: "construction"; readonly layers: ReadonlyMap<RustConstructionLayer, boolean> };
+
 export interface RustBindingLivenessRecords {
   readonly bindingLiveness: RustRecordFamily<RustBindingLiveness>;
-  readonly unobservedWrite: RustRecordFamily<boolean>;
+  readonly unobservedWrite: RustRecordFamily<RustUnobservedWrite>;
 }
 
