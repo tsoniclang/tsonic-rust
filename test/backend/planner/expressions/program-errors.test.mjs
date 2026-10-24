@@ -34,7 +34,7 @@ test("native error union planning preserves nested paths, original payloads and 
   };
   const conversion = selectRustProgramErrorConversion(outer, undefined, definitions);
   assert.ok(conversion);
-  const program = rustProgramWithTypeEmissions([conversion.target]);
+  const program = rustProgramWithTypeEmissions([conversion.target, inner, outer], { typeDefinitions: definitions });
   const boundary = { componentId: "root", errorDomain: "project", errorTypePath: "rt::TsonicError" };
   function context(owner = "root", projectTypes = policy) {
     const sourcePackageErrors = {
