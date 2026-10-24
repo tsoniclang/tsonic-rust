@@ -394,6 +394,7 @@ function createRustStructuralShapeConstruction(
         ...(!nativeDispatch ? {} : {
           dispatchName: allocatePascalName(usedTypeNames, `${targetName}Dispatch`),
         }),
+        dispatchLifetime: selection.dispatchLifetime,
         genericParameters: Object.freeze([
           ...genericReferences.lifetimes.map((lifetime) => Object.freeze({
             kind: "lifetime" as const,

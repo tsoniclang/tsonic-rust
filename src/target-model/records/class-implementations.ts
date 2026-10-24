@@ -17,6 +17,10 @@ export interface RustClassImplementationGenerics {
   readonly lifetimes: readonly Extract<RustLifetimeRef, { readonly kind: "parameter" }>[];
 }
 
+export interface RustClassStructuralViewEmission extends RustProjectStructuralViewImplementation {
+  readonly nativeTargetCarrier: TargetTypeRef;
+}
+
 export interface RustClassConstructorViewEmission {
   readonly sourceCarrier: TargetTypeRef;
   readonly targetCarrier: TargetTypeRef;
@@ -29,7 +33,7 @@ export interface RustClassConstructorViewEmission {
 
 export interface RustClassImplementationRecords {
   readonly structuralView: { readonly get: (source: TargetTypeRef, target: TargetTypeRef) => RustProjectStructuralView | undefined };
-  readonly structuralViewImplementations: { readonly get: (declaration: Node, fileName: string) => readonly RustProjectStructuralViewImplementation[] | undefined };
+  readonly structuralViewImplementations: { readonly get: (declaration: Node, fileName: string) => readonly RustClassStructuralViewEmission[] | undefined };
   readonly structuralViewPolymorphic: { readonly get: (declaration: Node) => boolean | undefined };
   readonly structuralViewCallable: { readonly get: (callable: RustClassValueCallable) => RustStructuralViewCallableEmission | undefined };
   readonly structuralViewRequirements: { readonly get: (view: RustProjectStructuralView) => RustShapeGenericRequirementContract | undefined };

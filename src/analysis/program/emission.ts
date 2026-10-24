@@ -86,6 +86,7 @@ import { analyzeRustNativeMemberVisibility } from "../names/native-member-names.
 import { analyzeRustProjectEmission } from "../project-types/emission.js";
 import { analyzeRustOptionalStorageCallEmission } from "../project-types/optional-storage-emission.js";
 import { analyzeRustClassValueEmission } from "../objects/class-value-emission.js";
+import { analyzeRustClassImplementations } from "../objects/class-implementations.js";
 import { analyzeRustCarrierReads } from "../ownership/carrier-reads.js";
 import { analyzeRustProviderMutableEmission } from "../storage/provider-mutable-emission.js";
 import { analyzeRustProviderEvaluation } from "../storage/provider-evaluation.js";
@@ -199,6 +200,8 @@ export function finalizeRustNativeEmission(
     context.records.errorTransportEmissionPlans, context.records.conversionEmissionPlans);
   if (closedErrorValueIssues.length !== 0) return rejectedTargetStage(closedErrorValueIssues);
   analyzeRustProjectEmission({ program, nodes: context.nativeNodes, producer: context.records.projectEmissionPlans });
+  analyzeRustClassImplementations(program, context.records.classEmissionPlans, context.nativeNodes);
+  context.structuralShapes.seal();
   analyzeRustOptionalStorageCallEmission(program, context.nativeNodes, context.records.projectEmissionPlans);
   const structuralEmissionIssues = analyzeRustStructuralEmission(program, context.records.structuralEmissionPlans);
   if (structuralEmissionIssues.length !== 0) return rejectedTargetStage(structuralEmissionIssues);

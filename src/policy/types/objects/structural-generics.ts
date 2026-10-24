@@ -9,6 +9,7 @@ import { rustOwnedStorageChild } from "../storage/owned-storage.js";
 
 export interface RustStructuralGenericCarrierSelection {
   readonly carrier: TargetTypeRef;
+  readonly dispatchLifetime: RustLifetimeRef | undefined;
   readonly nestedCarriers: readonly {
     readonly source: TargetTypeRef;
     readonly carrier: TargetTypeRef;
@@ -80,6 +81,6 @@ export function rustStructuralGenericCarrier(
     return parameter;
   }, rustOwnedStorageChild);
   const transformed = parameters.size !== 0 || lifetimeCount !== 0;
-  return Object.freeze({ carrier: transformed ? selected : carrier,
+  return Object.freeze({ carrier: transformed ? selected : carrier, dispatchLifetime: objectLifetime,
     nestedCarriers: Object.freeze(transformed ? nestedCarriers : []) });
 }

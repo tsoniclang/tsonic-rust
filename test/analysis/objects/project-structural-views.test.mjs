@@ -497,6 +497,46 @@ ${order === "open-first" ? `${open}\n${closed}` : `${closed}\n${open}`}`,
 }
 
 for (const surfaces of [[], ["js"]]) {
+  test(`native view getters publish actual stored callable environments before structural close in ${surfaces[0] ?? "native"}`, () => {
+    const { program } = analyzeRust({ surfaces, files: { "index.ts": `
+type View<T> = { readonly identity: (value: T) => T; readonly adapted: (value: T, extra: number) => T; read(): T };
+class Box<T> {
+  constructor(public value: T) {}
+  identity = (value: T): T => value;
+  adapted = (value: T): T => value;
+  read(): T { return this.value; }
+}
+export function view<T>(owner: Box<T>): View<T> { return owner; }
+export function main(): string { return view(new Box<string>("value")).identity("checked"); }
+` } });
+    const owner = program.projectTypes.definitions.find(definition => definition.sourceName === "Box");
+    assert.equal(owner !== undefined, true, "the checked class owns the physical stored fields");
+    const logical = program.classValues.instanceViewImplementations.find(view => view.declaration === owner.declaration);
+    assert.equal(logical !== undefined, true, "the original source view remains available");
+    const file = program.source.ast.getFileName(program.source.ast.getSourceFile(owner.declaration));
+    const emitted = program.records.structuralViewImplementations.get(owner.declaration, file);
+    assert.equal(emitted?.length, 1, "the complete native implementation has one publication");
+    const selected = emitted[0];
+    assert.equal(selected.targetCarrier === logical.targetCarrier, true, "native completion does not overwrite the logical view key");
+    const shape = program.structuralShapes.definitionForCarrier(selected.nativeTargetCarrier);
+    assert.equal(shape !== undefined, true, "the exact completed native getter carrier is admitted before close");
+    for (const name of ["identity", "adapted"]) {
+      const original = rustStructuralObjectCarrierValue(logical.targetCarrier).fields.find(field => field.sourceName === name);
+      const native = shape.fields.find(field => field.sourceName === name);
+      const member = selected.fields.find(field => field.storageIndex === shape.fields.indexOf(native));
+      assert.equal(rustCallableProtocol(original.type).lifetime.kind, "placeholder", `${name}: logical inference is preserved`);
+      assert.equal(rustCallableProtocol(native.carrier).lifetime.kind, "static", `${name}: actual capture-free producer closes the stored environment`);
+      assert.equal(rustTargetTypeRefEquals(native.carrier, member.readAdapter.targetCarrier), true,
+        `${name}: native trait, getter result and selected adaptation share the exact error/parameter/lifetime contract`);
+    }
+    const template = program.structuralShapes.templateForCarrier(selected.nativeTargetCarrier);
+    const dispatch = program.records.structuralShapeEmission.get(template).dispatch;
+    assert.equal(dispatch.lifetime.kind, "parameter", "one real receiver lifetime survives alongside the two data environments");
+    assert.equal(template.genericParameters.filter(parameter => parameter.kind === "lifetime").length, 3,
+      "the receiver and two independent data callable lifetimes remain independent");
+    assert.equal(Object.isFrozen(selected), true, "the native renderer consumes the completed immutable publication");
+  });
+
   test(`generic live structural views use the class binder instead of a selected String supertrait in ${surfaces[0] ?? "native"}`, () => {
     const example = receiverFieldStorageCases.find(entry => entry.name === "generic-deferred-non-copy-view");
     assert.equal(example !== undefined, true);

@@ -59,6 +59,43 @@ test("single captured native strings retain inline storage through exact pure bo
   }
 });
 
+test("selected native borrowed method receivers retain the same single-owner proof as direct inputs", () => {
+  const borrowed = rustBorrowedStrTargetType();
+  const result = { kind: "source-primitive", name: "int32" };
+  const original = { kind: "provider-operation", operationId: "fixture.string.indexOf", abi: {
+    operationKind: "method", target: { form: "instance-method", method: "index_of" },
+    sourceReceiver: { kind: "receiver", carrier: stringCarrier, declaredCarrier: stringCarrier, disposition: "runtime" },
+    sourceArguments: [], targetGenericArguments: [], dispatchInputs: [],
+    effects: { evaluation: "pure", safety: "safe", invocation: "infallible", awaiting: "not-applicable", errorBoundary: "none" },
+    result: { kind: "sync", rawCarrier: result, carrier: result,
+      conversion: { kind: "identity", sourceCarrier: result, targetCarrier: result, fallible: false } },
+    targetReceiver: { kind: "input", input: { source: { kind: "receiver" }, sourceCarrier: stringCarrier, mode: "value",
+      parameterCarrier: borrowed, conversion: { kind: "semantic", conversion: { kind: "semantic-conversion", id: "borrowed-str-from-owned-string" },
+        sourceCarrier: stringCarrier, targetCarrier: borrowed, fallible: false } } }, targetArguments: [],
+  } };
+  for (const wrapped of [false, true]) for (const [label, operation, expected] of [
+    ["selected borrowed receiver", original, "borrow-cell"],
+    ["unknown native method", undefined, "location"],
+    ["observable receiver", { ...original, abi: { ...original.abi, effects: { ...original.abi.effects, evaluation: "observable" } } }, "location"],
+    ["fallible receiver", { ...original, abi: { ...original.abi, effects: { ...original.abi.effects, invocation: "fallible" } } }, "location"],
+    ["owned receiver", { ...original, abi: { ...original.abi, targetReceiver: { kind: "input", input: {
+      ...original.abi.targetReceiver.input, parameterCarrier: stringCarrier } } } }, "location"],
+  ]) {
+    const current = fixture(`export function outer(seed: string) {
+      const callback = () => { seed += "!"; return ${wrapped ? "((seed))" : "seed"}.indexOf("7"); }; return callback;
+    }`, { carrier: stringCarrier });
+    let call;
+    const visit = node => {
+      if (current.source.ast.is.IsCallExpression(node)) call = node;
+      current.source.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+    };
+    visit(current.owner);
+    assert.equal(call !== undefined, true, label);
+    if (operation !== undefined) current.records.targetOperations.source(call, operation);
+    assert.equal(current.select()?.storage, expected, `${label}, wrapped=${wrapped}`);
+  }
+});
+
 test("loop activation identities distinguish immutable values, live lexical storage and var bindings", () => {
   for (const [kind, body, expected] of [
     ["let", "", "value"], ["let", "seed += 1;", "location"], ["var", "", "location"],

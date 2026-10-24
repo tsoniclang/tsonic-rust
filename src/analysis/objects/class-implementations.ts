@@ -2,16 +2,15 @@ import type { Node } from "@tsonic/tsts";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustClassEmissionProducer } from "../program/records/class-emission.js";
-import type { RustClassConstructorViewEmission, RustClassImplementationContext } from "../../target-model/records/class-implementations.js";
+import type { RustClassConstructorViewEmission, RustClassImplementationContext, RustClassStructuralViewEmission } from "../../target-model/records/class-implementations.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustProjectTypeDefinition } from "../../target-model/types/project-types.js";
 import type { RustProjectGenericEmission } from "../../target-model/records/project-emission.js";
 import type { RustClassValueCallable } from "../../target-model/records/class-value-callables.js";
-import type { RustProjectStructuralViewImplementation } from "../../target-model/records/project-structural-views.js";
 import type { RustLifetimeRef } from "../../target-model/lifetimes/model.js";
 import { rustLifetimeKey } from "../../target-model/lifetimes/index.js";
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
-import { rustCallableProtocol, rustSourceTypeCarrierValue, rustTargetGenericReferences, substituteRustTargetGenerics } from "../../target-model/types/index.js";
+import { rustCallableProtocol, rustSourceTypeCarrierValue, rustTargetGenericReferences, substituteRustTargetGenerics, rustStructuralObjectCarrierValue, rustStructuralObjectTargetType, rustOptionElementCarrier } from "../../target-model/types/index.js";
 import { rustClassConstructorTargetType } from "../../target-model/types/carriers/class-constructors.js";
 import { authoredTypeParameterNames, generatedTypeParameterNames } from "@tsonic/target-api/source";
 import { rustTypeParameterFromSourceContract } from "../../target-model/types/carriers/generic-references.js";
@@ -19,6 +18,7 @@ import { rustTargetTypeChildren } from "../../target-model/types/carriers/childr
 import { mapRustTargetTypes } from "../../target-model/types/carriers/substitution.js";
 import { rustProducerErrorReference } from "../../target-model/types/carriers/producer-errors.js";
 import { selectRustCallableValueAdapter } from "../../policy/conversions/callable-adapters.js";
+import { rustCallableTargetForSourceLifetime } from "../../policy/conversions/value-carrier-reconciliation.js";
 
 export function analyzeRustClassImplementations(program: Omit<RustAnalysisProgram, "reachability">, producer: RustClassEmissionProducer, nodes: readonly Node[]): void {
   const contexts = new WeakMap<Node, Map<string, RustClassImplementationContext>>();
@@ -95,7 +95,7 @@ export function analyzeRustClassImplementations(program: Omit<RustAnalysisProgra
     files.set(view.ownerFileName, emitted);
   }
   for (const [declaration, files] of constructors) for (const [file, views] of files) producer.constructorViews(declaration, file, views);
-  const instances = new Map<Node, Map<string, RustProjectStructuralViewImplementation[]>>();
+  const instances = new Map<Node, Map<string, RustClassStructuralViewEmission[]>>();
   const polymorphicDeclarations = new Set<Node>();
   const selectedCallables = new Set<RustClassValueCallable>();
   for (const view of program.classValues.instanceViewImplementations) {
@@ -103,7 +103,7 @@ export function analyzeRustClassImplementations(program: Omit<RustAnalysisProgra
     if (requirements === undefined) failTargetAnalysisInvariant("tsonic-rust", "An admitted structural view requires its sealed native generic requirements.", view.declaration);
     const fields = view.fields.map(member => {
       if (member.field === undefined || member.readAdapter === undefined ||
-        rustCallableProtocol(member.field.resultCarrier) === undefined) return member;
+        rustCallableProtocol(rustOptionElementCarrier(member.field.resultCarrier) ?? member.field.resultCarrier) === undefined) return member;
       const stored = program.callableValues.projectFieldStorage.get(member.declaration);
       const instantiated = stored === undefined ? undefined
         : program.projectTypes.instantiateMemberCarrier(member.declaration, view.sourceCarrier, stored);
@@ -123,7 +123,18 @@ export function analyzeRustClassImplementations(program: Omit<RustAnalysisProgra
         failTargetAnalysisInvariant("tsonic-rust", "An admitted callable field view requires its exact physical-to-getter adaptation.", member.declaration);
       return Object.freeze({ ...member, readAdapter });
     });
-    const published = Object.freeze({ ...view, fields: Object.freeze(fields) });
+    const logical = rustStructuralObjectCarrierValue(view.targetCarrier);
+    if (logical === undefined)
+      failTargetAnalysisInvariant("tsonic-rust", "An admitted structural view requires its exact logical member contract.", view.declaration);
+    const nativeTargetCarrier = rustStructuralObjectTargetType(logical.ownerFileName,
+      logical.fields.map((field, storageIndex) => {
+        const member = fields.find(member => member.storageIndex === storageIndex);
+        return member?.readAdapter === undefined ? field : Object.freeze({ ...field,
+          type: rustCallableTargetForSourceLifetime(member.readAdapter.targetCarrier, field.type) });
+      }), logical.representation, logical.construction, logical.bases, logical.implementation);
+    if (program.structuralShapes.definitionForCarrier(nativeTargetCarrier) === undefined)
+      failTargetAnalysisInvariant("tsonic-rust", "An admitted structural view requires its complete physical getter and native dispatch contract.", view.declaration);
+    const published = Object.freeze({ ...view, nativeTargetCarrier, fields: Object.freeze(fields) });
     producer.structuralViewRequirements(published, requirements);
     const definition = program.projectTypes.definitionForDeclaration(view.declaration);
     const representation = program.objectRepresentations.representationFor(definition);

@@ -235,6 +235,10 @@ test("native dispatch shares only implicit method receiver storage, never callab
   const protocols = storage => new Map(fields(storage).map(value => [value.sourceName, rustCallableProtocol(value.type)]));
   const dispatch = protocols("dispatch");
   const stored = protocols("fields");
+  assert.equal(rustLifetimesEqual(rustStructuralGenericCarrier(source, "dispatch").dispatchLifetime,
+    dispatch.get("first").lifetime), true, "the actual native receiver lifetime is published independently of data fields");
+  assert.equal(rustStructuralGenericCarrier(source, "fields").dispatchLifetime, undefined,
+    "ordinary stored fields do not manufacture an erased receiver lifetime");
   assert.equal(rustLifetimesEqual(dispatch.get("first").lifetime, dispatch.get("second").lifetime), true,
     "both native methods retain the same actual erased receiver environment");
   assert.equal(rustLifetimesEqual(dispatch.get("first").lifetime, dispatch.get("nested").lifetime), true,
