@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { planRustOptionBranch } from "../../../../dist/backend/planner/expressions/option-branch.js";
+import { planRustNativeOptionBranch, planRustOptionBranch } from "../../../../dist/backend/planner/expressions/option-branch.js";
 import { rustOptionTargetType } from "../../../../dist/target-model/types/carriers/optional.js";
 import { rustProgramPlanContext, rustProgramWithTypeEmissions } from "../../../helpers/plan-context.mjs";
 import { rustTsValueTargetType } from "../../../../dist/target-model/types/index.js";
+import { printRustExpr } from "../../../../dist/print/source/index.js";
+import { runCargo, writeGeneratedProject } from "../../../helpers/cargo-projects.mjs";
 
 // The planner reads each Option carrier's sealed storage and rendering; a real program selects them.
 const stringCarrier = { kind: "target-named", id: "rust.std.String" };
@@ -13,6 +15,88 @@ const program = rustProgramWithTypeEmissions([
   rustOptionTargetType(stringCarrier),
 ].map(rustOptionTargetType));
 const planContext = (overrides = {}) => rustProgramPlanContext(program, overrides);
+
+test("native optional effects keep one input and payload scope without an empty match arm", () => {
+  const option = { kind: "call", path: "next_optional", args: [] };
+  const present = { kind: "call", path: "consume_present", args: [{ kind: "path", path: "present" }] };
+  const absent = { kind: "tuple-literal", elements: [] };
+  const branch = planRustNativeOptionBranch(option, "present", present, absent);
+  assert.equal(branch.kind, "if-let", "a genuinely empty absence has no value or effect to emit");
+  assert.equal(branch.expression === option, true, "the actual optional source is evaluated once in its original position");
+  assert.equal(branch.whenTrue === present, true, "the payload is consumed in the same selected native branch scope");
+  assert.equal(branch.pattern.kind, "tuple-variant", "the real Some pattern retains its native move or borrowed payload");
+  assert.equal(branch.pattern.path, "Some");
+  assert.equal(branch.pattern.elements[0].name, "present");
+  assert.equal(Object.hasOwn(branch, "whenFalse"), false, "there is no artificial absent value binding or Drop scope");
+  const carrier = rustOptionTargetType({ kind: "source-primitive", name: "int32" });
+  const planned = planRustOptionBranch(option, carrier, "present", present, absent, planContext());
+  assert.equal(planned.kind, "if-let", "the canonical carrier-selected option branch uses the same native effect recipe");
+  assert.equal(planned.expression === option && planned.whenTrue === present, true,
+    "the shared recipe does not reconstruct or duplicate either original expression");
+  for (const fallback of [
+    { kind: "call", path: "on_absent", args: [] },
+    { kind: "evaluate-then", effect: { kind: "call", path: "on_absent", args: [] }, value: absent },
+    { kind: "tuple-literal", elements: [{ kind: "call", path: "on_absent", args: [] }] },
+    { kind: "none" },
+  ]) {
+    const selected = planRustNativeOptionBranch(option, "present", present, fallback);
+    assert.equal(selected.kind, "match", "an actual absent value, effect or fallback alternative remains conditional");
+    assert.equal(selected.expression === option, true, "fallback selection retains the identical input evaluation");
+    assert.equal(selected.arms[0].expression === present && selected.arms[1].expression === fallback, true,
+      "neither branch evaluation, effect nor lifetime boundary is discarded");
+  }
+});
+
+test("native optional effects preserve temporary receiver and payload Drop order", { timeout: 300_000 }, () => {
+  const option = { kind: "method-call", receiver: { kind: "field", name: "payload", receiver: {
+    kind: "call", path: "holder", args: [{ kind: "path", path: "trace" }, { kind: "path", path: "present" }],
+  } }, method: "as_ref", args: [] };
+  const present = { kind: "call", path: "observe", args: [{ kind: "path", path: "payload" }] };
+  const selected = planRustNativeOptionBranch(option, "payload", present, { kind: "tuple-literal", elements: [] });
+  const project = writeGeneratedProject("native-option-effect-drop-order", [
+    { kind: "source", path: "Cargo.toml", text: '[package]\nname = "native_option_effect_drop_order"\nversion = "0.1.0"\nedition = "2024"\n' },
+    { kind: "source", path: "src/lib.rs", text: `
+#[cfg(test)]
+mod tests {
+    use std::cell::RefCell;
+    use std::rc::Rc;
+    type Trace = Rc<RefCell<Vec<&'static str>>>;
+    struct Payload { trace: Trace }
+    impl Drop for Payload {
+        fn drop(&mut self) { self.trace.borrow_mut().push("payload"); }
+    }
+    struct Holder { payload: Option<Payload>, trace: Trace }
+    impl Drop for Holder {
+        fn drop(&mut self) { self.trace.borrow_mut().push("subject"); }
+    }
+    fn holder(trace: &Trace, present: bool) -> Holder {
+        trace.borrow_mut().push("input");
+        Holder { payload: if present { Some(Payload { trace: Rc::clone(trace) }) } else { None }, trace: Rc::clone(trace) }
+    }
+    fn observe(payload: &Payload) { payload.trace.borrow_mut().push("present"); }
+    fn selected(trace: &Trace, present: bool) {
+        ${printRustExpr(selected)};
+        trace.borrow_mut().push("after");
+    }
+    #[test]
+    fn exact_native_lifetimes_and_effects() {
+        for (present, expected) in [
+            (true, vec!["input", "present", "subject", "payload", "after"]),
+            (false, vec!["input", "subject", "after"]),
+        ] {
+            let trace = Rc::new(RefCell::new(Vec::new()));
+            selected(&trace, present);
+            assert_eq!(*trace.borrow(), expected);
+        }
+    }
+}
+` },
+  ]);
+  runCargo(project, ["generate-lockfile", "--offline"]);
+  runCargo(project, ["fmt"]);
+  runCargo(project, ["clippy", "--all-targets", "--locked", "--offline", "--", "-D", "warnings"]);
+  runCargo(project, ["test", "--locked", "--offline"]);
+});
 
 test("a complex optional scrutinee is evaluated once within its branch lifetime", () => {
   const option = { kind: "block", body: { statements: [{ kind: "tail", expr: { kind: "call", path: "produce", args: [] } }] } };
