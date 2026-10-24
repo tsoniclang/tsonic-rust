@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { rustFutureValueForOperation } from "../../../dist/analysis/callables/future-values.js";
 import { analyzeRustErrorEffects } from "../../helpers/rust-error-analysis.mjs";
+import { compileRust } from "../../helpers/rust-session.mjs";
 import { rustJsPromiseTargetType, rustSourcePrimitiveTargetType, rustJsValueTargetType,
   rustNamedTargetType, rustProgramErrorTargetType } from "../../../dist/target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
@@ -107,6 +108,14 @@ for (const [name, source] of [
     assert.equal(resolverEffects.nativeErrors[0].identity, "js-rejection");
     assert.equal(rustTargetTypeRefEquals(resolverEffects.nativeErrors[0].errorType, rustJsValueTargetType()), true,
       "the full native resolver error remains unchanged");
+    const { result } = compileRust({ surfaces: ["js"],
+      target: { id: "rust", options: { outputType: "bin", crateName: "native_callback_inverse" } },
+      files: { "index.ts": "export {};\n" + source } });
+    assert.equal(result.diagnostics.length, 0, "the complete native program retains the admitted invocation and rejection conversions");
+    const joins = result.program.records.nativeErrorJoinDeclarations.get("/src/index.ts");
+    assert.equal(joins !== undefined, true, "the actual source module has its sealed native join inventory");
+    assert.equal(joins.some(declaration => declaration.arity > 1), false,
+      "direct Promise rejection conversion does not demand an unused native error-join declaration");
   });
 }
 
