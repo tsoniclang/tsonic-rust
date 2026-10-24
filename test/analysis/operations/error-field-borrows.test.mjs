@@ -5,6 +5,47 @@ import { BinaryExpression_Left, BinaryExpression_Right, Node_Expression } from "
 import { rustSourceFilePlanContext } from "../../helpers/plan-context.mjs";
 import { planBinaryExpression } from "../../../dist/backend/planner/expressions/binary.js";
 import { printRustExpr } from "../../../dist/print/source/index.js";
+import { borrowedComparisonMutationSource, closedUnionEqualitySource } from "../../../../tsonic/test/fixtures/closed-union-equality.mjs";
+
+for (const surfaces of [[], ["js"]]) {
+  for (const [label, source] of [["borrowed union payload", closedUnionEqualitySource], ["owned effect snapshot", borrowedComparisonMutationSource]]) {
+    test(`native String input forms reuse the completed comparison decision for ${label} on ${surfaces[0] ?? "native"}`, () => {
+      const { program } = analyzeRust({ surfaces, files: { "index.ts": source } });
+      const { ast } = program.source;
+      let views = 0;
+      let borrowedProjection = 0;
+      let snapshots = 0;
+      const visit = node => {
+        const binary = program.records.binaryEmission.get(node);
+        if (binary?.operator === "==" || binary?.operator === "!=") {
+          for (const [operand, shared] of [[binary.left, binary.leftShared], [binary.right, binary.rightShared]]) {
+            const view = program.records.stringComparisonView.get(operand);
+            if (view?.kind !== "native-str-reference") continue;
+            views += 1;
+            assert.equal(view.inputForm, shared ? "shared-reference" : "value",
+              `${label}: the view copies its exact completed operand decision without new ownership arbitration`);
+            const read = program.records.readOwnership.get(operand);
+            if (program.records.flowReadProjection.get(operand) !== undefined && shared) {
+              borrowedProjection += 1;
+              assert.equal(read?.value.kind, "borrow", "the original narrowed payload is genuinely shared");
+            }
+            if (read?.value.kind === "clone") {
+              snapshots += 1;
+              assert.equal(view.inputForm, "value", "an owned first-value snapshot cannot be turned back into a shared source read");
+              assert.equal(shared, false, "the completed later-effect decision stays authoritative");
+            }
+          }
+        }
+        ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+      };
+      program.sourceFiles.forEach(visit);
+      assert.equal(views > 0, true, `${label}: the actual source exercises the native String view owner`);
+      if (label === "borrowed union payload") assert.equal(borrowedProjection > 0, true,
+        "the retained native borrow_deref_ref witness reaches its actual shared flow payload");
+      else assert.equal(snapshots > 0, true, "the actual same-owner RHS replacement still requires its first-value snapshot");
+    });
+  }
+}
 
 for (const surfaces of [[], ["js"]]) {
   for (const property of ["name", "message", "stack"]) {

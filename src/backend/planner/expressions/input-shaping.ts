@@ -107,7 +107,8 @@ export function createRustSharedReferenceArgument(
   if (sourceParameterAbi?.mode === "ref" || sourceParameterAbi?.mode === "mut-ref") return argument;
   if (node !== undefined && override === undefined) {
     const stringView = context.input.program.records.stringComparisonView.get(node);
-    if (stringView !== undefined && stringView.kind !== "value") return rustErrorFieldComparisonView(node, argument, undefined, context);
+    if (stringView !== undefined && stringView.kind !== "value" && stringView.kind !== "native-str-reference")
+      return rustErrorFieldComparisonView(node, argument, undefined, context);
     const selected = context.input.program.records.argumentView.get(node);
     if (selected?.slice === true) return { kind: "reference", expr: planArrayLiteral(node, context, "slice") };
     // A by-reference parameter read is already a shared reference; borrowing its storage again is a needless borrow.
