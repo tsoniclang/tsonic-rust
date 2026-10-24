@@ -178,7 +178,11 @@ function bindingCanTransfer(binding: Node, callable: Node, input: RustOwnershipF
   const kind = ast.variableDeclarationKind(binding);
   if (kind === "using" || kind === "await using") return false;
   const summary = navigation.declarationUseSummary(binding);
-  return !summary.exported && (!summary.hasUnclassifiedValueUse || summary.uses.every(use => {
+  return !summary.exported && (!(summary.hasUnclassifiedValueUse || summary.captured) || summary.uses.every(use => {
+    if (use.kind === "source-linkage" || use.kind === "type-only") return true;
+    const owner = sourceEnclosingCallable(use.reference, ast);
+    if (owner !== undefined && owner !== callable) return input.capturesFor(owner)?.captures.some(capture =>
+      capture.storage === "value" && sourceNodesEqual(ast, capture.declaration, binding)) === true;
     if (use.role !== "value" || awaitedReads.has(use.reference)) return true;
     const disposition = sourceExpressionResultDisposition(ast, use.reference);
     return disposition.kind === "consumed" && ast.is.IsThrowStatement(disposition.use);
