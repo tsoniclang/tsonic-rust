@@ -362,7 +362,7 @@ function resolveObjectRestBindingCarrier(
         carrier,
         storage: "structural-object",
         fields: registeredFields as readonly RustSourceObjectField[],
-      })
+      }, { kind: "root" })
     ? undefined
     : carrier;
 }

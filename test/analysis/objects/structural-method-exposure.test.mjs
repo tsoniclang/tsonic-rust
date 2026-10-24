@@ -6,7 +6,9 @@ import { selectRustStructuralMethodExposure } from "../../../dist/policy/types/o
 import { rustFixedStructuralMethodDeclarations } from "../../../dist/analysis/callables/generic-values.js";
 import { selectRustStructuralFactoryReceiver } from "../../../dist/policy/ownership/retained-storage.js";
 import { isRustCopyCarrier, rustCarrierSupportsClone, rustCarrierSupportsTrait } from "../../../dist/policy/constraints/native-traits.js";
-import { rustStructuralObjectTargetType } from "../../../dist/target-model/types/carriers/source-types.js";
+import { rustStructuralObjectTargetType, rustStructuralObjectCarrierValue } from "../../../dist/target-model/types/carriers/source-types.js";
+import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
+import { bindRustStructuralReceiverParameters } from "../../../dist/analysis/declarations/structural-receiver-requirements.js";
 
 test("native structural handle Clone requires no state or context Clone bound", () => {
   const parameter = { kind: "type-parameter", identity: "native-context", name: "Context" };
@@ -26,6 +28,45 @@ test("native structural handle Clone requires no state or context Clone bound", 
     "a value representation uses an actually supplied generic Clone obligation");
   assert.equal(rustCarrierSupportsClone({ kind: "opaque", id: "unknown-state" }), false,
     "an opaque unknown carrier does not inherit a structural handle contract");
+});
+
+for (const surfaces of [[], ["js"]]) test(`own-literal method write admission does not inherit a helper formal (${surfaces[0] ?? "native"})`, () => {
+  let context;
+  compileRust({ surfaces, files: { "index.ts": `
+function id<Value>(value: Value): Value { return value; }
+export function run(): number {
+  const local = id({ value(): number { return 1; } });
+  local.value = () => 2;
+  return local.value();
+}
+` }, compileTarget(request) {
+    context = analyzeRustCheckedContext(request);
+    return { kind: "resolved", value: { artifacts: [] }, diagnostics: context.diagnostics };
+  } });
+  assert.equal(context !== undefined, true, "the actual source owner is analyzed before native materialization");
+  const { ast, sourceStorage, source, records } = context;
+  const target = sourceStorage.nodes.find(node => ast.is.IsPropertyAccessExpression(node) &&
+    source.semantics.forNode(node).operations.propertyAccess(node)?.accessMode === "write");
+  assert.equal(target !== undefined, true, "the counterdomain retains its original checked write target");
+  const checked = source.semantics.forNode(target).operations.propertyAccess(target);
+  assert.equal(checked?.selectedDeclaration !== undefined && ast.is.IsMethodDeclaration(checked.selectedDeclaration), true,
+    "the selected member is the actual own literal body, not a shared formal signature");
+  const receiver = sourceStorage.subjectFor(checked.receiver.expression);
+  assert.equal(receiver.kind, "resolved", "the exact receiver has checked source provenance");
+  const ancestry = sourceStorage.ancestorsFor(receiver.subject);
+  const helper = sourceStorage.nodes.find(node => ast.is.IsFunctionDeclaration(node) && ast.text(ast.name(node)) === "id");
+  const parameter = helper === undefined ? undefined : ast.parameters(helper)[0];
+  assert.equal(ancestry.kind === "resolved" && ancestry.subjects.some(subject =>
+    subject.kind === "input" && subject.node === parameter), true,
+    "unscoped ancestry really contains the unrelated helper input and cannot prove receiver scope");
+  const selected = records.targetOperation.get(target);
+  assert.equal(selected?.kind === "source-field" && selected.accessMode === "write" && selected.valueSemantics.kind === "method", true,
+    "the owning source admission preserves the original concrete method write route");
+  assert.equal(records.selectedOperation.get(target)?.provenance?.sourceSelectedDeclaration === checked.selectedDeclaration, true,
+    "native selection retains the identical checked own-literal member");
+  assert.equal(context.diagnostics.some(diagnostic => diagnostic.code === "RUST_STRUCTURAL_METHOD_WRITE_UNSUPPORTED" ||
+    diagnostic.code === "RUST_STRUCTURAL_METHOD_WRITE_PROVENANCE_MISSING"), false,
+    "a helper's formal never relabels an own-literal receiver as the shared-formal v1 cut");
 });
 
 test("fixed native methods require complete readonly, required and exact body evidence", () => {
@@ -105,7 +146,7 @@ export function create() {
     "one retained instantiation of the same actual body keeps its needed family");
 });
 
-for (const surfaces of [[], ["js"]]) test(`fixed calls bind the complete receiver context, not only their own captures (${surfaces[0] ?? "native"})`, () => {
+for (const surfaces of [[], ["js"]]) test(`fixed calls bind the complete receiver context, not only their own captures (${surfaces[0] ?? "native"})`, testContext => {
   const { program } = analyzeRust({ surfaces, files: { "index.ts": `
 export function create(callback: () => number) {
   return {
@@ -126,6 +167,35 @@ export function run(callback: () => number): number { return create(callback).re
   assert.equal(read.payload.captures.length, 0, "the read method does not acquire its sibling's capture");
   assert.equal(definition.genericParameters.some(parameter => parameter.kind === "type"), true,
     "the complete physical receiver template still declares the sibling context's actual native type parameter");
+  const ast = program.source.ast;
+  const receivers = [];
+  const visit = node => {
+    const operation = program.records.targetOperation.get(node);
+    if (operation?.kind === "source-call" && operation.target.form === "structural-method" &&
+      definition.fields[operation.target.storageIndex]?.sourceName === "read") {
+      const access = ast.as.AsCallExpression(node)?.Expression;
+      const receiver = access === undefined ? undefined : ast.as.AsPropertyAccessExpression(access)?.Expression;
+      assert.equal(receiver !== undefined, true, "the fixed call retains its original checked receiver occurrence");
+      receivers.push(program.callableValues.nativeStorage.operandFor(receiver));
+    }
+    ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+  };
+  program.sourceFiles.forEach(visit);
+  assert.equal(receivers.length, 1, "the exact returned receiver is checked once");
+  for (const selected of receivers) {
+    assert.equal(selected.kind !== "unresolved", true,
+      selected.kind === "unresolved" ? selected.reason : "the actual returned receiver has published physical storage");
+    const physical = rustStructuralObjectCarrierValue(selected.carrier);
+    const template = program.structuralShapes.templateForCarrier(selected.carrier);
+    const distinct = template !== undefined && !rustTargetTypeRefEquals(template.carrier, selected.carrier);
+    testContext.diagnostic(`physical-receiver: physical=${physical?.implementation?.kind === "physical"}; canonical-template=${template !== undefined}; distinct-instance=${distinct}`);
+    assert.equal(physical?.implementation?.kind, "physical", "the receiver retains its actual checked physical implementation");
+    assert.equal(template !== undefined, true, "the source-call producer admits the physical instance before the generic consumer's template lookup");
+    const parameters = new Set(template.genericParameters.flatMap(parameter => parameter.kind === "type" ? [parameter.identity] : []));
+    assert.equal(bindRustStructuralReceiverParameters(template.carrier, selected.carrier, parameters) !== undefined, true,
+      "the complete receiver binds only through exact native geometry and its own canonical type identities");
+    assert.equal(distinct, true, "the caller's actual physical context is an instance, not a reused callee-template identity");
+  }
 });
 
 test("only an actual retained factory receiver or physical context requires native ownership", () => {
@@ -138,15 +208,21 @@ test("only an actual retained factory receiver or physical context requires nati
 });
 
 test("sealed fixed methods publish actual payloads and native factory receiver decisions", () => {
-  for (const [label, source, expected, captures] of [
-    ["no receiver or captures", "export function create() { return { async answer(): Promise<number> { return 7; } }; }", "shared", 0],
-    ["receiver state", "export function create() { return { value: 7, async answer(): Promise<number> { return this.value; } }; }", "value", 0],
-    ["physical context without this", "export function create(value: number) { return { async answer(): Promise<number> { return value; } }; }", "value", 1],
+  for (const [label, source, expected, captures, lowering] of [
+    ["settled without receiver or captures", "export function create() { return { async answer(): Promise<number> { return 7; } }; }", "shared", 0, "settled"],
+    ["settled receiver state", "export function create() { return { value: 7, async answer(): Promise<number> { return this.value; } }; }", "shared", 0, "settled"],
+    ["settled physical context without this", "export function create(value: number) { return { async answer(): Promise<number> { return value; } }; }", "shared", 1, "settled"],
+    ["factory without receiver or captures", "export function create() { return { async answer(pending: Promise<number>): Promise<number> { await pending; return 7; } }; }", "shared", 0, "factory"],
+    ["factory receiver state", "export function create() { return { value: 7, async answer(pending: Promise<number>): Promise<number> { await pending; return this.value; } }; }", "value", 0, "factory"],
+    ["factory physical context without this", "export function create(value: number) { return { async answer(pending: Promise<number>): Promise<number> { await pending; return value; } }; }", "value", 1, "factory"],
   ]) {
     const { program } = analyzeRust({ surfaces: ["js"], files: { "index.ts": source } });
     const shape = program.structuralShapes.definitions.find(definition => definition.fields.some(field => field.sourceName === "answer"));
     const method = shape?.fields.find(field => field.sourceName === "answer")?.methodPlan;
     assert.equal(method?.kind, "fixed", `${label}: the actual checked native body remains concrete`);
+    const asynchronous = program.records.asyncFunction.get(method.declaration);
+    assert.equal(asynchronous?.kind === "js-promise" && asynchronous.lowering.kind === lowering, true,
+      `${label}: native receiver ownership follows the actual selected completion lifetime`);
     assert.equal(Object.isFrozen(method.payload), true, `${label}: the final payload is required and immutable`);
     assert.equal(method.payload.captures.length, captures, `${label}: captures are the actual source domain, not an empty substitute`);
     assert.equal(method.payload.receiverFields.length, 0, `${label}: no unrelated enclosing receiver field is invented`);

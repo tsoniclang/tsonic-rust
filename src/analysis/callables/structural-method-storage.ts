@@ -256,7 +256,8 @@ export function analyzeRustStructuralMethodExposures(input: {
     if (operation?.kind !== "source-field" || operation.storage !== "structural-object" || operation.valueSemantics.kind !== "method") continue;
     const use = input.source.navigation.expressionValueFlow(node);
     const selected = candidates.get(keyFor(operation.receiverCarrier, operation.storageIndex));
-    if (selected !== undefined && use.uses.some(current => current.role !== "call-target" && current.role !== "type-only")) selected.extracted = true;
+    if (selected !== undefined && (use.escapes ||
+      use.uses.some(current => current.role !== "call-target" && current.role !== "type-only"))) selected.extracted = true;
   }
   return new Map([...candidates].map(([key, value]) => {
     const selected = selectRustStructuralMethodExposure({ writes: value.writes, boundary: value.boundary,
@@ -398,18 +399,22 @@ export function createRustStructuralMethodStorage(input: {
           }
         }
       }
-    } else if (operation?.kind === "source-call" && operation.target.form === "structural-method") {
-      const destination = destinationFor(operation.target.receiverCarrier, operation.target.storageIndex);
+    } else {
+      const method = operation?.kind === "source-call" && operation.target.form === "structural-method" ? operation.target
+        : operation?.kind === "source-field" && operation.storage === "structural-object" && operation.valueSemantics.kind === "method" ? operation : undefined;
+      if (method === undefined) continue;
+      const destination = destinationFor(method.receiverCarrier, method.storageIndex);
       if (destination === undefined) continue;
-      const callee = Node_Expression(ast, node);
-      const subject = callee === undefined ? undefined : sourceStorage.subjectFor(callee);
-      if (subject?.kind === "resolved") register(node, destination, subject.subject);
-    } else if (operation?.kind === "source-field" && operation.storage === "structural-object" &&
-      operation.valueSemantics.kind === "method") {
-      const destination = destinationFor(operation.receiverCarrier, operation.storageIndex);
-      if (destination === undefined) continue;
-      const subject = sourceStorage.subjectFor(node);
-      if (subject.kind === "resolved") register(node, destination, subject.subject);
+      const selected = records.selectedOperation.get(node)?.provenance;
+      const receiver = asSourceNode(selected?.sourceReceiver, ast);
+      const declaration = asSourceNode(selected?.sourceSelectedDeclaration, ast);
+      if (receiver === undefined || declaration === undefined) {
+        sourceIssues.push({ subject: node, message: "Structural method storage requires its original checked receiver and member." });
+        continue;
+      }
+      const subject = sourceStorage.storageSubjectFor(receiver, [{ kind: "method-value", declaration }]);
+      if (subject.kind === "unresolved") sourceIssues.push({ subject: node, message: subject.reason });
+      else register(node, destination, subject.subject);
     }
   }
   // A method slot read through a parameter is produced by the arguments of every checked activation of the
@@ -520,12 +525,12 @@ export function createRustStructuralMethodStorage(input: {
       const literals: { readonly definition: RustStructuralMethodShape; readonly carrier: TargetTypeRef }[] = [];
       for (const node of input.nativeNodes) {
         const operation = records.targetOperation.get(node);
-        if (operation?.kind !== "record-literal" || operation.storage !== "structural-object" ||
-          rustStructuralObjectCarrierValue(operation.resultCarrier)?.implementation === undefined) continue;
-        const physical = input.nativeStorage.valueFor(node);
-        if (physical.kind === "unresolved") return reject(node, physical.reason);
+        if (operation?.kind !== "record-literal" || operation.storage !== "structural-object") continue;
         const definition = structuralShapes.definitionForCarrier(operation.resultCarrier);
         if (definition === undefined) failTargetAnalysisInvariant("tsonic-rust", "An admitted structural literal requires its original checked layout owner.", node);
+        if (!definition.fields.some(field => field.methodPlan?.kind === "fixed")) continue;
+        const physical = input.nativeStorage.valueFor(node);
+        if (physical.kind === "unresolved") return reject(node, physical.reason);
         literals.push({ definition, carrier: physical.carrier });
       }
       for (const definition of structuralShapes.definitions) {

@@ -82,7 +82,7 @@ function structural(input, selected, field = "value", options = {}) {
     fields: [{ ...evidence, ...options, sourceName: field, sourceType: evidence.property.type,
       symbols: [evidence.property.symbol], declarations: options.declarations ?? evidence.declarations,
       storageIndex: 0, resultCarrier: selected, readonly: false, presence: fields[0].presence }],
-  }), true, "exact physical shape is registered");
+  }, { kind: "root" }), true, "exact physical shape is registered");
   return { carrier, registry };
 }
 
