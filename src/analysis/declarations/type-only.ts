@@ -1,10 +1,11 @@
 import type { Node, SourceFile } from "@tsonic/tsts";
-import { sourceClassFieldIsTypeOnly, VariableDeclarationList_Declarations, VariableStatement_DeclarationList, type SourceDeclarationUse } from "@tsonic/target-api/source";
+import { Node_Expression, selectSourceNativeValueGuard, sourceClassFieldIsTypeOnly, VariableDeclarationList_Declarations, VariableStatement_DeclarationList, type SourceDeclarationUse } from "@tsonic/target-api/source";
 import type { RustFactWalk } from "../program/walk.js";
 import { appendRustDiagnostic, rustOperationContext } from "../program/walk.js";
 import { resolveSelectedProviderDeclaration } from "../../policy/identities/selected-source.js";
 import { selectedRustProviderGlobal } from "../../policy/identities/provider-globals.js";
 import { selectRustProviderSourceReceiver } from "../operations/members/source-qualifiers.js";
+import { selectRustErrorTypePredicate } from "../operations/source-profiles/js/type-tests.js";
 
 export function recordRustTypeOnlyDeclarations(walk: RustFactWalk, sourceFiles: readonly SourceFile[]): void {
   walk.context.records.typeOnlyDeclarations.finalize(walk, sourceFiles);
@@ -56,6 +57,19 @@ export function checkRustAmbientVariableUse(walk: RustFactWalk, declaration: Nod
     if (ast.kindName(current) === "KindPropertySignature" || sourceClassFieldIsTypeOnly(ast, current)) return;
     if (ast.is.IsSourceFile(current)) break;
   }
+  let qualifier = use.reference;
+  let parent = ast.parent(qualifier);
+  while (parent !== undefined && ["KindParenthesizedExpression", "KindSatisfiesExpression", "KindNonNullExpression"].includes(ast.kindName(parent))) {
+    if (Node_Expression(ast, parent) !== qualifier) break;
+    qualifier = parent;
+    parent = ast.parent(qualifier);
+  }
+  const nativeGuard = parent === undefined || ast.kindName(parent) !== "KindBinaryExpression" ? undefined
+    : selectSourceNativeValueGuard({ ast, navigation: walk.context.source.navigation,
+      semanticsFor: walk.context.semanticsFor }, parent);
+  if (nativeGuard?.kind === "nominal" && nativeGuard.sourceConstructor === use.reference &&
+    nativeGuard.declaration === declaration &&
+    selectRustErrorTypePredicate(walk.context, declaration, walk.context.sourceProfiles) !== undefined) return;
   const provider = resolveSelectedProviderDeclaration(walk.context, declaration,
     [{ subject: use.reference, precision: "exact" }]);
   if (provider.kind !== "missing" || selectedRustProviderGlobal(declaration, walk.context,

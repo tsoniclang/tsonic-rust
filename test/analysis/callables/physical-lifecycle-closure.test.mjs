@@ -149,6 +149,14 @@ for (const budgetFailure of [false, true]) {
             return original.callableValues.preparePhysicalStorage(...arguments_);
           } } });
           return { ...original, callableValues, sourceStorage: { ...original.sourceStorage,
+            typeFor(subject) {
+              if (preparing && subject.kind === "value" && subject.projection.length === 0 &&
+                original.ast.is.IsMethodDeclaration(subject.node)) {
+                queries += 1;
+                return { kind: "unresolved", reason };
+              }
+              return original.sourceStorage.typeFor(subject);
+            },
             storageProducersFor(subject, bindings) {
               if (preparing && subject.projection.some(projection => projection.kind === "method-value")) {
                 queries += 1;
@@ -172,6 +180,30 @@ for (const budgetFailure of [false, true]) {
       "no final physical error publication follows failed source admission");
   });
 }
+
+test("literal constructors retain their original physical closure independently of later external slot writes", () => {
+  const { source, program } = analyzeRust({ surfaces: ["js"], files: { "index.ts": `
+export function make(value: number) {
+  return { read(): number { return value; } };
+}
+` } });
+  const storage = createSourceStorageQuery(createTargetSourceProgram(source),
+    program.records.sourceArtifacts.get().map(artifact => artifact.sourceFile));
+  const method = sourceNodes(program).find(node => program.source.ast.is.IsMethodDeclaration(node));
+  assert.equal(method !== undefined, true, "the literal has its actual checked original method");
+  const subject = storage.subject(method, "value");
+  assert.equal(subject.kind, "resolved", "the source method has an exact checked value subject");
+  const bindings = storage.bindingsForLexicalOwner(method);
+  assert.equal(bindings.kind, "resolved", "the actual source constructor retains its lexical bindings");
+  const domain = storage.storageProducersFor(subject.subject, bindings.bindings);
+  assert.equal(domain.kind === "open" && domain.boundaries.some(boundary => boundary.kind === "external-write"), true,
+    "the externally returned mutable method slot is not misreported as a closed future write domain");
+  const closure = program.records.targetOperation.get(method);
+  assert.equal(closure?.kind, "closure", "the original literal still constructs its own admitted closure");
+  const actual = program.callableValues.nativeProducers.physicalFor(method, closure.resultCarrier);
+  assert.equal(rustCallablePhysicalSignature(actual) !== undefined, true,
+    "that actual construction is completed without replacing its source identity or closing external writes");
+});
 
 const structuralSources = {
   "four Promise body edges": `
