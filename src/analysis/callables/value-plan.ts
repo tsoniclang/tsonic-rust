@@ -313,7 +313,7 @@ function createRustCallableValueLifecycle(input: RustCallableValuePlanInput,
     declaresGenericInputs: owner => input.ast.is.IsFunctionDeclaration(owner) || input.ast.is.IsMethodDeclaration(owner) ||
       input.ast.is.IsConstructorDeclaration(owner) || input.ast.is.IsGetAccessorDeclaration(owner) ||
       input.ast.is.IsSetAccessorDeclaration(owner) || genericImplementations.has(owner) ||
-      input.lexicalFunctions.forDeclaration(owner)?.kind === "resolved", genericImplementations,
+      input.lexicalFunctions.forDeclaration(owner)?.kind === "resolved",
     ownedRetainedParameter: parameter => {
       const declaration = input.ast.parent(parameter);
       if (declaration === undefined || input.ast.hasModifierKind(declaration, "async")) return false;
