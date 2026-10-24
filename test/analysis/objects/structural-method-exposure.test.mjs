@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { analyzeRust } from "../../helpers/rust-session.mjs";
+import { analyzeRust, compileRust } from "../../helpers/rust-session.mjs";
+import { analyzeRustCheckedContext } from "../../helpers/rust-session-analysis-context.mjs";
 import { selectRustStructuralMethodExposure } from "../../../dist/policy/types/objects/structural-emission.js";
 import { rustFixedStructuralMethodDeclarations } from "../../../dist/analysis/callables/generic-values.js";
 import { selectRustStructuralFactoryReceiver } from "../../../dist/policy/ownership/retained-storage.js";
@@ -39,6 +40,36 @@ test("fixed native methods require complete readonly, required and exact body ev
     ["optional presence", { presence: "optional" }],
   ]) assert.equal(selectRustStructuralMethodExposure({ ...selected, ...change }), "stored", name);
 });
+
+for (const surfaces of [[], ["js"]]) {
+  for (const [label, suffix, expected] of [
+    ["direct native invocation", "export function read(): number { return source.value(); }", "fixed"],
+    ["actual member write", "source.value = function(): number { return 9; };", "stored"],
+    ["extracted method identity", "export const extracted = source.value;", "stored"],
+    ["opaque formal receiver", "export function read(other: typeof source, flag: boolean): number { return (flag ? source : other).value(); }", "stored"],
+  ]) test(`checked exported method exposure retains ${label} (${surfaces[0] ?? "native"})`, () => {
+    let methods;
+    compileRust({ surfaces, files: { "index.ts": `
+export const source = { value(): number { return 7; } };
+${suffix}
+` }, compileTarget(request) {
+      const context = analyzeRustCheckedContext(request, original => {
+        const structuralShapes = Object.create(original.structuralShapes, { initialize: { value(...inputs) {
+          original.structuralShapes.initialize(...inputs);
+          methods = original.structuralShapes.definitions.flatMap(definition => definition.fields
+            .filter(field => field.sourceName === "value" && field.method === true).map(field => field.methodPlan));
+        } } });
+        return Object.defineProperties({}, { ...Object.getOwnPropertyDescriptors(original),
+          structuralShapes: { value: structuralShapes, enumerable: true } });
+      });
+      return { kind: "resolved", value: { artifacts: [] }, diagnostics: context.diagnostics };
+    } });
+    assert.equal(methods !== undefined && methods.length !== 0, true,
+      `${label}: the real checked source reaches the pre-seal native representation owner`);
+    for (const method of methods) assert.equal(method?.kind, expected,
+      `${label}: actual writes/extraction stay distinct from the exported native body boundary`);
+  });
+}
 
 test("only universally fixed actual bodies leave the retained generic family", () => {
   const { program } = analyzeRust({ files: { "index.ts": `
