@@ -18,7 +18,8 @@ import { structuralMemberWritesSource } from "../../../../tsonic/test/fixtures/s
 
 for (const surfaces of [[], ["js"]]) {
   test(`complete late TYPE admission includes selected structural native output carriers on ${surfaces[0] ?? "native"}`, () => {
-    const { program } = analyzeRust({ surfaces, files: { "index.ts": structuralMemberWritesSource } });
+    const { program } = analyzeRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } },
+      files: { "index.ts": structuralMemberWritesSource + "\nmain();\n" } });
     const shapes = new Set([...program.structuralShapes.definitions, ...program.structuralShapes.instances]);
     let nativeFields = 0;
     let transformedFields = 0;
