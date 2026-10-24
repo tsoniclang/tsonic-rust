@@ -26,7 +26,7 @@ function fixture() {
   sourceTypes.registerStructuralObject({ sourceType, carrier: template, storage: "structural-object", fields: [{
     sourceName: "value", declarations: [fieldDeclaration], symbols: [fieldSymbol], sourceType: parameterType,
     resultCarrier: parameter, storageIndex: 0, presence: "required", readonly: false,
-  }] });
+  }] }, { kind: "root" });
   const correspondence = {
     kind: "available",
     source: { type: sourceType, calls: [], constructs: [], indexes: [] },

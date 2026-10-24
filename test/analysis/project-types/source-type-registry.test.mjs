@@ -50,11 +50,9 @@ test("equivalent compiler type wrappers share one exact structural field project
   const firstSymbol = {};
   const secondSymbol = {};
   assert.equal(registry.registerStructuralObject(
-    structuralShape({}, declaration, firstSymbol),
-  ), true);
+    structuralShape({}, declaration, firstSymbol), { kind: "root" }), true);
   assert.equal(registry.registerStructuralObject(
-    structuralShape({}, declaration, secondSymbol),
-  ), true);
+    structuralShape({}, declaration, secondSymbol), { kind: "root" }), true);
 
   const projection = registry.structuralFieldProjectionForDeclaration(
     declaration,
@@ -69,11 +67,9 @@ test("conflicting structural projections for one declaration fail closed", () =>
   const registry = createRustSourceTypeRegistry();
   const declaration = {};
   assert.equal(registry.registerStructuralObject(
-    structuralShape({}, declaration, {}),
-  ), true);
+    structuralShape({}, declaration, {}), { kind: "root" }), true);
   assert.equal(registry.registerStructuralObject(
-    structuralShape({}, declaration, {}, float64Carrier),
-  ), false);
+    structuralShape({}, declaration, {}, float64Carrier), { kind: "root" }), false);
 
   assert.deepEqual(
     registry.structuralFieldProjectionForDeclaration(declaration, receiverCarrier)?.field.resultCarrier,
@@ -219,12 +215,12 @@ test("one admitted nominal reservation transitions to one exact structural alias
   registry.registerSourceFile(current.sourceFiles[0], current.ast, () => true);
   const nominal = registry.carrierForDeclaration(declaration);
   const first = { ...structuralShape({}, {}, {}), sourceAlias: declaration };
-  assert.equal(registry.registerStructuralObject(first), true, "a nominal reservation is not a finalized structural template");
+  assert.equal(registry.registerStructuralObject(first, { kind: "root" }), true, "a nominal reservation is not a finalized structural template");
   assert.equal(registry.registerRepresentationAlias(declaration, receiverCarrier), true, "the actual representation replaces the reservation");
   assert.equal(registry.carrierForDeclaration(declaration) === receiverCarrier, true, "one selected representation is published");
   assert.equal(registry.declarationForCarrier(nominal) === undefined, true, "superseded nominal identity is not left printable");
   const second = { ...structuralShape({}, {}, {}), sourceAlias: declaration };
-  assert.equal(registry.registerStructuralObject(second), true, "subsequent checked wrappers share the selected template");
+  assert.equal(registry.registerStructuralObject(second, { kind: "root" }), true, "subsequent checked wrappers share the selected template");
   assert.equal(registry.registerRepresentationAlias(declaration, receiverCarrier), true, "an identical finalized alias is stable");
   assert.equal(registry.registerRepresentationAlias(declaration, int32Carrier), false, "a second selected representation is refused");
   assert.equal(registry.carrierForDeclaration(declaration) === receiverCarrier, true, "failed replacement preserves exact prior identity");

@@ -23,7 +23,7 @@ test("constructor-only shapes retain parameters through traversal, substitution 
   const signature = {};
   const shape = { sourceType: {}, storage: "structural-object", carrier, fields: [],
     construction: { declaration, signatureInfo: { signature, parameters: [], returnType: {} }, carrier: construction } };
-  assert.equal(registry.registerStructuralObject(shape), true);
+  assert.equal(registry.registerStructuralObject(shape, { kind: "root" }), true);
   const plan = createRustStructuralShapePlan(registry.structuralObjects(), [], () => "source", [], new Map());
   assert.deepEqual(plan.definitions[0].genericParameters, [{ kind: "type", identity: "Value", name: "Value" }]);
   assert.deepEqual(plan.definitions[0].construction.carrier, construction);
@@ -51,9 +51,9 @@ test("constructor source registry preserves exact selected declaration and signa
     const registry = createRustSourceTypeRegistry();
     const shape = { sourceType: {}, storage: "structural-object", carrier, fields: [],
       construction: { declaration: {}, signatureInfo: { signature: {}, parameters: [], returnType: {} }, carrier: construction } };
-    assert.equal(registry.registerStructuralObject(shape), true);
-    assert.equal(registry.registerStructuralObject(shape), true);
-    assert.equal(registry.registerStructuralObject(mutation(shape)), false);
+    assert.equal(registry.registerStructuralObject(shape, { kind: "root" }), true);
+    assert.equal(registry.registerStructuralObject(shape, { kind: "root" }), true);
+    assert.equal(registry.registerStructuralObject(mutation(shape), { kind: "root" }), false);
     assert.equal(registry.structuralObjects().length, 1);
   }
 });
