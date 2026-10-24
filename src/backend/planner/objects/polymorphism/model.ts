@@ -143,7 +143,7 @@ export function projectCallableShape(
   for (const [identity, carrier] of arguments_ ?? []) substitutions.set(identity, carrier);
   const selectedContext = { ...context, typeParameterSubstitutions: substitutions };
   const syntheticNames = createRustSyntheticNameState(context.input.program.source.ast, member, []);
-  const parameters = planRustCallableParameters(selected.contract, selectedContext, syntheticNames);
+  const parameters = planRustCallableParameters(selected.contract, selectedContext, syntheticNames, "signature");
   const returnType = selected.omitReturn ? undefined : rustReturnTypeFromCarrierInContext(selected.returnCarrier, selectedContext);
   const errorType = selected.errorCarrier === undefined ? undefined : rustTypeFromCarrierInContext(selected.errorCarrier, selectedContext);
   if (parameters === undefined || !selected.omitReturn && returnType === undefined || selected.fallible && errorType === undefined)

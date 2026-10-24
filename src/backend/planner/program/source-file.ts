@@ -34,6 +34,7 @@ import type { RustPlanContext } from "./plan-context.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { planBlockLike, planStatement } from "../statements/index.js";
 import { applyFallibleShape } from "../types/fallible-shape.js";
+import { applyRustTailShape } from "../../target-ast/normalization/block-flow.js";
 import {
   createRustSyntheticNameState,
   type RustSyntheticNameState,
@@ -443,7 +444,7 @@ function planModuleItems(
     ...(errorBoundary === undefined ? {} : { errorType: errorBoundary.errorType }),
     params: nativeTasks.parameters,
     body: applyFallibleShape(
-      { statements: initializationStatements },
+      applyRustTailShape({ statements: initializationStatements }, false),
       fallible
         ? {
             fallible: true,

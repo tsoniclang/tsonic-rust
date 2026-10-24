@@ -105,14 +105,14 @@ export class Backing {
   const visit = node => {
     if (ast.is.IsPropertyAccessExpression(node)) {
       const access = ast.as.AsPropertyAccessExpression(node);
-      if (["value", "offset"].includes(ast.text(ast.name(node)))) accesses.push({ node, receiver: access.Expression });
+      const label = ast.text(access.Name);
+      if (["value", "offset"].includes(label)) accesses.push({ node, receiver: access.Expression, label });
     }
     ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
   };
   program.sourceFiles.forEach(visit);
   assert.equal(accesses.length, 2, "both checked discriminant branches retain their exact field receiver");
-  for (const { node, receiver } of accesses) {
-    const label = ast.text(ast.name(node));
+  for (const { node, receiver, label } of accesses) {
     const physical = program.records.targetOperation.get(receiver);
     const flow = program.records.flowReadProjection.get(receiver);
     assert.equal(physical !== undefined, true, `${label}: native field storage has a selected operation`);

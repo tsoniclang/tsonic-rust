@@ -24,7 +24,8 @@ export interface RustCallableParameterPlan {
   readonly prelude: readonly RustParameterPrelude[];
 }
 
-export function planRustCallableParameters(contract: SourceCallableContract, context: RustPlanContext, syntheticNames: RustSyntheticNameState): RustCallableParameterPlan {
+export function planRustCallableParameters(contract: SourceCallableContract, context: RustPlanContext,
+  syntheticNames: RustSyntheticNameState, use: "source-body" | "signature"): RustCallableParameterPlan {
   if (contract.kind === "native") {
     return { params: contract.nativeParameters.map(({ targetParameter }) => {
       const type = rustParameterTypeFromCarrierInContext(targetParameter.type, context);
@@ -42,8 +43,8 @@ export function planRustCallableParameters(contract: SourceCallableContract, con
     const parameterType = rustParameterTypeFromCarrierInContext(selected.carrier, context);
     const name = selected.pattern === undefined ? selected.name : allocateRustSyntheticName(syntheticNames, "binding_parameter");
     if (name === undefined || parameterType === undefined) failRustPlannerInvariant("An admitted callable parameter requires its native name and storage type.", parameter);
-    params.push({ name, type: parameterType, mutable: selected.parameterMutable,
-      ...(selected.pattern !== undefined || selected.default !== undefined || selected.storage !== undefined ||
+    params.push({ name, type: parameterType, mutable: use === "source-body" && selected.parameterMutable,
+      ...(use !== "source-body" || selected.pattern !== undefined || selected.default !== undefined || selected.storage !== undefined ||
         context.input.program.records.sourceParameterAbi.get(parameter)?.entryConversion !== undefined ? {}
         : { attrs: rustBindingLivenessAttributes(parameter, selected.parameterMutable, context) }) });
     prelude.push(...planRustParameterEntryConversion(parameter, name, selected.mutable, context)

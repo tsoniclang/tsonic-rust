@@ -46,7 +46,9 @@ export function rustErrorFieldComparisonView(node: Node | undefined, expression:
   const selected = context.input.program.records.stringComparisonView.get(node)
     ?? failRustPlannerInvariant("An admitted comparison requires its sealed native string view.", node);
   if (selected.kind === "literal") return { kind: "str-literal", value: selected.value };
-  if (selected.kind === "owned-string") return { kind: "method-call", receiver: expression, method: "as_str", args: [] };
+  if (selected.kind === "native-str-reference") return {
+    kind: "call", path: "core::convert::AsRef::<str>::as_ref", args: [{ kind: "reference", expr: expression }],
+  };
   if (selected.kind === "error") {
     const field = context.input.program.records.errorFieldEmission.get(node);
     const read = planRustBuiltinErrorPropertyRead(node, context);
@@ -56,7 +58,5 @@ export function rustErrorFieldComparisonView(node: Node | undefined, expression:
     ?? failRustPlannerInvariant("An admitted borrowed source string requires its native operand.", selected.operand);
   if (selected.kind === "contextual") return planExpressionBeforeContextualConversion(node, context)
     ?? failRustPlannerInvariant("An admitted borrowed string requires its native pre-conversion value.", node);
-  // An equality reads a borrowed str directly; owning it first is clippy::cmp_owned (a provider str result converted
-  // to String, as before the rewrite).
-  return expression.kind === "owned-string-from-borrowed-str" ? expression.expression : expression;
+  return expression;
 }

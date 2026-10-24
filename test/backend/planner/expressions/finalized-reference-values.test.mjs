@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { Node_Initializer } from "@tsonic/target-api/source";
 import { jsonNativeProjectionSource } from "../../../../../tsonic/test/fixtures/json-native-projection.mjs";
+import { closedInstanceFiles } from "../../../../../tsonic/test/fixtures/closed-instance-tests.mjs";
 import { analyzeRust, acmeVectorsPackage } from "../../../helpers/rust-session.mjs";
 import { rustSourceFilePlanContext } from "../../../helpers/plan-context.mjs";
 import { createRustRecordFixture } from "../../../helpers/records.mjs";
@@ -20,6 +21,29 @@ function sourceNodes(program) {
   program.records.sourceArtifacts.get().forEach(artifact => visit(artifact.sourceFile));
   return result;
 }
+
+test("an already selected borrowed union field receiver uses native field autoderef", () => {
+  const { program } = analyzeRust({ files: closedInstanceFiles });
+  const ast = program.source.ast;
+  const node = sourceNodes(program).find(node => {
+    if (!ast.is.IsPropertyAccessExpression(node)) return false;
+    const access = ast.as.AsPropertyAccessExpression(node);
+    return ast.text(access.Name) === "count" && ast.is.IsIdentifier(access.Expression) && ast.text(access.Expression) === "value";
+  });
+  assert.equal(node !== undefined, true, "the actual narrowed nominal source field is present");
+  const receiver = ast.as.AsPropertyAccessExpression(node).Expression;
+  assert.equal(program.records.targetOperation.get(node)?.kind, "source-field", "the selected operation reads actual native storage");
+  assert.equal(program.records.readOwnership.get(receiver)?.value.kind, "borrow", "the ownership producer already selected the nonconsuming receiver");
+  const projection = program.records.valueProjection.get(receiver);
+  assert.equal(projection?.borrowable, true, "the exact admitted projection supplies its native reference");
+  assert.equal(projection.flow !== undefined, true, "the original native union projection is retained");
+  const value = planExpression(node, rustSourceFilePlanContext(program, node));
+  assert.equal(value !== undefined, true, "the complete source field is rendered");
+  const output = printRustExpr(value);
+  assert.match(output, /match &value/u, "the exact borrowed native payload is still selected");
+  assert.doesNotMatch(output, /\(\*match/u, "native field access performs autoderef without a reconstructed explicit dereference");
+  assert.doesNotMatch(output, /\.clone\(/u, "the borrowed receiver and Copy field introduce no snapshot or payload clone");
+});
 
 test("a converted JSON reference borrows the selected value, never the original structural source", () => {
   const { program } = analyzeRust({ surfaces: ["js"], files: { "index.ts": jsonNativeProjectionSource } });
