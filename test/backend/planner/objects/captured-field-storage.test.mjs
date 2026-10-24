@@ -8,6 +8,9 @@ import { rustStoredObjectFieldSupportsBorrowedRead } from "../../../../dist/back
 import { validatedRustCapturedFieldStorageFact } from "../../../../dist/analysis/storage/receiver-captures.js";
 import { int32Carrier, stringCarrier } from "../../../helpers/rust-session.mjs";
 import { selectRustCapturedFieldStorage } from "../../../../dist/policy/ownership/captured-field-storage.js";
+import { analyzeRustStoredFields } from "../../../../dist/analysis/storage/stored-fields.js";
+import { createRustProgramRecordBuilder } from "../../../../dist/analysis/program/records/create.js";
+import { rustCallableTargetType, rustStructuralObjectTargetType } from "../../../../dist/target-model/types/index.js";
 
 const owner = { kind: "path", path: "payload" };
 const next = { kind: "path", path: "next" };
@@ -126,21 +129,37 @@ test("instantiated Copy reads from generic RefCell storage do not clone payloads
 });
 
 test("borrowed structural reads require exact plain stored fields, not dispatch or accessor inference", () => {
-  const carrier = {};
   const field = { storageIndex: 0, storage: "stored" };
-  function context(definition, selected = field) {
-    return { input: { program: { structuralShapes: { definitionForCarrier: () => definition, field: () => selected } } } };
+  function supports(definition, selected) {
+    const value = selected?.method === true ? rustCallableTargetType([], int32Carrier) : int32Carrier;
+    const carrier = rustStructuralObjectTargetType("/source.ts", [{ sourceName: "value", type: value,
+      presence: "required", readonly: false, ...(selected?.method === true ? { method: true } : {}) }]);
+    const builder = createRustProgramRecordBuilder();
+    if (definition !== undefined && selected !== undefined) {
+      const physical = { ...selected, sourceName: "value", targetName: "value", carrier: value,
+        presence: "required", readonly: false, ...(selected.method === true ? { methodPlan: {
+          kind: "stored", receiver: "independent", carrier: value, constructions: [],
+        } } : {}) };
+      const shape = { ...definition, carrier, fields: [physical] };
+      const program = {
+        structuralShapes: { instances: [shape], definitionForCarrier: candidate => candidate === carrier ? shape : undefined,
+          field: (candidate, index) => candidate === carrier && index === 0 ? physical : undefined },
+        projectTypes: { definitions: [], definitionForCarrier: () => undefined },
+        classValues: { instanceViewImplementations: [], constructorViewImplementations: [] },
+        records: createRustRecordFixture(), frozenDataWrites: { receiverFor: () => undefined },
+      };
+      analyzeRustStoredFields(program, [], builder.storedFieldPlans);
+    }
+    return rustStoredObjectFieldSupportsBorrowedRead("structural-object", carrier, 0,
+      { input: { program: { records: builder.readers } } });
   }
-  assert.equal(rustStoredObjectFieldSupportsBorrowedRead("structural-object", carrier, 0, context({ fields: [field] })), true);
+  assert.equal(supports({ fields: [field] }, field), true, "the actual stored-field producer admits the plain field");
   for (const changed of [undefined, { ...field, storage: "property" }, { ...field, storage: "bound" },
     { ...field, nativeLayout: {} }, { ...field, method: true }]) {
-    const selected = context({ fields: [field] });
-    selected.input.program.structuralShapes.field = () => changed;
-    assert.equal(rustStoredObjectFieldSupportsBorrowedRead("structural-object", carrier, 0, selected), false);
+    assert.equal(supports({ fields: [field] }, changed), false);
   }
-  assert.equal(rustStoredObjectFieldSupportsBorrowedRead("structural-object", carrier, 0, context(undefined)), false);
-  assert.equal(rustStoredObjectFieldSupportsBorrowedRead("structural-object", carrier, 0,
-    context({ fields: [field], dispatchName: "Dispatch" })), false);
+  assert.equal(supports(undefined, field), false);
+  assert.equal(supports({ fields: [field], dispatchName: "Dispatch" }, field), false);
 });
 
 test("analysis validates exact captured storage facts against the canonical override-family declaration", () => {

@@ -104,10 +104,6 @@ export function createRustNativeStorageSelection(
       selectedInputs.add(candidate);
       return candidate.implementation;
     };
-    const inputSignatureMatches = (candidate: RustNativeCallableInput, current: TargetTypeRef): boolean => {
-      const candidateCarrier = callableValueCarrier(candidate.carrier);
-      return candidateCarrier !== undefined && rustCallableInvocationSignaturesMatch(current, candidateCarrier);
-    };
     // The physical carrier of a value that reaches `current` through the finalized callable adapter recorded at `origin`.
     // `optional` reports a target that does not match `current` as absent instead of refusing the whole selection.
     const adaptedPhysical = (origin: SourceStorageSubject, bindings: SourceStorageBindings, current: TargetTypeRef,
@@ -285,8 +281,14 @@ export function createRustNativeStorageSelection(
           } else {
             const candidate = inputs.get(origin);
             if (candidate !== undefined) joinable = false;
-            const adapted = candidate === undefined ? undefined : adaptedReferences.get(origin.node);
-            if (candidate !== undefined && adapted !== undefined && !inputSignatureMatches(candidate, current)) {
+            const concreteParameter = origin.kind === "input" && origin.projection.length === 0 &&
+              input.native.isConcreteCallableParameter(origin.node)
+              ? input.records.sourceParameterAbi.get(origin.node)?.parameterCarrier : undefined;
+            const contract = candidate?.carrier ?? concreteParameter;
+            const contractValue = contract === undefined ? undefined : callableValueCarrier(contract);
+            const adapted = adaptedReferences.get(origin.node);
+            if (adapted !== undefined && contractValue !== undefined &&
+              !rustCallableInvocationSignaturesMatch(current, contractValue)) {
               // The input reaches this formal only through an adapted reference whose target is the formal's signature.
               for (const reference of adapted) {
                 const fact = input.records.contextualValueConversion.get(reference.node);
@@ -306,11 +308,12 @@ export function createRustNativeStorageSelection(
                 : frameFieldCarrier(origin);
               // A callable parameter of an owner emitted as a closure value is a concrete runtime callable supplied by
               // the caller; its physical carrier is its declared parameter carrier, with no producer of its own.
-              const concreteParameter = origin.kind === "input" && origin.projection.length === 0 &&
-                input.native.isConcreteCallableParameter(origin.node)
-                ? input.records.sourceParameterAbi.get(origin.node)?.parameterCarrier : undefined;
               if (concreteParameter !== undefined) {
-                const element = rustOptionElementCarrier(concreteParameter) ?? concreteParameter;
+                const generics = genericsFor(sourceEnclosingCallable(input.ast.parent(origin.node), input.ast), frontier.bindings, depth + 1);
+                if (generics.kind === "unresolved") return fail(generics.reason);
+                const boundParameter = substituteRustTargetGenerics(concreteParameter,
+                  generics.bindings.types, generics.bindings.lifetimes, generics.bindings.consts);
+                const element = rustOptionElementCarrier(boundParameter) ?? boundParameter;
                 const declared = rustCallablePhysicalCarrier(element);
                 if (declared === undefined || !rustCallableInvocationSignaturesMatch(current, callableValueCarrier(element) ?? element))
                   return fail("Native callable storage conflicts with its exact concrete callable parameter.");

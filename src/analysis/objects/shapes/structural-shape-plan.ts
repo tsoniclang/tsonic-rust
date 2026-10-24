@@ -212,7 +212,7 @@ function createRustStructuralShapeConstruction(
   const physicalSelection = (carrier: TargetTypeRef): ReturnType<typeof rustStructuralGenericCarrier> => {
     const existing = selections.get(carrier);
     if (existing !== undefined) return existing;
-    const selected = rustStructuralGenericCarrier(carrier);
+    const selected = rustStructuralGenericCarrier(carrier, "fields");
     selections.set(carrier, selected);
     return selected;
   };
@@ -299,10 +299,14 @@ function createRustStructuralShapeConstruction(
       const sourceCarriers = Object.freeze([...instances]
         .sort(([left], [right]) => left.localeCompare(right, "en"))
         .map(([, carrier]) => carrier));
-      const selection = physicalSelection([...uniqueByKey.get(key)!]
-        .sort(([left], [right]) => left.localeCompare(right, "en"))[0]![1]);
+      const original = [...uniqueByKey.get(key)!]
+        .sort(([left], [right]) => left.localeCompare(right, "en"))[0]![1];
+      const nativeDispatch = rustStructuralObjectCarrierValue(original)?.construction !== undefined ||
+        implementations.some(implementation => implementation.kind === "dispatch" && instances.has(closedMetadataKey(implementation.carrier)));
+      const selection = nativeDispatch ? rustStructuralGenericCarrier(original, "dispatch") : physicalSelection(original);
       const carrier = selection.carrier;
-      for (const source of sourceCarriers) nestedCarriers.push(...physicalSelection(source).nestedCarriers);
+      for (const source of sourceCarriers) nestedCarriers.push(...(nativeDispatch
+        ? rustStructuralGenericCarrier(source, "dispatch") : physicalSelection(source)).nestedCarriers);
       const structural = rustStructuralObjectCarrierValue(carrier);
       if (structural === undefined) {
         throw new Error("Rust structural shape plan contains a non-structural carrier.");
@@ -312,8 +316,6 @@ function createRustStructuralShapeConstruction(
       usedTypeNamesByComponent.set(componentId, usedTypeNames);
       const fieldNames = rustPropertyStorageNames(structural.fields.map(field => field.sourceName));
       const usedFieldNames = new Set(fieldNames.values());
-      const nativeDispatch = structural.construction !== undefined || implementations.some(implementation =>
-        implementation.kind === "dispatch" && instances.has(closedMetadataKey(implementation.carrier)));
       const fields = structural.fields.map((field, storageIndex): RustStructuralShapeField<RustStructuralMethodLayout> => {
         const selectedNativeFields = nativeFields.filter(candidate => candidate.storageIndex === storageIndex &&
           instances.has(closedMetadataKey(candidate.owner)));
@@ -566,7 +568,7 @@ function createRustStructuralShapeConstruction(
       if (previous !== undefined && !rustTargetTypeRefEquals(previous.carrier, physical))
         return unresolved("A structural source instance requires one exact native implementation and capture environment.");
       if (previous !== undefined) return Object.freeze({ kind: "resolved", carrier: previous.carrier });
-      const carrier = rustStructuralGenericCarrier(physical).carrier;
+      const carrier = rustStructuralGenericCarrier(physical, "fields").carrier;
       const references = rustTargetGenericReferences(carrier);
       const physicalOwner = originsByKey.get(closedMetadataKey(physical));
       const completedOwner = physicalOwner === undefined || physicalOwner === original ? undefined : physicalTemplateFor(physicalOwner);
@@ -600,7 +602,7 @@ function createRustStructuralShapeConstruction(
           template.template.componentId !== definition.componentId)) continue;
         if (definition.fields.some(field => field.methodPlan?.kind === "fixed") && template === undefined)
           failTargetAnalysisInvariant("tsonic-rust", "A fixed structural method requires its completed physical template before publication.");
-        const carrier = template === undefined ? definition.carrier : rustStructuralGenericCarrier(template.carrier).carrier;
+        const carrier = template === undefined ? definition.carrier : rustStructuralGenericCarrier(template.carrier, "fields").carrier;
         for (const [index] of fields ?? []) {
           if (definition.fields[index]?.method !== true)
             throw new Error("Structural method storage can replace only an admitted method slot.");
@@ -733,6 +735,7 @@ function createRustStructuralShapeConstruction(
       };
       const instances = new Map<string, RustStructuralShapeDefinition>();
       const physicalInstances = new Map<string, RustStructuralShapeDefinition>();
+      const instanceOwners = new Map([...originsByKey].map(([key, definition]) => [key, canonicalFor(replacements.get(definition)!)]));
       const instantiatePhysical = (definition: RustStructuralShapeDefinition, carrier: TargetTypeRef): RustStructuralShapeDefinition | undefined => {
         const owner = canonicalFor(definition);
         const key = closedMetadataKey(carrier);
@@ -743,7 +746,10 @@ function createRustStructuralShapeConstruction(
           return previous;
         }
         const selected = instantiateStructuralDefinition(owner, carrier);
-        if (selected !== undefined) physicalInstances.set(key, selected);
+        if (selected !== undefined) {
+          physicalInstances.set(key, selected);
+          instanceOwners.set(key, owner);
+        }
         return selected;
       };
       for (const [key, selected] of byKey) {
@@ -764,7 +770,6 @@ function createRustStructuralShapeConstruction(
         instances.set(key, instance);
       }
       const storageOwners = new Map([...byStorageKey].map(([key, definition]) => [key, canonicalFor(replacements.get(definition)!)]));
-      const instanceOwners = new Map([...originsByKey].map(([key, definition]) => [key, canonicalFor(replacements.get(definition)!)]));
       let finalInstances = Object.freeze([...physicalInstances.values()]);
       definitions = finalDefinitions;
       const registerFinal = (definition: RustStructuralShapeDefinition, carrier: TargetTypeRef): RustStructuralShapeDefinition | undefined => {

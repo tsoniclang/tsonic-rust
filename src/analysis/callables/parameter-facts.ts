@@ -13,6 +13,7 @@ import { recordBindingPatternFacts } from "../control-flow/binding-patterns.js";
 import { resolveExpressionCarrier } from "../source-evidence/types/resolution/expression-carriers.js";
 import { requireDenseSourceNodes } from "../source-evidence/dense-nodes.js";
 import { reconcileRequiredCarrier } from "../conversions/contextual-values.js";
+import type { RustCallableSignatureUnresolved } from "./signature-query.js";
 
 export function resolveParameterAbi(walk: RustFactWalk, parameter: Node) {
   const selection = walk.sourceCallableAbi.resolveParameterAbi(
@@ -54,15 +55,18 @@ export function refuseRustParameterCarrier(walk: RustFactWalk, parameter: Node, 
 }
 
 /** A callable whose signature cannot be finalized is refused at each parameter that has no closed native carrier. */
-export function refuseRustUnresolvedParameterCarriers(walk: RustFactWalk, declaration: Node): void {
+export function refuseRustUnresolvedParameterCarriers(
+  walk: RustFactWalk, declaration: Node, failure: RustCallableSignatureUnresolved,
+): void {
   const parameters = sourceCallableValueParameters(walk.context.ast, declaration, walk.context.semanticsFor(declaration));
   if (parameters === undefined) return;
   for (const parameter of parameters) {
     if (parameter === undefined || walk.context.records.sourceParameterAbi.get(parameter) !== undefined) continue;
     const selection = walk.sourceCallableAbi.resolveParameterAbi(
       parameter, rustResolutionContext(walk, parameter), walk.operationOptions);
-    if (selection === undefined || selection.kind === "rejected")
-      refuseRustParameterCarrier(walk, parameter, selection?.reason);
+    if (selection?.kind === "rejected") refuseRustParameterCarrier(walk, parameter, selection.reason);
+    else if (selection === undefined) appendRustDiagnostic(walk, "RUST_PARAMETER_CARRIER_UNSUPPORTED", failure.reason,
+      parameter, ["target.capability=rust.callable.parameter-carrier"]);
   }
 }
 

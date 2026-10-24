@@ -214,7 +214,7 @@ function selectReturn(
           const target = call === undefined ? undefined : semantics.declarations.signatureDeclaration(call.selectedSignature);
           if (target !== undefined && walk.context.source.navigation.isProjectDeclaration(target) && !ast.hasModifierKind(target, "async") &&
             walk.context.semanticsFor(target).operations.generator(target) === undefined) {
-            if (finalizeRustCallableSignature(probe, target) === undefined) return undefined;
+            if (finalizeRustCallableSignature(probe, target).kind !== "complete") return undefined;
             const sourceFile = ast.getSourceFile(expression);
             if (sourceFile === undefined) return undefined;
             return resolveExpressionCarrier(probe, expression, sourceFile, expected);
