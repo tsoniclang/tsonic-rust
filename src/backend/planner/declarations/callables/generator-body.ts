@@ -20,7 +20,7 @@ export function planRustGeneratorBody(
       params: [{ name: controllerName, mutable: false }],
       move: true,
       async: true,
-      body: applyRustTailShape(body, !isRustUnitCarrier(fact.returnType)),
+      body: applyRustTailShape(body, !isRustUnitCarrier(fact.returnType), new Set([controllerName])),
     }],
   };
 }

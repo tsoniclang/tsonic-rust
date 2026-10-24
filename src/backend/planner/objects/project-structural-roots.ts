@@ -8,20 +8,24 @@ import { rustProjectRootType, rustProjectStateType } from "./polymorphism/names.
 import { planRustProjectRepresentationGenerics } from "./polymorphism/names.js";
 import type { RustGenerics } from "../../target-ast/syntax/nodes.js";
 import { rustProjectImplementationContext, rustProjectImplementationGenerics } from "./polymorphism/implementation-generics.js";
-import type { RustProjectStructuralView } from "../../../target-model/records/project-structural-views.js";
 import { rustGenericRequirementBounds, rustGenericsWithAssociatedBounds } from "../types/generic-bounds.js";
 import { rustAssociatedPredicates } from "../types/associated-bounds.js";
 import { closedMetadataKey } from "../../../target-model/metadata/closed-data.js";
 import { failRustPlannerInvariant } from "../diagnostics.js";
+import type { RustClassStructuralViewEmission } from "../../../target-model/records/class-implementations.js";
+import { rustLifetimeKey } from "../../../target-model/lifetimes/index.js";
+import { rustLifetimeToAst } from "../types/lifetime-syntax.js";
 
 export function rustStructuralViewImplementationContext(
-  carrier: TargetTypeRef, representation: RustObjectRepresentation, context: RustPlanContext,
+  view: RustClassStructuralViewEmission, representation: RustObjectRepresentation, context: RustPlanContext,
 ): RustPlanContext {
-  return rustProjectImplementationContext(representation.definition, carrier, context);
+  const selected = rustProjectImplementationContext(representation.definition, view.sourceCarrier, context);
+  return { ...selected, lifetimeSubstitutions: new Map([...selected.lifetimeSubstitutions ?? [],
+    ...view.nativeLifetimes.map(lifetime => [rustLifetimeKey(lifetime), lifetime] as const)]) };
 }
 
 export function rustStructuralViewImplementationGenerics(
-  view: RustProjectStructuralView, representation: RustObjectRepresentation, context: RustPlanContext,
+  view: RustClassStructuralViewEmission, representation: RustObjectRepresentation, context: RustPlanContext,
 ): RustGenerics | undefined {
   const selected = planRustProjectRepresentationGenerics(representation, context);
   const generics = rustProjectImplementationGenerics(view.sourceCarrier, selected, context);
@@ -29,14 +33,24 @@ export function rustStructuralViewImplementationGenerics(
   const inventory = context.input.program.records.classImplementationGenerics.get(view.sourceCarrier);
   if (generics === undefined || requirements === undefined || inventory === undefined) failRustPlannerInvariant("An admitted structural view requires its exact native generic inventory and requirements.", view.declaration);
   const byIdentity = new Map(requirements.typeParameters.map(parameter => [parameter.identity, parameter.requirements]));
-  return rustGenericsWithAssociatedBounds(generics.parameters.map((parameter, index) => {
+  const parameters = generics.parameters.map((parameter, index) => {
     if (parameter.kind !== "type") return parameter;
     const source = inventory.parameters[index - inventory.lifetimes.length];
     if (source === undefined) failRustPlannerInvariant("An admitted structural view parameter requires its exact source identity.", view.declaration);
     return {
     ...parameter, bounds: [...new Map([...parameter.bounds, ...rustGenericRequirementBounds(byIdentity.get(source.identity) ?? [])]
       .map(bound => [closedMetadataKey(bound), bound])).values()],
-  }; }), [...new Map([...generics.wherePredicates, ...rustAssociatedPredicates(requirements.associatedTypes, context)]
+  }; });
+  const predicates = view.nativeOutlives.map(requirement => {
+    const type = rustTypeFromCarrierInContext(requirement.carrier, context);
+    if (type === undefined) failRustPlannerInvariant("An admitted structural getter requires its sealed native outlives carrier.", view.declaration);
+    const lifetime = context.lifetimeSubstitutions?.get(rustLifetimeKey(requirement.lifetime)) ?? requirement.lifetime;
+    return { kind: "type" as const, type, bounds: [{ kind: "lifetime" as const, lifetime: rustLifetimeToAst(lifetime) }] };
+  });
+  return rustGenericsWithAssociatedBounds([
+    ...view.nativeLifetimes.map(lifetime => ({ kind: "lifetime" as const, name: lifetime.name, outlives: [] })),
+    ...parameters,
+  ], [...new Map([...generics.wherePredicates, ...rustAssociatedPredicates(requirements.associatedTypes, context), ...predicates]
     .map(predicate => [closedMetadataKey(predicate), predicate])).values()]);
 }
 

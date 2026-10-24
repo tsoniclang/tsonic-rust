@@ -19,7 +19,7 @@ test("single captured native strings retain inline storage through exact pure bo
   const borrowed = rustBorrowedStrTargetType();
   const size = { kind: "source-primitive", name: "native-uint" };
   const conversion = { kind: "identity", sourceCarrier: size, targetCarrier: size, fallible: false };
-  const input = { source: { kind: "receiver" }, sourceCarrier: stringCarrier, mode: "value",
+  const input = { source: { kind: "receiver" }, sourceCarrier: stringCarrier, mode: "value", sharedConversion: true, elementView: "value",
     parameterCarrier: borrowed, conversion: { kind: "semantic",
       conversion: { kind: "semantic-conversion", id: "borrowed-str-from-owned-string" },
       sourceCarrier: stringCarrier, targetCarrier: borrowed, fallible: false } };
@@ -41,8 +41,8 @@ test("single captured native strings retain inline storage through exact pure bo
       awaitedRawCarrier: size, awaitedConversion: conversion, awaitedCarrier: size } } }, "location"],
     ["retained result", { ...original, abi: { ...original.abi, result: { ...original.abi.result, carrier: stringCarrier } } }, "location"],
     ["missing receiver", { ...original, abi: { ...original.abi, targetReceiver: { kind: "none" } } }, "location"],
-    ["mutable mode", { ...original, abi: { ...original.abi, targetReceiver: { kind: "input", input: { ...input, mode: "mut-ref" } } } }, "location"],
-    ["wrong view", { ...original, abi: { ...original.abi, targetReceiver: { kind: "input", input: { ...input, parameterCarrier: stringCarrier } } } }, "location"],
+    ["mutable mode", { ...original, abi: { ...original.abi, targetReceiver: { kind: "input", input: { ...input, mode: "mut-ref", sharedConversion: false } } } }, "location"],
+    ["wrong view", { ...original, abi: { ...original.abi, targetReceiver: { kind: "input", input: { ...input, parameterCarrier: stringCarrier, sharedConversion: false } } } }, "location"],
   ]) {
     const current = fixture(`export function outer(seed: string) {
       const callback = () => { seed += "!"; return seed.length; }; return callback;
@@ -56,6 +56,43 @@ test("single captured native strings retain inline storage through exact pure bo
     assert.equal(property !== undefined, true, label);
     if (operation !== undefined) current.records.targetOperations.source(property, operation);
     assert.equal(current.select()?.storage, expected, label);
+  }
+});
+
+test("selected native borrowed method receivers retain the same single-owner proof as direct inputs", () => {
+  const borrowed = rustBorrowedStrTargetType();
+  const result = { kind: "source-primitive", name: "int32" };
+  const original = { kind: "provider-operation", operationId: "fixture.string.indexOf", abi: {
+    operationKind: "method", target: { form: "instance-method", method: "index_of" },
+    sourceReceiver: { kind: "receiver", carrier: stringCarrier, declaredCarrier: stringCarrier, disposition: "runtime" },
+    sourceArguments: [], targetGenericArguments: [], dispatchInputs: [],
+    effects: { evaluation: "pure", safety: "safe", invocation: "infallible", awaiting: "not-applicable", errorBoundary: "none" },
+    result: { kind: "sync", rawCarrier: result, carrier: result,
+      conversion: { kind: "identity", sourceCarrier: result, targetCarrier: result, fallible: false } },
+    targetReceiver: { kind: "input", input: { source: { kind: "receiver" }, sourceCarrier: stringCarrier, mode: "value", sharedConversion: true, elementView: "value",
+      parameterCarrier: borrowed, conversion: { kind: "semantic", conversion: { kind: "semantic-conversion", id: "borrowed-str-from-owned-string" },
+        sourceCarrier: stringCarrier, targetCarrier: borrowed, fallible: false } } }, targetArguments: [],
+  } };
+  for (const wrapped of [false, true]) for (const [label, operation, expected] of [
+    ["selected borrowed receiver", original, "borrow-cell"],
+    ["unknown native method", undefined, "location"],
+    ["observable receiver", { ...original, abi: { ...original.abi, effects: { ...original.abi.effects, evaluation: "observable" } } }, "location"],
+    ["fallible receiver", { ...original, abi: { ...original.abi, effects: { ...original.abi.effects, invocation: "fallible" } } }, "location"],
+    ["owned receiver", { ...original, abi: { ...original.abi, targetReceiver: { kind: "input", input: {
+      ...original.abi.targetReceiver.input, parameterCarrier: stringCarrier, sharedConversion: false } } } }, "location"],
+  ]) {
+    const current = fixture(`export function outer(seed: string) {
+      const callback = () => { seed += "!"; return ${wrapped ? "((seed))" : "seed"}.indexOf("7"); }; return callback;
+    }`, { carrier: stringCarrier });
+    let call;
+    const visit = node => {
+      if (current.source.ast.is.IsCallExpression(node)) call = node;
+      current.source.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+    };
+    visit(current.owner);
+    assert.equal(call !== undefined, true, label);
+    if (operation !== undefined) current.records.targetOperations.source(call, operation);
+    assert.equal(current.select()?.storage, expected, `${label}, wrapped=${wrapped}`);
   }
 });
 
