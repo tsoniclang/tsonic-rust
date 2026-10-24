@@ -80,7 +80,7 @@ for (const [name, body, moves] of [
     const parameter = storage.nodes.find(node => ast.is.IsParameterDeclaration(node));
     const references = storage.nodes.filter(node => ast.is.IsIdentifier(node) &&
       ast.parent(node) !== parameter && source.navigation.sourceReferenceFor(node)?.declaration === parameter);
-    const selected = analyzeRustOwnershipFlow({ source, storage, nativeNodes: storage.nodes,
+    const selected = analyzeRustOwnershipFlow({ source, storage, nativeNodes: storage.nodes, sourceCallableFor: () => undefined,
       capturesFor: () => undefined, isOnceCallable: () => false, canMoveStoredField: () => false,
       isOwnedOperationResult: () => false });
     assert.equal(selected.kind, "resolved", "the actual checked source graph closes before read publication");
@@ -107,7 +107,7 @@ for (const captureStorage of ["value", "cell", "borrow-cell", "location"]) {
     const terminal = storage.nodes.find(node => ast.is.IsIdentifier(node) && ast.is.IsReturnStatement(ast.parent(node)));
     assert.equal(declaration !== undefined && closure !== undefined && reference !== undefined && terminal !== undefined, true,
       "the original checked closure and final outer read are both present");
-    const selected = analyzeRustOwnershipFlow({ source, storage, nativeNodes: storage.nodes,
+    const selected = analyzeRustOwnershipFlow({ source, storage, nativeNodes: storage.nodes, sourceCallableFor: () => undefined,
       capturesFor: owner => owner !== closure ? undefined : { receivers: [], receiverFields: [], captures: [{
         declaration, reference, carrier: captureStorage === "cell" ? rustSourcePrimitiveTargetType("float64") : rustStringTargetType(),
         storage: captureStorage,
