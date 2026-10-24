@@ -97,7 +97,7 @@ export function compare(values: readonly string[], expected: string): boolean {
   assert.equal(comparisons.length, 4, "every captured, borrowed, indexed and owned comparison is admitted");
   for (const node of comparisons) {
     for (const operand of [BinaryExpression_Left(ast, node), BinaryExpression_Right(ast, node)]) {
-      const label = ast.text(operand);
+      const label = ast.kindName(operand);
       assert.equal(program.records.stringComparisonView.get(operand)?.kind, "native-str-reference",
         `${label}: native String and str-backed reads have one pre-seal AsRef view`);
     }

@@ -98,7 +98,7 @@ export function inspect(): number { ${initial} ${body} }
   const effect = nodes.find(node => ast.is.IsCallExpression(node) && ast.text(ast.as.AsCallExpression(node).Expression) === "step");
   assert.equal(effect !== undefined && ast.as.AsBinaryExpression(write).Right === effect, true,
     `${name}: the effect remains the exact one source RHS`);
-  const output = rustSourceText(result.artifacts);
+  const output = rustSourceText(result);
   assert.equal((output.match(/step\(\)/gu) ?? []).length, 2, `${name}: one function declaration and one actual evaluation`);
   assert.equal(output.includes('expect(unused_assignments, reason = "checked source evaluation order")'), dead,
     `${name}: only the selected dead store has the existing checked warning disposition`);
@@ -270,7 +270,7 @@ export function inspect(count: int32): int32 {
   if (expectedUnused) {
     const { result } = compileRust({ files: { "index.ts": source } });
     assert.equal(result.diagnostics.length, 0, `${label}: the same source is admitted for native emission`);
-    const output = rustSourceText(result.artifacts);
+    const output = rustSourceText(result);
     assert.match(output, /for _ in /, `${label}: the unobserved counter needs no native binding`);
     assert.doesNotMatch(output, /let index\s*=/, `${label}: no unused float-counter conversion is emitted`);
     assert.match(output, /total/, `${label}: the loop body and its writes remain`);

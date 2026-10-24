@@ -126,9 +126,8 @@ for (const [surface, selected] of surfaces) {
       const { analysis, ast } = analyzeOnly(source, selected);
       assert.equal(analysis?.kind === "rejected", true, `${name}: source analysis rejects`);
       const followers = name === "parenthesized negative overflow" ? ["RUST_INITIALIZER_CARRIER_MISMATCH"]
-        : name === "argument" || name === "generic argument" ? ["RUST_SOURCE_CALL_ARGUMENT_CARRIER_MISSING"]
-          : name === "default argument" ? ["RUST_DEFAULT_PARAMETER_INITIALIZER_CARRIER_UNSUPPORTED"]
-            : name === "switch case" ? ["RUST_SWITCH_CASE_NOT_CLOSED"] : [];
+        : name === "default argument" ? ["RUST_DEFAULT_PARAMETER_INITIALIZER_CARRIER_UNSUPPORTED"]
+          : name === "switch case" ? ["RUST_SWITCH_CASE_NOT_CLOSED"] : [];
       const leaders = surface === "js" && name === "element assignment" ? ["RUST_SELECTED_ASSIGNMENT_UNSUPPORTED"] : [];
       assert.deepEqual(analysis.diagnostics.map(issue => issue.code), [...leaders, rangeCode, ...followers],
         `${name}: complete ordered diagnostic list`);

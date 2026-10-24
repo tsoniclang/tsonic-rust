@@ -2,6 +2,9 @@ import { createRustRecordFixture } from "../../helpers/records.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { selectRustBorrowedIterationBinding } from "../../../dist/analysis/storage/borrowed-iteration-bindings.js";
+import { finalizeRustProviderOperationAbi } from "../../../dist/policy/operations/members/abi/finalize.js";
+import { validateRustFinalizedOperationAbi } from "../../../dist/policy/operations/members/abi/validation.js";
+import { rustStringToBorrowedStrValueConversion } from "../../../dist/target-model/conversions/model.js";
 
 import { rustBorrowedStrTargetType, rustStringTargetType, rustVecTargetType } from "../../../dist/target-model/types/index.js";
 
@@ -117,52 +120,56 @@ test("borrowed loop provider uses require exact compiler-selected pure shared-re
   const read = { kind: "KindPropertyAccessExpression", expression: input.reference, parent: input.body.statements[0] };
   input.reference.parent = read;
   input.body.statements[0].expression = read;
-  read.operation = { kind: "provider-operation", abi: {
-    effects: { evaluation: "pure", safety: "safe" }, result: { kind: "sync" },
-    sourceReceiver: { kind: "required" }, targetReceiver: { kind: "input", input: {
-      mode: "ref", sourceCarrier: input.string, conversion: { kind: "identity" }, source: { kind: "receiver" },
-    } }, targetArguments: [],
-  } };
+  const finalize = (form, options = {}) => {
+    const abi = finalizeRustProviderOperationAbi({ operationKind: "method", form,
+      sourceReceiver: { kind: "runtime", carrier: input.string }, sourceArgumentCarriers: [],
+      resultCarrier: { kind: "source-primitive", name: "int32" }, isAsync: false,
+      isFallible: false, evaluation: "pure", ...options });
+    assert.equal(abi !== undefined && validateRustFinalizedOperationAbi(abi), true,
+      "the native provider input comes from its complete ABI producer and admission");
+    return abi;
+  };
+  const form = { form: "receiver-method", name: "read_length" };
+  read.operation = { kind: "provider-operation", abi: finalize(form) };
   const original = read.operation;
   assert.ok(input.select());
-  for (const operation of [
-    { ...original, abi: { ...original.abi, effects: { evaluation: "observable", safety: "safe" } } },
-    { ...original, abi: { ...original.abi, effects: { evaluation: "pure", safety: "requires-unsafe" } } },
-    { ...original, abi: { ...original.abi, result: { kind: "async" } } },
-    ...["value", "mut-ref"].map(mode => ({ ...original, abi: { ...original.abi,
-      targetReceiver: { kind: "input", input: { ...original.abi.targetReceiver.input, mode } },
-    } })),
-    { ...original, abi: { ...original.abi, targetReceiver: { kind: "input", input: {
-      ...original.abi.targetReceiver.input, conversion: { kind: "clone" },
-    } } } },
+  for (const [label, abi] of [
+    ["observable native read", finalize(form, { evaluation: undefined })],
+    ["unsafe native read", finalize(form, { isUnsafe: true })],
+    ["async native read", finalize(form, { isAsync: true })],
+    ["owned native receiver", finalize({ form: "free-call", path: "read_length", receiverMode: "value" })],
+    ["exclusive native receiver", finalize({ form: "receiver-method", name: "read_length", mutatesReceiver: true }, { evaluation: undefined })],
   ]) {
-    read.operation = operation;
-    assert.equal(input.select(), undefined);
+    read.operation = { ...original, abi };
+    assert.equal(input.select() === undefined, true, label);
   }
-  const sourceInput = original.abi.targetReceiver.input;
+  const clone = { ...original.abi, targetReceiver: { kind: "input", input: {
+    ...original.abi.targetReceiver.input, conversion: { kind: "clone" },
+  } } };
+  assert.equal(validateRustFinalizedOperationAbi(clone), false,
+    "the original forged clone input is refused at native ABI admission, not revalidated by the read consumer");
   const borrowed = rustBorrowedStrTargetType();
-  const semantic = { ...sourceInput, mode: "value", parameterCarrier: borrowed, conversion: {
-    kind: "semantic", conversion: { kind: "semantic-conversion", id: "borrowed-str-from-owned-string" },
-    sourceCarrier: input.string, targetCarrier: borrowed, fallible: false,
-  } };
-  const selectInput = selected => {
-    read.operation = { ...original, abi: { ...original.abi, targetReceiver: { kind: "input", input: selected } } };
-    return input.select();
-  };
-  assert.ok(selectInput(semantic), "exact native borrowed string conversion");
-  for (const selected of [
-    { ...semantic, mode: "ref" },
-    { ...semantic, mode: "mut-ref" },
-    { ...semantic, parameterCarrier: input.string },
-    { ...semantic, conversion: { ...semantic.conversion, fallible: true } },
-    { ...semantic, conversion: { ...semantic.conversion, sourceCarrier: borrowed } },
-    { ...semantic, conversion: { ...semantic.conversion, targetCarrier: input.string } },
-    { ...semantic, conversion: { ...semantic.conversion, conversion: {
+  const convertedAbi = finalize({ form: "free-call", path: "read_length", receiverMode: "value",
+    receiverConversion: rustStringToBorrowedStrValueConversion });
+  const semantic = convertedAbi.targetArguments[0];
+  assert.equal(semantic.source.kind, "receiver", "the actual converted input retains its checked receiver identity");
+  assert.equal(semantic.sharedConversion, true, "the actual ABI producer owns the first native conversion's shared read");
+  read.operation = { ...original, abi: convertedAbi };
+  assert.equal(input.select() !== undefined, true, "exact native borrowed string conversion");
+  for (const [label, selected] of [
+    ["inconsistent shared result mode", { ...semantic, mode: "ref" }],
+    ["inconsistent exclusive result mode", { ...semantic, mode: "mut-ref" }],
+    ["inconsistent native parameter", { ...semantic, parameterCarrier: input.string }],
+    ["forged conversion fallibility", { ...semantic, conversion: { ...semantic.conversion, fallible: true } }],
+    ["inconsistent source carrier", { ...semantic, conversion: { ...semantic.conversion, sourceCarrier: borrowed } }],
+    ["inconsistent target carrier", { ...semantic, conversion: { ...semantic.conversion, targetCarrier: input.string } }],
+    ["opposite native conversion", { ...semantic, conversion: { ...semantic.conversion, conversion: {
       kind: "semantic-conversion", id: "owned-string-from-borrowed-str",
-    } } },
-    { ...semantic, conversion: { ...semantic.conversion, conversion: {
+    } } }],
+    ["optional native conversion", { ...semantic, conversion: { ...semantic.conversion, conversion: {
       kind: "semantic-conversion", id: "borrowed-str-from-optional-string",
-    } } },
-    { ...semantic, conversion: { kind: "sequence", steps: [semantic.conversion] } },
-  ]) assert.equal(selectInput(selected), undefined, "nonborrow or inconsistent native input remains rejected");
+    } } }],
+    ["noncanonical incomplete sequence", { ...semantic, conversion: { kind: "sequence", steps: [semantic.conversion] } }],
+  ]) assert.equal(validateRustFinalizedOperationAbi({ ...convertedAbi, targetArguments: [selected] }), false,
+    `${label}: the original malformed correspondence is rejected before publication`);
 });
