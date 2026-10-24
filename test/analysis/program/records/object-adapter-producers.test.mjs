@@ -283,12 +283,13 @@ function viewFixture(builder, { expression = {}, sourceCarrier = rustStructuralO
     registerStructuralFieldImplementation: () => true,
   }, context: { requiredRecords: [],
     projectTypes: { definitionForCarrier: () => undefined },
-    semanticsFor: () => ({ types: { expressionType: () => sourceType, structuralMembers: () => ({
-      kind: "available", destination: { calls: [], constructs: [], indexes: [] }, members: [{ kind: "present",
+    semanticsFor: () => ({ types: { expressionType: () => sourceType, structuralMembers: (_sourceType, _targetType, purpose) => {
+      assert.equal(purpose, "read", "a published object view requires a readable checked source member");
+      return { kind: "available", destination: { calls: [], constructs: [], indexes: [] }, members: [{ kind: "present",
         source: { property: { symbol: sourceSymbol }, declarations: [sourceDeclaration] },
         destination: { property: { symbol: targetSymbol }, declarations: [targetDeclaration] },
       }],
-    }) } }),
+    }; } } }),
   } };
   return { expression, sourceCarrier, targetCarrier, walk,
     select: () => builder.objectReferenceViews.select(walk, expression, sourceCarrier, targetCarrier) };

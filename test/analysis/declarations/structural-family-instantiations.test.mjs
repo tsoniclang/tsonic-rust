@@ -200,9 +200,10 @@ function fixture() {
   };
   const context = { ast: { kindName: () => "KindPropertySignature", typeNode: () => undefined,
     is: { IsMethodDeclaration: () => false } },
-    currentSemantics: { types: { aliasApplication: () => undefined, structuralMembers(source, destination) {
+    currentSemantics: { types: { aliasApplication: () => undefined, structuralMembers(source, destination, purpose) {
     assert.equal(source, selectedType);
     assert.equal(destination, templateType);
+    assert.equal(purpose, "correspondence", "generic member correspondence does not authorize a physical read");
     return correspondence;
   } } } };
   return { sourceTypes, templateCarrier, selectedCarrier, templateType, selectedType, declarations, selectedSymbols,
@@ -294,7 +295,8 @@ test("structural proof reuse requires both exact source identity and target carr
   let queries = 0;
   const context = { ...input.context, currentSemantics: { types: {
     ...input.context.currentSemantics.types,
-    structuralMembers() {
+    structuralMembers(_source, _destination, purpose) {
+      assert.equal(purpose, "correspondence", "rejected source identity still uses the exact correspondence question");
       queries += 1;
       return { kind: "unavailable" };
     },

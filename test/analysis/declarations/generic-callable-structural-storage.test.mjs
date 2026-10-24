@@ -41,8 +41,9 @@ function fixture() {
     },
     types: {
       aliasApplication: () => undefined,
-      structuralMembers: (source, destination) => {
+      structuralMembers: (source, destination, purpose) => {
         assert.equal(source === sourceType && destination === sourceType, true, "exact structural type owners");
+        assert.equal(purpose, "correspondence", "generic storage retains checked member correspondence without a physical read");
         return correspondence;
       },
     },
@@ -113,7 +114,8 @@ function invocationFixture() {
       ...input.correspondence.members[0].source, property: resultProperty,
     } }],
   };
-  input.semantics.types.structuralMembers = (source, destination) => {
+  input.semantics.types.structuralMembers = (source, destination, purpose) => {
+    assert.equal(purpose, "correspondence", "instantiated callable results retain the exact correspondence question");
     if (source === input.sourceType && destination === input.sourceType) return input.correspondence;
     assert.equal(source === resultType && (destination === input.sourceType || destination === resultType), true,
       "instantiated checker result and retained structural template have exact owners");

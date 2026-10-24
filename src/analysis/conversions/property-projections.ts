@@ -94,7 +94,7 @@ export function selectRustPropertyProjectionCase(
   options: RustOperationsProviderOptions,
   reserve: () => boolean,
 ): RustPropertyProjectionCase | undefined {
-  const correspondence = context.currentSemantics.types.structuralMembers(sourceType, destination);
+  const correspondence = context.currentSemantics.types.structuralMembers(sourceType, destination, "read");
   if (correspondence.kind !== "available" || correspondence.destination.calls.length !== 0 ||
     correspondence.destination.constructs.length !== 0 || correspondence.destination.indexes.length !== 0) return undefined;
   const fields: Extract<RustValueConversion, { readonly kind: "js-value-from-properties" }>["fields"][number][] = [];

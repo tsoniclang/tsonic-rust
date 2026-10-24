@@ -44,7 +44,7 @@ function fixture() {
   const firstType = storage.typeFor(first.subject);
   assert.equal(firstType.kind, "resolved");
   const queries = source.semantics.forFile(file);
-  const relationship = queries.types.structuralMembers(firstType.type, firstType.type);
+  const relationship = queries.types.structuralMembers(firstType.type, firstType.type, "read");
   assert.equal(relationship.kind, "available");
   const members = new Map(relationship.members.map(pair => [pair.source.property.name, pair.source]));
   return { source, file, storage, nodes, queries, members, firstType: firstType.type };

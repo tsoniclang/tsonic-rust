@@ -24,8 +24,9 @@ function fixture() {
   const correspondence = { kind: "available", destination: { calls: [], constructs: [], indexes: [] },
     members: [{ kind: "present", source: member, destination: member }] };
   const context = { typeDefinitions: emptyRustTypeDefinitions, currentSemantics: { types: {
-    structuralMembers(actual, required) {
+    structuralMembers(actual, required, purpose) {
       assert.equal(actual === sourceType && required === destination, true, "exact checked source and destination identity");
+      assert.equal(purpose, "read", "runtime projection requires a readable checked source member");
       return correspondence;
     },
   } } };

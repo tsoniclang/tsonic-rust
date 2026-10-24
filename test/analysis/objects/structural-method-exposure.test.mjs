@@ -147,7 +147,8 @@ export function run(): number {
       .map(field => ({ name: field.sourceName, declaration: context.ast.kindName(field.methodPlan.declaration) })) }))));
   assert.equal(result.diagnostics.length, 0, result.diagnostics.map(diagnostic => diagnostic.message).join("; "));
   for (const shape of shapes) for (const field of shape.fields) if (field.methodPlan?.kind === "fixed") {
-    assert.equal(Object.isFrozen(field.methodPlan.payload), true, "the actual native body has its required published capture payload");
+    assert.equal(field.methodPlan.payload !== undefined && Object.isFrozen(field.methodPlan.payload), true,
+      "the actual native body has its required published capture payload");
     assert.equal(rustStructuralObjectCarrierValue(shape.carrier)?.implementation?.kind, "physical",
       "the original checked method contract publishes the completed physical implementation");
   }
@@ -266,7 +267,8 @@ test("sealed fixed methods publish actual payloads and native factory receiver d
     const asynchronous = program.records.asyncFunction.get(method.declaration);
     assert.equal(asynchronous?.kind === "js-promise" && asynchronous.lowering.kind === lowering, true,
       `${label}: native receiver ownership follows the actual selected completion lifetime`);
-    assert.equal(Object.isFrozen(method.payload), true, `${label}: the final payload is required and immutable`);
+    assert.equal(method.payload !== undefined && Object.isFrozen(method.payload), true,
+      `${label}: the final payload is required and immutable`);
     assert.equal(method.payload.captures.length, captures, `${label}: captures are the actual source domain, not an empty substitute`);
     assert.equal(method.payload.receiverFields.length, 0, `${label}: no unrelated enclosing receiver field is invented`);
     assert.equal(method.payload.receivers.length, 0, `${label}: this is the literal receiver, not an enclosing captured receiver`);

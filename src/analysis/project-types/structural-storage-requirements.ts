@@ -27,7 +27,7 @@ export function createRustStructuralStorageCollector(
     const targetSymbol = semantics.declarations.typeSymbol(target);
     const targetDeclarations = targetSymbol === undefined ? [] : semantics.declarations.symbolDeclarations(targetSymbol);
     if (targetDeclarations.some(declaration => projectTypes.definitionForDeclaration(declaration)?.kind === "class")) return;
-    const correspondence = semantics.types.structuralMembers(source, target);
+    const correspondence = semantics.types.structuralMembers(source, target, "correspondence");
     if (correspondence.kind !== "available" || correspondence.destination.calls.length !== 0 ||
       correspondence.destination.constructs.length !== 0 || correspondence.destination.indexes.length !== 0) return;
     references.add(definitions[0]!.declaration);

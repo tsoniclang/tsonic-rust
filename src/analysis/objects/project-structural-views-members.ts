@@ -33,7 +33,7 @@ export function selectRustProjectStructuralViewSources(
   walk: RustFactWalk, sourceCarrier: TargetTypeRef, target: RustSourceObjectShape,
   semantics: SourceFileSemantics, sourceType: Type,
 ): readonly RustProjectStructuralViewSource[] | undefined {
-  const correspondence = semantics.types.structuralMembers(sourceType, target.sourceType);
+  const correspondence = semantics.types.structuralMembers(sourceType, target.sourceType, "read");
   if (correspondence.kind !== "available" || correspondence.destination.calls.length !== 0 ||
     correspondence.destination.constructs.length !== 0 || correspondence.destination.indexes.length !== 0 ||
     correspondence.members.filter(member => !isRustErasedNominalMember(member.destination.declarations, walk.context.ast)).length !== target.fields.length) return undefined;

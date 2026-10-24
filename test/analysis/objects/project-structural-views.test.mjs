@@ -119,9 +119,12 @@ function structuralFieldSelection({ callable = false, accessor = false, nativeRe
       new Map([[parameter.identity, receiver.value.genericArguments[0].type]])),
   };
   const semantics = { declarations: { declaredType: node => node === declaration ? sourceType : undefined },
-    types: { typeArgumentBindings: () => [], structuralMembers: () => ({ kind: "available", destination: { calls: [], constructs: [], indexes: [] },
+    types: { typeArgumentBindings: () => [], structuralMembers: (_sourceType, _targetType, purpose) => {
+      assert.equal(purpose, "read", "a structural view selects an actual readable native member");
+      return { kind: "available", destination: { calls: [], constructs: [], indexes: [] },
       members: [{ kind: "present", destination: { declarations: [destination], property: { symbol } },
-        source: { read: "field", declarations: [member], getters: [], setters: [], property: { readonly: false } } }] }) } };
+        source: { read: "field", declarations: [member], getters: [], setters: [], property: { readonly: false } } }] };
+    } } };
   // A generalized destination registers its own shape storage as an instance of the view's structural template.
   const registrations = [];
   const sourceTypes = { structuralInstantiations: () => [{ template, instance: carrier }], typeFamilies: { get: () => undefined },
