@@ -192,7 +192,7 @@ test("exact union payload admission is generic and constructs nested native vari
   assert.deepEqual(wholeInner.carrier, inner);
   assert.deepEqual(contract.path.map(step => step.variant.name), ["Nested", "Complete"]);
   const program = rustProgramWithTypeEmissions([source, payloadCarrier, inner, target], {
-    source: "export type Inner = boolean | undefined;\nexport type Outer = Inner | string;\nexport function probe(): void {}\n",
+    source: "export type Inner = boolean;\nexport type Outer = string;\nexport function probe(): void {}\n",
     typeDefinitions: definitions,
   });
   const context = rustProgramPlanContext(program);
