@@ -16,6 +16,10 @@ import { closedMetadataKey } from "../../../dist/target-model/metadata/closed-da
 import { analyzeRust } from "../../helpers/rust-session.mjs";
 import { structuralMemberWritesSource } from "../../../../tsonic/test/fixtures/structural-member-writes.mjs";
 import { rustDeclarationEmissionCarriers } from "../../../dist/analysis/source-evidence/types/emission-inventory.js";
+import { sealRustAnalysisProgram } from "../../../dist/analysis/program/index.js";
+import { createRustPlanningContext } from "../../../dist/backend/planner/context.js";
+import { planRustOutput } from "../../../dist/backend/planner/program/index.js";
+import { planClassDeclaration } from "../../../dist/backend/planner/declarations/classes/planning.js";
 
 for (const surfaces of [[], ["js"]]) {
   test(`complete late TYPE admission includes selected structural native output carriers on ${surfaces[0] ?? "native"}`, () => {
@@ -36,19 +40,25 @@ for (const surfaces of [[], ["js"]]) {
     }
     assert.equal(nativeFields > 0, true, "the positive checks actual emitted native class field storage");
     const nodes = [definition.declaration];
-    const actual = rustDeclarationEmissionCarriers(program, nodes);
+    const collected = new Set(rustDeclarationEmissionCarriers(program, nodes).map(carrier => closedMetadataKey(carrier)));
+    for (const field of emission.fields) assert.equal(collected.has(closedMetadataKey(field.carrier)), true,
+      `the canonical output inventory includes the actual selected native field ${field.sourceName}`);
     const rejected = { ...program, records: { ...program.records,
       nativeClass: Object.freeze({ get: () => undefined }) } };
-    const omitted = new Set(rustDeclarationEmissionCarriers(rejected, nodes).map(carrier => closedMetadataKey(carrier)));
-    const nativeOnly = actual.filter(carrier => !omitted.has(closedMetadataKey(carrier)));
-    assert.equal(nativeOnly.length > 0, true,
-      "omitting the actual native class producer loses its selected output types instead of reconstructing them from source fields");
-    for (const carrier of nativeOnly) {
-      assert.equal(program.records.typeEmission.get(carrier)?.positions !== undefined, true,
-        `every class-only selected output has sealed type evidence; key=${closedMetadataKey(carrier)}`);
-      assert.equal(program.records.optionalStorageTypeArguments.get(carrier) !== undefined, true,
-        `every class-only selected output has its exact optional argument row; key=${closedMetadataKey(carrier)}`);
-    }
+    assert.throws(() => planClassDeclaration(definition.declaration, { input: { program: rejected } }),
+      failure => failure?.diagnostic?.code === "TSONIC_INTERNAL_PLANNER_INVARIANT" &&
+        failure.diagnostic.sourceNode === definition.declaration && failure.diagnostic.message ===
+          "An admitted ordinary class requires its sealed native declaration plan.",
+      "a missing native class producer is refused by its existing output owner before any field can be rendered");
+    const sealed = sealRustAnalysisProgram(program);
+    const records = { ...sealed.records, typeEmission: Object.freeze({ get(carrier) {
+      const selected = sealed.records.typeEmission.get(carrier);
+      assert.equal(selected?.positions !== undefined, true,
+        `every actual native output rendering input has sealed TYPE positions; key=${closedMetadataKey(carrier)}`);
+      return selected;
+    } }) };
+    const planned = planRustOutput(createRustPlanningContext({ ...sealed, records }));
+    assert.equal(planned.kind, "resolved", "the complete actual native output consumes only pre-seal TYPE evidence");
   });
 }
 
