@@ -72,9 +72,12 @@ test("native formals preserve original data and method geometry when their contr
   for (const invalid of [-1, 2, 0.5, Number.NaN])
     assert.equal(rustSourceParameterSupportsMemberWrites(logical, new Set([invalid])), false,
       "invalid original field index is rejected: " + invalid);
-  const direct = rustStructuralObjectTargetType("index.ts", rustStructuralObjectCarrierValue(logical).fields, "value");
+  const direct = rustStructuralObjectTargetType("index.ts", readFields.map(({ accessor: _accessor, ...field }) => field), "value");
   assert.equal(rustSourceParameterSupportsMemberWrites(direct, new Set([1])), true,
     "a native value carrier supports its exact write without a replacement representation");
+  const accessorValue = rustStructuralObjectTargetType("index.ts", readFields, "value");
+  assert.equal(rustSourceParameterSupportsMemberWrites(accessorValue, new Set([1])), false,
+    "a native value carrier cannot acquire an accessor dispatch contract");
   const method = rustCallableTargetType([], value);
   const methods = rustStructuralObjectTargetType("index.ts", [
     { sourceName: "first", type: method, presence: "required", readonly: false, method: true },
@@ -138,8 +141,15 @@ export function replace(owner: Reader): void { const alias = owner; alias.second
   test(`${label} demanded methods retain original member identity and an already-sufficient native ABI`, () => {
     const { context, walk } = analyzeRustOperations(`
 type Reader = { first(): number; second(): number; };
-export function read(owner: Reader): number { return owner.first() + owner.second(); }
-export function replace(owner: Reader): void { const alias = owner; alias.second = () => 9; }
+function read(owner: Reader): number { return owner.first() + owner.second(); }
+function replace(owner: Reader): void { const alias = owner; alias.second = () => 9; }
+export function run(): number {
+  const fixed = { first(): number { return 1; }, second(): number { return 2; } };
+  const changed = { first(): number { return 3; }, second(): number { return 4; } };
+  const before = read(fixed);
+  replace(changed);
+  return before + read(changed);
+}
 `, { surfaces });
     const { ast } = context;
     const declarations = context.sourceStorage.nodes.filter(node => ast.is.IsFunctionDeclaration(node) && ast.body(node) !== undefined);
@@ -178,13 +188,32 @@ export function replace(owner: Reader): void { const alias = owner; alias.second
     assert.equal(context.records.sourceParameterAbi.get(readParameter) === readSelection.abi, true, "the reader retains its exact published ABI");
     assert.equal(context.records.sourceParameterAbi.get(writeParameter) === writeSelection.abi, true, "the writer retains its exact published ABI");
   });
+
+  test(`${label} an open method formal cannot invent a closed physical source producer`, () => {
+    const { result } = compileRust({ surfaces, files: { "index.ts": `
+type Reader = { value(): number; };
+type Other = { value(): number; };
+export function read(owner: Reader): number { return owner.value(); }
+` } });
+    assert.equal(result.diagnostics.length, 1, "the original open formal has one precise native producer refusal");
+    assert.equal(result.diagnostics[0].code, "RUST_CALLABLE_VALUE_NOT_CLOSED",
+      "the open physical producer is rejected at native callable admission");
+    assert.equal(result.diagnostics[0].message,
+      "Retained constructor selection requires its exact admitted source producer domain.",
+      "the original open-domain reason is retained without a guessed implementation");
+    assert.equal(result.artifacts.length, 0, "an unproved native method producer never reaches target emission");
+  });
 }
 
 test("native formal refusal retains the exact unknown and budget reasons and rejects same-spelled foreign members", () => {
   const { context, walk } = analyzeRustOperations(`
 type Reader = { value(): number; };
 type Other = { value(): number; };
-export function read(owner: Reader): number { return owner.value(); }
+function read(owner: Reader): number { return owner.value(); }
+export function run(): number {
+  const owner = { value(): number { return 1; } };
+  return read(owner);
+}
 `);
   const { ast } = context;
   const declaration = context.sourceStorage.nodes.find(node => ast.is.IsFunctionDeclaration(node) && ast.body(node) !== undefined);
