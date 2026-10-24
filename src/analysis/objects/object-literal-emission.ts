@@ -105,6 +105,7 @@ export function analyzeRustObjectLiteralEmission(program: Omit<RustAnalysisProgr
       message: `Closed record construction requires exact ordered data-property and carrier facts. Node kind: ${ast.kindName(node)}.`,
       evidence: ["target.capability=rust.backend.closed-record"] });
   }
+  if (issues.length !== 0) return Object.freeze(issues);
   const modules = new Map<SourceFile, RustObjectLiteralEmissionRequest[]>();
   const structural = (node: Node, carrier: TargetTypeRef, accessorFields: ReadonlySet<number>): RustStructuralLiteralEmission => {
     const shape = program.structuralShapes.templateForCarrier(carrier);
@@ -180,17 +181,17 @@ export function analyzeRustObjectLiteralEmission(program: Omit<RustAnalysisProgr
     const existing = producer.records.objectLiteralEmission.get(node);
     if (existing !== undefined) return existing;
     if (!native.has(node)) return undefined;
+    const sourceFields = sourceFieldsFor(node, fact);
     const project = program.projectTypes.definitionForCarrier(fact.resultCarrier);
     const shape = program.structuralShapes.definitionForCarrier(fact.resultCarrier);
     const form = selectRustObjectLiteralDispatch({ fact, structuralImplementation: shape?.dispatchName !== undefined ||
       shape?.fields.some(field => field.methodPlan?.kind === "fixed") === true,
       polymorphicProject: project !== undefined && program.projectTypes.isPolymorphic(project) });
-    if (form === undefined) return undefined;
-    const sourceFields = sourceFieldsFor(node, fact);
-    const selected: RustObjectLiteralEmission = form === "project"
-      ? Object.freeze({ kind: "project", node, sourceFields, selection: analyzeRustProjectLiteralEmission(program, node, fact, source) })
-      : Object.freeze({ kind: "structural", node, sourceFields, selection: structural(node, fact.resultCarrier, new Set(fact.contributions.flatMap(contribution =>
+    const implementation: RustObjectLiteralEmission["implementation"] = form === undefined ? undefined : form === "project"
+      ? Object.freeze({ kind: "project", selection: analyzeRustProjectLiteralEmission(program, node, fact, source) })
+      : Object.freeze({ kind: "structural", selection: structural(node, fact.resultCarrier, new Set(fact.contributions.flatMap(contribution =>
         contribution.kind === "accessor" && contribution.role === "get" ? [contribution.targetStorageIndex] : []))) });
+    const selected: RustObjectLiteralEmission = Object.freeze({ node, carrier: fact.resultCarrier, sourceFields, implementation });
     producer.literal(node, selected);
     return selected;
   };
@@ -198,7 +199,7 @@ export function analyzeRustObjectLiteralEmission(program: Omit<RustAnalysisProgr
     const fact = program.records.targetOperation.get(node);
     if (native.has(node) && fact?.kind === "record-literal") {
       const selected = literalFor(node, fact);
-      if (selected !== undefined) append(selected);
+      if (selected?.implementation !== undefined) append(Object.freeze({ node, ...selected.implementation }));
     }
     const reference = program.records.objectReferenceEmission.get(node);
     if (native.has(node) && reference?.kind === "structural" && reference.dispatch)

@@ -97,7 +97,7 @@ function construction(text, wrapCaptures = captures => captures, wrapRecords = r
       physical.carrierFor(carrier, ownerFileName, subject, bindings, producers) };
   const genericImplementations = new Set(registry.plan.definitions.flatMap(definition => definition.implementations.map(implementation => implementation.declaration)));
   const native = createRustNativeCallableInputPlan({ ...input, sourcePackages: program.host.sourcePackages, usedNames: new Set(),
-    genericImplementations, ownedRetainedParameter: program.callableValues.native.isNativeRetainedParameter,
+    ownedRetainedParameter: program.callableValues.native.isNativeRetainedParameter,
     declaresGenericInputs: owner => source.ast.is.IsFunctionDeclaration(owner) || source.ast.is.IsMethodDeclaration(owner) ||
       source.ast.is.IsConstructorDeclaration(owner) || source.ast.is.IsGetAccessorDeclaration(owner) ||
       source.ast.is.IsSetAccessorDeclaration(owner) || genericImplementations.has(owner) ||
