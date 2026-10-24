@@ -1,7 +1,7 @@
 import { finalizeRustNativeEmission } from "./emission.js";
 import { rejectedTargetStage, resolvedTargetStage, type TargetStageResult, failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import { snapshotTargetPlanningSourceNavigation, targetSourceSyntaxProgram } from "@tsonic/target-api/analysis";
-import type { SourceLiteralIndex } from "@tsonic/target-api/source";
+import { asSourceNode, type SourceLiteralIndex } from "@tsonic/target-api/source";
 import { analyzeRustProgram } from "./analyze.js";
 import { createRustProgramRecords } from "./records/create.js";
 import type { RustAnalysisRecords } from "../../target-model/records/analysis.js";
@@ -226,6 +226,7 @@ export function analyzeRustAnalysisProgram(
     storage: context.sourceStorage,
     nativeNodes: context.nativeNodes,
     capturesFor,
+    sourceCallableFor: invocation => asSourceNode(records.selectedCall.get(invocation)?.sourceDeclaration, context.ast),
     mayBorrowArgument: (argument, reference) => !projectConstructions.ownsExternalArgument(argument) &&
       rustNativeArgumentBorrowsRead(argument, reference, context.ast, records),
     isInstanceFieldUse: (reference, declaration) => {

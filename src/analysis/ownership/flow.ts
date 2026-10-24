@@ -5,12 +5,13 @@ import { analyzeSourceLiveness, createSourceControlFlow, type SourceControlFlowG
 import { Node_Expression, isSourceCallableBodyBoundary, sourceEnclosingCallable, sourceExpressionResultDisposition, sourceNodesEqual, sourceParameterIsProperty, sourceTransparentExpressionOperand, type TargetSourceProgram } from "@tsonic/target-api/source";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustClosureCaptureFact } from "../../target-model/records/operation-selections.js";
-import type { RustLexicalFunctionQueries } from "../../target-model/records/lexical-functions.js";
+import type { RustLexicalFunctionCapture, RustLexicalFunctionQueries } from "../../target-model/records/lexical-functions.js";
 
 export interface RustOwnershipFlowInput {
   readonly source: TargetSourceProgram;
   readonly storage: SourceStorageQueries;
   readonly nativeNodes: readonly Node[];
+  readonly sourceCallableFor: (invocation: Node) => Node | undefined;
   readonly capturesFor: (closure: Node) => RustClosureCaptureFact | undefined;
   readonly isOnceCallable: (closure: Node) => boolean;
   readonly canMoveStoredField: (field: Node) => boolean;
@@ -29,6 +30,8 @@ export function analyzeRustOwnershipFlow(input: RustOwnershipFlowInput):
   const { ast } = source;
   const movingReads = new Set<Node>();
   const captureTransfers = new Map<Node, ReadonlySet<Node>>();
+  const captureForwarding: { readonly invoker: Node; readonly callee: Node; readonly binding: Node }[] = [];
+  const lexicalReadMoves: { readonly callable: Node; readonly binding: Node; readonly reference: Node }[] = [];
   const capturedStorageBindings = new Set<Node>();
   for (const declaration of input.nativeNodes) {
     if (!isSourceCallableBodyBoundary(ast, declaration) || ast.body(declaration) === undefined) continue;
@@ -41,7 +44,22 @@ export function analyzeRustOwnershipFlow(input: RustOwnershipFlowInput):
   for (const declaration of input.nativeNodes) {
     if (!isSourceCallableBodyBoundary(ast, declaration) || ast.body(declaration) === undefined) continue;
     const selected = createSourceControlFlow(source, declaration, { domain: { kind: "source" }, limits: input.limits });
-    const liveness = selected.kind === "resolved" ? analyzeSourceLiveness(selected.graph, input.limits) : selected;
+    const additionalReads = new Map<number, readonly Node[]>();
+    const nativeInvocations = new Map<number, { readonly declaration: Node;
+      readonly captures: readonly RustLexicalFunctionCapture[]; readonly singleInvocation: boolean }>();
+    if (selected.kind === "resolved") for (const point of selected.graph.points) {
+      if (point.operation.kind !== "evaluate" || point.source === undefined || !ast.is.IsCallExpression(point.source)) continue;
+      const callee = input.sourceCallableFor(point.source);
+      const lexical = callee === undefined ? undefined : input.lexicalFunctions?.forDeclaration(callee);
+      if (lexical?.kind === "unresolved") return { kind: "rejected", diagnostics: [{
+        code: "RUST_OWNERSHIP_FLOW_UNRESOLVED", category: "error", source: "tsonic-rust",
+        message: lexical.reason, sourceNode: point.source, evidence: ["target.capability=rust.analysis.ownership"],
+      }] };
+      if (callee === undefined || lexical?.kind !== "resolved" || lexical.valueObserved) continue;
+      additionalReads.set(point.id, Object.freeze(lexical.captures.map(capture => capture.declaration)));
+      nativeInvocations.set(point.id, { declaration: callee, captures: lexical.captures, singleInvocation: lexical.singleInvocation });
+    }
+    const liveness = selected.kind === "resolved" ? analyzeSourceLiveness(selected.graph, additionalReads, input.limits) : selected;
     if (liveness.kind === "unresolved") return { kind: "rejected", diagnostics: [{
       code: "RUST_OWNERSHIP_FLOW_UNRESOLVED", category: "error", source: "tsonic-rust",
       message: liveness.reason, sourceNode: liveness.source ?? declaration,
@@ -54,11 +72,28 @@ export function analyzeRustOwnershipFlow(input: RustOwnershipFlowInput):
     for (const point of graph.points) if (point.operation.kind === "read" && point.source !== undefined &&
       liveness.reachable.has(point.id) && sourceEnclosingCallable(point.source, ast) === declaration &&
       sourceExpressionResultDisposition(ast, point.source).kind === "awaited-in-scope") awaitedReads.add(point.source);
+    const lexicalOwner = input.lexicalFunctions?.forDeclaration(declaration);
     const ownedCaptures = new Set((input.capturesFor(declaration)?.captures ?? [])
-      .filter(capture => capture.storage === "value").map(capture => capture.declaration));
+      .filter(capture => capture.storage === "value" && !(lexicalOwner?.kind === "resolved" && !lexicalOwner.valueObserved &&
+        lexicalOwner.captures.some(selected => selected.mutable && sourceNodesEqual(ast, selected.declaration, capture.declaration))))
+      .map(capture => capture.declaration));
     for (const point of graph.points) {
       if (!liveness.reachable.has(point.id) || point.source === undefined) continue;
+      const invocation = nativeInvocations.get(point.id);
+      if (invocation?.singleInvocation) for (const capture of invocation.captures) {
+        const binding = capture.declaration;
+        if (capture.mutable || input.capturesFor(invocation.declaration)?.captures.some(selected =>
+          selected.storage === "value" && sourceNodesEqual(ast, selected.declaration, binding)) !== true ||
+          liveness.after.get(point.id)!.has(binding) || invocationBorrowsBinding(point.source, binding, input)) continue;
+        if (bindingCanTransfer(binding, declaration, input, awaitedReads, capturedStorageBindings)) {
+          captureTransfers.set(invocation.declaration, new Set([...captureTransfers.get(invocation.declaration) ?? [], binding]));
+        } else if (input.isOnceCallable(declaration) && ownedCaptures.has(binding)) {
+          captureForwarding.push({ invoker: declaration, callee: invocation.declaration, binding });
+        }
+      }
       if (point.operation.kind === "capture") {
+        const lexical = input.lexicalFunctions?.forDeclaration(point.source);
+        if (lexical?.kind === "resolved" && !lexical.valueObserved) continue;
         const capture = input.capturesFor(point.source)?.captures.find(value =>
           sourceNodesEqual(ast, value.declaration, point.operation.kind === "capture" ? point.operation.binding : undefined));
         if (capture === undefined || capture.storage !== "value" ||
@@ -69,14 +104,21 @@ export function analyzeRustOwnershipFlow(input: RustOwnershipFlowInput):
         captureTransfers.set(point.source, transferred);
       } else if (point.operation.kind === "read" && liveness.lastUses.has(point.source) &&
         !isFunctionScopedLoopRead(point.source, point.operation.binding, input) &&
-        !hasOverlappingArgumentBorrow(point.source, point.operation.binding, input) &&
-        (bindingCanTransfer(point.operation.binding, declaration, input, awaitedReads, capturedStorageBindings) ||
-          input.isOnceCallable(declaration) && ownedCaptures.has(point.operation.binding))) {
-        movingReads.add(point.source);
+        !hasOverlappingArgumentBorrow(point.source, point.operation.binding, input)) {
+        if (bindingCanTransfer(point.operation.binding, declaration, input, awaitedReads, capturedStorageBindings)) {
+          movingReads.add(point.source);
+        } else if (input.isOnceCallable(declaration) && ownedCaptures.has(point.operation.binding)) {
+          if (lexicalOwner?.kind === "resolved" && !lexicalOwner.valueObserved) {
+            lexicalReadMoves.push({ callable: declaration, binding: point.operation.binding, reference: point.source });
+          } else movingReads.add(point.source);
+        }
       }
     }
   }
-  if (input.lexicalFunctions !== undefined) transferInvokedLexicalCaptures(input, input.lexicalFunctions, captureTransfers);
+  transferInvokedLexicalCaptures(captureForwarding, captureTransfers);
+  for (const read of lexicalReadMoves) {
+    if (captureTransfers.get(read.callable)?.has(read.binding) === true) movingReads.add(read.reference);
+  }
   for (const node of input.nativeNodes) {
     if (sourceParameterIsProperty(ast, node)) {
       const summary = source.navigation.declarationUseSummary(node);
@@ -100,49 +142,33 @@ export function analyzeRustOwnershipFlow(input: RustOwnershipFlowInput):
   return { kind: "resolved", flow: Object.freeze({ movingReads, captureTransfers, regions: Object.freeze(regions) }) };
 }
 
-// A lexical function that is not observed as a value receives its captures as arguments at its invocations. Its
-// declaration-site capture point in the enclosing region is therefore not where the binding is consumed. When such a
-// function is invoked exactly once, from one once-called lexical invoker that itself received the binding by move, and
-// that invoker uses the binding only by making this invocation, the invoker passes its owned capture on by move.
-// Chains (outer -> through -> read) close by repeating until no capture gains a transfer.
 function transferInvokedLexicalCaptures(
-  input: RustOwnershipFlowInput,
-  lexical: Pick<RustLexicalFunctionQueries, "forDeclaration" | "calleesFor">,
+  forwarding: readonly { readonly invoker: Node; readonly callee: Node; readonly binding: Node }[],
   captureTransfers: Map<Node, ReadonlySet<Node>>,
 ): void {
-  const { ast, navigation } = input.source;
-  const invokers = new Map<Node, Node[]>();
-  for (const declaration of input.nativeNodes) {
-    for (const callee of lexical.calleesFor(declaration)) {
-      const owners = invokers.get(callee) ?? [];
-      if (!owners.includes(declaration)) owners.push(declaration);
-      invokers.set(callee, owners);
-    }
-  }
-  const capturesBinding = (callable: Node, binding: Node): boolean => (input.capturesFor(callable)?.captures ?? [])
-    .some(capture => sourceNodesEqual(ast, capture.declaration, binding));
   let changed = true;
   while (changed) {
     changed = false;
-    for (const [callee, owners] of invokers) {
-      const selected = lexical.forDeclaration(callee);
-      if (selected?.kind !== "resolved" || selected.valueObserved || !selected.singleInvocation || owners.length !== 1) continue;
-      const invoker = owners[0]!;
-      if (!input.isOnceCallable(invoker)) continue;
-      for (const capture of input.capturesFor(callee)?.captures ?? []) {
-        const binding = capture.declaration;
-        if (capture.storage !== "value" || captureTransfers.get(callee)?.has(binding) === true ||
-          captureTransfers.get(invoker)?.has(binding) !== true ||
-          !(input.capturesFor(invoker)?.captures ?? []).some(owned => owned.storage === "value" &&
-            sourceNodesEqual(ast, owned.declaration, binding)) ||
-          navigation.declarationUses(binding).some(use => use.kind !== "source-linkage" && use.kind !== "type-only" &&
-            sourceEnclosingCallable(use.reference, ast) === invoker) ||
-          lexical.calleesFor(invoker).some(other => other !== callee && capturesBinding(other, binding))) continue;
-        captureTransfers.set(callee, new Set([...captureTransfers.get(callee) ?? [], binding]));
-        changed = true;
-      }
+    for (const { invoker, callee, binding } of forwarding) {
+      if (captureTransfers.get(invoker)?.has(binding) !== true || captureTransfers.get(callee)?.has(binding) === true) continue;
+      captureTransfers.set(callee, new Set([...captureTransfers.get(callee) ?? [], binding]));
+      changed = true;
     }
   }
+}
+
+function invocationBorrowsBinding(invocation: Node, binding: Node, input: RustOwnershipFlowInput): boolean {
+  if (input.mayBorrowArgument === undefined) return false;
+  const { ast, navigation } = input.source;
+  const arguments_ = new Set(ast.arguments(invocation));
+  return navigation.declarationUses(binding).some(use => {
+    if (use.kind === "source-linkage" || use.kind === "type-only") return false;
+    for (let node: Node | undefined = use.reference; node !== undefined && !isSourceCallableBodyBoundary(ast, node); node = ast.parent(node)) {
+      if (arguments_.has(node)) return input.mayBorrowArgument!(node, use.reference);
+      if (node === invocation) return false;
+    }
+    return false;
+  });
 }
 
 function bindingCanTransfer(binding: Node, callable: Node, input: RustOwnershipFlowInput,

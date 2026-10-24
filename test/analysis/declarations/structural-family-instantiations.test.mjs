@@ -232,21 +232,22 @@ test("native dispatch shares only implicit method receiver storage, never callab
     method("explicit", explicit), method("nested", nested),
   ]);
   const fields = storage => rustStructuralObjectCarrierValue(rustStructuralGenericCarrier(source, storage).carrier).fields;
-  const dispatch = fields("dispatch").map(value => rustCallableProtocol(value.type));
-  const stored = fields("fields").map(value => rustCallableProtocol(value.type));
-  assert.equal(rustLifetimesEqual(dispatch[0].lifetime, dispatch[1].lifetime), true,
+  const protocols = storage => new Map(fields(storage).map(value => [value.sourceName, rustCallableProtocol(value.type)]));
+  const dispatch = protocols("dispatch");
+  const stored = protocols("fields");
+  assert.equal(rustLifetimesEqual(dispatch.get("first").lifetime, dispatch.get("second").lifetime), true,
     "both native methods retain the same actual erased receiver environment");
-  assert.equal(rustLifetimesEqual(dispatch[0].lifetime, dispatch[4].lifetime), true,
+  assert.equal(rustLifetimesEqual(dispatch.get("first").lifetime, dispatch.get("nested").lifetime), true,
     "a result callable does not create an independent lifetime for the shared receiver");
-  assert.equal(rustLifetimesEqual(dispatch[0].lifetime, dispatch[2].lifetime), false,
+  assert.equal(rustLifetimesEqual(dispatch.get("first").lifetime, dispatch.get("stored").lifetime), false,
     "a callable data field keeps its separate stored-value lifetime even with the identical source callable type");
-  assert.equal(rustLifetimesEqual(dispatch[3].lifetime, borrowed), true, "an authored native lifetime retains its exact identity");
-  assert.equal(rustLifetimesEqual(rustCallableProtocol(dispatch[4].result).lifetime, borrowed), true,
+  assert.equal(rustLifetimesEqual(dispatch.get("explicit").lifetime, borrowed), true, "an authored native lifetime retains its exact identity");
+  assert.equal(rustLifetimesEqual(rustCallableProtocol(dispatch.get("nested").result).lifetime, borrowed), true,
     "a genuine returned callable lifetime stays in the native method ABI");
-  assert.equal(rustLifetimesEqual(stored[0].lifetime, stored[1].lifetime), false,
+  assert.equal(rustLifetimesEqual(stored.get("first").lifetime, stored.get("second").lifetime), false,
     "ordinary fields keep their independently captured callable environments");
-  const original = rustStructuralObjectCarrierValue(source).fields.map(value => rustCallableProtocol(value.type));
-  assert.equal(original[0].lifetime.kind, "placeholder", "native storage selection never rewrites the logical checked contract");
+  const original = rustStructuralObjectCarrierValue(source).fields.find(value => value.sourceName === "first");
+  assert.equal(rustCallableProtocol(original.type).lifetime.kind, "placeholder", "native storage selection never rewrites the logical checked contract");
 });
 
 test("nested structural family storage retains exact child definitions and independent argument positions", () => {
