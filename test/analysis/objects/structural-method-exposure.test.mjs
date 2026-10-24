@@ -208,15 +208,21 @@ test("only an actual retained factory receiver or physical context requires nati
 });
 
 test("sealed fixed methods publish actual payloads and native factory receiver decisions", () => {
-  for (const [label, source, expected, captures] of [
-    ["no receiver or captures", "export function create() { return { async answer(): Promise<number> { return 7; } }; }", "shared", 0],
-    ["receiver state", "export function create() { return { value: 7, async answer(): Promise<number> { return this.value; } }; }", "value", 0],
-    ["physical context without this", "export function create(value: number) { return { async answer(): Promise<number> { return value; } }; }", "value", 1],
+  for (const [label, source, expected, captures, lowering] of [
+    ["settled without receiver or captures", "export function create() { return { async answer(): Promise<number> { return 7; } }; }", "shared", 0, "settled"],
+    ["settled receiver state", "export function create() { return { value: 7, async answer(): Promise<number> { return this.value; } }; }", "shared", 0, "settled"],
+    ["settled physical context without this", "export function create(value: number) { return { async answer(): Promise<number> { return value; } }; }", "shared", 1, "settled"],
+    ["factory without receiver or captures", "export function create() { return { async answer(pending: Promise<number>): Promise<number> { await pending; return 7; } }; }", "shared", 0, "factory"],
+    ["factory receiver state", "export function create() { return { value: 7, async answer(pending: Promise<number>): Promise<number> { await pending; return this.value; } }; }", "value", 0, "factory"],
+    ["factory physical context without this", "export function create(value: number) { return { async answer(pending: Promise<number>): Promise<number> { await pending; return value; } }; }", "value", 1, "factory"],
   ]) {
     const { program } = analyzeRust({ surfaces: ["js"], files: { "index.ts": source } });
     const shape = program.structuralShapes.definitions.find(definition => definition.fields.some(field => field.sourceName === "answer"));
     const method = shape?.fields.find(field => field.sourceName === "answer")?.methodPlan;
     assert.equal(method?.kind, "fixed", `${label}: the actual checked native body remains concrete`);
+    const asynchronous = program.records.asyncFunction.get(method.declaration);
+    assert.equal(asynchronous?.kind === "js-promise" && asynchronous.lowering.kind === lowering, true,
+      `${label}: native receiver ownership follows the actual selected completion lifetime`);
     assert.equal(Object.isFrozen(method.payload), true, `${label}: the final payload is required and immutable`);
     assert.equal(method.payload.captures.length, captures, `${label}: captures are the actual source domain, not an empty substitute`);
     assert.equal(method.payload.receiverFields.length, 0, `${label}: no unrelated enclosing receiver field is invented`);

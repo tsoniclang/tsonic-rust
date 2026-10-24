@@ -525,12 +525,12 @@ export function createRustStructuralMethodStorage(input: {
       const literals: { readonly definition: RustStructuralMethodShape; readonly carrier: TargetTypeRef }[] = [];
       for (const node of input.nativeNodes) {
         const operation = records.targetOperation.get(node);
-        if (operation?.kind !== "record-literal" || operation.storage !== "structural-object" ||
-          rustStructuralObjectCarrierValue(operation.resultCarrier)?.implementation === undefined) continue;
-        const physical = input.nativeStorage.valueFor(node);
-        if (physical.kind === "unresolved") return reject(node, physical.reason);
+        if (operation?.kind !== "record-literal" || operation.storage !== "structural-object") continue;
         const definition = structuralShapes.definitionForCarrier(operation.resultCarrier);
         if (definition === undefined) failTargetAnalysisInvariant("tsonic-rust", "An admitted structural literal requires its original checked layout owner.", node);
+        if (!definition.fields.some(field => field.methodPlan?.kind === "fixed")) continue;
+        const physical = input.nativeStorage.valueFor(node);
+        if (physical.kind === "unresolved") return reject(node, physical.reason);
         literals.push({ definition, carrier: physical.carrier });
       }
       for (const definition of structuralShapes.definitions) {

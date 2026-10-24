@@ -123,7 +123,7 @@ function physicalConstruction(checked, { unavailableReturns = new Set(), constru
   physical = createRustGenericCallablePhysicalPlan(generic.definitions, generic.definitionFor, {
     ast, lifetimes: input.lifetimes, storage: sourceStorage, captures, native, boundSubjectFor: queries.boundSubjectFor,
   });
-  for (const producer of producers.producers) queries.prepareReturn(producer.declaration);
+  if (constructionErrorsReady) for (const producer of producers.producers) queries.prepareReturn(producer.declaration);
   const storage = finalizeRustNativeParameterStorage({ ast, storage: sourceStorage, nativeNodes: input.nativeNodes, records }, queries);
   const occurrences = prepareRustProviderSourceOccurrences({ ast, records, nodes: input.nativeNodes,
     isNativeNode: input.isNativeNode, semantics: sourceStorage.source.semantics });
@@ -250,7 +250,12 @@ test("all four required runtime roles materialize the exact original checked sub
   assert.equal(Object.isFrozen(lifecycle.prepared), true, "the early view contains readonly lookup-only data, not construction methods");
   for (const request of requests) {
     const method = request.kind === "invocation" ? "invocationCallableFor" : `${request.kind}For`;
-    assert.equal(lifecycle.prepared[method](request.subject).kind, request.kind === "invocation" ? "selected" : "unresolved",
+    const prepared = lifecycle.prepared[method](request.subject);
+    if (request.kind === "return") {
+      const original = current.input([]).nativeStorage.returnFor(request.subject);
+      assert.equal(original.kind !== "unresolved" && prepared === original, true,
+        "the actual producer return prerequisite was already completed while its physical family was open");
+    } else assert.equal(prepared.kind, request.kind === "invocation" ? "selected" : "unresolved",
       `${request.kind}: only the actual quantified invocation is admitted while family construction is open`);
     assert.equal(lifecycle.prepared[method](current.metadata).kind, "unresolved",
       `${request.kind}: unrelated checked metadata never becomes an attempted runtime selection`);
