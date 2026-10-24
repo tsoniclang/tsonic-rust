@@ -141,6 +141,45 @@ function run(value: number): void {
   }
 });
 
+for (const surfaces of [[], ["js"]]) {
+  test(`immutable native String loads keep their pointee lease across later reads on ${surfaces[0] ?? "native"}`, () => {
+    const { program } = analyzeRust({ surfaces, files: { "index.ts": `
+import type { Mut, Ref } from "@tsonic/rust/types.js";
+import { load, store } from "@tsonic/rust/lang.js";
+export function equal(left: Ref<string>, right: Ref<string>): boolean { return load(left) === load(right); }
+export function changing(target: Mut<string>, replacement: string): boolean {
+  return load(target) === (store(target, replacement), "changed");
+}
+` } });
+    const { ast } = program.source;
+    const comparisons = [];
+    const visit = node => {
+      if (ast.is.IsBinaryExpression(node) && program.records.targetOperation.get(node)?.kind === "operator-token" &&
+        ast.is.IsCallExpression(ast.as.AsBinaryExpression(node).Left)) comparisons.push(ast.as.AsBinaryExpression(node));
+      ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+    };
+    program.sourceFiles.forEach(visit);
+    assert.equal(comparisons.length, 2, "both immutable and genuinely mutable native source intervals are selected");
+    for (const comparison of comparisons) {
+      const load = program.records.targetOperation.get(comparison.Left);
+      assert.equal(load?.kind, "reference-operation", "the selected left operand is its real native reference load");
+      const immutable = !load.operandCarrier.mutable;
+      const read = program.records.readOwnership.get(comparison.Left);
+      assert.equal(read?.borrowedAcross.has(comparison.Right), immutable,
+        "only the immutable native String pointee lease can span this later operand");
+      if (immutable) {
+        assert.equal(read.value.kind, "borrow", "a shared observation does not materialize an owning String copy");
+        assert.equal(read.source.kind, "borrow", "the native source view remains the original immutable pointee");
+        assert.equal(program.records.referenceOperation.get(comparison.Left)?.recipe.form, "reference",
+          "the sole late load recipe consumes that already-selected native borrow");
+      } else {
+        assert.equal(program.records.referenceOperation.get(comparison.Left)?.recipe.form === "reference", false,
+          "a later store into the mutable pointee cannot retain the old shared view");
+      }
+    }
+  });
+}
+
 test("repeated native reference loads and stores reach their real sealed ownership and write plans", () => {
   const { program } = analyzeRust({ files: { "index.ts": `
 import type { int32 } from "@tsonic/core/types.js";
