@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { createTargetSourceProgram } from "@tsonic/target-api/source";
+import { createSourceStorageQuery } from "@tsonic/target-api/analysis";
 import { createRustSourceCallableAbiResolver } from "../../../dist/analysis/callables/source-callable-abi.js";
 import { rustCallableTargetType, rustSourcePrimitiveTargetType, rustStructuralObjectTargetType, rustStructuralObjectCarrierValue } from "../../../dist/target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
@@ -72,12 +74,28 @@ test("native formals preserve original data and method geometry when their contr
   for (const invalid of [-1, 2, 0.5, Number.NaN])
     assert.equal(rustSourceParameterSupportsMemberWrites(logical, new Set([invalid])), false,
       "invalid original field index is rejected: " + invalid);
-  const direct = rustStructuralObjectTargetType("index.ts", readFields.map(({ accessor: _accessor, ...field }) => field), "value");
+  const direct = rustStructuralObjectTargetType("index.ts", [
+    { sourceName: "first", type: value, presence: "required", readonly: false },
+    { sourceName: "second", type: value, presence: "required", readonly: false },
+  ], "value");
+  const directFields = rustStructuralObjectCarrierValue(direct)?.fields;
+  assert.equal(directFields?.length, 2, "the independent native-value positive has a valid required-field domain");
   assert.equal(rustSourceParameterSupportsMemberWrites(direct, new Set([1])), true,
     "a native value carrier supports its exact write without a replacement representation");
-  const accessorValue = rustStructuralObjectTargetType("index.ts", readFields, "value");
+  const accessorValue = rustStructuralObjectTargetType("index.ts", [
+    directFields[0], { ...directFields[1], accessor: { getter: true, setter: true } },
+  ], "value");
+  assert.equal(rustStructuralObjectCarrierValue(accessorValue) === undefined, true,
+    "an accessor alone is outside the native-value domain even when both fields are required");
   assert.equal(rustSourceParameterSupportsMemberWrites(accessorValue, new Set([1])), false,
     "a native value carrier cannot acquire an accessor dispatch contract");
+  const optionalValue = rustStructuralObjectTargetType("index.ts", [
+    directFields[0], { ...directFields[1], presence: "optional" },
+  ], "value");
+  assert.equal(rustStructuralObjectCarrierValue(optionalValue) === undefined, true,
+    "optional presence alone is outside the native-value domain without an accessor");
+  assert.equal(rustSourceParameterSupportsMemberWrites(optionalValue, new Set([1])), false,
+    "a native value carrier cannot acquire an optional source slot");
   const method = rustCallableTargetType([], value);
   const methods = rustStructuralObjectTargetType("index.ts", [
     { sourceName: "first", type: method, presence: "required", readonly: false, method: true },
@@ -86,7 +104,7 @@ test("native formals preserve original data and method geometry when their contr
   assert.equal(rustSourceParameterSupportsMemberWrites(methods, new Set()), true,
     "a no-write method formal validates its original native contract");
   assert.equal(rustSourceParameterSupportsMemberWrites(methods, new Set([0])), true,
-    "a demanded native method validates the original already-writable contract");
+    "the original declaration permits the method write; actual native slot admission is separate");
   assert.equal(rustStructuralObjectCarrierValue(methods).fields[1].readonly, false,
     "a write demand never gratuitously rewrites an unrelated method contract");
 });
@@ -138,42 +156,49 @@ export function replace(owner: Reader): void { const alias = owner; alias.second
     assert.equal(context.records.sourceParameterAbi.get(writeParameter) === writeSelection.abi, true, "body bindings retain the published writer ABI identity");
   });
 
-  test(`${label} demanded methods retain original member identity and an already-sufficient native ABI`, () => {
+  test(`${label} closed method formals preserve original checked identity under exact declared write demand`, () => {
     const { context, walk } = analyzeRustOperations(`
 type Reader = { first(): number; second(): number; };
 function read(owner: Reader): number { return owner.first() + owner.second(); }
-function replace(owner: Reader): void { const alias = owner; alias.second = () => 9; }
 export function run(): number {
-  const fixed = { first(): number { return 1; }, second(): number { return 2; } };
-  const changed = { first(): number { return 3; }, second(): number { return 4; } };
-  const before = read(fixed);
-  replace(changed);
-  return before + read(changed);
+  const owner = { first(): number { return 1; }, second(): number { return 2; } };
+  return read(owner);
 }
 `, { surfaces });
     const { ast } = context;
     const declarations = context.sourceStorage.nodes.filter(node => ast.is.IsFunctionDeclaration(node) && ast.body(node) !== undefined);
     const read = declarations.find(node => ast.text(ast.name(node)) === "read");
-    const replace = declarations.find(node => ast.text(ast.name(node)) === "replace");
-    assert.equal(read !== undefined && replace !== undefined, true, "both genuine method-bearing implementation bodies exist");
+    assert.equal(read !== undefined, true, "the actual closed method reader has an implementation body");
     const readParameter = ast.parameters(read)[0];
-    const writeParameter = ast.parameters(replace)[0];
     const readDemand = context.sourceStorage.formalMemberWriteDemand(read, readParameter);
-    const writeDemand = context.sourceStorage.formalMemberWriteDemand(replace, writeParameter);
     assert.equal(readDemand.kind, "complete", "the reader has complete shared write-demand evidence");
     assert.equal(readDemand.members.length, 0, "a reader is not polluted by a sibling writer's demand");
-    assert.equal(writeDemand.kind, "complete", "the qualified local alias has complete shared write-demand evidence");
-    assert.equal(writeDemand.members.length, 1, "the alias demands exactly its original written method");
     const readSelection = walk.sourceCallableAbi.resolveParameterAbi(readParameter, rustResolutionContext(walk, readParameter), walk.operationOptions);
-    const writeSelection = walk.sourceCallableAbi.resolveParameterAbi(writeParameter, rustResolutionContext(walk, writeParameter), walk.operationOptions);
     assert.equal(readSelection?.kind, "resolved", "the actual no-write method formal has an admitted native ABI");
-    assert.equal(writeSelection?.kind, "resolved", "the actual demanded method formal has an admitted native ABI");
     const readShape = walk.sourceTypes.structuralObjectForCarrier(readSelection.abi.valueCarrier);
+    const declared = readShape.fields.find(field => field.sourceName === "second");
+    assert.equal(declared?.method === true && declared.declarations.length === 1 && declared.symbols.length !== 0, true,
+      "the declaration permission control uses the exact checked method and its original Symbol");
+    let queries = 0;
+    const resolver = createRustSourceCallableAbiResolver({
+      isNativeCallableExpression: walk.moduleBindings.isNativeCallableExpression,
+      parameterAbiFor: () => undefined,
+    });
+    const original = rustResolutionContext(walk, readParameter);
+    const writeSelection = resolver.resolveParameterAbi(readParameter, { ...original, sourceStorage: { ...context.sourceStorage,
+      formalMemberWriteDemand(owner, parameter) {
+        assert.equal(owner === read && parameter === readParameter, true, "the permission query retains the actual implementation and formal");
+        queries++;
+        return Object.freeze({ kind: "complete", members: Object.freeze([declared.declarations[0]]) });
+      },
+    } }, walk.operationOptions);
+    assert.equal(writeSelection?.kind, "resolved", "exact declared write permission does not invent or require a replacement ABI");
+    assert.equal(queries, 1, "declared method permission reads the existing shared summary exactly once");
     const writeShape = walk.sourceTypes.structuralObjectForCarrier(writeSelection.abi.valueCarrier);
     const written = writeShape.fields.find(field => field.sourceName === "second");
     assert.equal(written?.method, true, "the demand targets the actual native method, not an unrelated data field");
-    assert.equal(written.readonly, false, "the demanded native method remains writable");
-    assert.equal(written.declarations.includes(writeDemand.members[0]), true, "the shared demand retains its exact original member declaration");
+    assert.equal(written.readonly, false, "the declared method permission remains unchanged, not native slot proof");
+    assert.equal(written.declarations.includes(declared.declarations[0]), true, "the shared demand retains its exact original member declaration");
     assert.equal(readShape.sourceType === writeShape.sourceType, true, "the two method uses retain one checked source identity");
     assert.equal(readShape.fields.every((field, index) => field.declarations.length === writeShape.fields[index].declarations.length &&
       field.declarations.every((declaration, memberIndex) => declaration === writeShape.fields[index].declarations[memberIndex]) &&
@@ -184,24 +209,51 @@ export function run(): number {
     assert.equal(rustTargetTypeRefEquals(canonical.carrier, readSelection.abi.valueCarrier), true,
       "a no-write method formal retains its original native contract");
     assert.equal(rustTargetTypeRefEquals(canonical.carrier, writeSelection.abi.valueCarrier), true,
-      "an already-sufficient writable method contract is not replaced by a narrower facet");
-    assert.equal(context.records.sourceParameterAbi.get(readParameter) === readSelection.abi, true, "the reader retains its exact published ABI");
-    assert.equal(context.records.sourceParameterAbi.get(writeParameter) === writeSelection.abi, true, "the writer retains its exact published ABI");
+      "declared write permission does not create a native facet or claim physical write admission");
+    assert.equal(writeSelection.abi.mode, readSelection.abi.mode, "declared permission preserves native passing mode");
+    assert.equal(writeSelection.abi.form, readSelection.abi.form, "declared permission preserves the original required/default/rest form");
+    assert.equal(rustTargetTypeRefEquals(writeSelection.abi.parameterCarrier, readSelection.abi.parameterCarrier), true,
+      "declared permission preserves the exact physical parameter header and native lifetime");
+    assert.equal(context.records.sourceParameterAbi.get(readParameter) === readSelection.abi, true,
+      "a unit permission query cannot replace the actual closed program's published ABI");
   });
 
-  test(`${label} an open method formal cannot invent a closed physical source producer`, () => {
-    const { result } = compileRust({ surfaces, files: { "index.ts": `
-type Reader = { value(): number; };
-type Other = { value(): number; };
-export function read(owner: Reader): number { return owner.value(); }
+  test(`${label} shared-formal method replacement has one precise Rust v1 write-admission refusal`, () => {
+    const { result, source } = compileRust({ surfaces, files: { "index.ts": `
+type Reader = { first(): number; second(): number; };
+export function read(owner: Reader): number { return owner.first() + owner.second(); }
+export function replace(owner: Reader): void { const alias = owner; alias.second = () => 9; }
 ` } });
-    assert.equal(result.diagnostics.length, 1, "the original open formal has one precise native producer refusal");
-    assert.equal(result.diagnostics[0].code, "RUST_CALLABLE_VALUE_NOT_CLOSED",
-      "the open physical producer is rejected at native callable admission");
+    const checked = createTargetSourceProgram(source);
+    const storage = createSourceStorageQuery(checked, checked.sourceFiles);
+    const { ast } = checked;
+    const read = storage.nodes.find(node => ast.is.IsFunctionDeclaration(node) && ast.text(ast.name(node)) === "read");
+    const replace = storage.nodes.find(node => ast.is.IsFunctionDeclaration(node) && ast.text(ast.name(node)) === "replace");
+    const reader = storage.nodes.find(node => ast.is.IsTypeAliasDeclaration(node) && ast.text(ast.name(node)) === "Reader");
+    assert.equal(read !== undefined && replace !== undefined && reader !== undefined, true,
+      "the original complete read/write program retains its actual checked declarations");
+    const readDemand = storage.formalMemberWriteDemand(read, ast.parameters(read)[0]);
+    const writeDemand = storage.formalMemberWriteDemand(replace, ast.parameters(replace)[0]);
+    const member = ast.members(ast.typeNode(reader)).find(node => ast.text(ast.name(node)) === "second");
+    assert.equal(readDemand.kind === "complete" && readDemand.members.length === 0, true,
+      "the original source reader has no sibling write demand");
+    assert.equal(writeDemand.kind === "complete" && writeDemand.members.length === 1 && writeDemand.members[0] === member, true,
+      "the actual qualified alias demands exactly the original checked method Node");
+    const symbol = checked.navigation.declarationSymbol(member, ast.getSourceFile(member));
+    assert.equal(symbol !== undefined && checked.navigation.declarationSymbol(writeDemand.members[0], ast.getSourceFile(member)) === symbol, true,
+      "the refusal preserves the original checked member Symbol rather than a name-based replacement");
+    const assignment = storage.nodes.find(node => ast.is.IsBinaryExpression(node) &&
+      ast.kindName(ast.as.AsBinaryExpression(node).OperatorToken) === "KindEqualsToken");
+    const target = assignment === undefined ? undefined : ast.as.AsBinaryExpression(assignment).Left;
+    assert.equal(target !== undefined, true, "the refusal retains the actual original method-write target");
+    assert.equal(result.diagnostics.length, 1, "the explicit v1 cut has one source write-admission diagnostic");
+    assert.equal(result.diagnostics[0].code, "RUST_STRUCTURAL_METHOD_WRITE_UNSUPPORTED",
+      "method replacement is refused at its existing source write-admission owner");
     assert.equal(result.diagnostics[0].message,
-      "Retained constructor selection requires its exact admitted source producer domain.",
-      "the original open-domain reason is retained without a guessed implementation");
-    assert.equal(result.artifacts.length, 0, "an unproved native method producer never reaches target emission");
+      "Rust v1 does not support replacing a structural method through a shared source parameter or its alias.",
+      "the diagnostic states an explicit v1 scope cut, not native impossibility");
+    assert.equal(result.diagnostics[0].sourceNode === target, true, "the diagnostic retains the exact original write target");
+    assert.equal(result.artifacts.length, 0, "the unsupported program publishes no native artifacts");
   });
 }
 
@@ -216,9 +268,12 @@ export function run(): number {
 }
 `);
   const { ast } = context;
-  const declaration = context.sourceStorage.nodes.find(node => ast.is.IsFunctionDeclaration(node) && ast.body(node) !== undefined);
+  const declaration = context.sourceStorage.nodes.find(node => ast.is.IsFunctionDeclaration(node) &&
+    ast.body(node) !== undefined && ast.text(ast.name(node)) === "read");
+  assert.equal(declaration !== undefined, true, "the closed producer reaches the exact original read implementation");
   const parameter = ast.parameters(declaration)[0];
   const published = context.records.sourceParameterAbi.get(parameter);
+  assert.equal(published !== undefined, true, "the real closed producer admits the original formal before negative injection");
   const original = rustResolutionContext(walk, parameter);
   for (const reason of ["The actual callee is unknown.", "The finite source member-write budget is exhausted."]) {
     let queries = 0;
