@@ -91,13 +91,14 @@ function construction(text, wrapCaptures = captures => captures, wrapRecords = r
     node => nativeNodeSet.has(node), rustFixedStructuralMethodDeclarations(source.ast, program.structuralShapes));
   let physical;
   const input = { source, ast: source.ast, storage, nativeNodes, records, definitions: program.typeDefinitions,
+    frames: program.callableValues.frames,
     structuralShapes: program.structuralShapes, generic: registry.plan, lexicalFunctions: program.lexicalFunctions,
     lifetimes: program.sourceLifetimes,
     physicalCarrierFor: (carrier, ownerFileName, subject, bindings, producers) =>
       physical.carrierFor(carrier, ownerFileName, subject, bindings, producers) };
   const genericImplementations = new Set(registry.plan.definitions.flatMap(definition => definition.implementations.map(implementation => implementation.declaration)));
   const native = createRustNativeCallableInputPlan({ ...input, sourcePackages: program.host.sourcePackages, usedNames: new Set(),
-    genericImplementations, ownedRetainedParameter: program.callableValues.native.isNativeRetainedParameter,
+    ownedRetainedParameter: program.callableValues.native.isNativeRetainedParameter,
     declaresGenericInputs: owner => source.ast.is.IsFunctionDeclaration(owner) || source.ast.is.IsMethodDeclaration(owner) ||
       source.ast.is.IsConstructorDeclaration(owner) || source.ast.is.IsGetAccessorDeclaration(owner) ||
       source.ast.is.IsSetAccessorDeclaration(owner) || genericImplementations.has(owner) ||

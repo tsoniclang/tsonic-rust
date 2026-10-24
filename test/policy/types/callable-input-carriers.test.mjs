@@ -73,15 +73,20 @@ test("quantified invocation inputs retain their declaration protocol instead of 
   const unit = { kind: "tuple", elements: [] };
   const declared = rustCallableTargetType([element], unit);
   for (const kind of ["complete", "open", "unresolved"]) {
+    let originQueries = 0;
     const selected = resolveRustCallableInputCarrier(subject, declared, {
       ...ordinaryContext,
-      sourceStorage: { closedOriginsFor: () => ({ kind, origins: [{ subject }], boundaries: [] }) },
+      sourceStorage: { closedOriginsFor: () => {
+        originQueries++;
+        return { kind, origins: [{ subject }], boundaries: [] };
+      } },
     }, { callableSignatureCarrier: () => assert.fail("a quantified declaration cannot acquire a concrete caller ABI") });
-    assert.equal(selected === undefined, kind === "unresolved");
-    if (selected !== undefined) {
-      assert.equal(rustCallableInputProtocol(selected)?.parameters[0] === element, true);
-      assert.equal(rustCallableInputProtocol(selected)?.result === unit, true);
-    }
+    assert.equal(selected !== undefined, true, kind + ": the complete generic declaration determines its native input");
+    assert.equal(originQueries, 0, kind + ": generic input admission does not depend on a concrete caller domain");
+    assert.equal(rustCallableInputProtocol(selected)?.parameters[0] === element, true,
+      kind + ": the original generic input identity remains exact");
+    assert.equal(rustCallableInputProtocol(selected)?.result === unit, true,
+      kind + ": the original native result remains exact");
   }
 });
 

@@ -131,7 +131,8 @@ export function createRustNativeStorageSelection(
         rustCallableInvocationSignaturesMatch(conversion.source, physicalInputs[0]!.carrier)
         ? physicalInputs[0]!.carrier : undefined;
       const source = operand === undefined || sourceCarrier === undefined ? undefined : rustNativeCallablePhysicalSource(sourceCarrier,
-        { kind: "selected", carrier: operand, inputs: [...selectedInputs], ...(erasedPhysicals.has(operand) ? { erased: true as const } : {}) });
+        { kind: "selected", carrier: operand, inputs: [...selectedInputs], ...(erasedPhysicals.has(operand) ? { erased: true as const } : {}) },
+        input.frames);
       const file = input.ast.getSourceFile(origin.node);
       const physical = source === undefined || file === undefined ? undefined
         : rustCallableConversionPhysical(conversion, source.signature, input.ast.getFileName(file), input.definitions,

@@ -1,11 +1,16 @@
 import { failTargetAnalysisInvariant, type TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustStructuralEmissionProducer } from "../program/records/structural-emission.js";
+import type { RustProjectEmissionProducer } from "../program/records/project-emission.js";
 import { rustStructuralObjectCarrierValue } from "../../target-model/types/index.js";
 import { rustCarrierSupportsTrait } from "../../policy/constraints/native-traits.js";
 import { selectRustStructuralEmission } from "../../policy/types/objects/structural-emission.js";
 
-export function analyzeRustStructuralEmission(program: Omit<RustAnalysisProgram, "reachability">, producer: RustStructuralEmissionProducer): readonly TargetDiagnostic[] {
+export function analyzeRustStructuralEmission(
+  program: Omit<RustAnalysisProgram, "reachability">, producer: RustStructuralEmissionProducer,
+  projects: Pick<RustProjectEmissionProducer, "shape">,
+): readonly TargetDiagnostic[] {
+  for (const shape of program.structuralShapes.instances) projects.shape(shape.carrier, shape);
   const issues: TargetDiagnostic[] = [];
   const templates = new Set(program.structuralShapes.definitions);
   for (const definition of new Set([...program.structuralShapes.definitions, ...program.structuralShapes.instances])) {

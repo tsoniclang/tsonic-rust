@@ -30,7 +30,9 @@ test("constructor-only shapes retain parameters through traversal, substitution 
     { kind: "lifetime", lifetime }, { kind: "type", identity: "Value", name: "Value" },
   ]);
   assert.deepEqual(plan.definitions[0].dispatchLifetime, lifetime);
-  assert.deepEqual(plan.definitions[0].construction.carrier, construction);
+  assert.deepEqual(plan.definitions[0].construction.carrier, rustCallableTargetType([parameter], parameter, lifetime));
+  assert.deepEqual(plan.definitions[0].sourceCarriers, [carrier]);
+  assert.deepEqual(rustStructuralObjectCarrierValue(carrier).construction, construction);
   assert.ok(Object.isFrozen(plan.definitions[0].construction));
 });
 

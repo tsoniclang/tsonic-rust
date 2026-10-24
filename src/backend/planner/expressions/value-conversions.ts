@@ -403,7 +403,7 @@ function lowerStructuralObjectJsValueConversion(
   const sourcePath = { kind: "path" as const, path: sourceName };
   const entries: RustExpr[] = [];
   const literal = node === undefined ? undefined : context.input.program.records.objectLiteralEmission.get(node);
-  const sourceFields = literal !== undefined && rustTargetTypeRefEquals(literal.selection.carrier, contract.source)
+  const sourceFields = literal !== undefined && rustTargetTypeRefEquals(literal.carrier, contract.source)
     ? literal.sourceFields : undefined;
   const positions = new Map(sourceFields?.map((field, index) => [field.storageIndex, index]));
   const origins = new Map(sourceFields?.map(field => [field.storageIndex, field.value]));
