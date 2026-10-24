@@ -359,19 +359,19 @@ use captured_append_cost::index;
 use std::cell::RefCell;
 use tsonic_rust_runtime as rt;
 
-fn handwritten(value: String) -> rt::Callable<'static, (), rt::TsonicResult<usize>> {
+fn handwritten(value: String) -> rt::Callable<'static, (), rt::TsonicResult<f64>> {
     let value = RefCell::new(value);
     rt::Callable::new(move |()| {
         value.borrow_mut().push('!');
-        Ok(value.borrow().len())
+        Ok(value.borrow().encode_utf16().count() as f64)
     })
 }
 
 #[test]
 fn exact_mutable_frame_and_append_costs() {
     for _ in 0..32 {
-        let input = String::with_capacity(64);
-        let native_input = String::with_capacity(64);
+        let input = String::with_capacity(1024);
+        let native_input = String::with_capacity(1024);
         let (generated, generated_cost) = measure(|| index::append(input));
         let (native, native_cost) = measure(|| handwritten(native_input));
         assert_eq!(generated_cost, native_cost);
@@ -379,7 +379,7 @@ fn exact_mutable_frame_and_append_costs() {
         for index in 1..=1024 {
             let (generated_result, generated_cost) = measure(|| generated.call(()).unwrap());
             let (native_result, native_cost) = measure(|| native.call(()).unwrap());
-            assert_eq!(generated_result, index);
+            assert_eq!(generated_result, f64::from(index));
             assert_eq!(generated_result, native_result);
             assert_eq!(generated_cost, native_cost);
             assert_eq!(generated_cost.allocations, 0);
