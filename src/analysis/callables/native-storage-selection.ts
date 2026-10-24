@@ -310,7 +310,11 @@ export function createRustNativeStorageSelection(
                 input.native.isConcreteCallableParameter(origin.node)
                 ? input.records.sourceParameterAbi.get(origin.node)?.parameterCarrier : undefined;
               if (concreteParameter !== undefined) {
-                const element = rustOptionElementCarrier(concreteParameter) ?? concreteParameter;
+                const generics = genericsFor(sourceEnclosingCallable(input.ast.parent(origin.node), input.ast), frontier.bindings, depth + 1);
+                if (generics.kind === "unresolved") return fail(generics.reason);
+                const boundParameter = substituteRustTargetGenerics(concreteParameter,
+                  generics.bindings.types, generics.bindings.lifetimes, generics.bindings.consts);
+                const element = rustOptionElementCarrier(boundParameter) ?? boundParameter;
                 const declared = rustCallablePhysicalCarrier(element);
                 if (declared === undefined || !rustCallableInvocationSignaturesMatch(current, callableValueCarrier(element) ?? element))
                   return fail("Native callable storage conflicts with its exact concrete callable parameter.");

@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import type { AstReader, Node } from "@tsonic/tsts";
 import type { SourceStorageBindings, SourceStorageProducer, SourceStorageQueries, SourceStorageSubject } from "@tsonic/target-api/analysis";
-import { sourceNodeIdentity } from "@tsonic/target-api/source";
+import { sourceEnclosingCallable, sourceNodeIdentity } from "@tsonic/target-api/source";
 import type { RustTargetGenericArgument, TargetTypeRef } from "../../target-model/types/model.js";
 import { closedMetadataEquals, closedMetadataKey, snapshotClosedMetadata } from "../../target-model/metadata/closed-data.js";
 import { rustGenericCallableSignaturesMatch } from "../../policy/conversions/generic-callable.js";
@@ -15,7 +15,7 @@ import type { RustNativeCallableInputPlan } from "./native-inputs.js";
 import type { RustNativeCallableInput } from "../../target-model/records/native-protocols.js";
 import type { RustNativeStorageSelection } from "../../target-model/records/native-storage.js";
 import type { RustGenericCallableDefinition, RustGenericCallableImplementation } from "../../target-model/records/generic-callables.js";
-import { substituteRustTargetTypeParameters } from "../../target-model/types/carriers/substitution.js";
+import { substituteRustTargetGenericArgument, substituteRustTargetGenerics, substituteRustTargetTypeParameters } from "../../target-model/types/carriers/substitution.js";
 import { allocateRustGeneratedName } from "../../target-model/names/generated.js";
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
 import type { RustLifetimeIndex } from "../../target-model/lifetimes/index.js";
@@ -23,6 +23,7 @@ import type { RustLifetimeIndex } from "../../target-model/lifetimes/index.js";
 import { rustGenericCallableMemberBindings } from "./generic-bindings.js";
 import { snapshotRustCallableBindings } from "../../policy/types/callables/generic-bindings.js";
 import type { RustPhysicalCallableSourceSelection } from "../../target-model/records/physical-emission-contexts.js";
+import type { RustNativeStoragePlan } from "./native-storage.js";
 
 import type { RustGenericCallablePhysicalMember, RustGenericCallablePhysicalDefinition, RustGenericCallablePhysicalSelection, RustGenericCallablePhysicalConversion } from "../../target-model/records/generic-callables.js";
 
@@ -47,6 +48,7 @@ export interface RustGenericCallablePhysicalInput {
   readonly storage: SourceStorageQueries;
   readonly captures: RustNativeCaptureConstruction;
   readonly native: Pick<RustNativeCallableInputPlan, "inputs">;
+  readonly genericBindingsFor: RustNativeStoragePlan["genericBindingsFor"];
   readonly boundSubjectFor: (subject: SourceStorageSubject, carrier: TargetTypeRef, bindings: SourceStorageBindings) => RustNativeStorageSelection;
 }
 
@@ -245,16 +247,23 @@ export function createRustGenericCallablePhysicalPlan(
           !family.implementations.includes(implementation) || original.environment.length !== value.environment.length) return undefined;
         const substitutions = new Map(original.environment.flatMap((argument, index): [string, TargetTypeRef][] =>
           argument.kind === "type-parameter" ? [[argument.identity, value.environment[index]!]] : []));
+        const owner = sourceEnclosingCallable(input.ast.parent(implementation.declaration), input.ast);
+        const activation = owner === undefined ? undefined : input.genericBindingsFor(owner, producer.bindings);
+        if (activation?.kind === "unresolved") return undefined;
         const memberArguments: RustTargetGenericArgument[] = [];
         for (const argument of environment.arguments) {
           if (argument.kind !== "type" || argument.type.kind !== "type-parameter") {
-            memberArguments.push(argument);
+            memberArguments.push(activation === undefined ? argument : substituteRustTargetGenericArgument(argument,
+              activation.bindings.types, activation.bindings.lifetimes, activation.bindings.consts));
             continue;
           }
           const selectedInput = nativeInputs.get(argument.type.identity);
           if (selectedInput === undefined) return undefined;
+          const sourceCarrier = substituteRustTargetTypeParameters(selectedInput.carrier, substitutions);
+          const carrier = activation === undefined ? sourceCarrier : substituteRustTargetGenerics(sourceCarrier,
+            activation.bindings.types, activation.bindings.lifetimes, activation.bindings.consts);
           const selected = input.boundSubjectFor(selectedInput.subject,
-            substituteRustTargetTypeParameters(selectedInput.carrier, substitutions), producer.bindings);
+            carrier, producer.bindings);
           if (selected.kind === "unresolved") return undefined;
           if (selected.kind === "selected") for (const sourceInput of selected.inputs) selectedInputs.add(sourceInput);
           for (const source of selected.sources) nestedSources.push(source);

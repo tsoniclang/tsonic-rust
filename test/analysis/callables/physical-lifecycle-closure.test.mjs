@@ -724,6 +724,7 @@ test("a physical reader captured during construction becomes the same terminal l
     selections += 1;
     return generic.definitionFor(carrier);
   }, { ast: context.ast, lifetimes: context.sourceLifetimes, storage: context.sourceStorage, captures, native: context.callableValues.native,
+    genericBindingsFor: context.callableValues.nativeStorage.genericBindingsFor,
     boundSubjectFor: (subject, carrier, bindings) =>
       context.callableValues.nativeStorage.boundSubjectFor(subject, carrier, bindings) });
   const implementation = generic.definitions[0].implementations[0];

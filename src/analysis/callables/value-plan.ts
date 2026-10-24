@@ -347,6 +347,7 @@ function createRustCallableValueLifecycle(input: RustCallableValuePlanInput,
     nativeStorage: nativeStorageQueries });
   const physical = genericRegistry.initializePhysical({ ast: input.ast, lifetimes: input.lifetimes,
     storage: input.sourceStorage, captures, native,
+    genericBindingsFor: nativeStorageQueries.genericBindingsFor,
     boundSubjectFor: (subject, carrier, bindings) => nativeStorageQueries.boundSubjectFor(subject, carrier, bindings) });
   physicalCarrierFor = physical.carrierFor;
   let parameterStorage: RustNativeStoragePlan | undefined;
