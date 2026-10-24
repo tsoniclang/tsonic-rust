@@ -8,6 +8,7 @@ import { rustCallableValueConversionMatches } from "../../policy/conversions/cal
 import type { RustTargetGenericBindings, RustTargetGenericParameterSet } from "../../target-model/types/carriers/generic-inference.js";
 import type { RustFactWalk } from "../program/walk.js";
 import type { RustSourceObjectShape } from "../../target-model/records/source-types.js";
+import { rustStructuralObjectTargetType, type RustStructuralObjectFieldCarrierValue } from "../../target-model/types/carriers/source-types.js";
 import type { RustCallableParameterAbi, RustCallableParameterAdapter, RustCallableValueAdapter } from "../../target-model/records/callable-adapters.js";
 import { callableRestElement } from "../../target-model/records/callable-adapters.js";
 import { selectRustCallableValueAdapter } from "../../policy/conversions/callable-adapters.js";
@@ -44,16 +45,18 @@ export function generalizeRustProjectStructuralView(
     carrier, sourceBindings.types, sourceBindings.lifetimes, sourceBindings.consts);
   if (!rustTargetTypeRefEquals(specialize(sourceCarrier), view.sourceCarrier)) return undefined;
   const template = structuralViewTemplate(target.carrier, walk);
-  const shape = rustStructuralObjectCarrierValue(template);
+  const nativeTemplate = template === undefined ? undefined : structuralNativeViewTemplate(template, target.carrier);
+  const shape = rustStructuralObjectCarrierValue(nativeTemplate);
   const semantics = walk.context.semanticsFor(view.declaration);
   const sourceType = semantics.declarations.declaredType(view.declaration);
-  if (template === undefined || shape === undefined || sourceType === undefined || shape.fields.length !== view.fields.length) return undefined;
+  if (template === undefined || nativeTemplate === undefined || shape === undefined ||
+    sourceType === undefined || shape.fields.length !== view.fields.length) return undefined;
   const sources = selectRustProjectStructuralViewSources(walk, sourceCarrier, target, semantics, sourceType);
   if (sources === undefined || sources.length !== view.fields.length) return undefined;
   const closedFields = selectRustProjectStructuralViewFields(selectedSources, target, walk);
   if (closedFields === undefined || closedFields.length !== view.fields.length ||
     !closedFields.every((field, index) => structuralViewMemberMatches(field, view.fields[index]))) return undefined;
-  const parameters = rustTargetGenericReferences(template);
+  const parameters = rustTargetGenericReferences(nativeTemplate);
   const parameterSet: RustTargetGenericParameterSet = {
     typeIdentities: new Set(parameters.typeIdentities), lifetimeIdentities: new Set(parameters.lifetimeIdentities),
     constIdentities: new Set(parameters.constIdentities),
@@ -95,7 +98,7 @@ export function generalizeRustProjectStructuralView(
   }
   if (bindings.types.size !== parameters.typeIdentities.length || bindings.lifetimes.size !== parameters.lifetimeIdentities.length ||
     bindings.consts.size !== parameters.constIdentities.length) return undefined;
-  const targetCarrier = substituteRustTargetGenerics(template, bindings.types, bindings.lifetimes, bindings.consts);
+  const targetCarrier = substituteRustTargetGenerics(nativeTemplate, bindings.types, bindings.lifetimes, bindings.consts);
   if (!rustProjectViewMatches({ sourceCarrier, targetCarrier }, view.sourceCarrier, view.targetCarrier)) return undefined;
   const generalizedShape = rustStructuralObjectCarrierValue(targetCarrier);
   if (generalizedShape === undefined) return undefined;
@@ -162,6 +165,23 @@ function structuralViewTemplate(carrier: TargetTypeRef, walk: RustFactWalk): Tar
       ? root : undefined;
   };
   return rootFor(carrier, []);
+}
+
+function structuralNativeViewTemplate(template: TargetTypeRef, selected: TargetTypeRef): TargetTypeRef | undefined {
+  const logical = rustStructuralObjectCarrierValue(template);
+  const native = rustStructuralObjectCarrierValue(selected);
+  if (logical === undefined || native === undefined || logical.fields.length !== native.fields.length) return undefined;
+  const fields: RustStructuralObjectFieldCarrierValue[] = [];
+  for (const [index, field] of logical.fields.entries()) {
+    const selectedField = native.fields[index];
+    if (selectedField === undefined || selectedField.sourceName !== field.sourceName ||
+      selectedField.presence !== field.presence || selectedField.method !== field.method ||
+      selectedField.bound !== field.bound || selectedField.accessor?.getter !== field.accessor?.getter) return undefined;
+    fields.push({ ...field, readonly: selectedField.readonly,
+      ...(selectedField.accessor === undefined ? {} : { accessor: selectedField.accessor }) });
+  }
+  return rustStructuralObjectTargetType(logical.ownerFileName, fields, logical.representation,
+    logical.construction, logical.bases, logical.implementation);
 }
 
 function collectStructuralViewBindings(
