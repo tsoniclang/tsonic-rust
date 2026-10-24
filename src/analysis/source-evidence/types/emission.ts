@@ -4,6 +4,8 @@ import { rustRuntimeUnionContract } from "../../../target-model/types/carriers/r
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { RustAnalysisProgram } from "../../program/model.js";
 import type { RustTypeEmissionProducer } from "../../program/records/type-emission.js";
+import type { RustProjectEmissionProducer } from "../../program/records/project-emission.js";
+import { analyzeRustOptionalStorageTypeEmission } from "../../project-types/optional-storage-emission.js";
 import type { TargetTypeRef, RustTargetGenericArgument } from "../../../target-model/types/model.js";
 import type { RustTypeEmission, RustTypePositions, RustOptionalStorageEmission, RustSourceOptionalEmission, RustOptionPayloadView } from "../../../target-model/records/type-emission.js";
 import { isRustOptionCarrier, rustOptionValueCarrier, isRustStringCarrier } from "../../../target-model/types/index.js";
@@ -38,7 +40,8 @@ import { rustProgramNodeIsOutsideNativeCode } from "../../control-flow/compile-t
 import { substituteRustTargetTypeParameters } from "../../../target-model/types/carriers/substitution.js";
 
 export function analyzeRustTypeEmission(program: Omit<RustAnalysisProgram, "reachability">,
-  nodes: readonly Node[], producer: RustTypeEmissionProducer, extraTypes: readonly TargetTypeRef[]): void {
+  nodes: readonly Node[], producer: RustTypeEmissionProducer, extraTypes: readonly TargetTypeRef[],
+  optionalStorageProducer: Pick<RustProjectEmissionProducer, "optionalType">): void {
   const pending = [...extraTypes, ...nodes.flatMap(node => rustPhysicalEmissionRecordCarriers(program.records, node)), rustProgramErrorTargetType(), rustUnitTargetType()];
   pending.push(program.errorRegions.initialization.binary.lifecycle.carrier);
   pending.push(...program.providerErrorCarriers, ...rustDeclarationEmissionCarriers(program, nodes));
@@ -146,11 +149,13 @@ export function analyzeRustTypeEmission(program: Omit<RustAnalysisProgram, "reac
       ...contract.associatedTypes.flatMap(requirement => [requirement.carrier, ...(requirement.output === undefined ? [] : [requirement.output])]),
       ...contract.projectProjections.flatMap(projection => [projection.sourceCarrier, projection.targetCarrier]));
   }
-  const selections = new Map<string, { readonly carrier: TargetTypeRef; readonly value: Omit<RustTypeEmission, "positions" | "constructionArguments">; readonly children: readonly TargetTypeRef[] }>();
+  const selections = new Map<string, { readonly carrier: TargetTypeRef; readonly value: Omit<RustTypeEmission, "positions" | "constructionArguments">;
+    readonly children: readonly TargetTypeRef[]; readonly optionalArguments: readonly TargetTypeRef[] }>();
   for (let index = 0; index < pending.length; index++) {
     const carrier = pending[index]!;
     const key = closedMetadataKey(carrier);
     if (selections.has(key)) continue;
+    const optionalArguments = analyzeRustOptionalStorageTypeEmission(program, carrier, optionalStorageProducer);
     const generic = rustGenericCallableValue(carrier);
     const physical = generic === undefined ? undefined : program.callableValues.generic.physical.existingSelectionFor(carrier);
     // A carrier that still names source type parameters is rendered only after its emission context substitutes them;
@@ -222,13 +227,15 @@ export function analyzeRustTypeEmission(program: Omit<RustAnalysisProgram, "reac
                 return field.methodPlan.context;
               })) }) : rustUnitTargetType() }) });
     const frame = program.records.frameType.get(carrier);
+    const constructed = rustClassConstructorInstance(carrier);
     const children = [...rustTargetTypeChildren(carrier), ...(producerError === undefined ? [] : [producerError]),
+      ...(constructed === undefined ? [] : [constructed]),
       ...(unionArguments ?? []).flatMap(argument => argument.kind === "type" ? [argument.type] : []),
       ...(value.generic?.arguments ?? []).flatMap(argument => argument.kind === "type" ? [argument.type] : []),
       ...(value.structural?.context === undefined ? [] : [value.structural.context]),
       ...(frame?.environment ?? []), ...(frame?.independentCarrier === undefined ? [] : [frame.independentCarrier]),
-      ...(program.records.optionalStorageTypeArguments.get(carrier) ?? [])];
-    selections.set(key, { carrier, value, children });
+      ...optionalArguments];
+    selections.set(key, { carrier, value, children, optionalArguments });
     pending.push(...children);
     const definition = program.projectTypes.definitionForCarrier(carrier);
     if (definition !== undefined) pending.push(...(program.records.projectClassFields.get(definition, carrier) ?? []).map(field => field.carrier));
@@ -261,7 +268,7 @@ export function analyzeRustTypeEmission(program: Omit<RustAnalysisProgram, "reac
     else if (rustFrameCallableValue(carrier) !== undefined) children = program.records.frameType.get(carrier)?.environment ?? [];
     else if (rustClassConstructorInstance(carrier) !== undefined) children = rustTargetTypeChildren(rustClassConstructorInstance(carrier)!);
     else if (unionSource(carrier) !== undefined) children = [...argumentTypes(selected.value.unionArguments ?? rustSourceTypeCarrierValue(carrier)?.genericArguments),
-      ...program.records.optionalStorageTypeArguments.get(carrier) ?? []];
+      ...selected.optionalArguments];
     else if (carrier.kind === "closure") { opaque = "callable"; children = [...carrier.args, carrier.result]; }
     else if (carrier.kind === "impl-trait") {
       opaque = "explicit";
@@ -317,7 +324,7 @@ export function analyzeRustTypeEmission(program: Omit<RustAnalysisProgram, "reac
       const named = rustNamedTypeCarrierValue(carrier);
       const source = rustSourceTypeCarrierValue(carrier);
       if (named !== undefined) groups = argumentGroups(named.genericArguments);
-      else if (source !== undefined) groups = [...argumentGroups(source.genericArguments), ...(program.records.optionalStorageTypeArguments.get(carrier) ?? []).map(carrier => [carrier])];
+      else if (source !== undefined) groups = [...argumentGroups(source.genericArguments), ...selected.optionalArguments.map(carrier => [carrier])];
       else if (selected.value.unionArguments !== undefined) groups = argumentGroups(selected.value.unionArguments);
     }
     return groups === undefined ? undefined : Object.freeze(groups.map(group => group.some(carrier => positionFor(carrier).opaque)));

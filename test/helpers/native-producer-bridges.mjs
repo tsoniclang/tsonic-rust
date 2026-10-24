@@ -4,6 +4,8 @@ import { analyzeRustNativeProtocolEmission } from "../../dist/analysis/callables
 import { createRustNativeProtocolProducer } from "../../dist/analysis/program/records/native-protocol-emission.js";
 import { analyzeRustTypeEmission } from "../../dist/analysis/source-evidence/types/emission.js";
 import { createRustTypeEmissionProducer } from "../../dist/analysis/program/records/type-emission.js";
+import { analyzeRustProjectEmission } from "../../dist/analysis/project-types/emission.js";
+import { createRustProjectEmissionProducer } from "../../dist/analysis/program/records/project-emission.js";
 import { planRustNativeCallableProtocol } from "../../dist/backend/planner/declarations/callables/native-protocols.js";
 import { planRustNativeProducerBridge } from "../../dist/backend/planner/declarations/callables/native-producer-bridges.js";
 import { createRustTypeDefinitionRegistry } from "../../dist/analysis/project-types/type-definitions.js";
@@ -36,9 +38,12 @@ export function nativeProducerFixture({
   assert.deepEqual(issues, [], `${identity}: native protocol emission`);
   const withProtocols = { ...base, typeDefinitions: definitions, callableValues,
     records: { ...base.records, nativeProtocol: native.protocol, nativeProtocols: native.inventories } };
+  const projects = createRustProjectEmissionProducer(() => {});
+  analyzeRustProjectEmission({ program: withProtocols, nodes: [], producer: projects });
+  const admitted = { ...withProtocols, records: { ...withProtocols.records, ...projects.records } };
   const emission = createRustTypeEmissionProducer(() => {});
-  analyzeRustTypeEmission(withProtocols, [], emission, []);
-  const program = { ...withProtocols, records: { ...withProtocols.records, typeEmission: emission.records.typeEmission } };
+  analyzeRustTypeEmission(admitted, [], emission, [], projects);
+  const program = { ...admitted, records: { ...admitted.records, ...emission.records } };
   return { protocol, context: rustSourceFilePlanContext(program, sourceFile), definitions, program };
 }
 
