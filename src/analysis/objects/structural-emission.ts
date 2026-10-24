@@ -7,12 +7,16 @@ import { selectRustStructuralEmission } from "../../policy/types/objects/structu
 
 export function analyzeRustStructuralEmission(program: Omit<RustAnalysisProgram, "reachability">, producer: RustStructuralEmissionProducer): readonly TargetDiagnostic[] {
   const issues: TargetDiagnostic[] = [];
+  const templates = new Set(program.structuralShapes.definitions);
   for (const definition of new Set([...program.structuralShapes.definitions, ...program.structuralShapes.instances])) {
     const value = rustStructuralObjectCarrierValue(definition.carrier)?.representation === "value";
-    const genericRequirements = program.records.structuralGenerics.get(definition.carrier);
+    const template = templates.has(definition) ? definition : program.structuralShapes.templateForCarrier(definition.carrier);
+    if (template === undefined || !templates.has(template))
+      failTargetAnalysisInvariant("tsonic-rust", "An admitted structural instance requires its canonical native template.");
+    const genericRequirements = program.records.structuralGenerics.get(template.carrier);
     if (genericRequirements === undefined)
       failTargetAnalysisInvariant("tsonic-rust", "An admitted structural emission requires its completed generic contract.");
-    const selection = selectRustStructuralEmission({ definition, genericRequirements,
+    const selection = selectRustStructuralEmission({ definition, template, genericRequirements,
       clone: value && rustCarrierSupportsTrait(definition.carrier, "core::clone::Clone", () => true, undefined, program.typeDefinitions),
       copy: value && rustCarrierSupportsTrait(definition.carrier, "core::marker::Copy", () => true, undefined, program.typeDefinitions),
       default: value && rustCarrierSupportsTrait(definition.carrier, "core::default::Default", () => true, undefined, program.typeDefinitions) });

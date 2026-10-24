@@ -27,6 +27,40 @@ const target = (type, options = {}) => rustStructuralObjectTargetType(options.fi
     ...(options.accessor === undefined ? {} : { accessor: options.accessor }) },
 ]);
 
+for (const surfaces of [[], ["js"]]) test(`native dispatch instances retain canonical generic membership in ${surfaces[0] ?? "native"}`, () => {
+  const { program } = analyzeRust({ surfaces, files: { "index.ts": `
+type View<Value> = { readonly value: Value; read(): Value; };
+class Box<Value> {
+  value: Value;
+  constructor(value: Value) { this.value = value; }
+  read(): Value { return this.value; }
+}
+function open<Value>(owner: Box<Value>): View<Value> { return owner; }
+function closed(): View<number> { return new Box(3); }
+export function run(): number { return open(new Box(7)).read() + closed().value; }
+` } });
+  const definitions = program.structuralShapes.definitions.filter(definition => definition.dispatchName !== undefined);
+  assert.equal(definitions.length > 0, true, "the checked native class publishes a structural dispatch declaration");
+  let instances = 0;
+  for (const definition of definitions) {
+    const selected = program.records.structuralShapeEmission.get(definition)?.dispatch;
+    assert.equal(selected !== undefined, true, "the canonical declaration has its completed native membership");
+    assert.equal(selected.genericParameterIndices.every(index => definition.stateGenericParameters[index]?.kind === "type"), true,
+      "receiver-storage lifetimes do not become unused trait ABI parameters");
+    assert.equal(selected.genericParameterIndices.length, definition.stateGenericParameters.filter(parameter => parameter.kind === "type").length,
+      "all genuine native type parameters remain in the trait contract");
+    for (const instance of program.structuralShapes.instances) {
+      if (program.structuralShapes.templateForCarrier(instance.carrier) !== definition) continue;
+      const current = program.records.structuralShapeEmission.get(instance)?.dispatch;
+      assert.equal(current !== undefined, true, "every actual instance has a completed emission selection");
+      assert.equal(current.genericParameterIndices.join(","), selected.genericParameterIndices.join(","),
+        "substitution cannot change the canonical native trait arity or binder positions");
+      instances++;
+    }
+  }
+  assert.equal(instances > 0, true, "closed and original-binder instances actually exercise the same native declaration");
+});
+
 test("structural supertrait arguments close only inferred header lifetimes from the native object contract", () => {
   const named = { kind: "parameter", identity: "native:lifetime", name: "native" };
   const known = [

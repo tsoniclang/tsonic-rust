@@ -3,6 +3,7 @@ import type { RustShapeGenericRequirementContract } from "../../target-model/rec
 
 export interface RustStructuralEmissionPolicyInput {
   readonly definition: RustStructuralShapeDefinition;
+  readonly template: RustStructuralShapeDefinition;
   readonly genericRequirements: RustShapeGenericRequirementContract;
   readonly clone: boolean;
   readonly copy: boolean;
