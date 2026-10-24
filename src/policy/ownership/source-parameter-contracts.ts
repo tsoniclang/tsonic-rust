@@ -81,15 +81,14 @@ export function selectRustSourceParameterBorrowCarrier(
     ? { kind: "reference", referent: base, mutable: false } : undefined;
 }
 
-export function selectRustSourceParameterStructuralCarrier(
+export function rustSourceParameterSupportsMemberWrites(
   carrier: TargetTypeRef,
   writableFields: ReadonlySet<number>,
-): TargetTypeRef | undefined {
+): boolean {
   const structural = rustStructuralObjectCarrierValue(carrier);
-  if (structural === undefined || [...writableFields].some(index =>
-    !Number.isSafeInteger(index) || index < 0 || structural.fields[index] === undefined ||
-    structural.fields[index]!.readonly || structural.fields[index]!.accessor?.setter === false)) return undefined;
-  return carrier;
+  return structural !== undefined && [...writableFields].every(index =>
+    Number.isSafeInteger(index) && index >= 0 && structural.fields[index] !== undefined &&
+    !structural.fields[index]!.readonly && structural.fields[index]!.accessor?.setter !== false);
 }
 
 export function selectRustSourceParameterAbi(

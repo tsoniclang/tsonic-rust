@@ -1,4 +1,4 @@
-import { rustParameterModeForCarriers, selectRustSourceParameterAbi, selectRustSourceParameterBorrowCarrier, selectRustSourceParameterStructuralCarrier } from "../../policy/ownership/source-parameter-contracts.js";
+import { rustParameterModeForCarriers, selectRustSourceParameterAbi, selectRustSourceParameterBorrowCarrier, rustSourceParameterSupportsMemberWrites } from "../../policy/ownership/source-parameter-contracts.js";
 import type { RustSourceParameterAbiFact } from "../../target-model/records/callables-and-resources.js";
 import { flowStateFactKey } from "@tsonic/tsts";
 import { selectRustParameterEntryConversion } from "../../policy/ownership/parameter-entry-conversion.js";
@@ -238,9 +238,8 @@ export function createRustSourceCallableAbiResolver(input: {
         parameterOnlyForwardsThrownValue(parameter, context)) {
         base = rustProgramErrorTargetType();
       }
-      const native = selectRustSourceParameterFormalCarrier(parameter, base, context, options);
+      const native = validateRustSourceParameterMemberWrites(parameter, base, context, options);
       if (native === undefined || native.kind === "rejected") return native;
-      base = native.carrier;
       const requiresOwnedValue = parameterUsesFlowState(
         parameter,
         "moved",
@@ -266,31 +265,26 @@ export function createRustSourceCallableAbiResolver(input: {
   };
 }
 
-function selectRustSourceParameterFormalCarrier(
+function validateRustSourceParameterMemberWrites(
   parameter: Node,
   carrier: TargetTypeRef,
   context: RustTargetTypeResolutionContext,
   options: RustTargetTypeResolutionOptions,
-): { readonly kind: "resolved"; readonly carrier: TargetTypeRef } |
+): { readonly kind: "resolved" } |
   Extract<RustSourceParameterAbiSelection, { readonly kind: "rejected" }> | undefined {
   const optional = rustOptionElementCarrier(carrier);
-  if (optional !== undefined) {
-    const present = selectRustSourceParameterFormalCarrier(parameter, optional, context, options);
-    return present === undefined || present.kind === "rejected" ? present
-      : { kind: "resolved", carrier: rustTargetTypeRefEquals(optional, present.carrier)
-        ? carrier : rustSourceOptionalTargetType(present.carrier) };
-  }
+  if (optional !== undefined) return validateRustSourceParameterMemberWrites(parameter, optional, context, options);
   const owner = context.ast.parent(parameter);
   const structural = rustStructuralObjectCarrierValue(carrier);
   if (structural === undefined || structural.representation === "value" ||
     !structural.fields.some(field => field.method === true) ||
     owner === undefined || context.ast.body(owner) === undefined)
-    return { kind: "resolved", carrier };
+    return { kind: "resolved" };
   const shape = options.sourceTypes.structuralObjectForCarrier(carrier);
   if (shape === undefined) return undefined;
   const demand = context.sourceStorage.formalMemberWriteDemand(owner, parameter);
   if (demand.kind === "unresolved") return Object.freeze({ kind: "rejected", reason: demand.reason });
-  if (demand.members.length === 0) return { kind: "resolved", carrier };
+  if (demand.members.length === 0) return { kind: "resolved" };
   const writableFields = new Set<number>();
   for (const member of demand.members) {
     const fields = shape.fields.filter(field => field.declarations.includes(member));
@@ -299,10 +293,9 @@ function selectRustSourceParameterFormalCarrier(
         "Formal member-write demand requires one exact original checked native field correspondence." });
     writableFields.add(fields[0]!.storageIndex);
   }
-  const selected = selectRustSourceParameterStructuralCarrier(carrier, writableFields);
-  if (selected === undefined) return Object.freeze({ kind: "rejected", reason:
+  if (!rustSourceParameterSupportsMemberWrites(carrier, writableFields)) return Object.freeze({ kind: "rejected", reason:
     "Formal member-write demand requires an actually writable native member at every selected field." });
-  return { kind: "resolved", carrier: selected };
+  return { kind: "resolved" };
 }
 
 export function resolveRustContextualParameterAbi(
@@ -358,7 +351,7 @@ export function resolveRustContextualParameterAbi(
   if (selectedValueCarrier === undefined) {
     return undefined;
   }
-  const native = selectRustSourceParameterFormalCarrier(parameter, selectedValueCarrier, context, options);
+  const native = validateRustSourceParameterMemberWrites(parameter, selectedValueCarrier, context, options);
   if (native === undefined || native.kind === "rejected") return native;
   const authoredValue = authoredCarrier === undefined ? undefined
     : form === "optional" ? rustSourceOptionalTargetType(authoredCarrier) : authoredCarrier;
