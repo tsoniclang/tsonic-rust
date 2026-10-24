@@ -79,12 +79,23 @@ export function analyzeRustSourceCallArguments(program: Omit<RustAnalysisProgram
         const converted = rustValueCarrierTransitionTarget(program.records, argument);
         let projection: RustSourceCallInputEmission["projection"];
         let valid = sourceCarrier !== undefined;
+        let storageReason: string | undefined;
         if (sourceCarrier !== undefined && (input.sourceForm === "value" || input.sourceForm === "spread-sequence")) {
-          // A callable parameter whose lifetime is still a placeholder takes the concrete lifetime of the value passed.
-          const target = rustCallableTargetForSourceLifetime(converted ?? sourceCarrier, input.carrier);
-          valid = rustFinalizedCarrierTransitionMatches(mapRustTargetTypes(sourceCarrier, program.typeFamilies.normalize),
-            converted === undefined ? undefined : mapRustTargetTypes(converted, program.typeFamilies.normalize), mapRustTargetTypes(target, program.typeFamilies.normalize)) ||
-            converted === undefined && program.structuralShapes.sharesStorage(sourceCarrier, input.carrier);
+          const operand = program.callableValues.nativeStorage.operandFor(argument);
+          const value = converted === undefined ? operand : program.callableValues.nativeStorage.valueFor(argument);
+          if (operand.kind === "unresolved") {
+            valid = false;
+            storageReason = operand.reason;
+          } else if (value.kind === "unresolved") {
+            valid = false;
+            storageReason = value.reason;
+          } else {
+            const target = rustCallableTargetForSourceLifetime(value.carrier, input.carrier);
+            valid = rustFinalizedCarrierTransitionMatches(mapRustTargetTypes(operand.carrier, program.typeFamilies.normalize),
+              converted === undefined ? undefined : mapRustTargetTypes(value.carrier, program.typeFamilies.normalize),
+              mapRustTargetTypes(target, program.typeFamilies.normalize)) ||
+              converted === undefined && program.structuralShapes.sharesStorage(operand.carrier, input.carrier);
+          }
         } else if (sourceCarrier !== undefined && converted === undefined && input.sourceForm === "spread-element" && input.spreadElementIndex !== undefined) {
           const selected = input.projection;
           if (selected.kind !== "element") failTargetAnalysisInvariant("tsonic-rust", "An admitted native spread requires its selected input projection and conversion.", argument);
@@ -120,7 +131,8 @@ export function analyzeRustSourceCallArguments(program: Omit<RustAnalysisProgram
           }
         } else valid = false;
         if (!valid) refuse(argument, "rust.backend.source-call-argument-carrier",
-          `Project-source argument ${input.sourceArgumentIndex} conflicts with parameter ${parameterIndex}'s exact selected carrier.`, true);
+          storageReason ?? `Project-source argument ${input.sourceArgumentIndex} conflicts with parameter ${parameterIndex}'s exact selected carrier.`,
+          storageReason === undefined);
         const sourceAbi = program.records.sourceParameterAbi.get(argument);
         const identity = sourceAbi?.mode === parameter.mode && rustTargetTypeRefEquals(sourceAbi.parameterCarrier, parameter.parameterCarrier);
         if (parameter.mode !== "value" && (parameter.parameterCarrier.kind !== "reference" ||

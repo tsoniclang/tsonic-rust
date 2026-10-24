@@ -289,7 +289,18 @@ export function prepareRustPhysicalCallableEmissionRequests(
         else visitUse(receiver, owner, "receiver", node);
       } else if (target.classReceiver !== undefined) visitUse(target.classReceiver, owner, "receiver", node);
       if (checked === undefined) diagnostics.push(emissionDiagnostic(node, "An emitted source call requires its original checked argument occurrences."));
-      else for (const [index, argument] of checked.sourceArguments.entries()) visitUse(argument.expression, owner, `argument:${index}`, node);
+      else {
+        const arguments_ = ast.arguments(node);
+        for (const [index, argument] of checked.sourceArguments.entries()) {
+          const original = arguments_[index];
+          if (original === undefined || original !== argument.expression) {
+            diagnostics.push(emissionDiagnostic(node, "A physical source argument requires its identical original checked argument slot."));
+            continue;
+          }
+          visitUse(original, owner, `argument:${index}`, node);
+          runtime(owner, original, `argument:${index}`, node);
+        }
+      }
       const callable = rustSourceCallCallableStorageCarrier(operation, input.structuralShapes);
       // A generic callable value, or a stored (non-native) structural method slot, is invoked through its physical
       // invocation storage, which is prepared together with the other physical callable storage.

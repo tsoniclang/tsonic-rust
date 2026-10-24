@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { artifactText, compileRust } from "../../helpers/rust-session.mjs";
 import { runCargo, writeGeneratedProject } from "../../helpers/cargo-projects.mjs";
 import { nativeOwnershipCostSupport } from "../../helpers/native-ownership-cost.mjs";
-import { sourceCallableValueParameters } from "@tsonic/target-api/source";
+import { createTargetSourceProgram, sourceCallableValueParameters } from "@tsonic/target-api/source";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 
 const sourceText = `
@@ -59,13 +59,14 @@ for (const surfaces of [[], ["js"]]) {
       compiled.result.diagnostics.map(issue => `${issue.code}: ${issue.message}`).join("\n").slice(0, 2048));
     assert.equal(compiled.result.program !== undefined && compiled.result.plan !== undefined, true, "actual source reaches sealed native planning");
     const program = compiled.result.program;
+    const checked = createTargetSourceProgram(compiled.source);
     const reads = checkedKeyReads(program);
     const { ast } = program.source;
     for (const name of ["globalRead", "localRead", "numericRead", "enumRead"]) {
       const declaration = program.sourceFiles.flatMap(file => ast.statements(file)).find(node =>
         ast.is.IsFunctionDeclaration(node) && ast.text(ast.name(node)) === name);
       assert.equal(declaration !== undefined, true, `${name}: the original checked source function is retained`);
-      const parameters = sourceCallableValueParameters(ast, declaration, program.source.semantics.forNode(declaration));
+      const parameters = sourceCallableValueParameters(ast, declaration, checked.semantics.forNode(declaration));
       assert.equal(parameters !== undefined && parameters.length > 0, true, `${name}: the original object parameter is checked`);
       const abi = program.records.sourceParameterAbi.get(parameters[0]);
       assert.equal(abi?.mode, "ref", `${name}: a nonretaining object read keeps its native shared input`);

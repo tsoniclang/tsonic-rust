@@ -103,5 +103,5 @@ builder.sourceBinding.get(subject);
     assert.notEqual(result.status, 0, name);
     assert.match(result.diagnostics, diagnostic, name);
   }
-  assert.equal(invalid.length, 35);
+  assert.equal(invalid.length, 37, "all 37 exact retired producer forms retain their individual type-level refusals");
 });
