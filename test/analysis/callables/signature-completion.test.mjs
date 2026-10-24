@@ -380,12 +380,10 @@ export function step(callback: () => number): Identity {
 test("one completed synchronous owner publishes input-only native retention before caching its signature", () => {
   const input = fixture(false, retainedInputSource, []);
   const records = input.current.context.records;
-  let admissions = 0;
-  const current = { ...input.current, context: { ...input.current.context, records: { ...records,
-    retainedEnvironments: { ...records.retainedEnvironments,
-      retain(...arguments_) { admissions++; return records.retainedEnvironments.retain(...arguments_); },
-    },
-  } } };
+  const current = input.current;
+  const admissions = () => current.context.requiredRecords.filter(requirement =>
+    requirement.family === "retainedEnvironment" && requirement.subject === input.declaration);
+  assert.equal(admissions().length, 0, "the actual probe begins without a dependent environment publication");
   const selected = finalizeRustCallableSignature(current, input.declaration);
   assert.equal(selected !== undefined && selected.result.returnCarrier.kind === "target-specific", true,
     "the actual generic callable result is distinct from a monomorphic runtime-callable result");
@@ -398,12 +396,13 @@ test("one completed synchronous owner publishes input-only native retention befo
   assert.equal(environment.inputs.length, 1, "the complete input vector contains one retained source formal");
   assert.equal(environment.inputs[0].kind === "parameter" && environment.inputs[0].declaration === parameter, true,
     "retention keeps the exact original source parameter, not a callable-family or contextual surrogate");
-  assert.equal(admissions, 1, "input and result completion have one synchronous environment publisher");
+  assert.equal(admissions().length, 1, "input and result completion have one synchronous environment publisher");
+  assert.equal(admissions()[0].producer, "sourceCallableReturns.resolve", "the completed source-return owner owns that publication");
   assert.equal(finalizeRustCallableSignature(current, input.declaration) === selected, true);
   const repeated = finalizeRustCallableSignature(current, input.declaration, { selectedReturn: selected.logicalReturn });
   assert.equal(repeated?.result === selected.result, true, "an exact new request reuses the admitted result");
   assert.equal(records.retainedEnvironment.get(input.declaration) === environment, true);
-  assert.equal(admissions, 1, "matching signature requests do not publish a second environment");
+  assert.equal(admissions().length, 1, "matching signature requests do not publish a second environment");
   records.seal(current.context.requiredRecords);
 });
 
