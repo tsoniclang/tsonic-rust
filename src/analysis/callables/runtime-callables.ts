@@ -171,7 +171,7 @@ export function applySelectedRuntimeCallableCall(
   );
   if (arguments_ === undefined) return undefined;
   const resultCarrier = rustSourceCallResultWithInputLifetimes(callable.result,
-    finalizedParameters.map(parameter => parameter.parameterCarrier), bindings,
+    arguments_.parameters.map(parameter => parameter.parameterCarrier), bindings,
     rustSourceCallArgumentCarriers(expression, walk.context.ast, walk.context.records));
   if (!retainRustSelectedSourceCallResultStorage(selectedSignature, finalized!.targetGenericArguments,
     resultCarrier, rustResolutionContext(walk, expression), walk.operationOptions)) {
@@ -266,7 +266,7 @@ export function applySelectedRuntimeCallableCall(
     resolveExpressionCarrier(walk, callee, sourceFile, target.receiverCarrier) === undefined) return undefined;
   const completed = setCarrierFact(walk, expression, finalResultCarrier);
   if (completed === undefined) return undefined;
-  recordSelectedSourceCallArguments(walk, arguments_);
+  recordSelectedSourceCallArguments(walk, arguments_.arguments);
   if (selectedOptional !== undefined) {
     requireRustRecord(walk.context.requiredRecords, "optionalChain", expression, selectedOptional.operationKind, "analysis/source-evidence/types/resolution/references.ts");
     walk.context.records.optionalChains.guard(expression, selectedOptional.guard,
@@ -285,7 +285,7 @@ export function applySelectedRuntimeCallableCall(
     kind: "source-call",
     operationId: selectedSignature.member.id,
     target,
-    parameters: finalizedParameters,
+    parameters: arguments_.parameters,
     resultCarrier,
     ...(finalized === undefined || finalized.targetGenericArguments.length === 0 ? {} : {
       targetGenericArguments: finalized.targetGenericArguments,

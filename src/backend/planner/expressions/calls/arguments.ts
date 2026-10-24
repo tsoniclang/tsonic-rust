@@ -12,6 +12,7 @@ import { planRustRestAssembly } from "./rest-assembly.js";
 import { planRustSourceCallArgumentValue } from "./singleton-slices.js";
 import { rustValueDestinationContext } from "../value-destinations.js";
 import { planRustAbsentValue } from "../optional-storage.js";
+import { lowerRustValueConversion } from "../value-conversions.js";
 
 export interface RustSourceArgumentEvaluation {
   readonly arguments: readonly RustExpr[];
@@ -68,6 +69,13 @@ function shapeSourceInput(plan: RustSourceArgumentEvaluation, input: RustSourceC
     value = projection.kind === "fixed" ? { kind: "index", receiver: value, index: { kind: "int-literal", text: String(projection.index) } }
       : { kind: "field", receiver: value, name: String(projection.index) };
     if (projection.clone) value = { kind: "method-call", receiver: value, method: "clone", args: [] };
+  }
+  if (projection !== undefined && projection.conversion !== null) {
+    const conversion = projection.conversion;
+    const source = conversion.sourceMode === "ref" && projection.kind !== "element"
+      ? applyRustArgumentMode(context, { stage: "finalized", expression: value }, "ref") : value;
+    value = lowerRustValueConversion(conversion, source, context, node)
+      ?? failRustPlannerInvariant("An admitted spread input requires its selected native projection conversion.", node);
   }
   if (input.passing === "value" || input.passing === "identity" || plan.borrowedInputs.get(node) === value) return value;
   return applyRustArgumentMode(context, projection !== undefined || plan.bindings.length !== 0

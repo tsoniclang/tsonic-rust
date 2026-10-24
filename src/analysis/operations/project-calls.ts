@@ -1,5 +1,5 @@
 import { selectRustProjectSourceCallTarget } from "./source-call-targets.js";
-import { prepareSelectedSourceCallArguments, recordSelectedSourceCallArguments } from "./source-call-arguments.js";
+import { prepareSelectedSourceCallArguments, recordSelectedSourceCallArguments, type RustSourceCallParameterRequest } from "./source-call-arguments.js";
 import { rustTargetGenericTypeArguments, substituteRustTargetGenerics, isRustProgramErrorCarrier, rustJsArrayLikeElementTargetType } from "../../target-model/types/index.js";
 import { KindFunctionDeclaration, Node_Type } from "@tsonic/target-api/source";
 
@@ -97,7 +97,7 @@ export function applySelectedProjectSourceCall(
       ["target.capability=rust.source-call.parameter-storage"]);
     return undefined;
   }
-  let parameters: import("../../target-model/operations/model.js").RustSourceCallParameterPlan[] = [];
+  let parameters: RustSourceCallParameterRequest[] = [];
   for (const [index, targetParameter] of selectedMember.parameters.entries()) {
     const selectedParameter = selectedParameters[index];
     const parameterDeclaration = declarationParameters[index];
@@ -351,7 +351,7 @@ export function applySelectedProjectSourceCall(
         );
         return undefined;
       }
-      parameters = callableParameters as import("../../target-model/operations/model.js").RustSourceCallParameterPlan[];
+      parameters = callableParameters as RustSourceCallParameterRequest[];
     }
   }
   const invocationReferences = rustTargetGenericReferences({ kind: "tuple",
@@ -391,9 +391,10 @@ export function applySelectedProjectSourceCall(
   }));
   const arguments_ = prepareSelectedSourceCallArguments(walk, callArguments as readonly Node[], sourceFile, parameters, bindings);
   if (arguments_ === undefined) return undefined;
+  const preparedParameters = arguments_.parameters;
   const actualArgumentCarriers = rustSourceCallArgumentCarriers(expression, ast, walk.context.records);
   const instantiateResult = (carrier: TargetTypeRef): TargetTypeRef => rustRetainedCallResult(rustSourceCallResultWithInputLifetimes(
-    carrier, parameters.map(parameter => parameter.parameterCarrier), bindings, actualArgumentCarriers, parameters), retainedLifetimes);
+    carrier, preparedParameters.map(parameter => parameter.parameterCarrier), bindings, actualArgumentCarriers, preparedParameters), retainedLifetimes);
   const nativeResultCarrier = instantiateResult(genericResultCarrier);
   const sourceResult = selectRustSourceCallResult(walk.operationOptions.projectTypes, nativeResultCarrier, () => {
     const selected = selectedSignature.sourceResultProjection?.selectedCarrier;
@@ -440,7 +441,7 @@ export function applySelectedProjectSourceCall(
     requireRustRecord(walk.context.requiredRecords, "retainedCallLifetimes", expression, "retained-call", "analysis/operations/project-calls.ts");
   }
   walk.context.records.retainedCalls.finalize(expression, retainedLifetimes);
-  recordSelectedSourceCallArguments(walk, arguments_);
+  recordSelectedSourceCallArguments(walk, arguments_.arguments);
   requireRustRecord(walk.context.requiredRecords, "selectedOperation", expression, "source-call", "applySelectedProjectSourceCall");
   walk.context.records.selectedOperations.project(
     expression,
@@ -454,7 +455,7 @@ export function applySelectedProjectSourceCall(
     kind: "source-call",
     operationId,
     target,
-    parameters,
+    parameters: preparedParameters,
     ...(targetGenericArguments.length === 0 ? {} : { targetGenericArguments }),
     ...(sourceResult.projection === undefined ? {} : { resultProjection: sourceResult.projection }),
     ...(asyncBody === undefined ? {} : { asyncBody }),

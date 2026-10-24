@@ -7,6 +7,7 @@ import type { RustExactIntegerConversion } from "../conversions/exact-integer.js
 import type { RustIntegerRefinementConversion } from "../conversions/integer-refinement.js";
 import type { RustProgramErrorConversion } from "../conversions/program-error.js";
 import type { RustUnionArmMapping, RustUnionLeaf } from "../types/union-relations.js";
+import type { RustValueConversionContract } from "../conversions/contracts.js";
 
 export const rustExtensionId = "tsonic.rust";
 
@@ -548,6 +549,14 @@ export interface RustOptionalChainFact {
   readonly lowering: "map" | "and-then";
 }
 
+export type RustSourceCallArgumentProjection =
+  | { readonly kind: "direct" }
+  | {
+      readonly kind: "element";
+      readonly sourceCarrier: TargetTypeRef;
+      readonly conversion: (RustValueConversionContract & { readonly fallible: false }) | null;
+    };
+
 export interface RustSourceCallParameterPlan {
   readonly form: "required" | "optional" | "default" | "rest";
   readonly valueCarrier: TargetTypeRef;
@@ -560,5 +569,6 @@ export interface RustSourceCallParameterPlan {
     readonly sourceParameterForm: "parameter" | "rest-element" | "rest-sequence";
     readonly carrier: TargetTypeRef;
     readonly spreadElementIndex?: number;
+    readonly projection: RustSourceCallArgumentProjection;
   }[];
 }

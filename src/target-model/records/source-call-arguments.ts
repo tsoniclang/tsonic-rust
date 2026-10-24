@@ -1,12 +1,14 @@
 import type { Node } from "@tsonic/tsts";
 import type { TargetTypeRef } from "../types/model.js";
 import type { RustTargetOperationFact } from "./operations.js";
+import type { RustSourceCallArgumentProjection } from "../operations/model.js";
 
 export type RustSourceCallFact = Extract<RustTargetOperationFact, { readonly kind: "source-call" }>;
 
 export interface RustSourceCallInputEmission {
   readonly argumentIndex: number;
-  readonly projection: { readonly kind: "tuple" | "fixed" | "element"; readonly index: number; readonly clone: boolean } | undefined;
+  readonly projection: { readonly kind: "tuple" | "fixed" | "element"; readonly index: number; readonly clone: boolean;
+    readonly conversion: Extract<RustSourceCallArgumentProjection, { readonly kind: "element" }>["conversion"] } | undefined;
   readonly passing: "value" | "identity" | "ref" | "mut-ref";
   readonly sequence: "value" | "native" | "js";
 }

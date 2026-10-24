@@ -16,12 +16,16 @@ import { rustSpreadElementCarrier } from "../../target-model/operations/rest-ass
 import { rustCallableProtocol } from "../../target-model/types/carriers/callables.js";
 import { rustCallableInvocationSignaturesMatch } from "../../policy/conversions/callable-input.js";
 import { reconcileRequiredCarrier } from "../conversions/contextual-values.js";
+import { selectRustSourceValueConversion } from "../../policy/conversions/selection.js";
+import { rustValueConversionContract } from "../../policy/conversions/contracts.js";
+import { snapshotClosedMetadata } from "../../target-model/metadata/closed-data.js";
 import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustSelectedTargetSignature } from "../../target-model/records/member-selections.js";
 
-import type { RustArgumentMode } from "../../target-model/operations/model.js";
+import type { RustArgumentMode, RustSourceCallArgumentProjection, RustSourceCallParameterPlan } from "../../target-model/operations/model.js";
+import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 
 import { requireRustRecord } from "../program/records/required-records.js";
 
@@ -30,15 +34,25 @@ interface RustSelectedSourceCallArgument {
   readonly mode: RustArgumentMode;
 }
 
+export type RustSourceCallParameterRequest = Omit<RustSourceCallParameterPlan, "inputs"> & {
+  readonly inputs: readonly Omit<RustSourceCallParameterPlan["inputs"][number], "projection">[];
+};
+
+interface RustPreparedSourceCallArguments {
+  readonly arguments: readonly RustSelectedSourceCallArgument[];
+  readonly parameters: readonly RustSourceCallParameterPlan[];
+}
+
 export function prepareSelectedSourceCallArguments(
   walk: RustFactWalk,
   callArguments: readonly Node[],
   sourceFile: SourceFile,
-  parameters: readonly import("../../target-model/operations/model.js").RustSourceCallParameterPlan[],
+  parameters: readonly RustSourceCallParameterRequest[],
   bindings: readonly NonNullable<RustSelectedTargetSignature["sourceArgumentBindings"]>[number][],
-): readonly RustSelectedSourceCallArgument[] | undefined {
+): RustPreparedSourceCallArguments | undefined {
   const { ast } = walk.context;
   const selected: RustSelectedSourceCallArgument[] = [];
+  const projections = new Map<RustSourceCallParameterRequest["inputs"][number], RustSourceCallArgumentProjection>();
   for (const [index, argument] of callArguments.entries()) {
     const argumentBindings = bindings.filter((binding) =>
       binding.sourceArgumentIndex === index);
@@ -52,10 +66,10 @@ export function prepareSelectedSourceCallArguments(
       );
       return undefined;
     }
-    const bindingCarriers = parameters.flatMap((parameter) =>
+    const inputs = parameters.flatMap((parameter) =>
       parameter.inputs
-        .filter((input) => input.sourceArgumentIndex === index)
-        .map((input) => input.carrier));
+        .filter((input) => input.sourceArgumentIndex === index));
+    const bindingCarriers = inputs.map(input => input.carrier);
     const expected = ast.kindName(argument) === KindSpreadElement
       ? undefined
       : bindingCarriers.length > 0 && bindingCarriers.every((carrier) =>
@@ -68,13 +82,11 @@ export function prepareSelectedSourceCallArguments(
       sourceFile,
       expected,
     );
-    if (resolvedArgumentCarrier === undefined ||
-      ast.kindName(argument) === KindSpreadElement &&
-        !selectedSpreadArgumentMatches(
-          resolvedArgumentCarrier,
-          parameters.flatMap((parameter) => parameter.inputs.filter((input) =>
-            input.sourceArgumentIndex === index)),
-        )) {
+    const spread = ast.kindName(argument) === KindSpreadElement;
+    const selectedProjections = resolvedArgumentCarrier === undefined ? [] : inputs.map(input =>
+      selectSourceCallArgumentProjection(resolvedArgumentCarrier, input, spread, walk.context.typeDefinitions));
+    if (resolvedArgumentCarrier === undefined || spread && inputs.length === 0 ||
+      selectedProjections.some(projection => projection === undefined)) {
       // An argument whose own selection was refused already reported that refusal; no second diagnostic follows it.
       if (!walk.rejectedExpressions.has(argument)) {
         appendRustDiagnostic(
@@ -87,6 +99,7 @@ export function prepareSelectedSourceCallArguments(
       }
       return undefined;
     }
+    for (const [inputIndex, input] of inputs.entries()) projections.set(input, selectedProjections[inputIndex]!);
     // A callable argument (for example a Promise resolver) whose invocation signature is wider than the instantiated
     // callable parameter reaches it through the finalized callable adapter, decided here like any contextual conversion.
     if (expected !== undefined && rustCallableProtocol(expected) !== undefined &&
@@ -120,7 +133,22 @@ export function prepareSelectedSourceCallArguments(
     const mode = modes[0]!;
     selected.push(Object.freeze({ argument, mode }));
   }
-  return Object.freeze(selected);
+  const prepared: RustSourceCallParameterPlan[] = [];
+  for (const parameter of parameters) {
+    const inputs: RustSourceCallParameterPlan["inputs"][number][] = [];
+    for (const input of parameter.inputs) {
+      const projection = projections.get(input);
+      if (projection === undefined) {
+        appendRustDiagnostic(walk, "RUST_SOURCE_CALL_BINDING_MISSING",
+          "Selected source input has no exact checked argument projection.", sourceFile,
+          ["target.capability=rust.source-call.argument-bindings"]);
+        return undefined;
+      }
+      inputs.push(Object.freeze({ ...input, projection }));
+    }
+    prepared.push(Object.freeze({ ...parameter, inputs: Object.freeze(inputs) }));
+  }
+  return Object.freeze({ arguments: Object.freeze(selected), parameters: Object.freeze(prepared) });
 }
 
 export function recordSelectedSourceCallArguments(walk: RustFactWalk, selected: readonly RustSelectedSourceCallArgument[]): void {
@@ -135,19 +163,21 @@ export function recordSelectedSourceCallArguments(walk: RustFactWalk, selected: 
   }
 }
 
-function selectedSpreadArgumentMatches(
+function selectSourceCallArgumentProjection(
   sourceCarrier: TargetTypeRef,
-  inputs: readonly import("../../target-model/operations/model.js").RustSourceCallParameterPlan["inputs"][number][],
-): boolean {
-  return inputs.length > 0 && inputs.every((input) => {
-    const selectedCarrier = input.sourceForm === "spread-element"
-      ? input.spreadElementIndex === undefined
-        ? undefined
-        : rustSpreadElementCarrier(sourceCarrier, input.spreadElementIndex)
-      : input.sourceForm === "spread-sequence"
-        ? sourceCarrier
-        : undefined;
-    return selectedCarrier !== undefined &&
-      rustTargetTypeRefEquals(selectedCarrier, input.carrier);
-  });
+  input: RustSourceCallParameterRequest["inputs"][number],
+  spread: boolean,
+  definitions: RustTypeDefinitions,
+): RustSourceCallArgumentProjection | undefined {
+  if (!spread) return input.sourceForm === "value" ? Object.freeze({ kind: "direct" }) : undefined;
+  if (input.sourceForm === "spread-sequence") return rustTargetTypeRefEquals(sourceCarrier, input.carrier)
+    ? Object.freeze({ kind: "direct" }) : undefined;
+  const element = input.sourceForm !== "spread-element" || input.spreadElementIndex === undefined
+    ? undefined : rustSpreadElementCarrier(sourceCarrier, input.spreadElementIndex);
+  if (element === undefined) return undefined;
+  if (rustTargetTypeRefEquals(element, input.carrier)) return Object.freeze({ kind: "element", sourceCarrier: element, conversion: null });
+  const conversion = selectRustSourceValueConversion(element, input.carrier, definitions);
+  const contract = conversion === undefined ? undefined : rustValueConversionContract(conversion, definitions);
+  return contract === undefined || contract.fallible ? undefined
+    : Object.freeze({ kind: "element", sourceCarrier: element, conversion: snapshotClosedMetadata(contract) });
 }

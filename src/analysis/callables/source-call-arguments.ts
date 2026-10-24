@@ -85,9 +85,11 @@ export function analyzeRustSourceCallArguments(program: Omit<RustAnalysisProgram
           valid = rustFinalizedCarrierTransitionMatches(mapRustTargetTypes(sourceCarrier, program.typeFamilies.normalize),
             converted === undefined ? undefined : mapRustTargetTypes(converted, program.typeFamilies.normalize), mapRustTargetTypes(target, program.typeFamilies.normalize)) ||
             converted === undefined && program.structuralShapes.sharesStorage(sourceCarrier, input.carrier);
-        } else if (sourceCarrier !== undefined && converted === undefined && input.spreadElementIndex !== undefined) {
+        } else if (sourceCarrier !== undefined && converted === undefined && input.sourceForm === "spread-element" && input.spreadElementIndex !== undefined) {
+          const selected = input.projection;
+          if (selected.kind !== "element") failTargetAnalysisInvariant("tsonic-rust", "An admitted native spread requires its selected input projection and conversion.", argument);
           const element = rustSpreadElementCarrier(sourceCarrier, input.spreadElementIndex);
-          valid = element !== undefined && rustTargetTypeRefEquals(mapRustTargetTypes(element, program.typeFamilies.normalize), mapRustTargetTypes(input.carrier, program.typeFamilies.normalize));
+          valid = element !== undefined && rustTargetTypeRefEquals(mapRustTargetTypes(element, program.typeFamilies.normalize), mapRustTargetTypes(selected.sourceCarrier, program.typeFamilies.normalize));
           if (valid && element !== undefined) {
             const expression = evaluation[input.sourceArgumentIndex]!.expression;
             const read = program.records.readOwnership.get(expression);
@@ -95,17 +97,18 @@ export function analyzeRustSourceCallArguments(program: Omit<RustAnalysisProgram
             const copy = isRustCopyCarrier(element, carrier => program.callableValues.generic.definitionFor(carrier)?.copy === true);
             const fixed = rustFixedArrayCarrierValue(sourceCarrier) !== undefined;
             const borrowed = read.source.kind === "borrow" || read.sharedReference;
+            const consumption = selected.conversion === null ? parameter.mode : selected.conversion.sourceMode === "ref" ? "ref" : "value";
             if (borrowed) borrowedRoots.set(input.sourceArgumentIndex, read.sharedReference ? "identity"
               : read.source.kind === "borrow" && read.source.mutable ? "mut-ref" : "ref");
             const destructure = fixed && !copy && !borrowed;
-            projection = { kind: destructure ? "element" : fixed ? "fixed" : "tuple", index: input.spreadElementIndex,
-              clone: !destructure && !copy && borrowed && parameter.mode === "value" };
+            projection = Object.freeze({ kind: destructure ? "element" : fixed ? "fixed" : "tuple", index: input.spreadElementIndex,
+              clone: !destructure && !copy && borrowed && consumption === "value", conversion: selected.conversion });
             if (destructure) {
               const values = elements.get(input.sourceArgumentIndex) ?? new Map<number, "value" | "ref" | "mut-ref">();
               const existing = values.get(input.spreadElementIndex);
-              if (existing !== undefined && (existing !== parameter.mode || existing === "value"))
+              if (existing !== undefined && (existing !== consumption || existing === "value"))
                 failTargetAnalysisInvariant("tsonic-rust", "A checked fixed spread element has one exact native consumption mode.", argument);
-              values.set(input.spreadElementIndex, parameter.mode);
+              values.set(input.spreadElementIndex, consumption);
               elements.set(input.sourceArgumentIndex, values);
             }
             if (projection.clone) {
@@ -126,7 +129,7 @@ export function analyzeRustSourceCallArguments(program: Omit<RustAnalysisProgram
           failTargetAnalysisInvariant("tsonic-rust", "An admitted reference parameter requires its exact native referent ABI.", argument);
         if (parameter.mode === "mut-ref") mutable.add(input.sourceArgumentIndex);
         inputs.push(Object.freeze({ argumentIndex: input.sourceArgumentIndex, projection,
-          passing: parameter.mode === "value" ? "value" : identity || projection?.kind === "element" ? "identity" : parameter.mode,
+          passing: parameter.mode === "value" ? "value" : identity || projection?.kind === "element" && projection.conversion === null ? "identity" : parameter.mode,
           sequence: input.sourceForm !== "spread-sequence" ? "value" : isRustJsArrayCarrier(input.carrier) ? "js" : "native" }));
       }
       // An omitted optional native callable input is passed as the absent value of its invocation witness.
