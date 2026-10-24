@@ -10,15 +10,15 @@ test("unit completion omits only a final pure unit literal and retains preceding
   const unit = { kind: "tuple-literal", elements: [] };
   for (const kind of ["return", "tail"]) {
     const body = { statements: [effect, { kind, expr: unit }] };
-    assert.deepEqual(applyRustTailShape(body, false), { statements: [effect] });
-    assert.deepEqual(applyRustTailShape(body, true).statements[1], { kind: "tail", expr: unit });
+    assert.deepEqual(applyRustTailShape(body, false, new Set()), { statements: [effect] });
+    assert.deepEqual(applyRustTailShape(body, true, new Set()).statements[1], { kind: "tail", expr: unit });
     const effectful = { statements: [{ kind, expr: effect.expr }] };
-    assert.deepEqual(applyRustTailShape(effectful, false).statements, [{ kind: "tail", expr: effect.expr }]);
+    assert.deepEqual(applyRustTailShape(effectful, false, new Set()).statements, [{ kind: "tail", expr: effect.expr }]);
   }
   const nested = { statements: [{ kind: "scope", body: { statements: [{ kind: "tail", expr: unit }] } }] };
-  assert.deepEqual(applyRustTailShape(nested, false), { statements: [{ kind: "scope", body: { statements: [] } }] });
+  assert.deepEqual(applyRustTailShape(nested, false, new Set()), { statements: [{ kind: "scope", body: { statements: [] } }] });
   const earlyReturn = { statements: [{ kind: "return", expr: unit }, effect] };
-  assert.equal(applyRustTailShape(earlyReturn, false), earlyReturn);
+  assert.equal(applyRustTailShape(earlyReturn, false, new Set()), earlyReturn);
 });
 
 test("exhaustive switches retain function, method and closure return flow", { timeout: 300_000 }, () => {

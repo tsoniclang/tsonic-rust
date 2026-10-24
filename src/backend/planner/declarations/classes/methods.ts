@@ -228,6 +228,7 @@ export function planProjectMethod(
   const shapedBody = applyRustTailShape(
     { statements: [...overridePrelude, ...finalizedBody.statements] },
     returnType !== undefined,
+    new Set([...params.map(parameter => parameter.name), ...(isStatic ? [] : ["self"])]),
   );
   return { kind: "function",
     name: methodName,

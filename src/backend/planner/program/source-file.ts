@@ -444,7 +444,7 @@ function planModuleItems(
     ...(errorBoundary === undefined ? {} : { errorType: errorBoundary.errorType }),
     params: nativeTasks.parameters,
     body: applyFallibleShape(
-      applyRustTailShape({ statements: initializationStatements }, false),
+      applyRustTailShape({ statements: initializationStatements }, false, new Set(nativeTasks.parameters.map(parameter => parameter.name))),
       fallible
         ? {
             fallible: true,

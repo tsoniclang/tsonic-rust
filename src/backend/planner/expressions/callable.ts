@@ -399,6 +399,8 @@ export function planRustCallableExpressionBody(
   const loweredBody = generator === undefined ? applyFallibleShape(applyRustTailShape(
     bodyWithBindings,
     !emission.unitBody || bodyIsFallible,
+    new Set([...closureParams.map(parameter => parameter.name),
+      ...captureBindings.flatMap(binding => binding.name === undefined ? [] : [binding.name])]),
   ), bodyIsFallible
     ? {
         fallible: true,
