@@ -9,6 +9,51 @@ import { createRustProgramRecordBuilder } from "../../../dist/analysis/program/r
 import { emptyRustTypeDefinitions } from "../../../dist/target-model/types/source-union-definitions.js";
 import { rustOptionTargetType, rustStringTargetType, rustSourcePrimitiveTargetType, rustUnitTargetType } from "../../../dist/target-model/types/index.js";
 import { analyzeRust } from "../../helpers/rust-session.mjs";
+import { finalizeRustProviderOperationAbi } from "../../../dist/policy/operations/members/abi/finalize.js";
+import { rustBigIntTargetType } from "../../../dist/target-model/types/carriers/native.js";
+
+for (const projection of [false, true]) test(`owned native getter results remain distinct from stored element places (projection=${projection})`, async () => {
+  for (const [sourceType, payload] of [["string", rustStringTargetType()], ["bigint", rustBigIntTargetType()]]) {
+    const source = createTargetSourceProgram(await checkedSource("ownership-native-getter-result", {
+      "src/index.ts": `function inspect(values: (${sourceType} | undefined)[]): void { void (values[0]!); }`,
+    }));
+    const storage = createSourceStorageQuery(source, source.sourceFiles);
+    const { ast } = source;
+    const element = storage.nodes.find(node => ast.is.IsElementAccessExpression(node));
+    assert.equal(element !== undefined, true, "the fixture keeps its original checked element source occurrence");
+    const carrier = rustOptionTargetType(payload);
+    for (const [label, form, owned] of [
+      ["owned native getter", { form: "method", name: "get" }, true],
+      ["native stored index", { form: "index" }, false],
+    ]) {
+      const builder = createRustProgramRecordBuilder();
+      builder.runtimeCarriers.selected(element, carrier);
+      if (projection) builder.flowReadProjections.project(element, carrier, payload, { kind: "option-value" });
+      const abi = finalizeRustProviderOperationAbi({ operationKind: "indexer", form,
+        sourceReceiver: { kind: "runtime", carrier: { kind: "array", element: carrier } },
+        sourceArgumentCarriers: [rustSourcePrimitiveTargetType("int32")],
+        resultCarrier: carrier, isAsync: false, isFallible: false });
+      assert.equal(abi !== undefined, true, `${label}: the exact native receiver/result contract is present`);
+      builder.targetOperations.source(element, { kind: "provider-operation", operationId: "fixture.native-getter", abi });
+      for (const node of storage.nodes) if (ast.is.IsVoidExpression(node)) builder.targetOperations.source(node, {
+        kind: "void-expression", operationId: "ownership-read.discard", resultCarrier: rustUnitTargetType(),
+      });
+      const nodes = new Set(storage.nodes);
+      const selected = analyzeRustReadOwnership({ storage, nativeNodes: storage.nodes, records: builder.seal([]),
+        flow: { movingReads: new Set(owned ? [element] : []), captureTransfers: new Map() },
+        borrowEffects: { pureValues: new Set(), fieldWrites: new Map(), stableBindings: new Set(), nativeWrites: new Map() },
+        borrowEffectsInput: { ast, isNativeNode: node => nodes.has(node) }, definitions: emptyRustTypeDefinitions,
+        genericRequirements: { supportsClone: () => true }, genericCallables: { definitionFor: () => undefined },
+        capturesFor: () => undefined, invocationTransfersCapture: () => false, ownsExternalArgument: () => false,
+      });
+      assert.equal(selected.kind, "resolved", `${label}: the complete checked read inventory closes`);
+      const read = selected.ownership.reads.get(element);
+      assert.equal(read?.readsStorage, !owned, `${label}: source element syntax does not override the existing native owned-result proof`);
+      assert.equal(read?.value.kind, owned ? "move" : "borrow", `${label}: a fresh owned payload is not reborrowed or cloned`);
+      assert.equal(read?.source.kind, owned ? "move" : "borrow", `${label}: a native stored place keeps its exact shared lease`);
+    }
+  }
+});
 
 for (const [name, body, moves] of [
   ["terminal", "throw value;", [true]],

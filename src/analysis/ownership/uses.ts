@@ -15,6 +15,7 @@ import { rustTargetGenericReferences } from "../../target-model/types/carriers/g
 import { rustLifetimeKey } from "../../target-model/lifetimes/index.js";
 import type { RustStructuralShapePlan } from "../objects/shapes/structural-shape-plan.js";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
+import { isRustAssignmentOperator } from "../../target-model/syntax/tokens.js";
 
 export function rustNativeArgumentBorrowsRead(argument: Node, reference: Node,
   ast: AstReader, records: RustProgramRecords): boolean {
@@ -95,15 +96,29 @@ export function analyzeRustReadUses(ast: AstReader, nodes: readonly Node[], reco
       nativeInputs: operation?.kind === "provider-operation" || operation?.kind === "runtime-set" ? rustFinalizedSourceInputs(operation.abi).map(input =>
         ({ source: input.source, mode: argumentConsumed(input.source, argumentsList) ? undefined : rustProviderInputBorrowMode(input) })) : [],
       argumentModes: (argumentsList ?? []).map(argument => records.argumentPassing.get(argument)?.mode) });
-    for (const [subject, use] of selected) uses.set(subject, use);
+    let source = node;
+    let parent = ast.parent(source);
+    while (parent !== undefined && sourceTransparentExpressionOperand(ast, parent) === source) {
+      source = parent;
+      parent = ast.parent(source);
+    }
+    const assignment = parent === undefined || !ast.is.IsBinaryExpression(parent) || BinaryExpression_Left(ast, parent) !== source
+      ? undefined : records.targetOperation.get(parent);
+    const assignmentRight = parent !== undefined && (assignment?.kind === "nullish-assignment" ||
+      (assignment?.kind === "operator-token" || assignment?.kind === "operator-call") &&
+      assignment.operator !== "=" && isRustAssignmentOperator(assignment.operator)) ? BinaryExpression_Right(ast, parent) : undefined;
+    const receiver = Node_Expression(ast, node);
+    const extendedUse = (subject: Node, use: RustReadUse): RustReadUse => subject !== receiver || assignmentRight === undefined ? use
+      : Object.freeze({ ...use, later: Object.freeze([...use.later, assignmentRight]) });
+    for (const [subject, use] of selected) uses.set(subject, extendedUse(subject, use));
     // A getter read whose method borrows `self` shares its receiver, like a stored field read.
     if (operation?.kind === "source-accessor" && operation.accessMode === "read" && operation.receiver.kind === "instance" &&
       operation.read !== undefined && records.selfMode.get(operation.read.declaration)?.mode === "ref") {
       const receiver = Node_Expression(ast, node);
       const key = ast.is.IsElementAccessExpression(node) ? ElementAccessExpression_ArgumentExpression(ast, node) : undefined;
       if (receiver !== undefined && !uses.has(receiver))
-        uses.set(receiver, Object.freeze({ mode: "shared", later: Object.freeze(key === undefined ? [] : [key]), laterStart: 0,
-          stableAcrossEffects: true }));
+        uses.set(receiver, extendedUse(receiver, Object.freeze({ mode: "shared", later: Object.freeze(key === undefined ? [] : [key]), laterStart: 0,
+          stableAcrossEffects: true })));
     }
   }
   for (const node of nodes) {

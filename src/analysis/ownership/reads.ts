@@ -58,7 +58,8 @@ export function analyzeRustReadOwnership(input: {
       }] };
     }
     const operation = records.targetOperation.get(node);
-    storageReads.set(node, inherited ?? (ast.is.IsIdentifier(node) || ast.is.IsElementAccessExpression(node) ||
+    const ownedProviderResult = operation?.kind === "provider-operation" && flow.movingReads.has(node);
+    storageReads.set(node, inherited ?? (ast.is.IsIdentifier(node) || ast.is.IsElementAccessExpression(node) && !ownedProviderResult ||
       ast.kindName(node) === "KindThisExpression" || ast.kindName(node) === "KindThisKeyword" ||
       operation?.kind === "source-field" && operation.valueSemantics.kind === "stored"));
   }
