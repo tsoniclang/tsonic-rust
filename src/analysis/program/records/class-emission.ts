@@ -11,15 +11,15 @@ import type { RustProjectTypeDefinition } from "../../../target-model/types/proj
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustSourceTypeCarrierValue } from "../../../target-model/types/index.js";
 import type { RustClassValueCallable, RustClassValueForwarderEmission, RustClassValueForwarderRecords } from "../../../target-model/records/class-value-callables.js";
-import type { RustClassImplementationContext, RustClassImplementationGenerics, RustClassConstructorViewEmission, RustClassImplementationRecords } from "../../../target-model/records/class-implementations.js";
+import type { RustClassImplementationContext, RustClassImplementationGenerics, RustClassConstructorViewEmission, RustClassImplementationRecords, RustClassStructuralViewEmission } from "../../../target-model/records/class-implementations.js";
 import { closedMetadataKey } from "../../../target-model/metadata/closed-data.js";
 import { rustProjectViewMatches } from "../../../policy/types/objects/project-view-bindings.js";
-import type { RustProjectStructuralView, RustProjectStructuralViewImplementation } from "../../../target-model/records/project-structural-views.js";
+import type { RustProjectStructuralView } from "../../../target-model/records/project-structural-views.js";
 import type { RustStructuralViewCallableEmission } from "../../../target-model/records/class-implementations.js";
 import type { RustShapeGenericRequirementContract } from "../../../target-model/records/generic-requirements.js";
 
 export interface RustClassEmissionProducer {
-  instanceViews(declaration: Node, fileName: string, values: readonly RustProjectStructuralViewImplementation[]): void;
+  instanceViews(declaration: Node, fileName: string, values: readonly RustClassStructuralViewEmission[]): void;
   instanceViewPolymorphic(declaration: Node, value: boolean): void;
   instanceViewCallable(callable: RustClassValueCallable, value: RustStructuralViewCallableEmission): void;
   structuralViewRequirements(view: RustProjectStructuralView, value: RustShapeGenericRequirementContract): void;
@@ -56,7 +56,7 @@ export function createRustClassEmissionProducer(assertOpen: () => void): RustCla
   const implementationGenerics = new Map<string, RustClassImplementationGenerics>();
   const constructorViews = new WeakMap<Node, Map<string, readonly RustClassConstructorViewEmission[]>>();
   const viewRequirements = new WeakMap<RustProjectStructuralView, RustShapeGenericRequirementContract>();
-  const instanceViews = new WeakMap<Node, Map<string, readonly RustProjectStructuralViewImplementation[]>>();
+  const instanceViews = new WeakMap<Node, Map<string, readonly RustClassStructuralViewEmission[]>>();
   const instanceConversions = new Map<string, RustProjectStructuralView>();
   const instancePolymorphic = new WeakMap<Node, boolean>();
   const instanceCallables = new WeakMap<RustClassValueCallable, RustStructuralViewCallableEmission>();
@@ -78,7 +78,7 @@ export function createRustClassEmissionProducer(assertOpen: () => void): RustCla
       classImplementationGenerics: Object.freeze({ get: (carrier: TargetTypeRef) => implementationGenerics.get(closedMetadataKey(carrier)) }),
       classConstructorViews: Object.freeze({ get: (declaration: Node, fileName: string) => constructorViews.get(declaration)?.get(fileName) }),
     }),
-    instanceViews(declaration: Node, fileName: string, values: readonly RustProjectStructuralViewImplementation[]): void {
+    instanceViews(declaration: Node, fileName: string, values: readonly RustClassStructuralViewEmission[]): void {
       assertOpen();
       let files = instanceViews.get(declaration);
       if (files === undefined) { files = new Map(); instanceViews.set(declaration, files); }

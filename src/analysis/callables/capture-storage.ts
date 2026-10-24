@@ -1,6 +1,6 @@
 import { requireRustRecord } from "../program/records/required-records.js";
 import type { Node, SourceFile, Symbol } from "@tsonic/tsts";
-import { sourceBindingHasSingleCaptureOwner, sourceBindingScope, sourceBindingIterationScope } from "@tsonic/target-api/source";
+import { Node_Expression, sourceBindingHasSingleCaptureOwner, sourceBindingScope, sourceBindingIterationScope } from "@tsonic/target-api/source";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { SourceDeclarationUse } from "@tsonic/target-api/source";
 import type { RustFactWalk } from "../program/walk.js";
@@ -130,11 +130,16 @@ function singleOwnerDirectBinding(
         expression = parent;
         parent = ast.parent(expression);
       }
-      const operation = parent === undefined ? undefined : walk.context.records.targetOperation.get(parent);
+      const receiverCall = parent !== undefined &&
+        (ast.is.IsPropertyAccessExpression(parent) || ast.is.IsElementAccessExpression(parent)) &&
+        Node_Expression(ast, parent) === expression ? ast.parent(parent) : undefined;
+      const operationNode = receiverCall !== undefined && ast.is.IsCallExpression(receiverCall) &&
+        Node_Expression(ast, receiverCall) === parent ? receiverCall : parent;
+      const operation = operationNode === undefined ? undefined : walk.context.records.targetOperation.get(operationNode);
       if (operation?.kind === "provider-operation" && operation.abi.effects.evaluation === "pure" &&
         operation.abi.effects.safety === "safe" && operation.abi.effects.invocation === "infallible" &&
         operation.abi.result.kind === "sync" && isRustCopyCarrier(operation.abi.result.carrier) &&
-        rustBorrowedStringInputs(parent!, operation, ast).includes(expression)) return true;
+        rustBorrowedStringInputs(operationNode!, operation, ast).includes(expression)) return true;
       if (parent !== undefined && (ast.is.IsCallExpression(parent) || ast.is.IsNewExpression(parent))) {
         if (!rustCallArgumentIsOwned(expression, ast, walk.context.records)) return false;
       } else if (parent !== undefined && ast.is.IsArrowFunction(parent) && ast.body(parent) === expression) {

@@ -31,3 +31,27 @@ main();
   assert.doesNotMatch(output, /JsValue::|from_closed|into_iter\(\).*collect|Any|downcast/u);
   validateGeneratedProject("native-binary-union-conversions", result.artifacts, { run: true });
 });
+
+test("native nominal qualifiers retain the original source-profile constructor identity", () => {
+  for (const qualifier of ["Uint8Array", "(Uint8Array)", "Uint8Array!"]) {
+    const { result } = compileRust({ surfaces: ["js"], files: { "index.ts": `
+export function inspect(value: Uint8Array): boolean { return value instanceof ${qualifier}; }
+` } });
+    assertNoTargetDiagnostics(result.diagnostics);
+    assert.equal(result.program !== undefined && result.artifacts.length !== 0, true,
+      `${qualifier}: a checked native qualifier publishes its existing native type test`);
+    assert.doesNotMatch(artifactText(result, "src/index.rs"), /JsValue::|from_closed|Any|downcast/u);
+  }
+});
+
+test("an authored constructor lookalike cannot acquire native source-profile qualification", () => {
+  const { result } = compileRust({ surfaces: ["js"], files: { "index.ts": `
+class Token { value: number = 1; }
+declare const Uint8Array: { new(): Token };
+export function inspect(value: Token): boolean { return value instanceof (Uint8Array); }
+` } });
+  assert.equal(result.diagnostics.filter(issue => issue.code === "RUST_AMBIENT_VALUE_IMPLEMENTATION_MISSING").length, 1,
+    "constructor spelling and checked nominal syntax cannot supply an authored native implementation");
+  assert.equal(result.program === undefined && result.artifacts.length === 0, true,
+    "an unimplemented authored qualifier publishes neither native records nor output");
+});

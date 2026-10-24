@@ -2,6 +2,27 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRust } from "../../helpers/rust-session.mjs";
 import { rustGenericCallableCarrier, rustGenericCallableValue } from "../../../dist/target-model/types/carriers/generic-callables.js";
+import { rustInvariantTypeMarker } from "../../../dist/backend/planner/types/invariant-marker.js";
+
+test("native capture markers preserve exact invariant input and output without a redundant singleton tuple", () => {
+  const lifetime = { kind: "named", name: "capture" };
+  const borrowed = { kind: "reference", mutable: false, referent: { kind: "unit" }, lifetime };
+  const native = { kind: "named", path: "CapturedValue" };
+  for (const parameters of [[], [borrowed], [borrowed, native]]) {
+    const marker = rustInvariantTypeMarker(parameters);
+    assert.equal(marker.kind === "named" && marker.path === "core::marker::PhantomData", true,
+      "the marker remains the native zero-sized ownership marker");
+    const signature = marker.genericArguments[0].type;
+    assert.equal(signature.kind === "function-pointer" && signature.parameters.length === 1, true,
+      "the same contravariant input and covariant output preserve invariance");
+    const environment = signature.parameters[0];
+    assert.equal(environment === signature.result, true, "both variance positions retain the identical selected environment");
+    if (parameters.length === 1) assert.equal(environment === borrowed && environment.lifetime === lifetime, true,
+      "a single actual capture keeps its exact type and lifetime without a type-complexity-only tuple");
+    else assert.equal(environment.kind === "tuple" && environment.elements === parameters, true,
+      "zero and multiple actual captures retain the exact native tuple and capture order");
+  }
+});
 
 function fixture(text) {
   const { program } = analyzeRust({ surfaces: [], files: { "index.ts": text } });

@@ -228,10 +228,11 @@ test("equal-native callable members preserve every distinct original producer an
   observed(callableSource, verifyCallableOrigins);
 });
 
-function verifyConstructorOrigins(program, observations) {
+function verifyConstructorOrigins(program, observations, create) {
   const contexts = program.physicalEmissionContexts.contexts.filter(context => context.use.role === "constructor-layer");
   const rows = contexts.flatMap(context => context.sourceOrigins.flatMap(origins => {
-    assert.equal(origins.kind, "resolved", "a checked source construction retains its original region selection");
+    assert.equal(origins.kind, "resolved", "a checked source construction retains its original region selection: " +
+      (origins.kind === "unavailable" ? origins.reason : origins.kind));
     return origins.alternatives.map(origin => ({context, origins, origin}));
   }));
   assert.equal(rows.length > 0, true, "real constructor and instance-initializer provider operations retain source associations");
@@ -261,10 +262,26 @@ function verifyConstructorOrigins(program, observations) {
   }
   assert.equal(initialized, true, "an actual instance-field initializer retains its class source scope");
   assert.equal(forwarded, true, "super construction retains the original allocation/root and actual caller activation");
+  const context = contexts[0];
+  const factory = observations.factories.find(factory => factory.requests.some(request => request.use === context.use));
+  const request = factory.requests.find(request => request.use === context.use);
+  assert.equal(request.source.kind === "construction" && request.source.plan.layers.includes(request.source.layer), true,
+    "the real constructor occurrence owns its identical admitted plan layer");
+  const foreignLayer = { ...request, source: { ...request.source, layer: { ...request.source.layer } } };
+  const foreignLayerOrigin = create(factory.input, [foreignLayer])(foreignLayer, context.sourceOrigins[0].occurrence);
+  assert.equal(foreignLayerOrigin.kind, "unavailable", "an equal-shaped copied layer cannot borrow an original construction row");
+  const foreignRoot = { ...request, source: { ...request.source, plan: { ...request.source.plan,
+    definition: { ...request.source.plan.definition } } } };
+  const foreignRootOrigin = create(factory.input, [foreignRoot])(foreignRoot, context.sourceOrigins[0].occurrence);
+  assert.equal(foreignRootOrigin.kind, "unavailable", "a copied native definition cannot replace the original plan root through owner equality");
 }
 
 test("constructor, super and instance-initializer origins use actual construction and per-activation binding rows", () => {
   observed(constructorSource, verifyConstructorOrigins);
+});
+
+test("direct and forwarded constructor roots retain separate allocations and identical original native body owners", () => {
+  observed(constructorSource + "\nexport function direct(text: string): boolean { return new Base(text).initial; }\n", verifyConstructorOrigins);
 });
 
 test("uninjected native, callable and constructor source-origin controls continue to emit ordinary Rust", () => {

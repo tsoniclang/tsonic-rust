@@ -103,15 +103,50 @@ test("an absent default preserves the native parameter and independently require
     const selected = planRustCallableParameterPrelude({ params: [], prelude: [{
       kind: "default", initializer, name: "value", mutable, carrier, valueCarrier: carrier,
       retainStorage: selectRustOptionalDefaultStorage({ storage: carrier, result: carrier }),
+      initialization: { kind: "binding" },
     }] }, context, node => {
       evaluations++;
       assert.equal(node === initializer, true, "exact original initializer");
       return { kind: "none" };
     });
     assert.equal(evaluations, 1);
-    assert.deepEqual(selected, mutable ? [{ kind: "let", name: "value", mutable: true,
+    assert.deepEqual(selected.statements, mutable ? [{ kind: "let", name: "value", mutable: true,
       init: { kind: "path", path: "value" } }] : [],
     "no redundant native alias, while an actual mutability transition remains intact");
+    assert.equal(selected.context === context, true, "binding initialization keeps the original body context");
+  }
+});
+
+test("native initialized returns are selected once with exact binding, Drop and initialization-order inverses", () => {
+  const { program } = analyzeRust({ files: { "index.ts": `
+export function direct(value: number): number { return value; }
+export function defaulted(value: number = 11): number { return value; }
+export function beforeRequired(value: number = 11, other: number): number { return value; }
+export function beforeDefault(value: number, other: number = 11): number { return value; }
+export function afterDefault(other: number = 11, value: number): number { return value; }
+export function ownedOther(value: string = "value", other: string): string { return value; }
+export function several(value: number): number { value += 1; return value; }
+export function pattern([value]: [number] = [11]): number { return value; }
+export function different(value: number): number { return value + 1; }
+` } });
+  const { ast } = program.source;
+  const callables = new Map(ast.statements(program.sourceFiles[0]).filter(ast.is.IsFunctionDeclaration)
+    .map(node => [ast.text(ast.name(node)), node]));
+  for (const [name, index, kind] of [
+    ["direct", 0, "return"], ["defaulted", 0, "return"], ["beforeRequired", 0, "return"],
+    ["beforeDefault", 0, "binding"], ["afterDefault", 1, "return"], ["ownedOther", 0, "binding"],
+    ["several", 0, "binding"], ["pattern", 0, "binding"], ["different", 0, "binding"],
+  ]) {
+    const callable = callables.get(name);
+    assert.equal(callable !== undefined, true, name + ": original checked owner");
+    const parameter = ast.parameters(callable)[index];
+    const selected = program.records.callableParameter.get(parameter);
+    assert.equal(selected !== undefined, true, name + ": the real parameter producer publishes once");
+    assert.equal(selected.initialization.kind, kind, name + ": exact return disposition retains native lifetime and order inverses");
+    assert.equal(Object.isFrozen(selected.initialization), true, name + ": the complete disposition is sealed");
+    if (kind === "return") assert.equal(selected.initialization.expression ===
+      ast.as.AsReturnStatement(ast.statements(ast.body(callable))[0]).Expression, true,
+    name + ": only the actual checked return occurrence receives the selected initializer");
   }
 });
 

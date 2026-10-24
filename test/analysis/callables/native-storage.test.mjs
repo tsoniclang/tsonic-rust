@@ -769,6 +769,48 @@ test("nested native method storage rejects missing layouts, slots and foreign so
     "an equal-looking foreign aggregate subject cannot acquire the current graph's layout");
 });
 
+test("absent native callable values consume only their exact admitted invocation argument witnesses", () => {
+  const { program } = analyzeRust({ surfaces: [], files: { "index.ts": `
+    import type { int64 } from "@tsonic/core/types.js";
+    const wide: int64 = 9007199254740993n;
+    function fail(): never { throw new Error("absent"); }
+    function call(read: ((value: int64) => int64) | null | undefined): int64 { return (read ?? fail())(wide); }
+    function relay(read: ((value: int64) => int64) | null | undefined): int64 { return call(read); }
+    export function main(): void {
+      if (relay(value => value) !== wide) throw new Error("wide result changed");
+      let caught = 0;
+      try { relay(null); } catch { caught++; }
+      try { relay(undefined); } catch { caught++; }
+      if (caught !== 2) throw new Error("native absence changed");
+    }
+    main();
+  ` } });
+  const { ast } = program.source;
+  const storage = program.callableValues.nativeStorage;
+  const witnessed = [];
+  const visit = node => {
+    if (ast.is.IsCallExpression(node)) for (const argument of ast.arguments(node)) {
+      const witness = storage.invocationArgumentWitnessFor(node, argument);
+      if (witness === undefined) continue;
+      const selected = storage.valueFor(argument);
+      assert.equal(selected.kind, "selected", "an absent argument has its already-admitted physical native selection");
+      assert.equal(selected.carrier === witness, true, "the complete original invocation witness is retained by identity");
+      assert.equal(selected.inputs.length, 0, "absence does not invent a callable parameter producer");
+      assert.equal(selected.sources.length, 0, "absence does not invent a runtime callable source");
+      assert.equal(Object.isFrozen(selected), true, "the selected absence contract is immutable");
+      witnessed.push({ invocation: node, argument });
+    }
+    ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+  };
+  program.sourceFiles.forEach(visit);
+  assert.equal(witnessed.length, 2, "null and undefined keep one native absence at their two exact call sites");
+  for (const [index, selected] of witnessed.entries()) {
+    assert.equal(storage.invocationArgumentWitnessFor(witnessed[1 - index].invocation, selected.argument) === undefined, true,
+      "a witness cannot cross an unrelated invocation even when its physical carrier matches");
+  }
+  assert.equal(storage.valueFor({}).kind, "unresolved", "a foreign source node cannot acquire an admitted native absence witness");
+});
+
 test("raw callable and Future data fields still require their own exact physical aggregate storage", () => {
   const current = fixture(`
     export function callableData(value: { stored: () => number }): number { return 1; }

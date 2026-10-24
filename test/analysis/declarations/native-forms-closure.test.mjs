@@ -159,7 +159,8 @@ class Entry {
   const names = createRustNamePlan({ ast: source.ast, sourceFiles: [file],
     isNativeNode: nativeMembership(source, file),
     semanticsFor: source.semantics.forNode, runtimeValueUses: { hasFirstClassUse: () => false } });
-  assert.equal(names.diagnostics.length, 0, "checked constant keys do not become authored identifier rejections");
+  assert.equal(names.diagnostics.length, 0, "checked constant keys do not become authored identifier rejections: " +
+    names.diagnostics.map(issue => issue.message).join("\n"));
   const declaration = source.ast.statements(file).find(node => source.ast.is.IsClassDeclaration(node));
   const members = source.ast.members(declaration);
   const [ordinary, instance, staticMethod, numeric, empty] = members;
