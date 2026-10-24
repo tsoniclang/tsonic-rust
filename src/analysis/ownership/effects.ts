@@ -125,14 +125,19 @@ export function analyzeRustBorrowEffects(
     });
     if (invalid) return rejected("Rust borrow effects require the canonical acyclic checked-node inventory.");
     selectStableBinding(node);
-    const operand = sourceTransparentExpressionOperand(input.ast, node);
+    const field = input.records.targetOperation.get(node);
+    const aliasReceiver = field?.kind === "source-field" && field.valueSemantics.kind === "receiver-alias" &&
+      field.dispatch === undefined && rustTargetTypeRefEquals(field.receiverCarrier, field.resultCarrier) &&
+      rustBorrowValueIsUnprojected(node, input.records) ? Node_Expression(input.ast, node) : undefined;
+    const operand = sourceTransparentExpressionOperand(input.ast, node) ?? aliasReceiver;
     if (operand !== undefined && stableBindings.has(operand)) stableBindings.add(node);
     if (rustBorrowPureCopyValue(node, input.ast, input.records, child => pure.has(child))) pure.add(node);
     const selected = selectBorrowedWrite(node, pure, input);
     if (selected !== undefined) writes.set(node, selected);
     if (!pure.has(node)) {
-      const targets = rustNativeWriteTargets(node, input,
-        child => pure.has(child) ? rustNoNativeWrites : nativeWrites.get(child), directField, reserveTargets);
+      const targets = aliasReceiver === undefined ? rustNativeWriteTargets(node, input,
+        child => pure.has(child) ? rustNoNativeWrites : nativeWrites.get(child), directField, reserveTargets)
+        : pure.has(aliasReceiver) ? rustNoNativeWrites : nativeWrites.get(aliasReceiver);
       if (targets !== undefined) nativeWrites.set(node, targets);
     }
   }
@@ -151,6 +156,12 @@ export function selectRustBorrowRelationship(source: Node, later: Node,
       continue;
     }
     const sequence = input.records.targetOperation.get(source);
+    if (inner !== undefined && sequence?.kind === "source-field" && sequence.valueSemantics.kind === "receiver-alias" &&
+      sequence.dispatch === undefined && rustTargetTypeRefEquals(sequence.receiverCarrier, sequence.resultCarrier) &&
+      rustBorrowValueIsUnprojected(source, input.records)) {
+      source = inner;
+      continue;
+    }
     if (sequence?.kind !== "sequence") break;
     const tail = BinaryExpression_Right(input.ast, source);
     if (tail === undefined || !rustBorrowValueIsUnprojected(source, input.records) ||

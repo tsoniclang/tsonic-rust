@@ -29,6 +29,13 @@ export function analyzeRustOwnershipFlow(input: RustOwnershipFlowInput):
   const { ast } = source;
   const movingReads = new Set<Node>();
   const captureTransfers = new Map<Node, ReadonlySet<Node>>();
+  const capturedStorageBindings = new Set<Node>();
+  for (const declaration of input.nativeNodes) {
+    if (!isSourceCallableBodyBoundary(ast, declaration) || ast.body(declaration) === undefined) continue;
+    for (const capture of input.capturesFor(declaration)?.captures ?? []) {
+      if (capture.storage !== "value") capturedStorageBindings.add(capture.declaration);
+    }
+  }
   const regions: { readonly graph: SourceControlFlowGraph;
     readonly liveness: Extract<SourceFlowLivenessSelection, { readonly kind: "resolved" }> }[] = [];
   for (const declaration of input.nativeNodes) {
@@ -56,14 +63,14 @@ export function analyzeRustOwnershipFlow(input: RustOwnershipFlowInput):
           sourceNodesEqual(ast, value.declaration, point.operation.kind === "capture" ? point.operation.binding : undefined));
         if (capture === undefined || capture.storage !== "value" ||
           liveness.after.get(point.id)!.has(point.operation.binding) ||
-          !bindingCanTransfer(point.operation.binding, declaration, input, awaitedReads)) continue;
+          !bindingCanTransfer(point.operation.binding, declaration, input, awaitedReads, capturedStorageBindings)) continue;
         const transferred = new Set(captureTransfers.get(point.source));
         transferred.add(capture.declaration);
         captureTransfers.set(point.source, transferred);
       } else if (point.operation.kind === "read" && liveness.lastUses.has(point.source) &&
         !isFunctionScopedLoopRead(point.source, point.operation.binding, input) &&
         !hasOverlappingArgumentBorrow(point.source, point.operation.binding, input) &&
-        (bindingCanTransfer(point.operation.binding, declaration, input, awaitedReads) ||
+        (bindingCanTransfer(point.operation.binding, declaration, input, awaitedReads, capturedStorageBindings) ||
           input.isOnceCallable(declaration) && ownedCaptures.has(point.operation.binding))) {
         movingReads.add(point.source);
       }
@@ -138,9 +145,10 @@ function transferInvokedLexicalCaptures(
   }
 }
 
-function bindingCanTransfer(binding: Node, callable: Node, input: RustOwnershipFlowInput, awaitedReads: ReadonlySet<Node>): boolean {
+function bindingCanTransfer(binding: Node, callable: Node, input: RustOwnershipFlowInput,
+  awaitedReads: ReadonlySet<Node>, capturedStorageBindings: ReadonlySet<Node>): boolean {
   const { ast, navigation } = input.source;
-  if (sourceEnclosingCallable(binding, ast) !== callable) return false;
+  if (sourceEnclosingCallable(binding, ast) !== callable || capturedStorageBindings.has(binding)) return false;
   const kind = ast.variableDeclarationKind(binding);
   if (kind === "using" || kind === "await using") return false;
   const summary = navigation.declarationUseSummary(binding);

@@ -8,7 +8,8 @@ import { rustProducerErrorTargetType } from "../../target-model/types/carriers/p
 import type { RustProducerErrorReference } from "../../target-model/types/carriers/producer-errors.js";
 import { rustCallableProtocol, rustCallableInputProtocol, rustClosureTargetType } from "../../target-model/types/carriers/callables.js";
 import { rustNamedTargetType } from "../../target-model/types/carriers/native.js";
-import { rustTypeGenericArguments, rustLifetimeGenericArgument } from "../../target-model/types/generic-arguments.js";
+import { rustTypeGenericArguments } from "../../target-model/types/generic-arguments.js";
+import { rustRuntimeCallableTargetType } from "../../target-model/types/carriers/runtime-carriers.js";
 import { rustNativeCallableCompletion } from "../../policy/types/callables/native-completion.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
@@ -159,8 +160,7 @@ export function createRustNativeCallableProducerPlan(input: {
     const arguments_: TargetTypeRef = { kind: "tuple", elements: signature.parameters };
     const result = rustNamedTargetType("rust.core.Result", "Result", rustTypeGenericArguments([resultCarrier, error]));
     const physical = retained
-      ? rustNamedTargetType("rust.runtime.Callable", "rt::Callable", [rustLifetimeGenericArgument(signature.lifetime!),
-        ...rustTypeGenericArguments([arguments_, result])])
+      ? rustRuntimeCallableTargetType(signature.lifetime!, signature.parameters, result)
       : rustClosureTargetType([arguments_], result);
     return Object.freeze({ kind: "selected", carrier: physical });
   };

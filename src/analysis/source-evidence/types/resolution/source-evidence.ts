@@ -21,7 +21,7 @@ import { rustSourceSelectionUsesExactBindings } from "./bound-source-selection.j
 import { bindRustCallableEnvironment, resolveRustCallableEnvironment } from "./callable-environments.js";
 import { retainRustCallableStructuralStorage } from "./structural-instantiations.js";
 import { resolveRustCallableInputCarrier } from "./callable-inputs.js";
-import { sourceEnclosingCallable } from "@tsonic/target-api/source";
+import { sourceEnclosingCallable, sourceReceiverOwner } from "@tsonic/target-api/source";
 import { rustRetainedValueLifetime } from "../../../callables/retained-values.js";
 
 export function resolveRustCallableEvidence(
@@ -94,7 +94,10 @@ export function resolveRustCallableStorageCarrier(
             !selectedProtocol.parameters.every((parameter, index) => rustTargetTypeRefEquals(parameter, templateProtocol.parameters[index])) ||
             !rustTargetTypeRefEquals(selectedProtocol.result, templateProtocol.result))) return undefined;
         selectedProtocol = templateProtocol;
-        const bound = context.sourceStorage.boundOriginsFor(receiver.subject, producer.bindings);
+        const receiverOwner = sourceReceiverOwner(producer.subject.node, context.ast, "storage");
+        const producerReceiver = receiverOwner === undefined ? undefined : context.sourceStorage.subject(receiverOwner, "receiver");
+        if (producerReceiver?.kind !== "resolved") return undefined;
+        const bound = context.sourceStorage.boundOriginsFor(producerReceiver.subject, producer.bindings);
         if (bound.kind === "unresolved" || bound.subjects.length === 0) return undefined;
         for (const actual of bound.subjects) {
           const checked = context.sourceStorage.typeFor(actual);

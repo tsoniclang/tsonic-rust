@@ -7,6 +7,61 @@ import { analyzeRustReadUses, rustNativeArgumentBorrowsRead } from "../../../dis
 import { selectRustOperationReadUses } from "../../../dist/policy/ownership/read-use.js";
 import { finalizeRustProviderOperationAbi } from "../../../dist/policy/operations/members/abi/finalize.js";
 import { rustStringTargetType } from "../../../dist/target-model/types/index.js";
+import { createRustRecordFixture } from "../../helpers/records.mjs";
+
+test("a native compound receiver keeps its complete getter-index and RHS interval through transparent wrappers", async () => {
+  const source = createTargetSourceProgram(await checkedSource("ownership-compound-receiver-interval", {
+    "src/index.ts": `
+declare function index(): number;
+declare function next(): number;
+function run(values: number[]): void {
+  values[index()] += next();
+  (((values[index()]))) += next();
+  values[index()] = next();
+}
+`,
+  }));
+  const { ast } = source;
+  const nodes = [];
+  const visit = node => {
+    nodes.push(node);
+    ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+  };
+  source.sourceFiles.forEach(visit);
+  const assignments = nodes.filter(node => ast.is.IsBinaryExpression(node));
+  assert.equal(assignments.length, 3, "ordinary, wrapped compound and plain assignments retain all original occurrences");
+  const integer = { kind: "source-primitive", name: "int32" };
+  const receiverCarrier = { kind: "target-named", id: "fixture.NativeReceiver" };
+  const getter = finalizeRustProviderOperationAbi({ operationKind: "indexer",
+    form: { form: "method", name: "get" },
+    sourceReceiver: { kind: "runtime", carrier: receiverCarrier }, sourceArgumentCarriers: [integer],
+    resultCarrier: integer, isAsync: false, isFallible: false });
+  assert.equal(getter !== undefined, true, "the selected getter supplies its actual shared native receiver ABI");
+  const operations = new Map();
+  for (const [index, assignment] of assignments.entries()) {
+    let left = ast.as.AsBinaryExpression(assignment).Left;
+    while (ast.is.IsParenthesizedExpression(left)) left = Node_Expression(ast, left);
+    operations.set(left, { kind: "provider-operation", operationId: "fixture::get", abi: getter });
+    operations.set(assignment, { kind: "operator-token", operationId: "fixture.assignment",
+      operator: index === 2 ? "=" : "+=", resultCarrier: integer, operandModes: ["value", "value"] });
+  }
+  const records = createRustRecordFixture({ targetOperation: { get: node => operations.get(node) } });
+  const uses = analyzeRustReadUses(ast, nodes, records, {}, () => false, { field: () => undefined });
+  for (const [index, assignment] of assignments.entries()) {
+    const binary = ast.as.AsBinaryExpression(assignment);
+    let left = binary.Left;
+    while (ast.is.IsParenthesizedExpression(left)) left = Node_Expression(ast, left);
+    const element = ast.as.AsElementAccessExpression(left);
+    const use = uses.get(element.Expression);
+    assert.equal(use?.mode, "shared", `assignment ${index}: the existing native receiver read mode is unchanged`);
+    assert.equal(use.later[0] === element.ArgumentExpression, true, `assignment ${index}: getter index executes first`);
+    assert.equal(use.later.length, index === 2 ? 1 : 2, `assignment ${index}: only a read-modify-write holds its receiver through RHS`);
+    if (index !== 2) assert.equal(use.later[1] === binary.Right, true, `assignment ${index}: the complete original RHS participates in alias/effect proof`);
+    assert.equal(use.laterStart, 0, `assignment ${index}: no index/RHS effect is skipped`);
+    assert.equal(use.stableAcrossEffects, true, `assignment ${index}: existing stability policy is transported, not invented`);
+    assert.equal(Object.isFrozen(use.later), true, `assignment ${index}: the published interval is immutable`);
+  }
+});
 
 function select(ast, node, operation) {
   return selectRustOperationReadUses(ast, node, { operation, computedMember: undefined, nativeInputs: [], argumentModes: [],

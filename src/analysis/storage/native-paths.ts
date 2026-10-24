@@ -2,6 +2,8 @@ import type { AstReader, Node } from "@tsonic/tsts";
 import { Node_Expression } from "@tsonic/target-api/source";
 import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
+import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
+import { rustBorrowValueIsUnprojected } from "./borrowed-element-purity.js";
 
 export interface RustNativeStoragePathInput {
   readonly ast: AstReader;
@@ -40,9 +42,15 @@ export function rustNativeStorageProjections(
     if (kind !== "KindParenthesizedExpression") {
       if (kind !== "KindPropertyAccessExpression") return undefined;
       const operation = input.records.targetOperation.get(node);
-      if (operation?.kind !== "source-field" || operation.valueSemantics.kind !== "stored" ||
-        operation.dispatch !== undefined || !Number.isSafeInteger(operation.storageIndex) || operation.storageIndex < 0) return undefined;
-      projections.unshift(operation.declaration ?? `${operation.operationId}\0${operation.storageIndex}`);
+      if (operation?.kind !== "source-field" || operation.dispatch !== undefined) return undefined;
+      if (operation.valueSemantics.kind === "receiver-alias") {
+        if (operation.accessMode !== "read" || !rustTargetTypeRefEquals(operation.receiverCarrier, operation.resultCarrier) ||
+          !rustBorrowValueIsUnprojected(node, input.records)) return undefined;
+      } else {
+        if (operation.valueSemantics.kind !== "stored" || !Number.isSafeInteger(operation.storageIndex) ||
+          operation.storageIndex < 0) return undefined;
+        projections.unshift(operation.declaration ?? `${operation.operationId}\0${operation.storageIndex}`);
+      }
     }
     const receiver = Node_Expression(input.ast, node);
     if (receiver === undefined) return undefined;

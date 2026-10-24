@@ -5,11 +5,12 @@ import { rustCallablePhysicalSignature } from "../../dist/target-model/conversio
 import { selectRustCallableConversion } from "../../dist/policy/conversions/callable.js";
 import { selectRustExactIntegerConversion } from "../../dist/policy/conversions/exact-integer.js";
 import { rustCallableTargetType, rustCallableInputTargetType } from "../../dist/target-model/types/carriers/callables.js";
-import { rustNamedTargetType } from "../../dist/target-model/types/carriers/native.js";
-import { rustCallableTargetId, rustInfallibleTargetId } from "../../dist/target-model/types/carriers/source-types.js";
+import { rustNamedTargetType, rustNamedTypeCarrierValue } from "../../dist/target-model/types/carriers/native.js";
+import { rustInfallibleTargetId } from "../../dist/target-model/types/carriers/source-types.js";
 import { rustFutureTargetType } from "../../dist/target-model/types/carriers/primitives.js";
 import { rustNativeErrorJoinReference } from "../../dist/target-model/types/native-error-joins.js";
-import { rustRuntimeErrorTargetType } from "../../dist/target-model/types/carriers/runtime-carriers.js";
+import { rustRuntimeCallableTargetType, rustRuntimeErrorTargetType } from "../../dist/target-model/types/carriers/runtime-carriers.js";
+import { isRustCopyCarrier, rustCarrierSupportsClone, rustCarrierSupportsTrait } from "../../dist/policy/constraints/native-traits.js";
 import { rustTargetTypeRefEquals } from "../../dist/target-model/types/equality.js";
 import { rustNativeCompletionFutureType } from "../../dist/target-model/types/callable-completions.js";
 
@@ -19,13 +20,43 @@ const infallible = { kind: "target-named", id: rustInfallibleTargetId };
 const failure = rustNamedTargetType("fixture:Failure", "Failure");
 const file = "/adapt.ts";
 const select = (source, target) => selectRustCallableConversion(source, target, selectRustExactIntegerConversion);
-const physicalCarrier = ({ parameters, result, error }) => rustNamedTargetType(rustCallableTargetId, "rt::Callable", [
-  { kind: "lifetime", lifetime: { kind: "static" } },
-  { kind: "type", type: { kind: "tuple", elements: parameters } },
-  { kind: "type", type: rustNamedTargetType("rust.core.Result", "Result", [
+const physicalCarrier = ({ parameters, result, error }) => rustRuntimeCallableTargetType({ kind: "static" }, parameters,
+  rustNamedTargetType("rust.core.Result", "Result", [
     { kind: "type", type: result }, { kind: "type", type: error },
-  ]) },
-]);
+  ]));
+
+test("native retained Callable Clone and identity equality have no parameter, result or error trait bound", () => {
+  const lifetime = { kind: "parameter", identity: "checked:retained-region", name: "region" };
+  const parameter = { kind: "type-parameter", identity: "checked:Payload", name: "Payload" };
+  const parameters = [parameter];
+  const completion = rustNamedTargetType("rust.core.Result", "Result", [
+    { kind: "type", type: parameter }, { kind: "type", type: failure },
+  ]);
+  const carrier = rustRuntimeCallableTargetType(lifetime, parameters, completion);
+  const named = rustNamedTypeCarrierValue(carrier);
+  assert.equal(named.genericArguments[0].lifetime === lifetime, true, "the actual selected borrowed construction lifetime is unchanged");
+  assert.equal(named.genericArguments[1].type.elements === parameters, true, "every native invocation parameter remains in the original tuple");
+  assert.equal(named.genericArguments[2].type === completion, true, "the native return and exact error completion are unchanged");
+  let obligations = 0;
+  assert.equal(rustCarrierSupportsTrait(carrier, "core::clone::Clone", () => { obligations++; return false; }), true,
+    "the native Callable Clone implementation clones only its existing Rc");
+  assert.equal(obligations, 0, "no payload, result or error Clone requirement is invented");
+  assert.equal(rustCarrierSupportsClone(carrier), true, "physical native metadata preserves the real Clone implementation");
+  for (const trait of ["core::cmp::PartialEq", "core::cmp::Eq"]) {
+    assert.equal(rustCarrierSupportsTrait(carrier, trait, () => { obligations++; return false; }), true,
+      `the actual native Callable implements ${trait} on its complete Self carrier`);
+    assert.equal(rustCarrierSupportsTrait(completion, trait), false, `${trait} is not imposed on the actual completion`);
+    assert.equal(rustCarrierSupportsTrait(failure, trait), false, `${trait} is not invented for an unrelated native carrier`);
+  }
+  assert.equal(obligations, 0, "native handle identity adds no parameter, result or error equality obligation");
+  assert.equal(rustCarrierSupportsTrait(carrier, "core::hash::Hash"), false, "native identity equality does not invent Hash");
+  assert.equal(isRustCopyCarrier(carrier), false, "the native retained handle is not Copy");
+  assert.equal(rustCarrierSupportsClone(completion), false, "cloning a handle does not make its actual completion Clone");
+  assert.equal(rustCarrierSupportsClone(failure), false, "unrelated move-only native carriers remain move-only");
+  const signature = rustCallablePhysicalSignature(carrier);
+  assert.equal(signature.parameters[0] === parameter && signature.result === parameter && signature.error === failure, true,
+    "the same physical callable ABI remains available without a compatibility representation");
+});
 
 test("physical adapters preserve source error and native Future payload without ambient substitution", () => {
   const future = rustFutureTargetType(integer);

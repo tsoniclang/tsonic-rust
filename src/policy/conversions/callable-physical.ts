@@ -1,11 +1,11 @@
 import { closedMetadataKey, hasExactObjectKeys, isClosedMetadata, isDenseDataArray, snapshotClosedMetadata } from "../../target-model/metadata/closed-data.js";
-import { rustRuntimeErrorTargetType } from "../../target-model/types/carriers/runtime-carriers.js";
+import { rustRuntimeCallableTargetType, rustRuntimeErrorTargetType } from "../../target-model/types/carriers/runtime-carriers.js";
 import { rustCallableInputProtocol, rustCallableProtocol, rustClosureProtocol } from "../../target-model/types/carriers/callables.js";
 import { rustNamedTargetType, rustNamedTypeCarrierValue } from "../../target-model/types/carriers/native.js";
 import { rustCallableTargetId, rustInfallibleTargetId } from "../../target-model/types/carriers/source-types.js";
 import { isRustNeverCarrier } from "../../target-model/types/carriers/js.js";
 import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
-import { rustTypeGenericArguments, rustLifetimeGenericArgument } from "../../target-model/types/generic-arguments.js";
+import { rustTypeGenericArguments } from "../../target-model/types/generic-arguments.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustNativeErrorJoinTargetType, type RustNativeErrorSource } from "../../target-model/types/native-error-joins.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
@@ -143,8 +143,7 @@ function physicalTarget(logical: TargetTypeRef, signature: RustCallablePhysicalS
     ? { ...logical, args: signature.parameters, result, fallible: false } : undefined;
   const lifetime = rustCallableProtocol(logical)?.lifetime;
   return logical.kind !== "target-named" || logical.id !== rustCallableTargetId || lifetime === undefined ? undefined
-    : rustNamedTargetType(rustCallableTargetId, "rt::Callable", [rustLifetimeGenericArgument(lifetime),
-      ...rustTypeGenericArguments([tuple, result])]);
+    : rustRuntimeCallableTargetType(lifetime, signature.parameters, result);
 }
 
 // Distinct producers stored in one place share one boxed callable of their shared signature (RULINGS ruling 2). The
@@ -172,8 +171,7 @@ export function rustCallableErrorJoin(
   }
   const result = rustNamedTargetType("rust.core.Result", "Result", rustTypeGenericArguments([signature.result,
     error ?? { kind: "target-named", id: rustInfallibleTargetId }]));
-  return snapshotClosedMetadata(rustNamedTargetType(rustCallableTargetId, "rt::Callable",
-    [lifetime, ...rustTypeGenericArguments([{ kind: "tuple", elements: signature.parameters }, result])]));
+  return snapshotClosedMetadata(rustRuntimeCallableTargetType(lifetime.lifetime, signature.parameters, result));
 }
 
 export function rustUninhabitedError(error: TargetTypeRef): boolean {
@@ -188,8 +186,7 @@ export function rustCallableWithError(physical: TargetTypeRef, error: TargetType
   const signature = rustCallablePhysicalSignature(physical);
   if (named?.id !== rustCallableTargetId || lifetime?.kind !== "lifetime" || signature === undefined) return undefined;
   const result = rustNamedTargetType("rust.core.Result", "Result", rustTypeGenericArguments([signature.result, error]));
-  return snapshotClosedMetadata(rustNamedTargetType(rustCallableTargetId, "rt::Callable",
-    [lifetime, ...rustTypeGenericArguments([{ kind: "tuple", elements: signature.parameters }, result])]));
+  return snapshotClosedMetadata(rustRuntimeCallableTargetType(lifetime.lifetime, signature.parameters, result));
 }
 
 // The physical boxed callable a declared callable protocol carrier denotes: `Callable<'l, (P..), Result<R, E>>`.
@@ -202,6 +199,6 @@ export function rustCallablePhysicalCarrier(declared: TargetTypeRef): TargetType
   const [parameters, result, error] = types ?? [];
   if ( lifetime?.kind !== "lifetime" || types?.length !== 3 || parameters?.kind !== "tuple" ||
     result === undefined || error === undefined) return undefined;
-  return snapshotClosedMetadata(rustNamedTargetType(rustCallableTargetId, "rt::Callable", [lifetime,
-    ...rustTypeGenericArguments([parameters, rustNamedTargetType("rust.core.Result", "Result", rustTypeGenericArguments([result, error]))])]));
+  return snapshotClosedMetadata(rustRuntimeCallableTargetType(lifetime.lifetime, parameters.elements,
+    rustNamedTargetType("rust.core.Result", "Result", rustTypeGenericArguments([result, error]))));
 }

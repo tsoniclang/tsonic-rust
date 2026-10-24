@@ -18,6 +18,7 @@ import { rustBorrowedOperationArguments } from "../storage/provider-borrows.js";
 import { BinaryExpression_Left, BinaryExpression_Right } from "@tsonic/target-api/source";
 import { analyzeRustReadUses } from "./uses.js";
 import { rustContextualRuntimeConversionContract } from "../../policy/conversions/contextual.js";
+import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 
 export function analyzeRustReadOwnership(input: {
   readonly storage: SourceStorageQueries;
@@ -47,18 +48,21 @@ export function analyzeRustReadOwnership(input: {
   for (let index = input.nativeNodes.length - 1; index >= 0; index -= 1) {
     if (!budget.node() || !budget.step() || !budget.row()) return rejectedBudget();
     const node = input.nativeNodes[index]!;
-    const operand = sourceTransparentExpressionOperand(ast, node);
+    const operation = records.targetOperation.get(node);
+    const receiverAlias = operation?.kind === "source-field" && operation.valueSemantics.kind === "receiver-alias" &&
+      operation.dispatch === undefined && rustTargetTypeRefEquals(operation.receiverCarrier, operation.resultCarrier);
+    const operand = sourceTransparentExpressionOperand(ast, node) ?? (receiverAlias ? Node_Expression(ast, node) : undefined);
     const nativeOperand = operand !== undefined && input.borrowEffectsInput.isNativeNode(operand);
     const inherited = nativeOperand ? storageReads.get(operand) : undefined;
-    if (nativeOperand && inherited === undefined) {
+    if (receiverAlias && !nativeOperand || nativeOperand && inherited === undefined) {
       return { kind: "rejected", diagnostics: [{
         code: "RUST_OWNERSHIP_SOURCE_INVENTORY_INVALID", category: "error", source: "tsonic-rust", sourceNode: node,
         message: "Rust ownership requires the complete parent-before-child checked source inventory.",
         evidence: ["target.capability=rust.analysis.ownership"],
       }] };
     }
-    const operation = records.targetOperation.get(node);
-    storageReads.set(node, inherited ?? (ast.is.IsIdentifier(node) || ast.is.IsElementAccessExpression(node) ||
+    const ownedProviderResult = operation?.kind === "provider-operation" && flow.movingReads.has(node);
+    storageReads.set(node, inherited ?? (ast.is.IsIdentifier(node) || ast.is.IsElementAccessExpression(node) && !ownedProviderResult ||
       ast.kindName(node) === "KindThisExpression" || ast.kindName(node) === "KindThisKeyword" ||
       operation?.kind === "source-field" && operation.valueSemantics.kind === "stored"));
   }

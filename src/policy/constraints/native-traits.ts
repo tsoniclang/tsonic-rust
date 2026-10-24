@@ -136,7 +136,8 @@ function supportsCloneWithContracts(
   }
   const structuralObject = rustStructuralObjectCarrierValue(carrier);
   if (structuralObject !== undefined) {
-    return structuralObject.fields.every((field) => supports(field.type));
+    return structuralObject.representation === "reference" ||
+      structuralObject.fields.every((field) => supports(field.type));
   }
   const sourceUnion = rustSourceUnionCarrierValue(carrier);
   if (sourceUnion !== undefined) {

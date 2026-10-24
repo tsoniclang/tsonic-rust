@@ -4,6 +4,28 @@ import { analyzeRust } from "../../helpers/rust-session.mjs";
 import { selectRustStructuralMethodExposure } from "../../../dist/policy/types/objects/structural-emission.js";
 import { rustFixedStructuralMethodDeclarations } from "../../../dist/analysis/callables/generic-values.js";
 import { selectRustStructuralFactoryReceiver } from "../../../dist/policy/ownership/retained-storage.js";
+import { isRustCopyCarrier, rustCarrierSupportsClone, rustCarrierSupportsTrait } from "../../../dist/policy/constraints/native-traits.js";
+import { rustStructuralObjectTargetType } from "../../../dist/target-model/types/carriers/source-types.js";
+
+test("native structural handle Clone requires no state or context Clone bound", () => {
+  const parameter = { kind: "type-parameter", identity: "native-context", name: "Context" };
+  const fields = [{ sourceName: "state", type: parameter, presence: "required", readonly: true }];
+  const reference = rustStructuralObjectTargetType("/source.ts", fields, "reference");
+  const value = rustStructuralObjectTargetType("/source.ts", fields, "value");
+  let obligations = 0;
+  assert.equal(rustCarrierSupportsTrait(reference, "core::clone::Clone", () => {
+    obligations++;
+    return false;
+  }), true, "the selected ObjectHandle Clone implementation has no state or context bounds");
+  assert.equal(obligations, 0, "cloning the native shared handle does not demand Context: Clone");
+  assert.equal(rustCarrierSupportsClone(reference), true, "the native reference carrier clones its existing handle");
+  assert.equal(isRustCopyCarrier(reference), false, "a native shared handle is not Copy");
+  assert.equal(rustCarrierSupportsClone(value), false, "a value representation still needs its real field Clone contract");
+  assert.equal(rustCarrierSupportsTrait(value, "core::clone::Clone", () => true), true,
+    "a value representation uses an actually supplied generic Clone obligation");
+  assert.equal(rustCarrierSupportsClone({ kind: "opaque", id: "unknown-state" }), false,
+    "an opaque unknown carrier does not inherit a structural handle contract");
+});
 
 test("fixed native methods require complete readonly, required and exact body evidence", () => {
   const selected = { writes: "none", boundary: "none", extracted: false, implementations: 1, presence: "required" };

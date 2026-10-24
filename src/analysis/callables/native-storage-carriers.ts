@@ -5,7 +5,8 @@ import { rustCallableProtocol } from "../../target-model/types/carriers/callable
 import { rustCallableTargetId } from "../../target-model/types/carriers/source-types.js";
 import { rustFrameCallableValue } from "../../target-model/types/carriers/frame-callables.js";
 import { rustNamedTargetType } from "../../target-model/types/carriers/native.js";
-import { rustTypeGenericArguments, rustLifetimeGenericArgument } from "../../target-model/types/generic-arguments.js";
+import { rustTypeGenericArguments } from "../../target-model/types/generic-arguments.js";
+import { rustRuntimeCallableTargetType } from "../../target-model/types/carriers/runtime-carriers.js";
 import { rustCallableInvocationSignaturesMatch } from "../../policy/conversions/callable-input.js";
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
 import { rustOptionElementCarrier } from "../../target-model/types/carriers/optional.js";
@@ -65,9 +66,8 @@ export function rustNativeStorageErasedClosureParameter(input: RustNativeStorage
   if (selected?.kind !== "target-named" || selected.id !== rustCallableTargetId || protocol?.lifetime === undefined ||
     protocol.error === undefined || !rustCallableInvocationSignaturesMatch(current, selected)) return undefined;
   // Its physical storage is the runtime callable over its argument tuple and fallible result.
-  return rustNamedTargetType(rustCallableTargetId, "rt::Callable", [rustLifetimeGenericArgument(protocol.lifetime),
-    ...rustTypeGenericArguments([{ kind: "tuple", elements: protocol.parameters },
-      rustNamedTargetType("rust.core.Result", "Result", rustTypeGenericArguments([protocol.result, protocol.error]))])]);
+  return rustRuntimeCallableTargetType(protocol.lifetime, protocol.parameters,
+    rustNamedTargetType("rust.core.Result", "Result", rustTypeGenericArguments([protocol.result, protocol.error])));
 }
 
 export function rustNativeStorageErasedFieldCallable(input: RustNativeStorageCarrierInput, origin: SourceStorageSubject, current: TargetTypeRef): TargetTypeRef | undefined {

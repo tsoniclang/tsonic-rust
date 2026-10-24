@@ -6,6 +6,7 @@ import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { RustNativeStorageSelection } from "../../target-model/records/native-storage.js";
 import { rustCallableProtocol } from "../../target-model/types/carriers/callables.js";
+import { rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
 import { rustTargetGenericReferences } from "../../target-model/types/carriers/generic-references.js";
 import { substituteRustTargetGenerics } from "../../target-model/types/carriers/substitution.js";
 import { substituteElidedLifetime } from "../../target-model/types/carriers/lifetime-elision.js";
@@ -13,8 +14,9 @@ import { rustLifetimeKey, rustStaticLifetime } from "../../target-model/lifetime
 import type { RustProjectTypePolicy } from "../project-types/index.js";
 import { rustOwnedStorageChildren } from "../../policy/types/storage/owned-storage.js";
 
-const containsCallableStorage = (carrier: TargetTypeRef): boolean => rustCallableProtocol(carrier) !== undefined ||
-  rustOwnedStorageChildren(carrier).some(containsCallableStorage);
+const containsCallableStorage = (carrier: TargetTypeRef): boolean => carrier.kind !== "function-pointer" && carrier.kind !== "closure" &&
+  (rustCallableProtocol(carrier) !== undefined || rustGenericCallableValue(carrier) !== undefined ||
+    rustOwnedStorageChildren(carrier).some(containsCallableStorage));
 
 const ownedLifetimes = (carrier: TargetTypeRef): TargetTypeRef => {
   const references = rustTargetGenericReferences(carrier);

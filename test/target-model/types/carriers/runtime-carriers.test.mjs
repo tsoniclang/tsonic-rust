@@ -91,11 +91,14 @@ test("native memory free-function qualification emits the exact existing Rust ca
   // The planner renders the pointee and error carriers from their sealed type emission records.
   const base = rustProgramWithTypeEmissions([layout.pointeeCarrier, error]);
   const node = base.sourceFiles[0];
-  const input = { ...base, records: { ...base.records, nativeBacking: { get: subject => subject === node ? layout : undefined } } };
+  const projects = createRustProjectEmissionProducer(() => {});
+  const input = { ...base, records: { ...base.records,
+    optionalStorageTypeArguments: projects.records.optionalStorageTypeArguments,
+    nativeBacking: { get: subject => subject === node ? layout : undefined } } };
   const layouts = createRustNativeLayoutProducer(() => {});
   const carriers = analyzeRustNativeMemoryEmission(input, [node], layouts);
   const types = createRustTypeEmissionProducer(() => {});
-  analyzeRustTypeEmission(input, [], types, [...carriers, error]);
+  analyzeRustTypeEmission(input, [], types, [...carriers, error], projects);
   const context = rustProgramPlanContext({ ...input, records: { ...input.records, ...layouts.records, ...types.records } }, { usedAliases: new Set() });
   const value = { kind: "path", path: "value" };
   for (const method of ["allocate_native_location", "location_to_raw", "reinterpret_raw_location"]) {
@@ -151,7 +154,7 @@ test("structural storage renders combined native method and bound-field carriers
     assert.equal(issues.length, 0, name + ": the actual structural owner admits the complete native storage");
     const admitted = { ...program, records: { ...program.records, ...projects.records, ...structural.records } };
     const types = createRustTypeEmissionProducer(() => {});
-    analyzeRustTypeEmission(admitted, [], types, structural.records.structuralShapeEmission.get(definition).fields.map(field => field.carrier));
+    analyzeRustTypeEmission(admitted, [], types, structural.records.structuralShapeEmission.get(definition).fields.map(field => field.carrier), projects);
     const liveness = createRustNativeLivenessProducer(() => {});
     analyzeRustStructuralLivenessEmission(admitted, base.reachability, liveness);
     const input = { program: { ...admitted, records: { ...admitted.records, ...types.records, ...liveness.emission } } };

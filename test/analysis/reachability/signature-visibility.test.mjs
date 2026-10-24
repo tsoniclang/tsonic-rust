@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRustSignatureVisibility } from "../../../dist/analysis/reachability/signature-visibility.js";
 import { createRustSourcePackageEmissionProducer } from "../../../dist/analysis/program/records/source-packages.js";
-import { rustSourceTypeCarrier } from "../../../dist/target-model/types/carriers/source-types.js";
+import { rustInfallibleTargetId, rustSourceTypeCarrier } from "../../../dist/target-model/types/carriers/source-types.js";
 import { createRustRecordFixture } from "../../helpers/records.mjs";
 
 const carrier = (file, name) => rustSourceTypeCarrier(file, name, "object");
@@ -25,6 +25,9 @@ function close(declarations) {
     callableValues: { generic: { physical: { definitions: () => [] } } },
     projectTypes: { definitionForCarrier: () => undefined },
     structuralShapes: { definitionForCarrier: () => undefined },
+    errorRegions: { initialization: { binary: {
+      lifecycle: { carrier: { kind: "target-named", id: rustInfallibleTargetId } },
+    } } },
   }, nodes, producer);
   return { nodes, selected: producer.records.signatureVisibility.get("project") };
 }
