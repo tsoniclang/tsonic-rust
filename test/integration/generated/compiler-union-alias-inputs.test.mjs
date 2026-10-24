@@ -105,7 +105,7 @@ export class Backing {
   const visit = node => {
     if (ast.is.IsPropertyAccessExpression(node)) {
       const access = ast.as.AsPropertyAccessExpression(node);
-      const label = ast.text(access.Name);
+      const label = ast.text(ast.name(node));
       if (["value", "offset"].includes(label)) accesses.push({ node, receiver: access.Expression, label });
     }
     ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
