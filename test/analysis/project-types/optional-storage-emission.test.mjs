@@ -14,6 +14,43 @@ import { rustSourceOptionalTargetType } from "../../../dist/target-model/types/p
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 import { closedMetadataKey } from "../../../dist/target-model/metadata/closed-data.js";
 import { analyzeRust } from "../../helpers/rust-session.mjs";
+import { structuralMemberWritesSource } from "../../../../tsonic/test/fixtures/structural-member-writes.mjs";
+import { rustDeclarationEmissionCarriers } from "../../../dist/analysis/source-evidence/types/emission-inventory.js";
+
+for (const surfaces of [[], ["js"]]) {
+  test(`complete late TYPE admission includes selected structural native output carriers on ${surfaces[0] ?? "native"}`, () => {
+    const { program } = analyzeRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } },
+      files: { "index.ts": structuralMemberWritesSource + "\nmain();\n" } });
+    const definition = program.projectTypes.definitions.find(candidate => candidate.sourceName === "Value");
+    assert.equal(definition !== undefined, true, "the real checked class owns the writable callable field");
+    const emission = program.records.nativeClass.get(definition.declaration);
+    assert.equal(emission !== undefined, true, "the class has its actual native output producer");
+    let nativeFields = 0;
+    for (const field of emission.fields) {
+      nativeFields++;
+      const key = closedMetadataKey(field.carrier);
+      assert.equal(program.records.typeEmission.get(field.carrier)?.positions !== undefined, true,
+        `native class field ${field.sourceName} has sealed position evidence; key=${key}`);
+      assert.equal(program.records.optionalStorageTypeArguments.get(field.carrier) !== undefined, true,
+        `native class field ${field.sourceName} has its explicit optional argument row; key=${key}`);
+    }
+    assert.equal(nativeFields > 0, true, "the positive checks actual emitted native class field storage");
+    const nodes = [definition.declaration];
+    const actual = rustDeclarationEmissionCarriers(program, nodes);
+    const rejected = { ...program, records: { ...program.records,
+      nativeClass: Object.freeze({ get: () => undefined }) } };
+    const omitted = new Set(rustDeclarationEmissionCarriers(rejected, nodes).map(carrier => closedMetadataKey(carrier)));
+    const nativeOnly = actual.filter(carrier => !omitted.has(closedMetadataKey(carrier)));
+    assert.equal(nativeOnly.length > 0, true,
+      "omitting the actual native class producer loses its selected output types instead of reconstructing them from source fields");
+    for (const carrier of nativeOnly) {
+      assert.equal(program.records.typeEmission.get(carrier)?.positions !== undefined, true,
+        `every class-only selected output has sealed type evidence; key=${closedMetadataKey(carrier)}`);
+      assert.equal(program.records.optionalStorageTypeArguments.get(carrier) !== undefined, true,
+        `every class-only selected output has its exact optional argument row; key=${closedMetadataKey(carrier)}`);
+    }
+  });
+}
 
 function selectionFixture(indexes = [0]) {
   const declaration = {};

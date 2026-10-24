@@ -104,7 +104,7 @@ export function analyzeRustTypeEmission(program: Omit<RustAnalysisProgram, "reac
     }
   }
   for (const shape of program.structuralShapes.instances) pending.push(shape.carrier, ...shape.fields.flatMap(field =>
-    [field.carrier, ...(field.methodPlan?.carrier === undefined ? [] : [field.methodPlan?.carrier])]));
+    [field.carrier, ...(field.methodPlan?.carrier === undefined ? [] : [field.methodPlan.carrier])]));
   for (const view of program.classValues.instanceViewImplementations) pending.push(view.sourceCarrier, view.targetCarrier);
   for (const sourceFile of program.sourceFiles) {
     const inventory = program.records.genericDeclarations.get(sourceFile);
