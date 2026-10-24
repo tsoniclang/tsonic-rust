@@ -5,6 +5,8 @@ import { join } from "node:path";
 import { artifactText, compileRust } from "../../helpers/rust-session.mjs";
 import { runCargo, writeGeneratedProject } from "../../helpers/cargo-projects.mjs";
 import { nativeOwnershipCostSupport } from "../../helpers/native-ownership-cost.mjs";
+import { sourceCallableValueParameters } from "@tsonic/target-api/source";
+import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 
 const sourceText = `
 const globalKey = "value";
@@ -59,6 +61,18 @@ for (const surfaces of [[], ["js"]]) {
     const program = compiled.result.program;
     const reads = checkedKeyReads(program);
     const { ast } = program.source;
+    for (const name of ["globalRead", "localRead", "numericRead", "enumRead"]) {
+      const declaration = program.sourceFiles.flatMap(file => ast.statements(file)).find(node =>
+        ast.is.IsFunctionDeclaration(node) && ast.text(ast.name(node)) === name);
+      assert.equal(declaration !== undefined, true, `${name}: the original checked source function is retained`);
+      const parameters = sourceCallableValueParameters(ast, declaration, program.source.semantics.forNode(declaration));
+      assert.equal(parameters !== undefined && parameters.length > 0, true, `${name}: the original object parameter is checked`);
+      const abi = program.records.sourceParameterAbi.get(parameters[0]);
+      assert.equal(abi?.mode, "ref", `${name}: a nonretaining object read keeps its native shared input`);
+      assert.equal(abi?.parameterCarrier.kind === "reference" && !abi.parameterCarrier.mutable &&
+        rustTargetTypeRefEquals(abi.parameterCarrier.referent, abi.valueCarrier), true,
+      `${name}: the shared input refers to the exact owned source carrier`);
+    }
     const global = reads.find(read => ast.is.IsIdentifier(read.fact.key) && ast.text(read.fact.key) === "globalKey");
     const local = reads.find(read => ast.is.IsIdentifier(read.fact.key) && ast.text(read.fact.key) === "key");
     assert.equal(global !== undefined && local !== undefined, true, "global native-const and local checked keys both participate");

@@ -1,6 +1,6 @@
 import type { RustSourceParameterAbiFact } from "../../target-model/records/callables-and-resources.js";
 
-import { inferRustTargetGenericBindings, rustTargetGenericReferences, substituteRustTargetGenerics, isRustVecCarrier, isRustStringCarrier, rustSourceOptionalTargetType, rustSliceElementCarrier, rustSliceRefTargetType, rustStructuralObjectCarrierValue } from "../../target-model/types/index.js";
+import { inferRustTargetGenericBindings, rustTargetGenericReferences, substituteRustTargetGenerics, isRustVecCarrier, isRustStringCarrier, rustSourceOptionalTargetType, rustSliceElementCarrier, rustSliceRefTargetType, rustStructuralObjectCarrierValue, rustSourceTypeCarrierValue } from "../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import type { RustArgumentMode } from "../../target-model/operations/model.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
@@ -76,7 +76,8 @@ export function selectRustSourceParameterBorrowCarrier(
   if (parameterLaneCarrier === undefined) return undefined;
   if (isRustVecCarrier(base)) return rustSliceRefTargetType(base.element);
   return rustTargetTypeRefEquals(parameterLaneCarrier, base) &&
-    (isRustStringCarrier(base) || rustStructuralObjectCarrierValue(base)?.representation === "reference")
+    (isRustStringCarrier(base) || rustStructuralObjectCarrierValue(base)?.representation === "reference" ||
+      rustSourceTypeCarrierValue(base)?.shape === "object")
     ? { kind: "reference", referent: base, mutable: false } : undefined;
 }
 

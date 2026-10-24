@@ -85,7 +85,7 @@ builder.sourceBinding.get(subject);
     ["parameter unknown mode", "builder.sourceParameterAbis.parameter(parameter, { ...selectedAbi, mode: 'shared' });", /not assignable/u],
     ["parameter foreign physical carrier", "builder.sourceParameterAbis.parameter(parameter, { ...selectedAbi, parameterCarrier: { kind: 'invalid' } });", /not assignable/u],
     ["parameter static input lifetime", "builder.sourceParameterAbis.parameter(parameter, { ...selectedAbi, inputLifetime: { kind: 'static' } });", /not assignable/u],
-    ["parameter foreign entry conversion", "builder.sourceParameterAbis.parameter(parameter, { ...selectedAbi, entryConversion: { kind: 'invalid' } });", /not assignable/u],
+    ["parameter foreign entry conversion", "builder.sourceParameterAbis.parameter(parameter, { ...selectedAbi, entryConversion: { kind: 'invalid' } });", /'kind' does not exist in type 'RustParameterEntryConversion'/u],
     ["use foreign expression", "builder.sourceParameterAbis.use({}, parameter);", /missing.*properties.*Node/u],
     ["use arbitrary fact", "builder.sourceParameterAbis.use(subject, arbitraryFact);", /RustSourceParameterAbiFact.*missing.*properties.*Node/u],
     ["use missing source", "builder.sourceParameterAbis.use(subject);", /Expected 2 arguments/u],

@@ -38,7 +38,7 @@ for (const surfaces of [[], ["js"]]) for (const [name, sourceText] of examples) 
     if (name === "original tuple-rest and pseudo-this parameters") {
       const emitted = rustSourceText(result);
       assert.match(emitted, /\bvalues: \[f64; 2\]/u, "the homogeneous checked tuple keeps its fixed native array carrier");
-      assert.match(emitted, /sum\(\s*1\.0,\s*\[2\.0,\s*3\.0\]\s*\)/u,
+      assert.match(emitted, /sum\(\s*1\.0,\s*\[2\.0_f64,\s*3\.0_f64\]\s*\)/u,
         "the three source values become one scalar and one exact native fixed array");
       assert.doesNotMatch(emitted, /vec!\[|Vec::/u, "a finite native rest tuple never allocates a dynamic rest vector");
     }
