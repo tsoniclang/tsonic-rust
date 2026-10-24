@@ -1,6 +1,7 @@
 import { createRustRecordFixture, rustNativeFixtureNodes } from "../../helpers/records.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
+import { createTargetSourceProgram } from "@tsonic/target-api/source";
 import { analyzeRust, artifactText, compileRust } from "../../helpers/rust-session.mjs";
 
 import { analyzeRustBorrowedElementReads } from "../../../dist/analysis/storage/borrowed-element-reads.js";
@@ -86,6 +87,9 @@ export function wrapped(value: string): () => string {
   return () => { ((value)) += "!"; return value; };
 }
 export function direct(value: string): string { value += "!"; return value; }
+export function duplicate(value: string): () => string {
+  return () => { value += value; return value; };
+}
 ` } };
     const { source, program } = analyzeRust(options);
     for (const name of ["captured", "wrapped", "direct"]) {
@@ -110,16 +114,21 @@ export function direct(value: string): string { value += "!"; return value; }
       `${surfaces.join()} both captured native cells append directly`);
     assert.doesNotMatch(output, /\(&[^\n]*\)\.borrow_mut\(\)/u);
     assert.match(output, /value\.push\('!'\)/u);
+    assert.match(output, /let next(?:_\d+)? = \[[\s\S]*?\]\s*\.concat\(\);\s*\{\s*let _ = location(?:_\d+)?\.replace\(next(?:_\d+)?\)/u,
+      "the owned concatenation completes and releases its temporary native read before the cell write");
+    assert.doesNotMatch(output, /\.replace\(\s*\[/u,
+      "a native write never retains its RHS temporary read guard into the same cell");
   }
 });
 
 test("a merely available borrowed operation cannot establish counted-loop purity", () => {
   const { source, program } = analyzeRust({ surfaces: ["js"], files: { "index.ts": sourceText } });
+  const navigation = createTargetSourceProgram(source).navigation;
   const { loop, element } = selectedNodes(source, program, "combine");
   assert.ok(program.records.targetOperation.get(element).borrowedIndexOperation);
-  const reads = analyzeRustBorrowedElementReads(program.source.ast, rustNativeFixtureNodes(program), program.records, program.source.navigation);
+  const reads = analyzeRustBorrowedElementReads(program.source.ast, rustNativeFixtureNodes(program), program.records, navigation);
   const counted = analyzeRustCountedLoopRepresentations({
-    ast: program.source.ast, nativeNodes: rustNativeFixtureNodes(program), navigation: program.source.navigation, records: program.records,
+    ast: program.source.ast, nativeNodes: rustNativeFixtureNodes(program), navigation, records: program.records,
     borrowedElementReads: { ...reads, forRead: () => undefined },
   });
   assert.equal(counted.get(loop) === undefined, true);
@@ -165,6 +174,7 @@ export function retained(values: string[]): string {
 
 test("borrowed append requires the sealed in-place write strategy and exact pure read", () => {
   const { source, program } = analyzeRust({ surfaces: ["js"], files: { "index.ts": sourceText } });
+  const navigation = createTargetSourceProgram(source).navigation;
   const { append, element } = selectedNodes(source, program, "combine");
   const selectedAppend = program.records.targetOperation.get(append);
   const selectedRead = program.records.targetOperation.get(element);
@@ -183,11 +193,11 @@ targetOperation: { get: (node) => {
 } }}, program.records);
     assert.equal(records.targetOperation.get(subject) === replacement, true,
       `selected fact mutation ${mutationIndex}`);
-    const reads = analyzeRustBorrowedElementReads(program.source.ast, rustNativeFixtureNodes(program), records, program.source.navigation);
+    const reads = analyzeRustBorrowedElementReads(program.source.ast, rustNativeFixtureNodes(program), records, navigation);
     assert.equal(reads.forExpression(append) === undefined, true, `append mutation ${mutationIndex}`);
     assert.equal(reads.forRead(element) === undefined, true, `read mutation ${mutationIndex}`);
     const counted = analyzeRustCountedLoopRepresentations({ ast: program.source.ast, nativeNodes: rustNativeFixtureNodes(program),
-      navigation: program.source.navigation, records: { ...records, literalValue: program.records.literalValue }, borrowedElementReads: reads }).get(
+      navigation, records: { ...records, literalValue: program.records.literalValue }, borrowedElementReads: reads }).get(
       selectedNodes(source, program, "combine").loop);
     assert.equal(counted === undefined, true, `counted mutation ${mutationIndex}`);
   }

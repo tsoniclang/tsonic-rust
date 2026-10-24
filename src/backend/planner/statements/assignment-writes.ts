@@ -568,6 +568,7 @@ export function planRustAssignmentWrite(
         failRustPlannerInvariant("An admitted string assignment requires its native promoted location plan.", left);
       }
       const locationName = allocateRustSyntheticName(context.syntheticNames, "location");
+      const nextName = allocateRustSyntheticName(context.syntheticNames, "next");
       const location: RustExpr = { kind: "path", path: locationName };
       return [{
         kind: "expr",
@@ -577,7 +578,8 @@ export function planRustAssignmentWrite(
               name: currentName,
               value: promotedLocation.read(location),
             },
-          ], promotedLocation.write(location, concatenated)),
+            { name: nextName, value: concatenated },
+          ], promotedLocation.write(location, { kind: "path", path: nextName })),
       }];
     }
     if (target === undefined) failRustPlannerInvariant("An admitted string assignment requires its native storage plan.", left);
