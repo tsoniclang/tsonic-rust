@@ -11,6 +11,7 @@ import { closedMetadataKey } from "../../../dist/target-model/metadata/closed-da
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 import { bindRustStructuralImplementationContract } from "../../../dist/policy/types/objects/structural-storage.js";
 import { rustCallableProtocol, rustCallableTargetType } from "../../../dist/target-model/types/carriers/callables.js";
+import { rustLifetimesEqual } from "../../../dist/target-model/lifetimes/index.js";
 
 const scalar = { kind: "source-primitive", name: "int32" };
 const parameter = { kind: "type-parameter", identity: "T", name: "T" };
@@ -233,16 +234,16 @@ test("native dispatch shares only implicit method receiver storage, never callab
   const fields = storage => rustStructuralObjectCarrierValue(rustStructuralGenericCarrier(source, storage).carrier).fields;
   const dispatch = fields("dispatch").map(value => rustCallableProtocol(value.type));
   const stored = fields("fields").map(value => rustCallableProtocol(value.type));
-  assert.equal(dispatch[0].lifetime === dispatch[1].lifetime, true,
+  assert.equal(rustLifetimesEqual(dispatch[0].lifetime, dispatch[1].lifetime), true,
     "both native methods retain the same actual erased receiver environment");
-  assert.equal(dispatch[0].lifetime === dispatch[4].lifetime, true,
+  assert.equal(rustLifetimesEqual(dispatch[0].lifetime, dispatch[4].lifetime), true,
     "a result callable does not create an independent lifetime for the shared receiver");
-  assert.equal(dispatch[0].lifetime === dispatch[2].lifetime, false,
+  assert.equal(rustLifetimesEqual(dispatch[0].lifetime, dispatch[2].lifetime), false,
     "a callable data field keeps its separate stored-value lifetime even with the identical source callable type");
-  assert.equal(dispatch[3].lifetime === borrowed, true, "an authored native lifetime retains its exact identity");
-  assert.equal(rustCallableProtocol(dispatch[4].result).lifetime === borrowed, true,
+  assert.equal(rustLifetimesEqual(dispatch[3].lifetime, borrowed), true, "an authored native lifetime retains its exact identity");
+  assert.equal(rustLifetimesEqual(rustCallableProtocol(dispatch[4].result).lifetime, borrowed), true,
     "a genuine returned callable lifetime stays in the native method ABI");
-  assert.equal(stored[0].lifetime === stored[1].lifetime, false,
+  assert.equal(rustLifetimesEqual(stored[0].lifetime, stored[1].lifetime), false,
     "ordinary fields keep their independently captured callable environments");
   const original = rustStructuralObjectCarrierValue(source).fields.map(value => rustCallableProtocol(value.type));
   assert.equal(original[0].lifetime.kind, "placeholder", "native storage selection never rewrites the logical checked contract");

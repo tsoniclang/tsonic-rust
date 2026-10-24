@@ -735,6 +735,7 @@ function createRustStructuralShapeConstruction(
       };
       const instances = new Map<string, RustStructuralShapeDefinition>();
       const physicalInstances = new Map<string, RustStructuralShapeDefinition>();
+      const instanceOwners = new Map([...originsByKey].map(([key, definition]) => [key, canonicalFor(replacements.get(definition)!)]));
       const instantiatePhysical = (definition: RustStructuralShapeDefinition, carrier: TargetTypeRef): RustStructuralShapeDefinition | undefined => {
         const owner = canonicalFor(definition);
         const key = closedMetadataKey(carrier);
@@ -745,7 +746,10 @@ function createRustStructuralShapeConstruction(
           return previous;
         }
         const selected = instantiateStructuralDefinition(owner, carrier);
-        if (selected !== undefined) physicalInstances.set(key, selected);
+        if (selected !== undefined) {
+          physicalInstances.set(key, selected);
+          instanceOwners.set(key, owner);
+        }
         return selected;
       };
       for (const [key, selected] of byKey) {
@@ -766,7 +770,6 @@ function createRustStructuralShapeConstruction(
         instances.set(key, instance);
       }
       const storageOwners = new Map([...byStorageKey].map(([key, definition]) => [key, canonicalFor(replacements.get(definition)!)]));
-      const instanceOwners = new Map([...originsByKey].map(([key, definition]) => [key, canonicalFor(replacements.get(definition)!)]));
       let finalInstances = Object.freeze([...physicalInstances.values()]);
       definitions = finalDefinitions;
       const registerFinal = (definition: RustStructuralShapeDefinition, carrier: TargetTypeRef): RustStructuralShapeDefinition | undefined => {
