@@ -77,14 +77,14 @@ test("complete source capture carriers preserve the canonical generic and frame 
     "the existing frame signature owner performs the same normalization without losing source capture evidence early");
 });
 
-function fixture(text, configure = input => input, maximumSteps) {
+function fixture(text, { source: configureSource = source => source, storage: configureStorage = storage => storage, maximumSteps } = {}) {
   const checked = checkRustSession(createRustSession({ surfaces: ["js"], files: { "index.ts": text } }));
-  const source = createTargetSourceProgram(checked);
-  const sourceStorage = createSourceStorageQuery(source, sourceProjectFiles(checked));
+  const source = configureSource(createTargetSourceProgram(checked));
+  const sourceStorage = configureStorage(createSourceStorageQuery(source, sourceProjectFiles(checked)), source);
+  assert.equal(sourceStorage.source === source, true, "instrumentation and storage share the identical checked source program");
   assert.equal(sourceStorage.failureReason(), undefined);
-  // The analysis host passes every native participating node; the source storage inventory is that set here.
-  const input = configure({ source, sourceStorage, sourceLifetimes: emptyRustLifetimeIndex,
-    nativeTasks: { lifecycleOwner: undefined, spawns: [], owners: [], parameterOwners: new Set(), calls: [], entries: [] } });
+  const input = { source, sourceStorage, sourceLifetimes: emptyRustLifetimeIndex,
+    nativeTasks: { lifecycleOwner: undefined, spawns: [], owners: [], parameterOwners: new Set(), calls: [], entries: [] } };
   const queries = createRustRetainedEnvironmentQueries(input, maximumSteps);
   const declarations = new Map(sourceStorage.nodes.filter(node => source.ast.is.IsFunctionDeclaration(node))
     .map(node => [source.ast.text(source.ast.name(node)), node]));
@@ -118,13 +118,46 @@ export async function outer(callback: () => number, unused: () => number): Promi
 }
 `;
 
+const scopedSuspended = `
+async function outer(callback: () => number, unused: () => number): Promise<number> {
+  function helper(): number { return callback(); }
+  return helper();
+}
+export async function observe(callback: () => number, unused: () => number): Promise<number> {
+  return await outer(callback, unused);
+}
+`;
+
+test("exported suspended inputs own the exact used callback without a generated borrowed environment", () => {
+  const current = fixture(suspended);
+  const owner = current.declarations.get("outer");
+  const parameters = current.source.ast.parameters(owner);
+  const ownership = current.queries.inputsFor(owner);
+  assert.equal(ownership.kind, "resolved");
+  assert.equal(ownership.ownership, "owned");
+  const selected = current.queries.environmentFor(owner);
+  assert.equal(selected.kind, "none");
+  assert.equal(current.queries.environmentFor(owner) === selected, true, "the exact owned selection is memoized");
+  const retained = current.queries.suspendedParametersFor(owner);
+  assert.equal(retained.length, 1, "the owned frame still retains its actual used callback");
+  assert.equal(retained[0] === parameters[0], true, "the original checked callback Node is preserved");
+  assert.equal(retained.includes(parameters[1]), false, "the unused input does not become a captured parameter");
+  assert.equal(Object.isFrozen(selected) && Object.isFrozen(retained), true);
+});
+
+test("retained environment selection refuses a different source wrapper before accepting storage evidence", () => {
+  const current = fixture(suspended);
+  assert.throws(() => createRustRetainedEnvironmentQueries({ ...current, source: { ...current.source } }),
+    /Callable retention and storage require the identical checked source program/u);
+  assert.equal(current.queries.environmentFor(current.declarations.get("outer")).kind, "none",
+    "refusing foreign source identity does not alter the independent original query");
+});
+
 test("unfinished retained input evidence stays retryable without changing its finite work budget", () => {
   let complete = false;
-  const current = fixture(suspended, input => ({ ...input,
-    source: { ...input.source, navigation: { ...input.source.navigation,
-      parameterUseSummary(parameter) { return complete ? input.source.navigation.parameterUseSummary(parameter) : undefined; },
-    } },
-  }));
+  const current = fixture(scopedSuspended, { source: source => ({ ...source, navigation: { ...source.navigation,
+    parameterUseSummary(parameter) { return complete ? source.navigation.parameterUseSummary(parameter) : undefined; },
+  } }) });
   const owner = current.declarations.get("outer");
   assert.equal(current.queries.suspendedParametersFor(owner) === undefined, true,
     "unfinished checked uses cannot publish an empty native capture inventory");
@@ -140,7 +173,7 @@ test("unfinished retained input evidence stays retryable without changing its fi
 });
 
 test("suspended retention uses checked nested-function capture evidence and excludes unused parameters", () => {
-  const { source, queries, declarations } = fixture(suspended);
+  const { source, queries, declarations } = fixture(scopedSuspended);
   const owner = declarations.get("outer");
   const parameters = source.ast.parameters(owner);
   const uses = source.navigation.parameterUseSummary(parameters[0]);
@@ -148,6 +181,8 @@ test("suspended retention uses checked nested-function capture evidence and excl
   assert.equal(uses.uses.some(use => use.captured && use.role === "call-target"), true);
   const selected = queries.environmentFor(owner);
   assert.equal(selected.kind, "selected");
+  assert.equal(queries.inputsFor(owner).ownership, "borrowed", "the original caller immediately awaits the actual private callable");
+  assert.equal(selected.environment.lifetime.kind, "parameter", "the scoped input owns a genuine named lifetime");
   assert.equal(selected.environment.inputs.length, 1);
   assert.equal(selected.environment.inputs[0].declaration === parameters[0], true);
   assert.equal(queries.suspendedParametersFor(owner)[0] === parameters[0], true);
@@ -196,17 +231,17 @@ export function make<Value>(value: Value, unused: Value) { return wrap(value); }
 
 test("returned source method traversal stays bounded and never invokes an accessor", () => {
   const source = `export function make<Value>(value: Value) { return { read(): Value { return value; } }; }`;
-  const bounded = fixture(source, undefined, 2);
+  const bounded = fixture(source, { maximumSteps: 2 });
   assert.equal(bounded.queries.environmentFor(bounded.declarations.get("make")).kind, "unresolved",
     "a missing finite component proof never becomes static");
-  const accessor = fixture(`export function make(unused: number) { return { get value(): number { return 1; } }; }`, input => ({
-    ...input, sourceStorage: { ...input.sourceStorage, subject(node, kind, projection) {
+  const accessor = fixture(`export function make(unused: number) { return { get value(): number { return 1; } }; }`, {
+    storage: (sourceStorage, checkedSource) => ({ ...sourceStorage, subject(node, kind, projection) {
       assert.equal(projection?.some(component => component.declaration !== undefined &&
-        input.source.ast.is.IsGetAccessorDeclaration(component.declaration)) === true, false,
+        checkedSource.ast.is.IsGetAccessorDeclaration(component.declaration)) === true, false,
       "source retention never manufactures an accessor invocation");
-      return input.sourceStorage.subject(node, kind, projection);
-    } },
-  }));
+      return sourceStorage.subject(node, kind, projection);
+    } }),
+  });
   assert.equal(accessor.queries.environmentFor(accessor.declarations.get("make")).kind, "none",
     "an unused input is not retained by evaluating a getter");
 });
@@ -216,11 +251,11 @@ test("retention respects the canonical opaque invocation leaf instead of travers
 interface NativeResult { next: NativeResult; read(): number; }
 declare function native(value: number): NativeResult;
 export function make(unused: number): NativeResult { return native(1); }
-`, input => ({ ...input, sourceStorage: { ...input.sourceStorage, subject(node, kind, projection) {
-    assert.equal(projection?.length > 0 && input.source.ast.is.IsCallExpression(node), false,
+`, { storage: (sourceStorage, source) => ({ ...sourceStorage, subject(node, kind, projection) {
+    assert.equal(projection?.length > 0 && source.ast.is.IsCallExpression(node), false,
       "an opaque native result is not a source record allocation");
-    return input.sourceStorage.subject(node, kind, projection);
-  } } }));
+    return sourceStorage.subject(node, kind, projection);
+  } }) });
   assert.equal(current.sourceStorage.boundaries.some(boundary => boundary.kind === "opaque-invocation"), true,
     "the actual source transport declares the native result opaque");
   assert.equal(current.queries.environmentFor(current.declarations.get("make")).kind, "none",
@@ -245,13 +280,13 @@ export async function outer(typeOnly: () => number, callback: () => number, valu
 test("declaration use evidence and lexical storage queries are memoized independently of selected carriers", () => {
   let parameterQueries = 0;
   let producerQueries = 0;
-  const context = fixture(`${suspended}
+  const context = fixture(`${scopedSuspended}
 export function returned(callback: () => number): () => number { return () => callback(); }
-`, input => ({ ...input, source: { ...input.source, navigation: { ...input.source.navigation,
-    parameterUseSummary(parameter) { parameterQueries += 1; return input.source.navigation.parameterUseSummary(parameter); },
-  } }, sourceStorage: { ...input.sourceStorage,
-    storageProducersFor(...arguments_) { producerQueries += 1; return input.sourceStorage.storageProducersFor(...arguments_); },
-  } }));
+`, { source: source => ({ ...source, navigation: { ...source.navigation,
+    parameterUseSummary(parameter) { parameterQueries += 1; return source.navigation.parameterUseSummary(parameter); },
+  } }), storage: sourceStorage => ({ ...sourceStorage,
+    storageProducersFor(...arguments_) { producerQueries += 1; return sourceStorage.storageProducersFor(...arguments_); },
+  }) });
   const outer = context.declarations.get("outer");
   const returned = context.declarations.get("returned");
   const first = context.queries.environmentFor(outer);
@@ -274,15 +309,15 @@ export function returned(callback: () => number): () => number { return () => ca
 
 test("retention fails closed on missing checked uses and finite work exhaustion without widening lifetimes", () => {
   for (const maximumSteps of [0, -1, Infinity, NaN, Number.MAX_SAFE_INTEGER + 1, 1]) {
-    const { queries, declarations } = fixture(suspended, undefined, maximumSteps);
+    const { queries, declarations } = fixture(suspended, { maximumSteps });
     const owner = declarations.get("outer");
     const selected = queries.environmentFor(owner);
     assert.equal(selected.kind, "unresolved", String(maximumSteps));
     assert.equal(queries.environmentFor(owner) === selected, true);
   }
-  const { queries, declarations } = fixture(suspended, input => ({ ...input,
-    source: { ...input.source, navigation: { ...input.source.navigation, parameterUseSummary: () => undefined } },
-  }));
+  const { queries, declarations } = fixture(suspended, {
+    source: source => ({ ...source, navigation: { ...source.navigation, parameterUseSummary: () => undefined } }),
+  });
   assert.equal(queries.environmentFor(declarations.get("outer")).kind, "unresolved");
 });
 
