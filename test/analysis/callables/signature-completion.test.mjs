@@ -5,6 +5,7 @@ import { createRustRecordFixture } from "../../helpers/records.mjs";
 import { createRustProgramRecordBuilder } from "../../../dist/analysis/program/records/create.js";
 import { createRustCarrierProbe } from "../../../dist/analysis/program/carrier-probe.js";
 import { rustResolutionContext } from "../../../dist/analysis/program/walk.js";
+import { sourceCallableValueParameters } from "@tsonic/target-api/source";
 import { finalizeRustCallableSignature, resolveRustCallableSignatureCarrier } from "../../../dist/analysis/callables/signature-query.js";
 import * as callableSignatures from "../../../dist/analysis/callables/signature-query.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
@@ -102,7 +103,16 @@ function inputFixture(source, select = (ast, node) => ast.is.IsFunctionDeclarati
   const { context, walk } = analyzeRustOperations(source, { surfaces: ["js"] });
   const declaration = context.sourceStorage.nodes.find(node => select(context.ast, node));
   assert.equal(declaration !== undefined, true, "the checked source owns the selected callable");
-  const parameters = context.ast.parameters(declaration);
+  const semantics = context.semanticsFor(declaration);
+  const parameters = sourceCallableValueParameters(context.ast, declaration, semantics, { kind: "declaration" });
+  assert.equal(parameters !== undefined, true, "the original checked callable has its complete value-parameter inventory");
+  const signature = semantics.declarations.declarationSignature(declaration);
+  const pseudo = signature === undefined ? undefined : semantics.types.signatureThisParameterInfo(signature)?.declaration;
+  if (pseudo !== undefined) {
+    assert.equal(context.ast.parameters(declaration).includes(pseudo), true, "the checked pseudo-this retains its original authored node");
+    assert.equal(parameters.includes(pseudo), false, "pseudo-this is not an authored runtime value input");
+    assert.equal(context.records.sourceParameterAbi.get(pseudo) === undefined, true, "pseudo-this has no native value ABI");
+  }
   const inputs = new Set(parameters);
   const inherited = createRustRecordFixture({
     sourceParameterAbi: { get: node => inputs.has(node) ? undefined : context.records.sourceParameterAbi.get(node) },
@@ -111,7 +121,7 @@ function inputFixture(source, select = (ast, node) => ast.is.IsFunctionDeclarati
   }, context.records);
   const current = createRustCarrierProbe({ ...walk, context: { ...context,
     records: createRustProgramRecordBuilder(context.typeDefinitions, inherited) } });
-  return { current, declaration, parameters, original: context.records,
+  return { current, declaration, parameters, pseudo, original: context.records,
     complete: current => callableSignatures.finalizeRustCallableParameterAbis(current, declaration) };
 }
 
@@ -163,6 +173,15 @@ for (const [name, source] of [
     parameter, rustResolutionContext(input.current, parameter), input.current.operationOptions));
   const actual = input.complete(input.current);
   assert.equal(actual === undefined, expected.some(abi => abi === undefined), name + ": no new effective-argument count rejection");
+  if (name === "explicit receiver") {
+    assert.equal(input.pseudo !== undefined, true, "the explicit receiver is proved by the actual selected checked signature");
+    assert.equal(input.parameters.length, 1, "only the actual offset value occupies the native input vector");
+    const nameNode = input.current.context.ast.name(input.parameters[0]);
+    assert.equal(input.current.context.ast.is.IsIdentifier(nameNode) && input.current.context.ast.text(nameNode) === "offset", true,
+      "the ordinary first value input is retained independently of pseudo-this");
+    assert.equal(input.current.context.records.sourceParameterAbi.get(input.pseudo) === undefined, true,
+      "input completion never publishes a native value ABI for the checked pseudo receiver");
+  }
   if (actual === undefined) {
     for (const parameter of input.parameters) assert.equal(input.current.context.records.sourceParameterAbi.get(parameter) === undefined, true,
       name + ": an unresolved vector publishes no input");

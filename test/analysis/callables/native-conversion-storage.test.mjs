@@ -51,7 +51,17 @@ function inspectFixture(program, requiredRecords) {
     assert.equal(physical !== undefined, true, "physical source operand");
     return physical;
   };
-  return { program, ast, input, declaration, initializer, operand, requiredRecords };
+  const stored = name => {
+    const node = declaration(name);
+    const source = program.records.runtimeCarrier.get(node)?.carrier;
+    assert.equal(source !== undefined, true, `${name}: the actual stored value has its checked source carrier`);
+    const selected = input.storage.valueFor(node);
+    assert.equal(selected.kind !== "unresolved", true, `${name}: ${selected.reason ?? "the original binding owns its published physical storage"}`);
+    const physical = rustNativeCallablePhysicalSource(source, selected);
+    assert.equal(physical !== undefined, true, `${name}: the stored value supplies its exact physical callable signature`);
+    return physical;
+  };
+  return { program, ast, input, declaration, initializer, operand, stored, requiredRecords };
 }
 
 test("source-produced conversion operands retain the original physical producer signature", () => {
@@ -85,7 +95,7 @@ test("source-produced physical formal signatures retain exact selected input and
   const inputs = current.program.callableValues.native.inputsFor(current.declaration("forward"));
   assert.equal(inputs.length, 2);
   for (const [index, name] of ["first", "second"].entries()) {
-    const value = current.operand(current.initializer(name));
+    const value = current.stored(name);
     assert.equal(value.input === inputs[index], true, name);
     assert.equal(value.signature.error.kind, "associated-type");
     assert.equal(value.signature.error.name, "InvocationError");
@@ -124,7 +134,7 @@ test("physical callable operands preserve checked member, tuple and array input 
       input.subject.projection[0]?.kind === projection &&
       (ordinal === undefined || input.subject.projection[0].index === ordinal));
     assert.equal(input !== undefined, true, `${name}: checked projected formal`);
-    const physical = current.operand(current.initializer(name));
+    const physical = current.stored(name);
     assert.equal(physical.input === input, true, name);
     assert.equal(rustTargetTypeRefEquals(physical.signature.error.owner, input.implementation), true, name);
     assert.equal(physical.signature.error.trait.id, input.protocol.identity);
@@ -143,7 +153,7 @@ test("physical callable signatures substitute declaration-generic environments w
   for (const [index, name] of ["first", "second"].entries()) {
     const input = inputs[index];
     assert.equal(input.environment.length, 1, "one actual outer type argument");
-    const physical = current.operand(current.initializer(name));
+    const physical = current.stored(name);
     assert.equal(physical.input === input, true);
     assert.equal(rustTargetTypeRefEquals(physical.signature.result, input.environment[0]), true);
     assert.equal(rustTargetTypeRefEquals(physical.signature.error.trait.genericArguments[0].type,
