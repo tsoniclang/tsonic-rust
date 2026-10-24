@@ -62,9 +62,10 @@ export function analyzeRustReadOwnership(input: {
       }] };
     }
     const ownedProviderResult = operation?.kind === "provider-operation" && flow.movingReads.has(node);
+    const referenceLoad = operation?.kind === "reference-operation" && operation.operation === "load";
     storageReads.set(node, inherited ?? (ast.is.IsIdentifier(node) || ast.is.IsElementAccessExpression(node) && !ownedProviderResult ||
       ast.kindName(node) === "KindThisExpression" || ast.kindName(node) === "KindThisKeyword" ||
-      operation?.kind === "source-field" && operation.valueSemantics.kind === "stored"));
+      referenceLoad || operation?.kind === "source-field" && operation.valueSemantics.kind === "stored"));
   }
   const uses = analyzeRustReadUses(ast, input.nativeNodes, records, input.definitions, input.ownsExternalArgument,
     input.borrowEffectsInput.structuralShapes);
@@ -114,9 +115,12 @@ export function analyzeRustReadOwnership(input: {
     for (const value of later) {
       if (!budget.step()) return rejectedBudget();
       const use = uses.get(node);
+      const operation = records.targetOperation.get(node);
+      const referenceLoad = operation?.kind === "reference-operation" && operation.operation === "load";
       if (use?.stableAcrossEffects === true && borrowEffects.stableBindings.has(node) &&
         (laterPositions.get(use.later)?.get(value) ?? -1) >= use.laterStart ||
-        selectRustBorrowRelationship(node, value, input.borrowEffectsInput, borrowEffects)) selected.add(value);
+        referenceLoad && borrowEffects.pureValues.has(value) ||
+        selectRustBorrowRelationship(referenceLoad ? operation.operandExpression : node, value, input.borrowEffectsInput, borrowEffects)) selected.add(value);
     }
     borrowRelationships.set(node, selected);
   }
@@ -155,7 +159,8 @@ export function analyzeRustReadOwnership(input: {
       const staticStringView = sourceRead?.kind === "borrow" && !sourceRead.mutable &&
         module?.storage === "native-const" && isRustStringCarrier(module.valueCarrier);
       if ((value === undefined || sourceRead === undefined) && storageRead &&
-        (records.sourceBinding.get(node) !== undefined || operation?.kind === "source-field" && operation.accessMode === "read")) {
+        (records.sourceBinding.get(node) !== undefined || operation?.kind === "source-field" && operation.accessMode === "read" ||
+          operation?.kind === "reference-operation" && operation.operation === "load")) {
         return { kind: "rejected", diagnostics: [{
           code: "RUST_VALUE_READ_OWNERSHIP_UNAVAILABLE", category: "error", source: "tsonic-rust", sourceNode: node,
           message: "An owned native value read requires a proven transfer, Copy or Clone contract; a borrowed read requires its exact use-site lease.",

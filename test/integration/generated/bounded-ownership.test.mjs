@@ -9,7 +9,8 @@ import { runCargo, validateGeneratedProject, writeGeneratedProject } from "../..
 
 function compile(source, options = {}) {
   const { result } = compileRust({ surfaces: ["js"],
-    target: { id: "rust", options: { outputType: "bin", ...options } }, files: { "index.ts": (source + "\nmain();\n") } });
+    target: { id: "rust", options: { outputType: "bin", ...options } },
+    files: { "index.ts": source + (options.outputType === "lib" ? "" : "\nmain();\n") } });
   assertNoTargetDiagnostics(result.diagnostics);
   return { result, output: artifactText(result, "src/index.rs") };
 }
@@ -146,6 +147,61 @@ main();
   assert.match(output, /change\(&mut value\)/u);
   assert.doesNotMatch(output, /&mut value\.clone\(\)/u);
   validateGeneratedProject("reference-load-normalization", result.artifacts, { run: true });
+});
+
+test("native reference stores evaluate target then value once and observe the old load before RHS mutation", { timeout: 300_000 }, () => {
+  const { result, output } = compile(`
+import type { int32 } from "@tsonic/core/types.js";
+import type { Mut } from "@tsonic/rust/types.js";
+import { load, mut, store } from "@tsonic/rust/lang.js";
+let events: int32 = 0;
+let targetCalls: int32 = 0;
+let valueCalls: int32 = 0;
+function target(value: Mut<int32>): Mut<int32> {
+  events = events * 10 + 1;
+  targetCalls++;
+  return value;
+}
+function next(): int32 {
+  events = events * 10 + 2;
+  valueCalls++;
+  return 7;
+}
+function mutate(value: Mut<int32>): int32 {
+  events = events * 10 + 3;
+  store(value, 9);
+  return 3;
+}
+function update(value: Mut<int32>): void { store(value, load(value) + mutate(value)); }
+function wrapped(value: Mut<int32>): void { store(((value)), load(((value))) + mutate(value)); }
+function plain(value: Mut<int32>): void { store(value, load(value) + 1); }
+export function main(): void {
+  let first: int32 = 5;
+  store(target(mut(first)), next());
+  if (first !== 7 || events !== 12 || targetCalls !== 1 || valueCalls !== 1) throw new Error("native store argument order");
+  events = 0;
+  let second: int32 = 5;
+  update(mut(second));
+  if (second !== 8 || events !== 3) throw new Error("native store old load");
+  events = 0;
+  let third: int32 = 5;
+  wrapped(mut(third));
+  if (third !== 8 || events !== 3) throw new Error("wrapped native store old load");
+  plain(mut(third));
+  if (third !== 9) throw new Error("pure native compound store");
+}
+`);
+  const update = functionSection(output, "update", "wrapped");
+  const wrapped = functionSection(output, "wrapped", "plain");
+  for (const [label, section] of [["direct", update], ["wrapped", wrapped]]) {
+    assert.doesNotMatch(section, /\+=/u, `${label}: effectful RHS never becomes a RHS-first native compound assignment`);
+    assert.match(section, /let reference_store_value(?:_\d+)? =/u, `${label}: the original full value is evaluated before the store`);
+    assert.match(section, /mutate\(/u, `${label}: the original mutation is retained`);
+    assert.doesNotMatch(section, /clone\(|String::from|Box::|Rc::|Arc::/u, `${label}: ordering uses only native stack storage`);
+  }
+  assert.match(output, /let reference_store_target(?:_\d+)? = target\(/u, "the effectful target is stabilized exactly once before its value");
+  assert.match(output, /let reference_store_value(?:_\d+)? = next\(/u, "the second argument is evaluated separately after the target");
+  validateGeneratedProject("reference-store-native-order", result.artifacts, { run: true });
 });
 
 test("field indices keep local cursor value storage while real escaping receivers stay shared", { timeout: 300_000 }, () => {

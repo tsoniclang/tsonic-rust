@@ -348,7 +348,7 @@ for (const [label, body, mutable, written] of [
   ["live direct write", "owned += 1; return owned;", true, true],
   ["live mutable borrow", "change(mut(owned)); return owned;", true, false],
 ]) test(`native lexical mutability follows emitted uses: ${label}`, () => {
-  const { source, program } = analyzeRust({ files: { "index.ts": `
+  const { program } = analyzeRust({ files: { "index.ts": `
 import { mut, load, store } from "@tsonic/rust/lang.js";
 import type { Mut } from "@tsonic/rust/types.js";
 function change(target: Mut<number>): void { store(target, load(target) + 1); }
@@ -360,7 +360,7 @@ export function inspect(input: number): number { let owned = input; ${body} }
   program.sourceFiles.forEach(visit);
   const declaration = nodes.find(node => ast.is.IsVariableDeclaration(node) && ast.text(ast.name(node)) === "owned");
   assert.equal(declaration !== undefined, true, `${label}: use the actual checked local declaration`);
-  assert.equal(source.navigation.declarationUseSummary(declaration).bindingWritten, written,
+  assert.equal(program.source.navigation.declarationUseSummary(declaration).bindingWritten, written,
     `${label}: source assignments remain whole and native reference calls remain distinct`);
   const selected = program.records.localBinding.get(declaration);
   assert.equal(selected?.kind, "value", `${label}: the native local binding is selected before publication`);

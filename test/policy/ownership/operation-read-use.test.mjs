@@ -156,6 +156,7 @@ export function replace(target: Mut<string>, value: string): void { store(target
 ` } });
   const { ast } = program.source;
   const operations = [];
+  const stores = [];
   const visit = node => {
     const fact = program.records.targetOperation.get(node);
     if (fact?.kind === "reference-operation") {
@@ -166,6 +167,10 @@ export function replace(target: Mut<string>, value: string): void { store(target
       assert.equal(program.records.referenceOperation.get(node)?.operation === fact, true,
         `${fact.operation}: rendering reads the same admitted operation, not a new selector`);
       if (fact.operation === "store") {
+        const selected = program.records.referenceOperation.get(node);
+        stores.push(selected);
+        assert.equal(selected?.recipe.kind, "store", "each native store publishes its required final recipe exactly once");
+        assert.equal(Object.hasOwn(fact, "writeStrategy"), false, "source facts no longer contain a premature optional store recipe");
         assert.equal(program.records.readOwnership.get(fact.valueExpression)?.value.kind === "borrow", false,
           "the stored native value is not reclassified as a borrowed handle");
       }
@@ -177,19 +182,40 @@ export function replace(target: Mut<string>, value: string): void { store(target
     "all repeated shared and mutable loads retain their real source occurrences");
   assert.equal(operations.filter(operation => operation.operation === "store").length, 4,
     "all direct, wrapped, disjoint and owned-value stores are admitted");
-  assert.equal(operations.filter(operation => operation.operation === "store" && operation.writeStrategy !== undefined).length, 1,
-    "only the existing exact-identifier compound recipe is selected; wrappers are not guessed equivalent");
+  assert.equal(stores.filter(selected => selected.recipe.evaluation.kind === "compound").length, 2,
+    "both exact direct and transparently wrapped operands use the same proven pure native update");
+  assert.equal(stores.filter(selected => selected.recipe.evaluation.kind === "direct").length, 2,
+    "disjoint loads and owned String replacements keep their original native value semantics");
 });
 
 test("a shared native reference still cannot be passed to the mutable store contract", () => {
-  assert.throws(() => compileRust({ files: { "index.ts": `
+  const { result, source } = compileRust({ files: { "index.ts": `
 import type { int32 } from "@tsonic/core/types.js";
 import type { Ref } from "@tsonic/rust/types.js";
 import { store } from "@tsonic/rust/lang.js";
 export function invalid(value: Ref<int32>): void { store(value, 1); }
-` } }), failure => typeof failure?.message === "string" && failure.message.includes("TypeScript diagnostics:") &&
-    failure.message.includes("Ref") && failure.message.includes("Mut"),
-  "the checked immutable-reference inverse fails at the existing native mutable-reference admission boundary");
+` } });
+  const { ast, sourceFiles } = createTargetSourceProgram(source);
+  const calls = [];
+  const visit = node => {
+    if (ast.is.IsCallExpression(node)) {
+      const callee = Node_Expression(ast, node);
+      if (callee !== undefined && ast.is.IsIdentifier(callee) && ast.text(callee) === "store") calls.push(node);
+    }
+    ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+  };
+  sourceFiles.forEach(visit);
+  assert.equal(calls.length, 1, "the inverse retains the actual checked immutable-reference store occurrence");
+  assert.deepEqual(result.diagnostics.map(diagnostic => diagnostic.code), ["RUST_REFERENCE_STORE_REQUIRES_MUTABLE"],
+    "only the exact preseal mutable-reference admission refuses the immutable input");
+  const diagnostic = result.diagnostics[0];
+  assert.equal(diagnostic.source, "tsonic-rust", "the native target owns the refusal");
+  assert.equal(diagnostic.message, "Rust reference store requires an exact mutable reference operand.",
+    "the immutable-reference inverse retains the complete existing reason");
+  assert.equal(diagnostic.sourceNode === calls[0], true, "the refusal names the exact original store call");
+  assert.equal(result.artifacts.length, 0, "the rejected immutable-reference store emits no native artifact");
+  assert.equal(result.program === undefined, true, "the rejected source is not published as a sealed program");
+  assert.equal(result.plan === undefined, true, "the rejected source is never planned");
 });
 
 test("nested native result lifetimes retain only their corresponding reference input", async () => {

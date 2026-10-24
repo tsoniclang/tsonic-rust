@@ -133,10 +133,7 @@ function projectOperationMetadata(fact: RustOperationComparisonInput, references
       return { ...fact, error: { ...fact.error, expression: reference(fact.error.expression) } };
     case "reference-operation":
       return fact.operation === "store"
-        ? { ...fact, operandExpression: reference(fact.operandExpression), valueExpression: reference(fact.valueExpression),
-            writeStrategy: fact.writeStrategy === undefined ? undefined : { ...fact.writeStrategy,
-              readExpression: reference(fact.writeStrategy.readExpression),
-              rightExpression: reference(fact.writeStrategy.rightExpression) } }
+        ? { ...fact, operandExpression: reference(fact.operandExpression), valueExpression: reference(fact.valueExpression) }
         : { ...fact, operandExpression: reference(fact.operandExpression) };
     case "native-pointer":
       return { ...fact, pointerExpression: reference(fact.pointerExpression),

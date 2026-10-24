@@ -42,12 +42,16 @@ export function analyzeRustStringComparisonViews(program: Omit<RustAnalysisProgr
     const carrier = program.records.valueRead.get(node)?.value;
     const referent = carrier?.kind === "reference" ? carrier.referent : carrier;
     const binary = parent === undefined ? undefined : program.records.binaryEmission.get(parent);
-    if (selected.kind === "value" && binary?.fact.kind === "operator-token" &&
+    if (parent !== undefined && selected.kind === "value" && binary?.fact.kind === "operator-token" &&
       (binary.operator === "==" || binary.operator === "!=") &&
       (isRustStringCarrier(referent) || rustTargetTypeRefEquals(referent, rustStrTargetType()))) {
-      const shared = binary.left === node ? binary.leftShared : binary.right === node ? binary.rightShared
-        : failTargetAnalysisInvariant("tsonic-rust", "A native string comparison view requires its exact finalized binary operand.", node);
-      selected = { kind: "native-str-reference", inputForm: shared ? "shared-reference" : "value" };
+      const comparison = program.records.nativeComparison.get(parent)
+        ?? failTargetAnalysisInvariant("tsonic-rust", "A native string comparison view requires its finalized native comparison recipe.", node);
+      if (comparison.kind === "ordinary") {
+        const shared = binary.left === node ? binary.leftShared : binary.right === node ? binary.rightShared
+          : failTargetAnalysisInvariant("tsonic-rust", "A native string comparison view requires its exact finalized binary operand.", node);
+        selected = { kind: "native-str-reference", inputForm: shared ? "shared-reference" : "value" };
+      }
     }
     if (parent !== undefined && operation?.kind === "operator-token" &&
       (BinaryExpression_Left(program.source.ast, parent) === node && operation.leftConversion !== undefined ||
