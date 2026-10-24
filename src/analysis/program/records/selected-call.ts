@@ -3,8 +3,8 @@ import type { RustFoundation } from "../../../target-model/foundation/model.js";
 import type { RustRecordFamily } from "../../../target-model/records/program.js";
 import { rustSelectedTargetSignatureEquals } from "../../../target-model/types/selected-call-equality.js";
 import type { RustTargetMember } from "../../../target-model/types/model.js";
-import type { RustSelectedTargetSignature } from "../../../target-model/records/member-selections.js";
-import type { Node } from "@tsonic/tsts";
+import type { RustSelectedTargetOperation, RustSelectedTargetSignature } from "../../../target-model/records/member-selections.js";
+import type { Node, ResolvedSourceCallInfo } from "@tsonic/tsts";
 import { rustFoundationForSelectedCall } from "../../foundation/requirements.js";
 import { createRustRecordFamily } from "./family.js";
 
@@ -68,5 +68,28 @@ export function selectedRustCallSignature(
       : { sourceSelectedMethodTypeArguments: request.source.sourceSelectedMethodTypeArguments }),
     ...(member.providerDeclaration === undefined ? {} : { providerDeclaration: member.providerDeclaration }),
     ...selectionDetails,
+  };
+}
+
+export function selectedRustSourceCallOperation(
+  source: ResolvedSourceCallInfo,
+  operation: Pick<RustSelectedTargetOperation, "operationId" | "operationKind" | "targetOperation" | "resultType">,
+): RustSelectedTargetOperation {
+  const callee = source.sourceCalleeAccess === undefined ? source.sourceCallee : source.sourceCalleeAccess;
+  return {
+    ...operation,
+    provenance: {
+      sourceExpression: source.call,
+      sourceReceiver: source.sourceCalleeAccess === undefined
+        ? source.sourceReceiver?.expression : source.sourceCalleeAccess.receiver.expression,
+      sourceCallee: source.sourceCallee.expression,
+      sourceSelectedSignature: source.selectedSignature,
+      sourceSelectedSymbol: callee.selectedSymbol,
+      sourceSelectedDeclaration: callee.selectedDeclaration,
+      sourceCalleeSymbol: source.sourceCallee.symbol,
+      sourceCalleeDeclaration: source.sourceCallee.declaration,
+      sourceResultType: source.sourceResultType,
+      sourceReturnType: source.sourceResultType,
+    },
   };
 }

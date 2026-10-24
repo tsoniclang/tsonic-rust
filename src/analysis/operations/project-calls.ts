@@ -38,6 +38,7 @@ import { rustSpreadElementCarrier } from "../../target-model/operations/rest-ass
 import { rustFixedArrayCarrierValue } from "../../target-model/types/carriers/native.js";
 import { rustTargetConstInteger } from "../../target-model/types/generic-arguments.js";
 import { acceptRustPolicy } from "../../policy/model/contracts.js";
+import { selectedRustSourceCallOperation } from "../program/records/selected-call.js";
 
 export function applySelectedProjectSourceCall(
   walk: RustFactWalk,
@@ -452,24 +453,12 @@ export function applySelectedProjectSourceCall(
   walk.context.records.retainedCalls.finalize(expression, retainedLifetimes);
   recordSelectedSourceCallArguments(walk, arguments_.arguments);
   requireRustRecord(walk.context.requiredRecords, "selectedOperation", expression, "source-call", "applySelectedProjectSourceCall");
-  walk.context.records.selectedOperations.checked(expression, acceptRustPolicy({ operation: {
+  walk.context.records.selectedOperations.checked(expression, acceptRustPolicy({ operation: selectedRustSourceCallOperation(sourceCall, {
     operationId,
     operationKind,
     targetOperation: target.form,
     resultType: finalResultCarrier,
-    provenance: {
-      sourceExpression: sourceCall.call,
-      sourceReceiver: sourceCall.sourceReceiver?.expression,
-      sourceCallee: sourceCall.sourceCallee.expression,
-      sourceSelectedSignature: sourceCall.selectedSignature,
-      sourceSelectedSymbol: sourceCall.sourceCallee.selectedSymbol,
-      sourceSelectedDeclaration: sourceCall.sourceCallee.selectedDeclaration,
-      sourceCalleeSymbol: sourceCall.sourceCallee.symbol,
-      sourceCalleeDeclaration: sourceCall.sourceCallee.declaration,
-      sourceResultType: sourceCall.sourceResultType,
-      sourceReturnType: sourceCall.sourceResultType,
-    },
-  } }));
+  }) }));
   requireRustRecord(walk.context.requiredRecords, "targetOperation", expression, "source-call", "analysis/operations/project-calls.ts");
   walk.context.records.targetOperations.source(expression, {
     kind: "source-call",

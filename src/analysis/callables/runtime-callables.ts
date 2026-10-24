@@ -31,6 +31,8 @@ import type { RustTargetOperationFact } from "../../target-model/records/operati
 import { rustSourceCallArgumentCarriers, rustSourceCallResultWithInputLifetimes } from "../callables/source-call-lifetimes.js";
 import { retainRustSelectedSourceCallResultStorage } from "../source-evidence/types/resolution/call-results.js";
 import { callableRestElement } from "../../target-model/records/callable-adapters.js";
+import { acceptRustPolicy } from "../../policy/model/contracts.js";
+import { selectedRustSourceCallOperation } from "../program/records/selected-call.js";
 
 export function applySelectedRuntimeCallableCall(
   walk: RustFactWalk,
@@ -41,6 +43,14 @@ export function applySelectedRuntimeCallableCall(
   selectedSignature: RustSelectedTargetSignature,
 ): TargetTypeRef | undefined {
   if (!isDenseDataArray(callArguments) || callArguments.some(argument => argument === undefined)) return undefined;
+  const sourceCall = walk.context.semanticsFor(expression).operations.call(expression);
+  if (sourceCall === undefined || sourceCall.call !== expression ||
+    sourceCall.selectedSignature !== selectedSignature.sourceSignature) {
+    appendRustDiagnostic(walk, "RUST_SOURCE_CALL_BINDINGS_MISSING",
+      "Selected runtime callable requires its identical original checked invocation and signature.", expression,
+      ["target.capability=rust.source-call.argument-bindings"]);
+    return undefined;
+  }
   const carrier = selectedSignature.sourceCallableCarrier;
   const genericNames = (selectedSignature.member.genericParameters ?? [])
     .flatMap(parameter => parameter.kind === "type" ? [{ kind: "type-parameter" as const,
@@ -188,12 +198,11 @@ export function applySelectedRuntimeCallableCall(
   }
   let selectedOptional: Extract<ReturnType<typeof selectRustOptionalCallResult>, { readonly kind: "resolved" }>["fact"];
   if (runtimeValue) {
-    const source = walk.context.semantics(sourceFile).operations.call(expression);
-    if (source === undefined || calleeCarrier === undefined) return undefined;
-    const declaration = walk.context.semantics(sourceFile).declarations.signatureDeclaration(source.selectedSignature);
+    if (calleeCarrier === undefined) return undefined;
+    const declaration = walk.context.semanticsFor(expression).declarations.signatureDeclaration(sourceCall.selectedSignature);
     const optionalInvocation = walk.context.ast.as.AsCallExpression(expression)?.QuestionDotToken !== undefined;
     const optionalResult = selectRustOptionalCallResult(
-      { source, ...(declaration === undefined ? {} : { sourceSelectedDeclaration: declaration }) },
+      { source: sourceCall, ...(declaration === undefined ? {} : { sourceSelectedDeclaration: declaration }) },
       resultCarrier, rustOperationContext(walk, expression), walk.operationOptions,
       optionalInvocation ? { guard: callee, sourceGuardCarrier: calleeCarrier, selectedGuardCarrier: carrier } : undefined,
     );
@@ -219,7 +228,7 @@ export function applySelectedRuntimeCallableCall(
   }
   const finalResultCarrier = optionalCall?.resultCarrier ?? resultCarrier;
   const computedKey = recordRustComputedCallEvaluation(walk.context.ast, walk.context.records, walk.context.requiredRecords,
-    walk.context.semanticsFor(expression).operations.call(expression), callee, true);
+    sourceCall, callee, true);
   if (computedKey !== undefined &&
     resolveExpressionCarrier(walk, computedKey, sourceFile, undefined) === undefined) return undefined;
   const structuralMethod = selectedSignature.sourceStructuralMethod;
@@ -279,13 +288,12 @@ export function applySelectedRuntimeCallableCall(
       selectedOptional.operationKind, selectedOptional);
   }
   requireRustRecord(walk.context.requiredRecords, "selectedOperation", expression, "source-call", "applySelectedRuntimeCallableCall");
-  walk.context.records.selectedOperations.project(
-    expression,
-    selectedSignature.member.id,
-    "method",
-    target.form,
-    finalResultCarrier,
-  );
+  walk.context.records.selectedOperations.checked(expression, acceptRustPolicy({ operation: selectedRustSourceCallOperation(sourceCall, {
+    operationId: selectedSignature.member.id,
+    operationKind: "method",
+    targetOperation: target.form,
+    resultType: finalResultCarrier,
+  }) }));
   requireRustRecord(walk.context.requiredRecords, "targetOperation", expression, "source-call", "analysis/source-evidence/types/resolution/references.ts");
   walk.context.records.targetOperations.source(expression, {
     kind: "source-call",

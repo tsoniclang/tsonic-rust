@@ -178,12 +178,14 @@ export function run(): number {
       assert.equal(operation.provenance?.sourceExpression === call, true, "the selected operation retains its original invocation Node");
       assert.equal(operation.provenance?.sourceSelectedSignature === checked.selectedSignature, true,
         "the operation retains the actual checked selected signature, not a reconstructed native header");
-      assert.equal(operation.provenance?.sourceReceiver === checked.sourceReceiver?.expression, true,
+      const callee = checked.sourceCalleeAccess === undefined ? checked.sourceCallee : checked.sourceCalleeAccess;
+      const receiver = checked.sourceCalleeAccess === undefined ? checked.sourceReceiver?.expression : checked.sourceCalleeAccess.receiver.expression;
+      assert.equal(operation.provenance?.sourceReceiver === receiver, true,
         "method receiver identity and genuine function-call receiver absence are preserved");
       assert.equal(operation.provenance?.sourceCallee === checked.sourceCallee.expression, true,
         "the original checked callable operand is not reconstructed from emitted syntax");
-      assert.equal(operation.provenance?.sourceSelectedDeclaration === checked.sourceCallee.selectedDeclaration &&
-        operation.provenance?.sourceSelectedSymbol === checked.sourceCallee.selectedSymbol, true,
+      assert.equal(operation.provenance?.sourceSelectedDeclaration === callee.selectedDeclaration &&
+        operation.provenance?.sourceSelectedSymbol === callee.selectedSymbol, true,
       "the actual selected member declaration and Symbol remain one checked correspondence");
     }
     const readParameter = ast.parameters(read)[0];
