@@ -10,6 +10,8 @@ import { planOptionalChainExpression } from "../../../../dist/backend/planner/ex
 import { planRustPromotedStorageWrite } from "../../../../dist/backend/planner/expressions/typed-locations.js";
 import { planRustCallArguments } from "../../../../dist/backend/planner/expressions/input-shaping.js";
 import { planExpression } from "../../../../dist/backend/planner/expressions/entry.js";
+import { analyzeRustDirectStorage } from "../../../../dist/analysis/storage/direct-storage.js";
+import { createRustDirectStorageProducer } from "../../../../dist/analysis/program/records/direct-storage.js";
 
 let fixture;
 function checkedProgram() {
@@ -65,7 +67,12 @@ test("a finalized tuple selection cannot lose its checked concrete index", () =>
     const selected = ast.as.AsElementAccessExpression(subject);
     return subject === node ? { ...selected, ArgumentExpression: undefined } : selected;
   } } };
-  const context = planContext({ ...program, source: { ...program.source, ast: changed } }, node);
+  const altered = { ...program, source: { ...program.source, ast: changed } };
+  const producer = createRustDirectStorageProducer(() => {});
+  const issues = analyzeRustDirectStorage(altered, [node], producer, { typedLocationPlan: { get: () => undefined } });
+  assert.equal(issues.length, 0, "no effectful write is being admitted");
+  assert.equal(producer.records.directStorage.get(node)?.kind, "unavailable", "a tuple without its concrete index has no native projection");
+  const context = planContext({ ...altered, records: { ...program.records, ...producer.records } }, node);
   let failure;
   try {
     planElementAccess(node, context);
@@ -75,7 +82,7 @@ test("a finalized tuple selection cannot lose its checked concrete index", () =>
   assert.equal(failure?.diagnostic?.code, "TSONIC_INTERNAL_PLANNER_INVARIANT");
   assert.equal(failure.diagnostic.source, "tsonic-rust");
   assert.equal(failure.diagnostic.category, "error");
-  assert.equal(failure.diagnostic.message, "Tuple element fact has no concrete source index expression.");
+  assert.equal(failure.diagnostic.message, "An admitted fixed projection requires its exact native receiver and source index.");
   assert.equal(failure.diagnostic.sourceNode === node, true, "exact checked element identity");
   assert.equal(context.diagnostics.length, 0, "no source rejection for corrupted checked syntax");
 });
@@ -95,7 +102,7 @@ test("an admitted optional chain requires backend names before its inner operati
   let innerCalls = 0;
   let failure;
   try {
-    planOptionalChainExpression(node, context, "property", () => {
+    planOptionalChainExpression(node, context, () => {
       innerCalls++;
       assert.fail("missing backend names cannot reach inner planning");
     });
@@ -105,7 +112,7 @@ test("an admitted optional chain requires backend names before its inner operati
   assert.equal(failure?.diagnostic?.code, "TSONIC_INTERNAL_PLANNER_INVARIANT");
   assert.equal(failure.diagnostic.source, "tsonic-rust");
   assert.equal(failure.diagnostic.category, "error");
-  assert.equal(failure.diagnostic.message, "Optional-chain lowering requires the compilation-owned synthetic-name state.");
+  assert.equal(failure.diagnostic.message, "An admitted optional chain requires its native name scope.");
   assert.equal(failure.diagnostic.sourceNode === node, true, "exact checked optional-chain identity");
   assert.equal(innerCalls, 0);
   assert.equal(context.diagnostics.length, 0, "no source rejection for missing backend state");

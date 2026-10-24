@@ -8,11 +8,20 @@ for (const [name, source, expected] of [
 ]) {
   test(`provider reference ${name} keeps the selected converted value`, () => {
     const { program } = analyzeRust({ surfaces: ["js"], files: { "index.ts": source } });
-    const selected = program.physicalEmissionContexts.sourceOccurrences.flatMap(occurrence => occurrence.inputs)
-      .filter(({ input, slot }) => input.mode === "ref" && program.records.sourceParameterAbi.get(slot.node)?.mode === "ref");
-    assert.equal(selected.length > 0, true, "the real source contains an actual borrowed parameter provider input");
+    const selected = program.physicalEmissionContexts.sourceOccurrences
+      .filter(occurrence => expected ? occurrence.operation.abi.operationKind === "method"
+        : occurrence.operation.operationId.startsWith("tsonic.rust.js.JSON.stringify."))
+      .flatMap(occurrence => occurrence.inputs)
+      .filter(({ input }) => expected ? input.source.kind === "receiver"
+        : input.source.kind === "argument" && input.source.sourceIndex === 0);
+    assert.equal(selected.length, 1, "the exact checked provider source has one receiver or first argument input");
     const converted = selected.filter(({ input }) => input.conversion.kind !== "identity");
     assert.equal(converted.length > 0, !expected, "the control really distinguishes a semantic transition from identity");
+    for (const { input, slot } of selected) {
+      assert.equal(input.mode, "ref", "the provider borrows the selected native input on both sides of the inverse");
+      assert.equal(program.records.sourceParameterAbi.get(slot.node)?.mode, expected ? "ref" : "value",
+        "readonly String has a native reference ABI; structural JSON storage remains an owned source value");
+    }
     for (const { input, slot } of expected ? selected : converted) {
       assert.equal(program.records.providerReference.get(slot.node, input), expected,
         "only an unchanged value can reuse the parameter's existing reference");

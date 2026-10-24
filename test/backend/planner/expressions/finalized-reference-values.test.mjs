@@ -6,7 +6,7 @@ import { analyzeRust, acmeVectorsPackage } from "../../../helpers/rust-session.m
 import { rustSourceFilePlanContext } from "../../../helpers/plan-context.mjs";
 import { createRustRecordFixture } from "../../../helpers/records.mjs";
 import { applyFinalizedRustArgumentMode, applyRustArgumentMode, createRustSharedReferenceArgument,
-  createRustMutableReferenceArgument } from "../../../../dist/backend/planner/expressions/input-shaping.js";
+  createRustMutableReferenceArgument, rustSourceStorageView } from "../../../../dist/backend/planner/expressions/input-shaping.js";
 import { planBinaryExpression } from "../../../../dist/backend/planner/expressions/binary.js";
 import { planExpression } from "../../../../dist/backend/planner/expressions/entry.js";
 import { printRustExpr } from "../../../../dist/print/source/index.js";
@@ -69,8 +69,31 @@ test("stabilized native inputs preserve their exact shared, exclusive and by-val
     else assert.equal(value.kind === "reference" && value.expr === bound && (value.mutable === true) === (input.mode === "mut-ref"), true,
       `${input.mode}: the bound value, not the original place or parameter ABI, determines reference syntax`);
   }
-  const borrowed = inputs.find(({ input, slot }) => input.mode === "ref" && program.records.providerReference.get(slot.node, input));
-  assert.equal(borrowed !== undefined, true, "the real unchanged reference parameter retains its pass-through evidence");
+  const shared = inputs.filter(({ input }) => input.mode === "ref");
+  assert.equal(shared.length, 1, "the native Vector reader has one actual shared input");
+  assert.equal(program.records.sourceParameterAbi.get(shared[0].slot.node)?.mode, "value",
+    "a native provider's reference input does not invent a borrowed source parameter ABI");
+  assert.equal(program.records.providerReference.get(shared[0].slot.node, shared[0].input), false,
+    "the owned Vector source must be borrowed rather than falsely reused as an existing reference");
+});
+
+test("an actual readonly String parameter preserves its admitted non-stabilized reference", () => {
+  const { program } = analyzeRust({ surfaces: ["js"], files: { "index.ts": `
+    export function read(value: string): number { return value.indexOf("x"); }
+    console.log(read("x"));
+  ` } });
+  const inputs = program.physicalEmissionContexts.sourceOccurrences
+    .filter(occurrence => occurrence.operation.abi.operationKind === "method")
+    .flatMap(occurrence => occurrence.inputs)
+    .filter(({ input }) => input.source.kind === "receiver");
+  assert.equal(inputs.length, 1, "one actual checked readonly String receiver supplies the inverse");
+  const borrowed = inputs[0];
+  assert.equal(borrowed.input.mode, "ref", "the provider accepts the exact native shared String input");
+  assert.equal(borrowed.input.conversion.kind, "identity", "no conversion replaces the original borrowed String");
+  assert.equal(program.records.sourceParameterAbi.get(borrowed.slot.node)?.mode, "ref",
+    "the real source parameter has the native reference ABI before planning");
+  assert.equal(program.records.providerReference.get(borrowed.slot.node, borrowed.input), true,
+    "the canonical producer admits unchanged native reference pass-through");
   const reference = { kind: "reference", expr: { kind: "path", path: "actual_reference_parameter" } };
   const context = rustSourceFilePlanContext(program, borrowed.slot.node);
   assert.equal(applyFinalizedRustArgumentMode(context, borrowed.slot.node, reference, borrowed.input, true) === reference, true,
@@ -92,6 +115,8 @@ test("projected reference values never recover an unprojected source view", () =
   assert.equal(projected.length > 0, true, "the checked narrowing publishes an actual value projection");
   for (const node of projected) {
     const context = rustSourceFilePlanContext(program, node);
+    assert.equal(rustSourceStorageView({ stage: "source", node }, context) === undefined, true,
+      "the one canonical source-view reader rejects recovering raw storage through any admitted projection");
     const value = { kind: "call", path: "already_projected_value", args: [] };
     const shared = createRustSharedReferenceArgument(context, { stage: "source", expression: value, node });
     assert.equal(shared.kind === "reference" && shared.expr === value && shared.mutable !== true, true,
@@ -154,11 +179,26 @@ test("operator-specific conversions survive reference shaping independently of n
 test("finalized argument stages never consult original source storage or parameter ABI", () => {
   const value = { kind: "call", path: "one_effect", args: [] };
   const context = { get input() { throw new Error("finalized shaping must not recover original-node evidence"); } };
+  assert.equal(rustSourceStorageView({ stage: "finalized" }, context) === undefined, true,
+    "the shared source-view owner respects finalized-stage absence before looking up any record");
   for (const mode of ["value", "ref", "mut-ref"]) {
     const planned = applyRustArgumentMode(context, { stage: "finalized", expression: value }, mode);
     assert.equal(mode === "value" ? planned === value : planned.kind === "reference" && planned.expr === value &&
       (planned.mutable === true) === (mode === "mut-ref"), true, `${mode}: exactly the selected expression survives`);
   }
+});
+
+test("native source views refuse missing required projection evidence at the single invariant owner", () => {
+  const { program } = analyzeRust({ files: { "index.ts": "export function read(value: string): string { return value; }" } });
+  const node = sourceNodes(program).find(node => program.source.ast.is.IsIdentifier(node) &&
+    program.source.ast.text(node) === "value" && program.source.ast.is.IsReturnStatement(program.source.ast.parent(node)));
+  assert.equal(node !== undefined, true, "the refusal uses an actual checked source value");
+  const records = createRustRecordFixture({ valueProjection: { get: () => undefined } }, program.records);
+  const context = rustSourceFilePlanContext({ ...program, records }, node);
+  assert.throws(() => rustSourceStorageView({ stage: "source", node }, context), error =>
+    error.diagnostic?.code === "TSONIC_INTERNAL_PLANNER_INVARIANT" && error.diagnostic.sourceNode === node &&
+    error.message === "An admitted native source view requires its sealed projection composition.",
+  "a missing sealed source view is neither guessed nor treated as an identity path");
 });
 
 test("transparent shared inputs retain the source-selected capture guard without cloning", () => {

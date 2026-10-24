@@ -4,6 +4,7 @@ import test from "node:test";
 import { nativeClosedValuesSource } from "../../../../tsonic/test/fixtures/native-closed-values.mjs";
 import { analyzeRust, artifactText, compileRust } from "../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
+import { BinaryExpression_Left, BinaryExpression_Right } from "@tsonic/target-api/source";
 
 for (const surfaces of [undefined, ["js"]]) {
   test(`nullish completion stays separate from an ordinary assignment value (${surfaces?.[0] ?? "native"})`, () => {
@@ -28,7 +29,8 @@ export function ordinary(value: string, next: string): string { return value = n
         assert.equal(write.target === evaluation.left, true, "write and completion share the exact native target");
         assert.equal(write.value === evaluation.right, true, "write and completion share the exact fallback expression");
       } else if (ast.is.IsBinaryExpression(node) && ast.operatorKindName(node) === "KindEqualsToken" &&
-        ast.text(node) === "value = next") {
+        ast.is.IsIdentifier(BinaryExpression_Left(ast, node)) && ast.text(BinaryExpression_Left(ast, node)) === "value" &&
+        ast.is.IsIdentifier(BinaryExpression_Right(ast, node)) && ast.text(BinaryExpression_Right(ast, node)) === "next") {
         ordinary++;
         assert.equal(program.records.assignmentWrite.get(node)?.valueResult !== undefined, true,
           "an actual ordinary value assignment retains its required native completion");

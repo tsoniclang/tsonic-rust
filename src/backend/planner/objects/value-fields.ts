@@ -63,6 +63,11 @@ export function planRustValueFieldLocation(
   const prepared = rustPreparedValueLocation(node, context);
   if (prepared !== undefined) return prepared;
   const selectedField = context.input.program.records.targetOperation.get(node);
+  const directOverride = context.expressionOverrides?.get(node);
+  if (directOverride !== undefined && (directOverride.valueForm !== "storage" || directOverride.storageForm !== "plain" ||
+    selectedField?.kind !== "source-field" || selectedField.valueSemantics.kind !== "stored" ||
+    context.input.program.records.admittedField.get(node) !== selectedField ||
+    !rustTargetTypeRefEquals(directOverride.carrier, selectedField.resultCarrier))) return undefined;
   if (selectedField?.kind === "source-field" && selectedField.declaration !== undefined) {
     const binding = context.input.program.records.frameBindingDeclaration.get(selectedField.declaration);
     if (binding !== undefined) {
@@ -123,7 +128,7 @@ export function planRustValueFieldLocation(
   if (selectedField?.kind === "source-indexed-field") return planRustIndexedFieldLocation(node, selectedField, context, access);
   const reject = (): never => failRustPlannerInvariant(
     "An admitted native value field requires its exact stored projection and owned mutable location.", node);
-  if (!rustSourceFieldHasValueReceiver(node, context) || context.syntheticNames === undefined) return reject();
+  if ((!rustSourceFieldHasValueReceiver(node, context) && directOverride === undefined) || context.syntheticNames === undefined) return reject();
   const { ast } = context.input.program.source;
   if (rustExpressionHasBoundRecordField(node, context)) {
     const operation = context.input.program.records.targetOperation.get(node);
@@ -153,7 +158,6 @@ export function planRustValueFieldLocation(
   let leafCarrier: TargetTypeRef | undefined;
   let expectedReceiver: TargetTypeRef | undefined;
   const projection = context.input.program.records.valueFieldProjection.get(node);
-  const directOverride = context.expressionOverrides?.get(node);
   if (projection === undefined && directOverride?.valueForm === "storage" && selectedField?.kind === "source-field" &&
     selectedField.valueSemantics.kind === "stored") {
     leafCarrier = selectedField.resultCarrier;

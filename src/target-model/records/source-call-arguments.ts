@@ -11,12 +11,12 @@ export interface RustSourceCallInputEmission {
   readonly sequence: "value" | "native" | "js";
 }
 
-export interface RustSourceParameterEmission {
+export type RustSourceParameterEmission = {
   readonly form: "required" | "optional" | "default" | "rest";
   readonly carrier: TargetTypeRef;
-  readonly rest: "native" | "js";
   readonly inputs: readonly RustSourceCallInputEmission[];
-}
+} & ({ readonly rest: "native" | "js" } |
+  { readonly rest: "tuple"; readonly omitted: readonly TargetTypeRef[] });
 
 export interface RustSourceCallEvaluationEmission {
   readonly arguments: readonly { readonly source: Node; readonly expression: Node; readonly destination: TargetTypeRef | undefined;

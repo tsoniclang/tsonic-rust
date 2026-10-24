@@ -42,35 +42,35 @@ test("authored generic binders retain independent identities across modules and 
     text: `${artifactText(result, implementationPath)}
 #[cfg(test)]
 mod storage_cost {
-use super::pair;
-use std::sync::atomic::{AtomicUsize, Ordering};
+    use super::pair;
+    use std::sync::atomic::{AtomicUsize, Ordering};
 
-static CLONES: AtomicUsize = AtomicUsize::new(0);
-static DROPS: AtomicUsize = AtomicUsize::new(0);
+    static CLONES: AtomicUsize = AtomicUsize::new(0);
+    static DROPS: AtomicUsize = AtomicUsize::new(0);
 
-struct Value;
+    struct Value;
 
-impl Clone for Value {
-    fn clone(&self) -> Self {
-        CLONES.fetch_add(1, Ordering::SeqCst);
-        Value
+    impl Clone for Value {
+        fn clone(&self) -> Self {
+            CLONES.fetch_add(1, Ordering::SeqCst);
+            Value
+        }
     }
-}
 
-impl Drop for Value {
-    fn drop(&mut self) {
-        DROPS.fetch_add(1, Ordering::SeqCst);
+    impl Drop for Value {
+        fn drop(&mut self) {
+            DROPS.fetch_add(1, Ordering::SeqCst);
+        }
     }
-}
 
-#[test]
-fn record_storage_clones_once_and_moves_the_last_value() {
-    let record = pair(Value);
-    assert_eq!(CLONES.load(Ordering::SeqCst), 1);
-    assert_eq!(DROPS.load(Ordering::SeqCst), 0);
-    drop(record);
-    assert_eq!(DROPS.load(Ordering::SeqCst), 2);
-}
+    #[test]
+    fn record_storage_clones_once_and_moves_the_last_value() {
+        let record = pair(Value);
+        assert_eq!(CLONES.load(Ordering::SeqCst), 1);
+        assert_eq!(DROPS.load(Ordering::SeqCst), 0);
+        drop(record);
+        assert_eq!(DROPS.load(Ordering::SeqCst), 2);
+    }
 }
 `,
   }), { run: true });

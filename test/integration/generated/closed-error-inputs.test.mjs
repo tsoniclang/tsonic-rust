@@ -22,8 +22,8 @@ test("checked closed Error inputs retain native identity without per-read alloca
 use closed_error_inputs::index;
 #[test]
 fn closed_error_input_cost() {
-    let (small, small_cost) = measure(|| index::run(Some(1)).expect("native fixture completes"));
-    let (large, large_cost) = measure(|| index::run(Some(10_000)).expect("native fixture completes"));
+    let (small, small_cost) = measure(|| index::run(Some(1)));
+    let (large, large_cost) = measure(|| index::run(Some(10_000)));
     assert!(small && large);
     assert_eq!(small_cost, large_cost);
 }

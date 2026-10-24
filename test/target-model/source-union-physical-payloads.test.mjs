@@ -151,6 +151,9 @@ test("physical declaration planning retains exact source arity and binder kinds 
   assert.equal(valid !== undefined, true);
   assert.deepEqual(valid.generics.parameters.map(selected => selected.name), ["Payload0", "Payload1"]);
   for (const parameters of [[], [generic, generic], [{ kind: "lifetime", name: "input", outlives: [] }]]) {
-    assert.equal(planRustSourceUnionPayloadTemplate(template, { parameters, wherePredicates: [] }, rustTypeFromCarrier) === undefined, true);
+    assert.throws(() => planRustSourceUnionPayloadTemplate(template, { parameters, wherePredicates: [] }, rustTypeFromCarrier),
+      error => error?.diagnostic?.code === "TSONIC_INTERNAL_PLANNER_INVARIANT" &&
+        error.diagnostic.message === "An admitted native union payload requires its exact sealed generic and field correspondence.",
+      "invalid sealed source arity and binder kinds never reach native declaration rendering");
   }
 });

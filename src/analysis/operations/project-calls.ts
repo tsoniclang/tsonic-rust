@@ -1,7 +1,7 @@
 import { selectRustProjectSourceCallTarget } from "./source-call-targets.js";
 import { prepareSelectedSourceCallArguments, recordSelectedSourceCallArguments } from "./source-call-arguments.js";
 import { rustTargetGenericTypeArguments, substituteRustTargetGenerics, isRustProgramErrorCarrier, rustJsArrayLikeElementTargetType } from "../../target-model/types/index.js";
-import { KindFunctionDeclaration } from "@tsonic/target-api/source";
+import { KindFunctionDeclaration, Node_Type } from "@tsonic/target-api/source";
 
 import { appendMalformedSourceAst } from "../declarations/project-types.js";
 import { appendRustDiagnostic, rustResolutionContext } from "../program/walk.js";
@@ -34,6 +34,7 @@ import { rustLifetimeKey, rustPlaceholderLifetime } from "../../target-model/lif
 import { recordRustComputedCallEvaluation } from "./computed-members.js";
 import { requireRustRecord } from "../program/records/required-records.js";
 import { rustPromiseBodyInvocationCarrier } from "../callables/promise-bodies.js";
+import { rustSpreadElementCarrier } from "../../target-model/operations/rest-assembly.js";
 
 export function applySelectedProjectSourceCall(
   walk: RustFactWalk,
@@ -189,10 +190,11 @@ export function applySelectedProjectSourceCall(
       : targetParameter.passingMode === "borrow-shared"
         ? "ref" as const
         : "value" as const;
-    const inputs = parameterInputs.map((binding) => {
+    const inputs = parameterInputs.map((binding, inputIndex) => {
       const carrier = parameterAbi.form === "rest" &&
           binding.sourceParameterForm === "rest-element"
-        ? valueCarrier.kind === "array" ? valueCarrier.element : rustJsArrayLikeElementTargetType(valueCarrier)
+        ? valueCarrier.kind === "tuple" ? rustSpreadElementCarrier(valueCarrier, inputIndex)
+          : valueCarrier.kind === "array" ? valueCarrier.element : rustJsArrayLikeElementTargetType(valueCarrier)
         : parameterAbi.form === "default" || parameterAbi.form === "optional" && mode === "value"
           ? parameterCarrier
           : valueCarrier;
@@ -208,9 +210,21 @@ export function applySelectedProjectSourceCall(
               : { spreadElementIndex: binding.spreadElementIndex }),
           };
     });
+    const tupleRest = parameterAbi.form === "rest" && valueCarrier.kind === "tuple" ? valueCarrier : undefined;
+    const wholeTupleSequence = tupleRest !== undefined && parameterInputs.length === 1 &&
+      parameterInputs[0]?.sourceParameterForm === "rest-sequence";
+    const omittedTupleElements = tupleRest === undefined || wholeTupleSequence ? [] : tupleRest.elements.slice(inputs.length);
+    const authoredRestType = omittedTupleElements.length === 0 || parameterDeclaration === undefined ? undefined
+      : Node_Type(ast, parameterDeclaration);
+    const checkedRestType = authoredRestType === undefined ? undefined : storageContext.currentSemantics.types.authoredType(authoredRestType);
+    const checkedTupleElements = checkedRestType === undefined ? undefined : storageContext.currentSemantics.types.tupleElementInfos(checkedRestType);
     if (inputs.some((input) => input === undefined) ||
       (parameterAbi.form !== "rest" && inputs.length > 1) ||
-      (parameterAbi.form === "required" && inputs.length !== 1)) {
+      (parameterAbi.form === "required" && inputs.length !== 1) ||
+      (tupleRest !== undefined && !wholeTupleSequence && (inputs.length > tupleRest.elements.length ||
+        parameterInputs.some(binding => binding.sourceParameterForm !== "rest-element") ||
+        omittedTupleElements.length !== 0 && (checkedTupleElements?.length !== tupleRest.elements.length ||
+          checkedTupleElements.slice(inputs.length).some(element => element.elementKind !== "optional"))))) {
       appendRustDiagnostic(
         walk,
         "RUST_SOURCE_CALL_PARAMETER_BINDING_CONFLICT",

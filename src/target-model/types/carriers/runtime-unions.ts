@@ -11,7 +11,7 @@ export type RustRuntimeUnionVariant =
   | { readonly kind: "constant"; readonly name: string; readonly value: boolean };
 
 export interface RustRuntimeUnionContract {
-  readonly typeofMethod?: string;
+  readonly typeofMethod?: "type_of";
   readonly strictEqualityOnly?: true;
   readonly alternatives: readonly {
     readonly carrier: TargetTypeRef;

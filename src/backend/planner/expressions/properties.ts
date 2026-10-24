@@ -21,6 +21,7 @@ import { planOptionalChainExpression } from "./optional-chains.js";
 import { rustOperationFact } from "./fundamentals.js";
 import { finishProviderOperationExpression, planProviderOperationExpression } from "./conversions.js";
 import { planExpression } from "./entry.js";
+import { rustSourceStorageView } from "./input-shaping.js";
 import { planRustSharedReceiver } from "./typed-locations.js";
 import { planRustSourceUnionFieldProjection, readRustUnionField } from "./unions.js";
 import { planRustBuiltinErrorProperty } from "./builtin-errors.js";
@@ -78,8 +79,9 @@ function planSourceFieldRead(node: Node, fact: Extract<RustTargetOperationFact, 
     return location.bindings.length === 0 ? location.read : rustValueBlock(location.bindings, location.read);
   }
   const receiverNode = Node_Expression(context.input.program.source.ast, node);
-  const location = receiverNode === undefined ? undefined : context.valueFieldLocations?.get(receiverNode) ??
-    (rustSourceFieldHasValueReceiver(receiverNode, context) ? planRustValueFieldLocation(receiverNode, context, "read") : undefined);
+  const storage = receiverNode === undefined ? undefined : rustSourceStorageView({ stage: "source", node: receiverNode }, context);
+  const location = storage === undefined ? undefined : context.valueFieldLocations?.get(storage) ??
+    (rustSourceFieldHasValueReceiver(storage, context) ? planRustValueFieldLocation(storage, context, "read") : undefined);
   if (location?.withRead !== undefined && fact.dispatch === undefined && fact.valueSemantics.kind === "stored" &&
     rustStoredObjectFieldSupportsBorrowedRead(fact.storage, fact.receiverCarrier, fact.storageIndex, context)) {
     const read = location.withRead(receiver => readRustStoredObjectField(fact.storage, fact.receiverCarrier, receiver, fact.storageIndex, fact.resultCarrier, context));

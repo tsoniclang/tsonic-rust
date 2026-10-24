@@ -78,6 +78,22 @@ export function stable(left: Choice, right: Choice): boolean { return left === r
   assert.equal(mutating.leftShared, false, "union emission consumes the selected snapshot exactly once");
   assert.equal(stable.leftShared, true, "the immutable native left operand stays shared");
   assert.equal(stable.rightShared, true, "the immutable native right operand stays shared");
+  const node = ast.parent(mutating.left);
+  assert.equal(ast.is.IsBinaryExpression(node), true, "the native operand retains its actual comparison parent");
+  const context = planningContext(program, node);
+  context.expressionOverrides = new Map([
+    [mutating.left, { expression: { kind: "call", path: "selected_snapshot", args: [] }, carrier: mutating.fact.leftCarrier }],
+    [mutating.right, { expression: { kind: "call", path: "mutate_owner", args: [] }, carrier: mutating.fact.rightCarrier }],
+  ]);
+  const planned = planBinaryExpression(node, context);
+  assert.equal(planned.kind, "block", "the owned snapshot has its own complete native temporary scope");
+  assert.equal(planned.body.statements[0].kind, "let", "the first operand completes before RHS evaluation");
+  assert.equal(planned.body.statements[1].kind, "let", "the second operand follows without reordering a shared first expression");
+  const printed = printRustExpr(planned);
+  assert.equal(printed.match(/selected_snapshot\(\)/gu)?.length, 1, "snapshot executes once");
+  assert.equal(printed.match(/mutate_owner\(\)/gu)?.length, 1, "RHS executes once");
+  assert.equal(printed.indexOf("selected_snapshot()") < printed.indexOf("mutate_owner()"), true,
+    "the first native statement releases temporary guards before the later mutation");
 });
 
 test("inferred cross-file optional unions retain absence and compare literals without enum injection", () => {
