@@ -160,8 +160,11 @@ export function read(): string { const value: Named<string> = new Child("ready")
   });
 
   test(`captured generic classes, rest/default calls and physical contexts retain required optional rows on ${surfaces[0] ?? "native"}`, () => {
+    const firstBody = surfaces.length === 0
+      ? "for (const item of rest) { return item; } return value;"
+      : "return rest.length === 0 ? value : rest[0];";
     const { program } = analyzeRust({ surfaces, files: { "index.ts": `
-function first<T>(fallback: T, value: T = fallback, ...rest: T[]): T { return rest.length === 0 ? value : rest[0]; }
+function first<T>(fallback: T, value: T = fallback, ...rest: T[]): T { ${firstBody} }
 export function retain<T>(value: T): () => T {
   class Captured { constructor(readonly current: T) {} read(): T { return this.current; } }
   const selected = new Captured(first(value));
