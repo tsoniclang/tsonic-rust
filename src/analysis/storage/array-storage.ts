@@ -44,8 +44,10 @@ export function collectRustArrayElementStorageDemands(
       const selected = argument === undefined ? undefined
         : walk.context.semanticsFor(argument.call).operations.call(argument.call);
       const selectedContext = selected === undefined ? context : arrayStorageCallContext(walk, selected);
-      if (selectedContext === undefined) continue;
-      const result = resolveRustAuthoredTargetType(authoredTypeNode, selectedContext, walk.operationOptions, new Set());
+      const demandContext = selectedContext === undefined ? undefined
+        : arrayStorageDemandContext(walk, authoredTypeNode, selectedContext);
+      if (demandContext === undefined) continue;
+      const result = resolveRustAuthoredTargetType(authoredTypeNode, demandContext, walk.operationOptions, new Set());
       carrier = walk.context.ast.hasModifierKind(declaration, "async") ? rustFutureOutputCarrier(result) : result;
     } else {
       const argument = sourceExpressionCallArgument(use.reference, walk.context.source);
@@ -58,14 +60,25 @@ export function collectRustArrayElementStorageDemands(
       const authoredTypeNode = parameter?.authoredTypeNode;
       if (authoredTypeNode === undefined || selected === undefined) continue;
       const selectedContext = arrayStorageCallContext(walk, selected);
-      if (selectedContext === undefined) continue;
-      carrier = resolveRustAuthoredTargetType(authoredTypeNode, selectedContext, walk.operationOptions, new Set());
+      const demandContext = selectedContext === undefined ? undefined
+        : arrayStorageDemandContext(walk, authoredTypeNode, selectedContext);
+      if (demandContext === undefined) continue;
+      carrier = resolveRustAuthoredTargetType(authoredTypeNode, demandContext, walk.operationOptions, new Set());
     }
     if (carrier === undefined) return Object.freeze([]);
     const element = isRustVecCarrier(carrier) ? carrier.element : rustJsArrayLikeElementTargetType(carrier);
     if (element !== undefined && rustTargetTypeParameterIdentities(element).length === 0) demands.push(element);
   }
   return Object.freeze(demands);
+}
+
+function arrayStorageDemandContext(
+  walk: RustFactWalk,
+  authoredTypeNode: Node,
+  context: RustTargetTypeResolutionContext,
+): RustTargetTypeResolutionContext | undefined {
+  const selection = walk.context.sourceStorage.storageSubjectFor(authoredTypeNode);
+  return selection.kind === "resolved" ? { ...context, sourceStorageSubject: selection.subject } : undefined;
 }
 
 function arrayStorageCallContext(
