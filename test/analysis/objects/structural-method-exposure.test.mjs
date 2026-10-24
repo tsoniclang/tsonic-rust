@@ -6,7 +6,9 @@ import { selectRustStructuralMethodExposure } from "../../../dist/policy/types/o
 import { rustFixedStructuralMethodDeclarations } from "../../../dist/analysis/callables/generic-values.js";
 import { selectRustStructuralFactoryReceiver } from "../../../dist/policy/ownership/retained-storage.js";
 import { isRustCopyCarrier, rustCarrierSupportsClone, rustCarrierSupportsTrait } from "../../../dist/policy/constraints/native-traits.js";
-import { rustStructuralObjectTargetType } from "../../../dist/target-model/types/carriers/source-types.js";
+import { rustStructuralObjectTargetType, rustStructuralObjectCarrierValue } from "../../../dist/target-model/types/carriers/source-types.js";
+import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
+import { bindRustStructuralReceiverParameters } from "../../../dist/analysis/declarations/structural-receiver-requirements.js";
 
 test("native structural handle Clone requires no state or context Clone bound", () => {
   const parameter = { kind: "type-parameter", identity: "native-context", name: "Context" };
@@ -105,7 +107,7 @@ export function create() {
     "one retained instantiation of the same actual body keeps its needed family");
 });
 
-for (const surfaces of [[], ["js"]]) test(`fixed calls bind the complete receiver context, not only their own captures (${surfaces[0] ?? "native"})`, () => {
+for (const surfaces of [[], ["js"]]) test(`fixed calls bind the complete receiver context, not only their own captures (${surfaces[0] ?? "native"})`, testContext => {
   const { program } = analyzeRust({ surfaces, files: { "index.ts": `
 export function create(callback: () => number) {
   return {
@@ -126,6 +128,35 @@ export function run(callback: () => number): number { return create(callback).re
   assert.equal(read.payload.captures.length, 0, "the read method does not acquire its sibling's capture");
   assert.equal(definition.genericParameters.some(parameter => parameter.kind === "type"), true,
     "the complete physical receiver template still declares the sibling context's actual native type parameter");
+  const ast = program.source.ast;
+  const receivers = [];
+  const visit = node => {
+    const operation = program.records.targetOperation.get(node);
+    if (operation?.kind === "source-call" && operation.target.form === "structural-method" &&
+      definition.fields[operation.target.storageIndex]?.sourceName === "read") {
+      const access = ast.as.AsCallExpression(node)?.Expression;
+      const receiver = access === undefined ? undefined : ast.as.AsPropertyAccessExpression(access)?.Expression;
+      assert.equal(receiver !== undefined, true, "the fixed call retains its original checked receiver occurrence");
+      receivers.push(program.callableValues.nativeStorage.operandFor(receiver));
+    }
+    ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+  };
+  program.sourceFiles.forEach(visit);
+  assert.equal(receivers.length, 1, "the exact returned receiver is checked once");
+  for (const selected of receivers) {
+    assert.equal(selected.kind !== "unresolved", true,
+      selected.kind === "unresolved" ? selected.reason : "the actual returned receiver has published physical storage");
+    const physical = rustStructuralObjectCarrierValue(selected.carrier);
+    const template = program.structuralShapes.templateForCarrier(selected.carrier);
+    const distinct = template !== undefined && !rustTargetTypeRefEquals(template.carrier, selected.carrier);
+    testContext.diagnostic(`physical-receiver: physical=${physical?.implementation?.kind === "physical"}; canonical-template=${template !== undefined}; distinct-instance=${distinct}`);
+    assert.equal(physical?.implementation?.kind, "physical", "the receiver retains its actual checked physical implementation");
+    assert.equal(template !== undefined, true, "the source-call producer admits the physical instance before the generic consumer's template lookup");
+    const parameters = new Set(template.genericParameters.flatMap(parameter => parameter.kind === "type" ? [parameter.identity] : []));
+    assert.equal(bindRustStructuralReceiverParameters(template.carrier, selected.carrier, parameters) !== undefined, true,
+      "the complete receiver binds only through exact native geometry and its own canonical type identities");
+    assert.equal(distinct, true, "the caller's actual physical context is an instance, not a reused callee-template identity");
+  }
 });
 
 test("only an actual retained factory receiver or physical context requires native ownership", () => {

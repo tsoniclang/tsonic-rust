@@ -256,7 +256,8 @@ export function analyzeRustStructuralMethodExposures(input: {
     if (operation?.kind !== "source-field" || operation.storage !== "structural-object" || operation.valueSemantics.kind !== "method") continue;
     const use = input.source.navigation.expressionValueFlow(node);
     const selected = candidates.get(keyFor(operation.receiverCarrier, operation.storageIndex));
-    if (selected !== undefined && use.uses.some(current => current.role !== "call-target" && current.role !== "type-only")) selected.extracted = true;
+    if (selected !== undefined && (use.escapes ||
+      use.uses.some(current => current.role !== "call-target" && current.role !== "type-only"))) selected.extracted = true;
   }
   return new Map([...candidates].map(([key, value]) => {
     const selected = selectRustStructuralMethodExposure({ writes: value.writes, boundary: value.boundary,

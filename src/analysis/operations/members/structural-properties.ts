@@ -6,6 +6,7 @@ import { closedMetadataKey } from "../../../target-model/metadata/closed-data.js
 import { isProjectSourceDeclaration } from "../../../policy/identities/selected-source.js";
 
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
+import { rustStructuralObjectCarrierValue } from "../../../target-model/types/carriers/source-types.js";
 
 import type { RustCheckedOperationSelectionResult, RustCheckedPropertySelectionInput, RustPolicySelection } from "../../../policy/model/contracts.js";
 import type { Node } from "@tsonic/tsts";
@@ -206,6 +207,23 @@ export function selectStructuralSourceProperty(
       "RUST_STRUCTURAL_FIELD_DELETE_UNSUPPORTED",
       "Structural fields cannot be deleted because the selected source field has no optional-property removal contract.",
     );
+  }
+  if (field.method === true && shape.storage === "structural-object" &&
+    rustStructuralObjectCarrierValue(receiverCarrier)?.representation === "reference" &&
+    (request.accessMode === "write" || request.accessMode === "read-write")) {
+    const receiver = context.sourceStorage.subjectFor(request.receiver);
+    const ancestry = receiver.kind === "resolved"
+      ? context.sourceStorage.ancestorsFor(receiver.subject) : receiver;
+    if (ancestry.kind === "unresolved") {
+      return rejectSelectedOperation(request.expression, context,
+        "RUST_STRUCTURAL_METHOD_WRITE_PROVENANCE_MISSING", ancestry.reason);
+    }
+    if (ancestry.subjects.some(subject => subject.kind === "input" && subject.projection.length === 0 &&
+      context.ast.is.IsParameterDeclaration(subject.node))) {
+      return rejectSelectedOperation(request.expression, context,
+        "RUST_STRUCTURAL_METHOD_WRITE_UNSUPPORTED",
+        "Rust v1 does not support replacing a structural method through a shared source parameter or its alias.");
+    }
   }
   const resultCarrier = field.resultCarrier;
   const operationId = structuralFieldOperationId(receiverCarrier, field.storageIndex);

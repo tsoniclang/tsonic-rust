@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { targetUseSiteRef } from "@tsonic/target-api/analysis";
 import { analyzeRustErrorEffects } from "../../helpers/rust-error-analysis.mjs";
-import { analyzeRust, boolCarrier } from "../../helpers/rust-session.mjs";
+import { analyzeRust, boolCarrier, compileRust, rustSourceText } from "../../helpers/rust-session.mjs";
 import { createRustPhysicalCallableLifecycle } from "../../../dist/analysis/callables/physical-lifecycle.js";
 import { createRustNativeCallableProducerPlan } from "../../../dist/analysis/callables/native-producers.js";
 import { createRustGenericCallablePhysicalPlan } from "../../../dist/analysis/callables/generic-physical.js";
@@ -77,6 +77,12 @@ export function exposeZero(): typeof zero { return zero; }
 export const stored = owner(true);
 const quantified = <Value>(value: Value): Value => value;
 export const invoked = quantified<boolean>(true);
+type Quantified = <Value>(value: Value) => Value;
+function quantifiedFactory(): Quantified {
+  return <Value>(value: Value): Value => value;
+}
+const retainedQuantified: Quantified = quantifiedFactory();
+export const retainedInvoked = retainedQuantified<boolean>(true);
 `;
 
 function checkedSource(text, options = { surfaces: [] }) {
@@ -140,7 +146,7 @@ export function inspect(value: string, word: string): boolean { return value.inc
   const declaration = sourceStorage.nodes.find(node => ast.is.IsVariableDeclaration(node) && ast.text(ast.name(node)) === "stored");
   const owner = sourceStorage.nodes.find(node => ast.is.IsFunctionDeclaration(node) && ast.text(ast.name(node)) === "owner");
   const metadata = sourceStorage.nodes.find(node => ast.is.IsTypeAliasDeclaration(node));
-  const invoked = sourceStorage.nodes.find(node => ast.is.IsVariableDeclaration(node) && ast.text(ast.name(node)) === "invoked");
+  const invoked = sourceStorage.nodes.find(node => ast.is.IsVariableDeclaration(node) && ast.text(ast.name(node)) === "retainedInvoked");
   const invocation = invoked === undefined ? undefined : ast.as.AsVariableDeclaration(invoked)?.Initializer;
   const operand = invocation === undefined ? undefined : ast.arguments(invocation)[0];
   assert.equal(declaration !== undefined && owner !== undefined && metadata !== undefined &&
@@ -151,6 +157,11 @@ export function inspect(value: string, word: string): boolean { return value.inc
   "the invocation subject has the actual quantified callable storage selected by the canonical request owner");
   assert.equal(context.callableValues.native.callFor(invocation) === undefined, true,
     "the retained invocation subject is not a native input Fn call with a different request contract");
+  const direct = sourceStorage.nodes.find(node => ast.is.IsVariableDeclaration(node) && ast.text(ast.name(node)) === "invoked");
+  const directInvocation = direct === undefined ? undefined : ast.as.AsVariableDeclaration(direct)?.Initializer;
+  const directOperation = directInvocation === undefined ? undefined : records.targetOperation.get(directInvocation);
+  assert.equal(directOperation?.kind === "source-call" && directOperation.target.form === "function", true,
+    "the original module const quantified arrow selects a direct native function, not retained invocation storage");
   const construction = physicalConstruction(checked, { constructionErrorsReady: !pendingErrors,
     unavailableReturns: missingResult ? new Set([owner]) : new Set() });
   const storage = construction.storage;
@@ -488,6 +499,14 @@ test("ordinary direct native declarations do not invent a required retained cons
   assert.equal(result.value.nativeProducers.producers.length, 1, "the real direct native declaration remains published");
   assert.equal(result.value.nativeStorage.invocationCallableFor(invocation).kind, "unresolved",
     "the original direct call does not invent an unrequested retained invocation selection");
+  const direct = compileRust({ surfaces: [], files: { "index.ts": `
+const quantified = <Value>(value: Value): Value => value;
+export const invoked = quantified<boolean>(true);
+` } });
+  assert.equal(direct.result.diagnostics.filter(diagnostic => diagnostic.category === "error").length, 0,
+    "the original module const-arrow program remains accepted without retained invocation storage");
+  assert.match(rustSourceText(direct.result), /\bfn quantified(?:<|\()/u,
+    "the original const-arrow is emitted as a direct native function");
 });
 
 test("native producer finalization rejects its removed declaration-to-carrier map API", () => {

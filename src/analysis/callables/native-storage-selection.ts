@@ -530,7 +530,10 @@ export function createRustNativeStorageSelection(
         if (operation?.kind === "source-call") {
           const produced = producerResult(selectedSubject, bindings, current, depth + 1);
           if (produced === undefined) return fail("A structural call result requires its actual native producer and bound physical environment.");
-          return produced;
+          const admitted = input.structuralShapes.definitionForCarrier(produced);
+          if (admitted === undefined || !rustTargetTypeRefEquals(admitted.carrier, produced))
+            return fail("A structural call result requires its exact admitted native implementation template.");
+          return admitted.carrier;
         }
         if (structural.implementation === undefined && structural.fields.some((field, index) =>
           field.method === true && input.structuralShapes.field(current, index)?.methodPlan?.kind === "fixed")) {
