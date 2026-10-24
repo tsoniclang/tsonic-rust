@@ -1,4 +1,4 @@
-import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
+import { failTargetAnalysisInvariant, type TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustStructuralEmissionProducer } from "../program/records/structural-emission.js";
 import { rustStructuralObjectCarrierValue } from "../../target-model/types/index.js";
@@ -9,7 +9,10 @@ export function analyzeRustStructuralEmission(program: Omit<RustAnalysisProgram,
   const issues: TargetDiagnostic[] = [];
   for (const definition of new Set([...program.structuralShapes.definitions, ...program.structuralShapes.instances])) {
     const value = rustStructuralObjectCarrierValue(definition.carrier)?.representation === "value";
-    const selection = selectRustStructuralEmission({ definition,
+    const genericRequirements = program.records.structuralGenerics.get(definition.carrier);
+    if (genericRequirements === undefined)
+      failTargetAnalysisInvariant("tsonic-rust", "An admitted structural emission requires its completed generic contract.");
+    const selection = selectRustStructuralEmission({ definition, genericRequirements,
       clone: value && rustCarrierSupportsTrait(definition.carrier, "core::clone::Clone", () => true, undefined, program.typeDefinitions),
       copy: value && rustCarrierSupportsTrait(definition.carrier, "core::marker::Copy", () => true, undefined, program.typeDefinitions),
       default: value && rustCarrierSupportsTrait(definition.carrier, "core::default::Default", () => true, undefined, program.typeDefinitions) });
