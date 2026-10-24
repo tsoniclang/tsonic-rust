@@ -3,6 +3,7 @@ import test from "node:test";
 import { rustCallableTargetType, rustCallableProtocol } from "../../dist/target-model/types/carriers/callables.js";
 import { rebindRustCallableCarrier } from "../../dist/policy/types/callables/method-values.js";
 import { rustNamedTargetType } from "../../dist/target-model/types/carriers/native.js";
+import { rustRuntimeCallableTargetType } from "../../dist/target-model/types/carriers/runtime-carriers.js";
 import { rustCallablePhysicalSignature } from "../../dist/target-model/conversions/callable-physical.js";
 import { selectRustCallableConversion } from "../../dist/policy/conversions/callable.js";
 import { rustNativeRepresentationMatches } from "../../dist/policy/conversions/native-representation.js";
@@ -28,9 +29,7 @@ test("ordinary Callable has one explicit environment independent from its invoca
 test("physical Callable preserves nonstatic nonClone error payloads without imposing traits", () => {
   const error = { kind: "reference", mutable: false, lifetime: region, referent: integer };
   const result = rustNamedTargetType("rust.core.Result", "Result", [argument(integer), argument(error)]);
-  const selected = rustNamedTargetType("rust.runtime.Callable", "rt::Callable", [
-    { kind: "lifetime", lifetime: region }, argument(unit), argument(result),
-  ]);
+  const selected = rustRuntimeCallableTargetType(region, [], result);
   const signature = rustCallablePhysicalSignature(selected);
   assert.equal(signature !== undefined, true);
   assert.equal(rustTargetTypeRefEquals(signature.error, error), true);

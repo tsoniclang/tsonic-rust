@@ -10,6 +10,7 @@ import { nativeOwnershipCostSupport } from "../../helpers/native-ownership-cost.
 import { runCargo, writeGeneratedProject } from "../../helpers/cargo-projects.mjs";
 import { rustCallableConstructionType } from "../../../dist/backend/planner/types/constructions.js";
 import { rustNamedTargetType, rustSourcePrimitiveTargetType } from "../../../dist/target-model/types/carriers/native.js";
+import { rustRuntimeCallableTargetType } from "../../../dist/target-model/types/carriers/runtime-carriers.js";
 import { rustJsValueTargetType } from "../../../dist/target-model/types/carriers/js.js";
 import { rustNativeCompletionFutureType } from "../../../dist/target-model/types/callable-completions.js";
 import { rustTypeGenericArguments } from "../../../dist/target-model/types/generic-arguments.js";
@@ -64,8 +65,7 @@ export function create(): () => Promise<int32> { return async (): Promise<int32>
   const infallible = rustNamedTargetType("rust.core.Infallible", "core::convert::Infallible", []);
   const future = rustNativeCompletionFutureType({ identity: "fixture:future", output: integer, error: failure, captures: [] });
   const result = rustNamedTargetType("rust.core.Result", "Result", rustTypeGenericArguments([future, infallible]));
-  const carrier = rustNamedTargetType("rust.runtime.Callable", "rt::Callable",
-    rustTypeGenericArguments([{ kind: "tuple", elements: [] }, result]));
+  const carrier = rustRuntimeCallableTargetType({ kind: "static" }, [], result);
   const owner = rustCallableConstructionType(carrier, pureFixture.context);
   assert.equal(owner !== undefined, true, "anonymous constructor payload is representable");
   const constructor = printRustExpr({ kind: "associated-call", owner, method: "new", args: [{
