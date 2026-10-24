@@ -49,7 +49,7 @@ export function lowerRustCompletionScope(scope: CompletionScope): RustStmt {
       : only?.kind === "expr" && only.expr.kind === "break-expression" && only.expr.label === name ? only.expr.expr : undefined;
     return { kind: "let", name, mutable: false, type: resultType(type, errorType),
       init: direct ?? (scope.asynchronous
-        ? { kind: "await", expr: { kind: "async-block", move: false, body: applyRustTailShape(region, true) } }
+        ? { kind: "await", expr: { kind: "async-block", move: false, body: applyRustTailShape(region, true, new Set()) } }
         : { kind: "block", ...(lowered.breaksToLabel ? { label: name } : {}), body: region }) };
   };
   const statements: RustStmt[] = [];

@@ -329,7 +329,8 @@ function planRustFunctionItem(
     return Object.freeze({ item, helper: undefined });
   }
   const generics = genericPlan.finalizeGenerics();
-  const finalizedBody: RustBlock = applyRustTailShape({ statements: [...parameterStatements, ...body.statements] }, returnType !== undefined);
+  const finalizedBody: RustBlock = applyRustTailShape({ statements: [...parameterStatements, ...body.statements] }, returnType !== undefined,
+    new Set(params.map(parameter => parameter.name)));
   const item: Extract<RustItem, { readonly kind: "function" }> = {
     kind: "function",
     name: nativeBody === undefined ? name : nativeBodyName!,
