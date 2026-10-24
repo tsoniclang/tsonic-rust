@@ -203,7 +203,7 @@ export function finalizeRustNativeEmission(
   analyzeRustClassImplementations(program, context.records.classEmissionPlans, context.nativeNodes, context.structuralShapes);
   context.structuralShapes.seal();
   analyzeRustOptionalStorageCallEmission(program, context.nativeNodes, context.records.projectEmissionPlans);
-  const structuralEmissionIssues = analyzeRustStructuralEmission(program, context.records.structuralEmissionPlans);
+  const structuralEmissionIssues = analyzeRustStructuralEmission(program, context.records.structuralEmissionPlans, context.records.projectEmissionPlans);
   if (structuralEmissionIssues.length !== 0) return rejectedTargetStage(structuralEmissionIssues);
   analyzeRustStoredFields(program, context.nativeNodes, context.records.storedFieldPlans);
   const objectReferenceEmission = analyzeRustObjectReferenceEmission(program, context.nativeNodes, context.records.objectReferenceEmissionPlans);
