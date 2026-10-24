@@ -3,6 +3,7 @@ import { Node_Expression, BinaryExpression_Left, BinaryExpression_Right, forEach
 import { failTargetAnalysisInvariant, type TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustErrorFieldProducer } from "../program/records/error-field-borrows.js";
+import { requireRustRecord, type RustRequiredRecord } from "../program/records/required-records.js";
 import type { RustErrorFieldEmission } from "../../target-model/records/error-field-borrows.js";
 import { rustJsErrorTargetType, isRustProgramErrorCarrier, rustSourceOptionalTargetType, rustStringTargetType } from "../../target-model/types/index.js";
 import { isRustClosedValueCarrier } from "../../target-model/types/carriers/closed-value-kind.js";
@@ -12,7 +13,7 @@ import { rustFlowReadProjectionMatches } from "../control-flow/flow-read-project
 import { rustBorrowPureOperation, rustBorrowValueIsUnprojected } from "../storage/borrowed-element-purity.js";
 import { rustProgramNodeIsOutsideNativeCode } from "../control-flow/compile-time-statements.js";
 
-export function analyzeRustErrorFieldBorrows(program: Omit<RustAnalysisProgram, "reachability">, nodes: readonly Node[], producer: RustErrorFieldProducer): readonly TargetDiagnostic[] {
+export function analyzeRustErrorFieldBorrows(program: Omit<RustAnalysisProgram, "reachability">, nodes: readonly Node[], producer: RustErrorFieldProducer, required: RustRequiredRecord[]): readonly TargetDiagnostic[] {
   const issues: TargetDiagnostic[] = [];
   const { ast } = program.source;
   const unwrap = (input: Node): Node => {
@@ -48,6 +49,7 @@ export function analyzeRustErrorFieldBorrows(program: Omit<RustAnalysisProgram, 
       guarded: operation.property === "stack" || shared, shared,
       directRead: rustBorrowValueIsUnprojected(node, program.records) && program.records.optionalChain.get(node) === undefined });
     selected.set(node, value); producer.field(node, value);
+    requireRustRecord(required, "errorFieldEmission", node, "builtin-error-property", "analysis/operations/error-field-borrows.ts");
   }
   const pure = new Map<Node, ReadonlySet<Node>>();
   for (const expression of nodes) {

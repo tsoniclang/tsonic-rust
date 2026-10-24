@@ -2,19 +2,23 @@ import { createRustRecordFixture } from "../../../helpers/records.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRust, compileRust, rustSourceText } from "../../../helpers/rust-session.mjs";
+import { analyzeRustOperations } from "../../../helpers/rust-operation-analysis.mjs";
 import { rustProgramPlanContext, rustProgramWithTypeEmissions, rustSourceFilePlanContext } from "../../../helpers/plan-context.mjs";
 
 import { planRustCallableParameters, planRustCallableParameterPrelude } from "../../../../dist/backend/planner/declarations/callables/parameters.js";
 import { analyzeRustCallableParameterEmission } from "../../../../dist/analysis/callables/parameters.js";
+import { recordRustParameterAbiSelection } from "../../../../dist/analysis/callables/parameter-facts.js";
 import { createRustCallableParameterProducer } from "../../../../dist/analysis/program/records/parameter-emission.js";
 import { createRustSyntheticNameState } from "../../../../dist/backend/planner/names/synthetic.js";
 import { rustOptionTargetType } from "../../../../dist/target-model/types/carriers/optional.js";
 import { selectRustOptionalDefaultStorage } from "../../../../dist/policy/conversions/optional-storage.js";
+import { requireRustConstructorContract } from "../../../../dist/backend/planner/declarations/classes/constructor-contracts.js";
 
 test("destructured defaults consume the sealed initialized value and reject conflicting input evidence", () => {
-  const { program } = analyzeRust({ files: { "index.ts": `
+  const source = `
     export function read([value]: [number] = [11], required: number): number { return value + required; }
-  ` } });
+  `;
+  const { program } = analyzeRust({ files: { "index.ts": source } });
   const { ast } = program.source;
   const sourceFile = program.sourceFiles[0];
   const callable = ast.statements(sourceFile).find(node => node !== undefined && ast.is.IsFunctionDeclaration(node));
@@ -37,24 +41,56 @@ runtimeCarrier: { get: (subject) => subject === parameter
       moduleName: "index", structuralShapesModuleName: "shapes",
       moduleNameByFileName: new Map(), externalCrateNameByFileName: new Map(),
       externalItemPathByIdentity: new Map(), externalStructuralShapeModuleByFileName: new Map() };
-    return { selected: planRustCallableParameters(program.records.callableDeclaration.get(callable).contract, context, names), diagnostics: context.diagnostics };
+    return { selected: planRustCallableParameters(program.records.callableDeclaration.get(callable).contract, context, names, "source-body"), diagnostics: context.diagnostics };
   };
   const valid = plan(abi);
   assert.equal(valid.selected !== undefined, true, "initialized tuple accepts optional transport");
   assert.equal(valid.diagnostics.length, 0);
   assert.deepEqual(valid.selected.prelude.map(entry => entry.kind), ["default", "binding"]);
-  // Conflicting binding input is refused where the parameter emission record is sealed (analysis), so the planner
-  // never receives it.
-  for (const selectedAbi of [{ ...abi, mode: "ref" }, { ...abi, mode: "mut-ref" },
-    { ...abi, valueCarrier: { kind: "source-primitive", name: "float64" } }]) {
-    const records = createRustRecordFixture({ sourceParameterAbi: { get: (subject) => subject === parameter
-      ? selectedAbi : program.records.sourceParameterAbi.get(subject) } }, program.records);
-    assert.throws(() => analyzeRustCallableParameterEmission({ program: { ...program, records }, nodes: [parameter],
-      producer: createRustCallableParameterProducer(() => {}), required: [] }),
-    error => error.diagnostic?.code === "TSONIC_INTERNAL_ANALYSIS_INVARIANT" &&
-      error.message === "Binding-pattern parameters require one exact by-value Rust source and initialized value carrier.",
-    "conflicting exact binding input rejects");
+  const { context: sourceContext, walk } = analyzeRustOperations(source);
+  const checkedCallable = sourceContext.sourceStorage.nodes.find(node => sourceContext.ast.is.IsFunctionDeclaration(node));
+  assert.equal(checkedCallable !== undefined, true, "the original callable has a real preseal source owner");
+  const checkedParameter = sourceContext.ast.parameters(checkedCallable)[0];
+  const checkedAbi = sourceContext.records.sourceParameterAbi.get(checkedParameter);
+  assert.equal(checkedAbi !== undefined, true, "the original source parameter has one admitted ABI");
+  assert.equal(sourceContext.records.callableParameter.get(checkedParameter) === undefined, true,
+    "the negative controls run before native parameter emission");
+  let conflicts = 0;
+  for (const mode of ["ref", "mut-ref"]) {
+    const requirementCount = sourceContext.requiredRecords.length;
+    assert.throws(() => recordRustParameterAbiSelection(walk, checkedParameter, { ...checkedAbi, mode }), error => {
+      assert.equal(error.diagnostic?.code, "TSONIC_INTERNAL_ANALYSIS_INVARIANT", mode);
+      assert.equal(error.message, "Conflicting Rust semantic plan 'tsonic.rust.sourceParameterAbi' for one exact source subject.", mode);
+      assert.equal(error.diagnostic.source, "tsonic-rust", mode);
+      assert.equal(error.diagnostic.category, "error", mode);
+      assert.equal(error.diagnostic.sourceNode === checkedParameter, true, `${mode}: the exact checked parameter owns the conflict`);
+      return true;
+    }, `${mode}: a second ABI cannot replace the admitted default input`);
+    assert.equal(sourceContext.records.sourceParameterAbi.get(checkedParameter) === checkedAbi, true,
+      `${mode}: the canonical source ABI remains unchanged`);
+    assert.equal(sourceContext.records.callableParameter.get(checkedParameter) === undefined, true,
+      `${mode}: conflicting inputs never publish a native parameter`);
+    assert.equal(sourceContext.requiredRecords.length, requirementCount, `${mode}: no conflicting admission is recorded`);
+    conflicts += 1;
   }
+  const records = createRustRecordFixture({ sourceParameterAbi: { get: subject => subject === parameter
+    ? { ...abi, valueCarrier: { kind: "source-primitive", name: "float64" } }
+    : program.records.sourceParameterAbi.get(subject) } }, program.records);
+  const producer = createRustCallableParameterProducer(() => {});
+  const required = [];
+  assert.throws(() => analyzeRustCallableParameterEmission({ program: { ...program, records }, nodes: [parameter],
+    producer, required }), error => {
+    assert.equal(error.diagnostic?.code, "TSONIC_INTERNAL_ANALYSIS_INVARIANT");
+    assert.equal(error.message, "Binding-pattern parameters require their exact Rust source value and selected native entry carrier.");
+    assert.equal(error.diagnostic.source, "tsonic-rust");
+    assert.equal(error.diagnostic.category, "error");
+    assert.equal(error.diagnostic.sourceNode === parameter, true, "the original checked binding owns the value-carrier refusal");
+    return true;
+  }, "conflicting exact binding value rejects before native publication");
+  assert.equal(producer.records.get(parameter) === undefined, true, "no inconsistent native parameter is published");
+  assert.equal(required.length, 0, "a refused native parameter does not register a publication");
+  conflicts += 1;
+  assert.equal(conflicts, 3, "both old mode conflicts and the exact value-carrier inverse remain covered");
 });
 
 test("an absent default preserves the native parameter and independently required mutability", () => {
@@ -120,11 +156,11 @@ test("one formal renderer consumes checked value vectors for functions, methods,
   program.sourceFiles.forEach(visit);
   assert.equal(callables.length, 5, "all actual authored formal-owner kinds are represented");
   for (const callable of callables) {
-    const contract = callable === selectedClass.constructor ? selectedClass.constructorContract
+    const contract = callable === selectedClass.constructor ? requireRustConstructorContract(selectedClass)
       : program.records.callableDeclaration.get(callable).contract;
     const parameters = contract.parameters;
     const context = rustSourceFilePlanContext(program, callable);
-    const plan = planRustCallableParameters(contract, context, context.syntheticNames);
+    const plan = planRustCallableParameters(contract, context, context.syntheticNames, "source-body");
     assert.equal(plan.params.length, parameters.length, "only selected value formals enter the common renderer");
     assert.equal(plan.params.every(parameter => parameter.name !== "this"), true, "the checked this annotation is not a runtime argument");
     assert.equal(plan.params.every(parameter => parameter.type !== undefined), true, "each actual native parameter has sealed storage syntax");
@@ -139,11 +175,11 @@ test("the removed raw callable parameter API and missing selected native formals
   const parameters = contract.parameters;
   assert.equal(parameters.length, 1, "the refusal control starts from a real selected formal");
   const context = rustSourceFilePlanContext(program, callable);
-  assert.throws(() => planRustCallableParameters(callable, context, context.syntheticNames), TypeError,
+  assert.throws(() => planRustCallableParameters(callable, context, context.syntheticNames, "source-body"), TypeError,
     "a raw callable is not accepted through a compatibility overload");
   const records = createRustRecordFixture({ callableParameter: { get: () => undefined } }, program.records);
   const invalid = rustSourceFilePlanContext({ ...program, records }, callable);
-  assert.throws(() => planRustCallableParameters(contract, invalid, invalid.syntheticNames),
+  assert.throws(() => planRustCallableParameters(contract, invalid, invalid.syntheticNames, "source-body"),
     error => error.diagnostic?.code === "TSONIC_INTERNAL_PLANNER_INVARIANT" &&
       error.message === "An admitted callable parameter requires its sealed native emission record.",
     "the renderer never reconstructs missing parameter storage from the AST");
