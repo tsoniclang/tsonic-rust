@@ -896,7 +896,7 @@ test("operation carriers and selected identities are admitted before native rend
   const unary = readFileSync(join(sourceRoot, "analysis/operations/expression-unary.ts"), "utf8");
   const closure = readFileSync(join(sourceRoot, "analysis/callables/lambda-emission.ts"), "utf8");
   const provider = readFileSync(join(sourceRoot, "analysis/operations/provider-inputs.ts"), "utf8");
-  assert.match(calls, /sourceCallEffectsMatch\(fact, effects, program\.typeDefinitions, native\)/u);
+  assert.match(calls, /sourceCallEffectsMatch\(fact, effects, program\.typeDefinitions, native, method\)/u);
   assert.match(arguments_, /sourceCallSelectedMemberMatches\(fact, selectedCall/u);
   for (const source of [binary, unary]) {
     assert.match(source, /records\.selectedOperation\.get\(node\)/u);

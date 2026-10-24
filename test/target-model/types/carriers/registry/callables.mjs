@@ -1,6 +1,27 @@
 // Carrier registry rows (callables): test and audit data for this compiler only; product code never reads it.
 export const callablesCarrierRegistry = Object.freeze([
   {
+    id: "src/policy/ownership/source-parameter-contracts.ts#selectRustSourceParameterBorrowCarrier",
+    kinds: ["reference"],
+    declaration: { module: "src/policy/ownership/source-parameter-contracts.ts", symbol: "selectRustSourceParameterBorrowCarrier" },
+    responsibility: "callables/resolve-source-call-parameter",
+    frozen: false,
+  },
+  {
+    id: "src/policy/types/objects/structural-storage.ts#bindRustStructuralImplementationContract",
+    kinds: ["target-specific"],
+    declaration: { module: "src/policy/types/objects/structural-storage.ts", symbol: "bindRustStructuralImplementationContract" },
+    responsibility: "vocabulary/carrier-substitution",
+    frozen: false,
+  },
+  {
+    id: "src/policy/types/objects/structural-emission.ts#selectRustStructuralMethodContextCarrier",
+    kinds: ["tuple"],
+    declaration: { module: "src/policy/types/objects/structural-emission.ts", symbol: "selectRustStructuralMethodContextCarrier" },
+    responsibility: "kinds/tuple",
+    frozen: true,
+  },
+  {
     id: "src/target-model/types/carriers/frame-callables.ts#rustFrameCallableTargetType",
     kinds: ["target-specific"],
     declaration: { module: "src/target-model/types/carriers/frame-callables.ts", symbol: "rustFrameCallableTargetType" },

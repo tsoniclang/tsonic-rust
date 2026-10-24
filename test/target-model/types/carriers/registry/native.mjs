@@ -11,7 +11,7 @@ export const nativeCarrierRegistry = Object.freeze([
     id: "src/target-model/types/carriers/runtime-carriers.ts#rustRuntimeCallableTargetType",
     kinds: ["target-specific"],
     declaration: { module: "src/target-model/types/carriers/runtime-carriers.ts", symbol: "rustRuntimeCallableTargetType" },
-    responsibility: "vocabulary/runtime-callable-target-type",
+    responsibility: "callables/callable-value",
     frozen: false,
   },
   {
