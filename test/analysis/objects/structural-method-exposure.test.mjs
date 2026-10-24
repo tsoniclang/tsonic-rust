@@ -105,6 +105,29 @@ export function create() {
     "one retained instantiation of the same actual body keeps its needed family");
 });
 
+for (const surfaces of [[], ["js"]]) test(`fixed calls bind the complete receiver context, not only their own captures (${surfaces[0] ?? "native"})`, () => {
+  const { program } = analyzeRust({ surfaces, files: { "index.ts": `
+export function create(callback: () => number) {
+  return {
+    invoke(): number { return callback(); },
+    read(): number { return 7; },
+  };
+}
+export function run(callback: () => number): number { return create(callback).read(); }
+` } });
+  const definition = program.structuralShapes.definitions.find(definition =>
+    definition.fields.some(field => field.sourceName === "invoke") && definition.fields.some(field => field.sourceName === "read"));
+  assert.equal(definition !== undefined, true, "the real receiver retains both checked native method bodies");
+  const invoke = definition.fields.find(field => field.sourceName === "invoke")?.methodPlan;
+  const read = definition.fields.find(field => field.sourceName === "read")?.methodPlan;
+  assert.equal(invoke?.kind === "fixed" && read?.kind === "fixed", true,
+    "both exact methods remain concrete rather than gaining a retained wrapper");
+  assert.equal(invoke.payload.captures.length, 1, "the invoking method keeps its actual callback context");
+  assert.equal(read.payload.captures.length, 0, "the read method does not acquire its sibling's capture");
+  assert.equal(definition.genericParameters.some(parameter => parameter.kind === "type"), true,
+    "the complete physical receiver template still declares the sibling context's actual native type parameter");
+});
+
 test("only an actual retained factory receiver or physical context requires native ownership", () => {
   for (const [label, input, expected] of [
     ["direct native body", { factory: false, usesThis: true, capturedValues: 2 }, "shared"],
