@@ -1,4 +1,5 @@
 import type { Node } from "@tsonic/tsts";
+import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { RustAnalysisProgram } from "../../program/model.js";
 import type { RustStringComparisonViewProducer } from "../../program/records/string-comparison-views.js";
 import type { RustStringComparisonView } from "../../../target-model/records/string-comparison-views.js";
@@ -40,10 +41,18 @@ export function analyzeRustStringComparisonViews(program: Omit<RustAnalysisProgr
       selected = { kind: "contextual" };
     const carrier = program.records.valueRead.get(node)?.value;
     const referent = carrier?.kind === "reference" ? carrier.referent : carrier;
-    if (selected.kind === "value" && operation?.kind === "operator-token" &&
-      (operation.operator === "==" || operation.operator === "!=") &&
-      (isRustStringCarrier(referent) || rustTargetTypeRefEquals(referent, rustStrTargetType())))
-      selected = { kind: "native-str-reference" };
+    const binary = parent === undefined ? undefined : program.records.binaryEmission.get(parent);
+    if (parent !== undefined && selected.kind === "value" && binary?.fact.kind === "operator-token" &&
+      (binary.operator === "==" || binary.operator === "!=") &&
+      (isRustStringCarrier(referent) || rustTargetTypeRefEquals(referent, rustStrTargetType()))) {
+      const comparison = program.records.nativeComparison.get(parent)
+        ?? failTargetAnalysisInvariant("tsonic-rust", "A native string comparison view requires its finalized native comparison recipe.", node);
+      if (comparison.kind === "ordinary") {
+        const shared = binary.left === node ? binary.leftShared : binary.right === node ? binary.rightShared
+          : failTargetAnalysisInvariant("tsonic-rust", "A native string comparison view requires its exact finalized binary operand.", node);
+        selected = { kind: "native-str-reference", inputForm: shared ? "shared-reference" : "value" };
+      }
+    }
     if (parent !== undefined && operation?.kind === "operator-token" &&
       (BinaryExpression_Left(program.source.ast, parent) === node && operation.leftConversion !== undefined ||
         BinaryExpression_Right(program.source.ast, parent) === node && operation.rightConversion !== undefined)) selected = { kind: "value" };

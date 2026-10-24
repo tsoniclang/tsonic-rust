@@ -75,7 +75,7 @@ export function resolveRustCheckedElementAccess(
       context.currentSemantics.declarations.symbolDeclarations(request.sourceSelectedSymbol)
         .includes(request.sourceSelectedDeclaration)) {
       const declarations = declarationKind === "KindGetAccessor" || declarationKind === "KindSetAccessor"
-        ? context.currentSemantics.types.structuralMembers(request.sourceReceiverType, request.sourceReceiverType)
+        ? context.currentSemantics.types.structuralMembers(request.sourceReceiverType, request.sourceReceiverType, "correspondence")
         : undefined;
       const matches = declarations?.kind === "available" ? declarations.members.filter(pair =>
         pair.kind === "present" && pair.source.property.symbol === request.sourceSelectedSymbol) : [];

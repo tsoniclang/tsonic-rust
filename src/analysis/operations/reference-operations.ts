@@ -7,7 +7,7 @@ import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { isRustStringCarrier, rustUnitTargetType } from "../../target-model/types/index.js";
 import { rustValueCarrierBeforeOptionProjection } from "../conversions/value-carrier-queries.js";
 import { requireRustRecord } from "../program/records/required-records.js";
-import { BinaryExpression_Left, BinaryExpression_Right, KindBinaryExpression, KindIdentifier } from "@tsonic/target-api/source";
+import { BinaryExpression_Left, BinaryExpression_Right, sourceTransparentExpressionOperand } from "@tsonic/target-api/source";
 import { appendRustDiagnostic, type RustFactWalk } from "../program/walk.js";
 import { setCarrierFact } from "./project-calls.js";
 import { resolveExpressionCarrier } from "../source-evidence/types/resolution/expression-carriers.js";
@@ -18,6 +18,7 @@ import { rustSourceOperationExportIds, rustSourceOperationSignatureIds } from ".
 import { readRustLanguageCall } from "./native-language-call.js";
 import { type TargetTypeRef } from "../../target-model/types/model.js";
 import { type RustTargetOperationFact } from "../../target-model/records/operations.js";
+import type { RustReferenceOperationRecipe } from "../../target-model/records/reference-operations.js";
 
 export function analyzeRustReferenceOperations(program: Omit<RustAnalysisProgram, "reachability">,
   nodes: readonly Node[], producer: RustReferenceOperationProducer): readonly TargetDiagnostic[] {
@@ -49,19 +50,20 @@ export function analyzeRustReferenceOperations(program: Omit<RustAnalysisProgram
         refuse(call, "RUST_REFERENCE_STORE_VALUE_CONFLICT", "Rust reference store value conflicts with its finalized target carrier.");
         continue;
       }
-      if (fact.writeStrategy !== undefined) {
-        const read = program.records.targetOperation.get(fact.writeStrategy.readExpression);
-        const value = program.records.targetOperation.get(fact.valueExpression);
-        if (read?.kind !== "reference-operation" || read.operation !== "load" || value?.kind !== "operator-token" ||
-          !rustTargetTypeRefEquals(read.operandCarrier, fact.operandCarrier) || !rustTargetTypeRefEquals(read.resultCarrier, fact.operandCarrier.referent) ||
-          !rustTargetTypeRefEquals(value.resultCarrier, fact.valueCarrier)) {
-          refuse(call, "RUST_REFERENCE_STORE_STRATEGY_CONFLICT", "Rust reference store strategy conflicts with its finalized read and operator facts.");
-          continue;
-        }
+      if (program.ownership.reads.get(fact.operandExpression) === undefined) {
+        refuse(call, "RUST_REFERENCE_STORE_OWNERSHIP_MISSING", "Rust reference store requires its finalized native target ownership.");
+        continue;
       }
     }
-    producer.publish(call, { operation: fact, load: fact.operation !== "load" || program.ownership.reads.get(call)?.sharedReference === true ? "reference"
-      : !fact.operandCarrier.mutable && isRustStringCarrier(fact.operandCarrier.referent) ? "owned-string" : "dereference" });
+    if (fact.operation === "store") {
+      const recipe = referenceStoreRecipe(program, fact);
+      Object.freeze(recipe.evaluation);
+      producer.publish(call, { operation: fact, recipe: Object.freeze(recipe) });
+    } else if (fact.operation === "load") producer.publish(call, { operation: fact, recipe: Object.freeze({ kind: "load",
+      form: program.ownership.reads.get(call)?.sharedReference === true ? "reference"
+        : !fact.operandCarrier.mutable && isRustStringCarrier(fact.operandCarrier.referent) ? "owned-string" : "dereference" }) });
+    else if (fact.operation === "shared-reference") producer.publish(call, { operation: fact, recipe: Object.freeze({ kind: "shared-reference" }) });
+    else producer.publish(call, { operation: fact, recipe: Object.freeze({ kind: "mutable-reference" }) });
   }
   return Object.freeze(issues);
 }
@@ -302,12 +304,6 @@ export function resolvedRustReferenceOperationCarrier(
     referenceCarrier: operandCarrier,
     valueExpression: source.valueExpression,
     valueCarrier,
-    ...referenceStoreWriteStrategy(
-      walk,
-      source.referenceExpression,
-      source.valueExpression,
-      operandCarrier,
-    ),
     resultCarrier,
   };
   requireRustRecord(walk.context.requiredRecords, "targetOperation", expression, fact.kind, "analysis/operations/reference-operations.ts");
@@ -315,61 +311,71 @@ export function resolvedRustReferenceOperationCarrier(
   return { carrier: setCarrierFact(walk, expression, resultCarrier) };
 }
 
-function referenceStoreWriteStrategy(
-  walk: RustFactWalk,
-  targetReferenceExpression: Node,
-  valueExpression: Node,
-  targetCarrier: Extract<TargetTypeRef, { readonly kind: "reference" }>,
-): Pick<
-  Extract<RustTargetOperationFact, { readonly kind: "reference-operation"; readonly operation: "store" }>,
-  "writeStrategy"
-> {
-  const { ast } = walk.context;
-  if (ast.kindName(targetReferenceExpression) !== KindIdentifier ||
-    ast.kindName(valueExpression) !== KindBinaryExpression) {
-    return {};
+function referenceStoreRecipe(program: Omit<RustAnalysisProgram, "reachability">,
+  fact: Extract<RustTargetOperationFact, { readonly kind: "reference-operation"; readonly operation: "store" }>):
+  Extract<RustReferenceOperationRecipe, { readonly kind: "store" }> {
+  const { ast } = program.source;
+  const target = referenceOperand(program, fact.operandExpression);
+  const binding = program.records.sourceBinding.get(target);
+  const summary = binding?.scope === "lexical" ? program.sourceNavigation.declarationUseSummary(binding.sourceDeclaration) : undefined;
+  const stableTarget = ast.is.IsIdentifier(target) && summary !== undefined && !summary.bindingWritten &&
+    !summary.captured && !summary.exported && !summary.uses.some(use => {
+      let reference = use.reference;
+      for (let parent = ast.parent(reference); parent !== undefined && sourceTransparentExpressionOperand(ast, parent) === reference;
+        parent = ast.parent(reference)) reference = parent;
+      const parent = ast.parent(reference);
+      const operation = parent === undefined ? undefined : program.records.targetOperation.get(parent);
+      return operation?.kind === "reference-operation" && operation.operation === "mutable-reference" && operation.operandExpression === reference;
+    }) && rustTargetTypeRefEquals(rustValueCarrierBeforeOptionProjection(program.records, target), fact.operandCarrier);
+  if (!stableTarget) {
+    const read = program.ownership.reads.get(fact.operandExpression);
+    return { kind: "store", valueExpression: fact.valueExpression, evaluation: {
+      kind: "target-first", target: read?.readsStorage === false && read.source.kind === "move" ? "value" : "mutable-reborrow" } };
   }
+  const valueExpression = referenceOperand(program, fact.valueExpression);
+  if (!ast.is.IsBinaryExpression(valueExpression)) return { kind: "store", valueExpression: fact.valueExpression,
+    evaluation: { kind: "direct" } };
   const readExpression = BinaryExpression_Left(ast, valueExpression);
   const rightExpression = BinaryExpression_Right(ast, valueExpression);
   if (readExpression === undefined || rightExpression === undefined) {
-    return {};
+    return { kind: "store", valueExpression: fact.valueExpression, evaluation: { kind: "direct" } };
   }
-  const readFact = walk.context.records.targetOperation.get(readExpression);
-  const valueFact = walk.context.records.targetOperation.get(valueExpression);
+  const readFact = program.records.targetOperation.get(referenceOperand(program, readExpression));
+  const valueFact = program.records.targetOperation.get(valueExpression);
   if (readFact?.kind !== "reference-operation" || readFact.operation !== "load" ||
-    ast.kindName(readFact.operandExpression) !== KindIdentifier ||
     valueFact?.kind !== "operator-token" || valueFact.leftConversion !== undefined ||
     valueFact.rightConversion !== undefined ||
-    !rustTargetTypeRefEquals(readFact.operandCarrier, targetCarrier) ||
-    !rustTargetTypeRefEquals(readFact.resultCarrier, targetCarrier.referent)) {
-    return {};
+    !rustTargetTypeRefEquals(readFact.operandCarrier, fact.operandCarrier) ||
+    !rustTargetTypeRefEquals(readFact.resultCarrier, fact.operandCarrier.referent)) {
+    return { kind: "store", valueExpression: fact.valueExpression, evaluation: { kind: "direct" } };
   }
-  const targetReference = walk.context.source.navigation.sourceReferenceFor(
-    targetReferenceExpression,
-  );
-  const readReference = walk.context.source.navigation.sourceReferenceFor(
-    readFact.operandExpression,
-  );
+  const targetReference = program.sourceNavigation.sourceReferenceFor(target);
+  const readReference = program.sourceNavigation.sourceReferenceFor(referenceOperand(program, readFact.operandExpression));
   if (targetReference?.symbol === undefined || readReference?.symbol === undefined ||
     targetReference.symbol !== readReference.symbol ||
     targetReference.declaration !== readReference.declaration) {
-    return {};
+    return { kind: "store", valueExpression: fact.valueExpression, evaluation: { kind: "direct" } };
   }
   const operator = selectRustEquivalentAssignment(
     valueFact.operator,
-    targetCarrier.referent,
+    fact.operandCarrier.referent,
     valueFact.resultCarrier,
   );
-  return operator === undefined || operator === "="
-    ? {}
-    : {
-        writeStrategy: {
-          kind: "compound-assignment",
-          operator,
-          readExpression,
-          rightExpression,
-        },
-      };
+  if (operator === undefined || operator === "=") return { kind: "store", valueExpression: fact.valueExpression,
+    evaluation: { kind: "direct" } };
+  const effects = program.sourceNavigation.expressionEffects(rightExpression);
+  const right = program.ownership.reads.get(rightExpression);
+  return right?.pure === true && !effects.invokes && !effects.mutates && !effects.suspends && !effects.mayThrow
+    ? { kind: "store", valueExpression: rightExpression, evaluation: { kind: "compound", operator } }
+    : { kind: "store", valueExpression: fact.valueExpression, evaluation: { kind: "value-first" } };
+}
+
+function referenceOperand(program: Omit<RustAnalysisProgram, "reachability">, node: Node): Node {
+  for (;;) {
+    const operand = sourceTransparentExpressionOperand(program.source.ast, node);
+    if (operand === undefined) return node;
+    node = operand;
+  }
 }
 
 function resolvedRustReferenceConstruction(

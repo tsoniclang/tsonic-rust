@@ -8,7 +8,7 @@ import type { RustArgumentMode, RustBorrowedIndexOperation, RustOperationCarrier
 import type { RustFinalizedOperationAbiFor, RustFinalizedValueConversion } from "./finalized-operation.js";
 import type { RustProgramErrorConversion } from "../conversions/program-error.js";
 import type { RustBorrowedSequenceInput } from "./borrowed-sequences.js";
-import type { RustAssignmentOperator, RustOperationSymbol, RustOperatorToken } from "../syntax/tokens.js";
+import type { RustOperationSymbol, RustOperatorToken } from "../syntax/tokens.js";
 import type { RustTargetGenericArgument, TargetTypeRef } from "../types/model.js";
 import type { RustSelectedUnionMethodIdentity } from "./member-selections.js";
 
@@ -691,7 +691,16 @@ export type RustTargetOperationFact =
   | {
       readonly kind: "reference-operation";
       readonly operationId: string;
-      readonly operation: "shared-reference" | "mutable-reference";
+      readonly operation: "shared-reference";
+      readonly operandExpression: Node;
+      readonly operandCarrier: TargetTypeRef;
+      readonly referenceCarrier: Extract<TargetTypeRef, { readonly kind: "reference" }>;
+      readonly resultCarrier: Extract<TargetTypeRef, { readonly kind: "reference" }>;
+    }
+  | {
+      readonly kind: "reference-operation";
+      readonly operationId: string;
+      readonly operation: "mutable-reference";
       readonly operandExpression: Node;
       readonly operandCarrier: TargetTypeRef;
       readonly referenceCarrier: Extract<TargetTypeRef, { readonly kind: "reference" }>;
@@ -715,12 +724,6 @@ export type RustTargetOperationFact =
       readonly referenceCarrier: Extract<TargetTypeRef, { readonly kind: "reference" }>;
       readonly valueExpression: Node;
       readonly valueCarrier: TargetTypeRef;
-      readonly writeStrategy?: {
-        readonly kind: "compound-assignment";
-        readonly operator: Exclude<RustAssignmentOperator, "=">;
-        readonly readExpression: Node;
-        readonly rightExpression: Node;
-      };
       readonly resultCarrier: TargetTypeRef;
     }
   | {

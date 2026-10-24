@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { createTargetSourceProgram } from "@tsonic/target-api/source";
 import { analyzeRust, compileRust, rustSourceText } from "../../helpers/rust-session.mjs";
 
 const cases = [
@@ -360,7 +361,7 @@ export function inspect(input: number): number { let owned = input; ${body} }
   program.sourceFiles.forEach(visit);
   const declaration = nodes.find(node => ast.is.IsVariableDeclaration(node) && ast.text(ast.name(node)) === "owned");
   assert.equal(declaration !== undefined, true, `${label}: use the actual checked local declaration`);
-  assert.equal(source.navigation.declarationUseSummary(declaration).bindingWritten, written,
+  assert.equal(createTargetSourceProgram(source).navigation.declarationUseSummary(declaration).bindingWritten, written,
     `${label}: source assignments remain whole and native reference calls remain distinct`);
   const selected = program.records.localBinding.get(declaration);
   assert.equal(selected?.kind, "value", `${label}: the native local binding is selected before publication`);

@@ -166,8 +166,7 @@ const facts = [
   { kind: "throw-op", error: { kind: "program", expression: second, carrier: text } },
   ...["shared-reference", "mutable-reference", "load"].map(operation =>
     ({ kind: "reference-operation", operation, operandExpression: first })),
-  { kind: "reference-operation", operation: "store", operandExpression: first, valueExpression: second,
-    writeStrategy: { kind: "compound-assignment", operator: "+=", readExpression: first, rightExpression: second } },
+  { kind: "reference-operation", operation: "store", operandExpression: first, valueExpression: second },
   { kind: "native-pointer", pointerExpression: first, valueExpression: second, offsetExpression: first },
 ].map(fact => ({ ...fact, operationId: `test.${fact.kind}`, resultCarrier: integer }));
 
