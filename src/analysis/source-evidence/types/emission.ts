@@ -38,10 +38,11 @@ import { rustCarrierProvidesErrorObservation } from "../../../policy/constraints
 import { rustCapturedLifetimeEmissionCarriers, rustDeclarationEmissionCarriers } from "./emission-inventory.js";
 import { rustProgramNodeIsOutsideNativeCode } from "../../control-flow/compile-time-statements.js";
 import { substituteRustTargetGenerics } from "../../../target-model/types/carriers/substitution.js";
+import { selectRustCheckedProjectProjection } from "../../../policy/types/objects/checked-project-projections.js";
 
 export function analyzeRustTypeEmission(program: Omit<RustAnalysisProgram, "reachability">,
   nodes: readonly Node[], producer: RustTypeEmissionProducer, extraTypes: readonly TargetTypeRef[],
-  optionalStorageProducer: Pick<RustProjectEmissionProducer, "optionalType">): void {
+  projectEmissionProducer: Pick<RustProjectEmissionProducer, "optionalType" | "checkedProjection">): void {
   const typeArguments = (arguments_: readonly RustTargetGenericArgument[]): readonly TargetTypeRef[] =>
     arguments_.flatMap(argument => argument.kind === "type" ? [argument.type] : []);
   const retainedCarriersFor = (node: Node): readonly TargetTypeRef[] => {
@@ -55,6 +56,9 @@ export function analyzeRustTypeEmission(program: Omit<RustAnalysisProgram, "reac
   const pending = [...extraTypes, ...nodes.flatMap(node => rustPhysicalEmissionRecordCarriers(program.records, node)), rustProgramErrorTargetType(), rustUnitTargetType()];
   pending.push(program.errorRegions.initialization.binary.lifecycle.carrier);
   pending.push(...program.providerErrorCarriers, ...rustDeclarationEmissionCarriers(program, nodes));
+  pending.push(...program.structuralShapes.unionDefinitions.flatMap(union => union.sourceCarriers));
+  for (const view of program.classValues.constructorViewImplementations) pending.push(view.sourceCarrier, view.targetCarrier);
+  for (const protocol of program.callableValues.native.protocols) pending.push(protocol.trait, ...protocol.method.parameters, protocol.result);
   pending.push(...rustCapturedLifetimeEmissionCarriers(program, nodes, node =>
     [...rustPhysicalEmissionRecordCarriers(program.records, node), ...rustDeclarationEmissionCarriers(program, [node]),
       ...retainedCarriersFor(node)]));
@@ -185,7 +189,7 @@ export function analyzeRustTypeEmission(program: Omit<RustAnalysisProgram, "reac
     const carrier = pending[index]!;
     const key = closedMetadataKey(carrier);
     if (selections.has(key)) continue;
-    const optionalArguments = analyzeRustOptionalStorageTypeEmission(program, carrier, optionalStorageProducer);
+    const optionalArguments = analyzeRustOptionalStorageTypeEmission(program, carrier, projectEmissionProducer);
     const generic = rustGenericCallableValue(carrier);
     const physical = generic === undefined ? undefined : program.callableValues.generic.physical.existingSelectionFor(carrier);
     // A carrier that still names source type parameters is rendered only after its emission context substitutes them;
@@ -196,7 +200,7 @@ export function analyzeRustTypeEmission(program: Omit<RustAnalysisProgram, "reac
     const union = rustSourceUnionCarrierValue(carrier);
     const unionArguments = union === undefined ? undefined : rustSourceUnionPayloadArguments(carrier, program.typeDefinitions);
     const unionDefinition = union?.origin === "generated" ? program.structuralShapes.unionForCarrier(carrier) : undefined;
-    const shape = union?.origin === "generated" ? undefined : program.structuralShapes.definitionForCarrier(carrier);
+    const shape = program.structuralShapes.definitionForCarrier(carrier);
     const optionalValue = rustOptionalStorageValue(carrier);
     const optionalElement = rustOptionElementCarrier(carrier);
     const payloadView = (string: boolean): RustOptionPayloadView => string && !isRustStringCarrier(rustOptionValueCarrier(carrier))
@@ -259,6 +263,9 @@ export function analyzeRustTypeEmission(program: Omit<RustAnalysisProgram, "reac
     const frame = program.records.frameType.get(carrier);
     const constructed = rustClassConstructorInstance(carrier);
     const definition = program.projectTypes.definitionForCarrier(carrier);
+    const projection = selectRustCheckedProjectProjection({ project: definition !== undefined, structural: shape !== undefined,
+      hasDispatch: shape?.dispatchName !== undefined, lifetimeParameters: definition?.genericParameters.some(parameter => parameter.kind === "lifetime") === true });
+    if (projection !== undefined) projectEmissionProducer.checkedProjection(carrier, projection);
     const parents = definition === undefined ? [] : program.projectTypes.directSupertypes(carrier);
     if (parents === undefined) failTargetAnalysisInvariant("tsonic-rust", "An admitted native project type requires its exact checked parent carriers.", definition?.declaration);
     const state = definition === undefined ? undefined : program.records.projectClassState.get(definition, carrier);

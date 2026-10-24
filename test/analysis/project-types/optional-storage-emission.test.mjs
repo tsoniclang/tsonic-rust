@@ -148,22 +148,44 @@ export function read(): string { const value: Named<string> = new Child("ready")
       .map(parameter => [parameter.identity, rustSourcePrimitiveTargetType("int32")]));
     const late = substituteRustTargetGenerics(program.projectTypes.openCarrier(definition), substitutions,
       new Map(), new Map(), program.typeFamilies.normalize);
-    const projects = createRustProjectEmissionProducer(() => {});
+    let open = true;
+    const projects = createRustProjectEmissionProducer(() => assert.equal(open, true, "only the open late producer writes"));
     analyzeRustProjectEmission({ program, nodes: [], producer: projects });
     const admitted = { ...program, records: { ...program.records, ...projects.records } };
     assert.equal(projects.records.optionalStorageTypeArguments.get(late) === undefined, true,
       "this exact native instantiation is genuinely introduced at the late worklist boundary");
+    assert.equal(projects.records.checkedProjectProjection.get(late) === undefined, true,
+      "the earlier declaration owner does not publish partial closed projection eligibility");
+    assert.equal(projects.records.checkedProjectProjection.get(program.projectTypes.openCarrier(definition)) === undefined, true,
+      "the earlier declaration owner is not a second projection publisher even for its open root");
     const emission = createRustTypeEmissionProducer(() => {});
     const writes = new Map();
-    const producer = { optionalType: (carrier, indexes, arguments_) => {
-      const key = closedMetadataKey([carrier, indexes ?? null]);
-      writes.set(key, (writes.get(key) ?? 0) + 1);
-      projects.optionalType(carrier, indexes, arguments_);
-    } };
+    const projectionWrites = new Map();
+    const producer = {
+      optionalType: (carrier, indexes, arguments_) => {
+        const key = closedMetadataKey([carrier, indexes ?? null]);
+        writes.set(key, (writes.get(key) ?? 0) + 1);
+        projects.optionalType(carrier, indexes, arguments_);
+      },
+      checkedProjection: (carrier, projection) => {
+        const key = closedMetadataKey(carrier);
+        projectionWrites.set(key, (projectionWrites.get(key) ?? 0) + 1);
+        projects.checkedProjection(carrier, projection);
+      },
+    };
     analyzeRustTypeEmission(admitted, [], emission, [late, late], producer);
     assert.equal(writes.get(closedMetadataKey([late, null])), 1, "duplicate late seeds publish their full row once");
     assert.equal([...writes.values()].every(count => count === 1), true,
       "shared native children retain one writer for every exact full or indexed key");
+    assert.equal(projectionWrites.get(closedMetadataKey(late)), 1,
+      "duplicate late seeds publish their actual native projection eligibility once");
+    assert.equal([...projectionWrites.values()].every(count => count === 1), true,
+      "shared inherited contracts retain one exact checked projection writer");
+    const projection = projects.records.checkedProjectProjection.get(late);
+    assert.equal(projection?.kind, "project", "the exact late native root retains its actual policy eligibility");
+    assert.equal(Object.isFrozen(projection), true, "the published eligibility is immutable");
+    assert.equal(projects.records.checkedProjectProjection.get(rustStringTargetType()) === undefined, true,
+      "a non-project native carrier never acquires fabricated eligibility");
     const selected = projects.records.optionalStorageTypeArguments.get(late);
     assert.equal(selected !== undefined, true, "the actual late type has its required optional argument row");
     assert.equal(emission.records.typeEmission.get(late) !== undefined, true, "the same late type has one complete rendering selection");
@@ -183,6 +205,10 @@ export function read(): string { const value: Named<string> = new Child("ready")
         assert.equal(parentDefinition !== undefined, true, "each inherited carrier belongs to its actual checked declaration");
         const row = projects.records.optionalStorageTypeArguments.get(parent);
         assert.equal(row !== undefined, true, `${parentDefinition.sourceName} has its exact late optional row`);
+        assert.equal(projects.records.checkedProjectProjection.get(parent)?.kind, "project",
+          `${parentDefinition.sourceName} has its actual closed inherited projection eligibility`);
+        assert.equal(projectionWrites.get(closedMetadataKey(parent)), 1,
+          `${parentDefinition.sourceName} is published once despite its shared native inheritance paths`);
         assert.equal(emission.records.typeEmission.get(parent) !== undefined, true,
           `${parentDefinition.sourceName} has complete native output metadata`);
         for (const child of row) assert.equal(emission.records.typeEmission.get(child) !== undefined, true,
@@ -191,6 +217,13 @@ export function read(): string { const value: Named<string> = new Child("ready")
       }
     }
     assert.equal(visited.size, 4, "the late seed reaches both transitive native state layers and its interface");
+    assert.throws(() => projects.checkedProjection(late, projection), /one exact carrier owner/u,
+      "a second actual projection publication is rejected");
+    open = false;
+    assert.equal(projects.records.checkedProjectProjection.get(late) === projection, true,
+      "sealed reads retain the same exact published policy decision");
+    assert.throws(() => projects.checkedProjection(late, projection), /only the open late producer writes/u,
+      "no projection decision can be written after sealing");
   });
 
   test(`closed native state and selected structural output dependencies are admitted on ${surfaces[0] ?? "native"}`, () => {
@@ -243,8 +276,36 @@ export function run(): string {
     for (const shape of program.structuralShapes.instances) {
       const selected = program.records.typeEmission.get(shape.carrier)?.structural;
       assert.equal(selected !== undefined, true, "each actual structural instance retains its native output selection");
+      assert.equal(program.records.checkedProjectProjection.get(shape.carrier)?.kind,
+        shape.dispatchName === undefined ? undefined : "structural",
+        "only an actual dispatch-bearing structural shape has native projection eligibility");
       for (const argument of selected.arguments) if (argument.kind === "type") admitted(argument.type, "selected state argument");
       if (selected.context !== undefined) admitted(selected.context, "selected structural context");
+    }
+  });
+
+  test(`native lifetime exclusions remain explicit checked projection decisions on ${surfaces[0] ?? "native"}`, () => {
+    const { program } = analyzeRust({ surfaces, files: { "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+import type { Life, Ref } from "@tsonic/rust/types.js";
+import { load } from "@tsonic/rust/lang.js";
+export interface Base<Region extends Life> { value: Ref<int32, Region>; }
+export interface Extended<Region extends Life> extends Base<Region> { extra: int32; }
+export function read<Region extends Life>(value: Extended<Region>): int32 { return load(value.value); }
+` } });
+    const definitions = program.projectTypes.definitions.filter(definition =>
+      definition.sourceName === "Base" || definition.sourceName === "Extended");
+    assert.equal(definitions.length, 2, "both actual checked lifetime-bearing declarations are retained");
+    for (const definition of definitions) {
+      assert.equal(definition.genericParameters.some(parameter => parameter.kind === "lifetime"), true,
+        `${definition.sourceName} has its real native lifetime parameter`);
+      const carrier = program.projectTypes.openCarrier(definition);
+      const projection = program.records.checkedProjectProjection.get(carrier);
+      assert.equal(projection?.kind, "excluded",
+        `${definition.sourceName} remains explicitly excluded by the unchanged native lifetime rule`);
+      assert.equal(Object.isFrozen(projection), true, "exclusion is a real sealed policy record, not a missing-row fallback");
+      assert.equal(program.records.typeEmission.get(carrier) !== undefined, true,
+        "native lifetime exclusion does not remove the carrier's actual TYPE metadata");
     }
   });
 
