@@ -11,6 +11,7 @@ import { rustOptionTargetType, rustStringTargetType, rustSourcePrimitiveTargetTy
 import { analyzeRust } from "../../helpers/rust-session.mjs";
 import { finalizeRustProviderOperationAbi } from "../../../dist/policy/operations/members/abi/finalize.js";
 import { rustBigIntTargetType } from "../../../dist/target-model/types/carriers/native.js";
+import { rustNativeStorageRoot, rustNativeStorageProjections } from "../../../dist/analysis/storage/native-paths.js";
 
 for (const projection of [false, true]) test(`owned native getter results remain distinct from stored element places (projection=${projection})`, async () => {
   for (const [sourceType, payload] of [["string", rustStringTargetType()], ["bigint", rustBigIntTargetType()]]) {
@@ -111,6 +112,30 @@ for (const captureStorage of ["value", "cell", "borrow-cell", "location"]) {
 }
 
 for (const surfaces of [[], ["js"]]) {
+  test(`a nested native receiver alias adds no phantom storage projection on ${surfaces[0] ?? "native"}`, () => {
+    const { program } = analyzeRust({ surfaces, files: { "index.ts": `
+      class Owner { readonly owner: Owner = this; count: number = 1; }
+      export function read(value: Owner): number { return value.owner.owner.count; }
+    ` } });
+    const { ast } = program.source;
+    const fields = [];
+    const visit = node => {
+      const operation = program.records.targetOperation.get(node);
+      if (operation?.kind === "source-field" && operation.valueSemantics.kind === "stored") fields.push(node);
+      ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+    };
+    program.sourceFiles.forEach(visit);
+    assert.equal(fields.length, 1, "the source has exactly one genuine stored-field read");
+    const field = fields[0];
+    const input = { ast, records: program.records, navigation: program.source.navigation };
+    const root = rustNativeStorageRoot(field, input);
+    assert.equal(root !== undefined, true, "the original checked input owns the native storage");
+    const path = rustNativeStorageProjections(field, root, input);
+    assert.equal(path?.length, 1, "both same-physical owner aliases add no fictitious field projection");
+    assert.equal(path?.[0] === program.records.targetOperation.get(field).declaration, true,
+      "the one real stored field retains its original checked declaration identity");
+  });
+
   test(`a native receiver alias follows its actual stored or owned receiver on ${surfaces[0] ?? "native"}`, () => {
     const { program } = analyzeRust({ surfaces, files: { "index.ts": `
       class Owner { readonly owner: Owner = this; }

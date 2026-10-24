@@ -10,6 +10,7 @@ import { structuralStorageKey } from "../../../dist/policy/types/objects/structu
 import { rustGenericCallableTargetType, rustGenericCallableProtocol, rustGenericCallableValue } from "../../../dist/target-model/types/carriers/generic-callables.js";
 import { rustCallableProtocol, rustCallableTargetType } from "../../../dist/target-model/types/carriers/callables.js";
 import { rustNamedTargetType } from "../../../dist/target-model/types/carriers/native.js";
+import { rustRuntimeCallableTargetType } from "../../../dist/target-model/types/carriers/runtime-carriers.js";
 import { rustCallablePhysicalSignature } from "../../../dist/target-model/conversions/callable-physical.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 import { rustOptionElementCarrier } from "../../../dist/target-model/types/carriers/optional.js";
@@ -187,13 +188,10 @@ test("physical method installation completes canonical and already indexed borro
   const property = {};
   const expression = {};
   const destinationCarrier = rustCallableTargetType(protocol.parameters, protocol.result, protocol.lifetime, infallible);
-  const physicalCarrier = rustNamedTargetType("rust.runtime.Callable", "rt::Callable", [
-    { kind: "lifetime", lifetime: protocol.lifetime },
-    { kind: "type", type: { kind: "tuple", elements: protocol.parameters } },
-    { kind: "type", type: rustNamedTargetType("rust.core.Result", "Result", [
+  const physicalCarrier = rustRuntimeCallableTargetType(protocol.lifetime, protocol.parameters,
+    rustNamedTargetType("rust.core.Result", "Result", [
       { kind: "type", type: protocol.result }, { kind: "type", type: infallible },
-    ]) },
-  ]);
+    ]));
   builder.finalizeMethodStorage(new Map([[definition, new Map([[0,
     { carrier: destinationCarrier, nativeBody: undefined, constructions: [{ object, property, expression, storageIndex: 0,
       physicalCarrier, destinationCarrier, payload: { captures: [], receiverFields: [], receivers: [] } }] },
@@ -238,13 +236,10 @@ test("physical method witnesses reject mismatched complete signatures before pub
   const otherError = { kind: "target-named", id: "source.NativeError" };
   const shape = rustStructuralObjectTargetType("/source.ts", [{ sourceName: "read",
     type: rustCallableTargetType([integer], integer, lifetime), presence: "required", readonly: false, method: true }]);
-  const physical = (parameters, result, error) => rustNamedTargetType("rust.runtime.Callable", "rt::Callable", [
-    { kind: "lifetime", lifetime },
-    { kind: "type", type: { kind: "tuple", elements: parameters } },
-    { kind: "type", type: rustNamedTargetType("rust.core.Result", "Result", [
+  const physical = (parameters, result, error) => rustRuntimeCallableTargetType(lifetime, parameters,
+    rustNamedTargetType("rust.core.Result", "Result", [
       { kind: "type", type: result }, { kind: "type", type: error },
-    ]) },
-  ]);
+    ]));
   for (const label of ["input", "result", "error", "logical source", "destination", "field index"]) {
     const builder = createRustStructuralShapePlanRegistry();
     builder.initialize([{ carrier: shape }], [], () => "source", [], [], storedMethodExposures([shape], () => "source"));
@@ -526,13 +521,10 @@ test("a remapped physical method rejects its old source index without partially 
   const originalFields = definition.fields;
   const protocol = rustCallableProtocol(originalFields[1].methodPlan.carrier);
   const destinationCarrier = rustCallableTargetType(protocol.parameters, protocol.result, protocol.lifetime, infallible);
-  const physicalCarrier = rustNamedTargetType("rust.runtime.Callable", "rt::Callable", [
-    { kind: "lifetime", lifetime },
-    { kind: "type", type: { kind: "tuple", elements: protocol.parameters } },
-    { kind: "type", type: rustNamedTargetType("rust.core.Result", "Result", [
+  const physicalCarrier = rustRuntimeCallableTargetType(lifetime, protocol.parameters,
+    rustNamedTargetType("rust.core.Result", "Result", [
       { kind: "type", type: protocol.result }, { kind: "type", type: infallible },
-    ]) },
-  ]);
+    ]));
   const constructions = [{ object: {}, property: {}, expression: {}, storageIndex: 0, physicalCarrier, destinationCarrier,
     payload: { captures: [], receiverFields: [], receivers: [] } }];
   assert.throws(() => builder.finalizeMethodStorage(new Map([[definition, new Map([[1,
