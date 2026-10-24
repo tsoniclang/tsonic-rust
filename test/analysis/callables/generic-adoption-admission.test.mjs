@@ -3,6 +3,17 @@ import test from "node:test";
 import { compileRust } from "../../helpers/rust-session.mjs";
 import { assertRejectedAsyncSource } from "../../helpers/native-promise-lifetimes.mjs";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
+import { sourceNodeIdentity } from "@tsonic/target-api/source";
+
+function diagnosticSummary(result, source) {
+  const ast = source.ast;
+  return JSON.stringify(result.diagnostics.map(({ code, message, sourceNode }) => {
+    const file = sourceNode === undefined ? undefined : ast.getSourceFile(sourceNode);
+    return { code, message, node: sourceNodeIdentity(ast, sourceNode),
+      text: file === undefined ? undefined : Buffer.from(ast.getSourceText(file))
+        .subarray(ast.pos(sourceNode), ast.end(sourceNode)).toString("utf8").trim().slice(0, 160) };
+  }));
+}
 
 const code = "TSONIC_GENERIC_ASYNC_ADOPTION_UNSUPPORTED";
 const identity = "async function identity<Value>(value: Value) { return value; }";
@@ -402,11 +413,11 @@ nativeEntryInverses.push(...[
 
 for (const [name, sourceText] of nativeEntryInverses) {
   test("Rust native callback non-adoption inverse: " + name, { timeout: 300_000 }, () => {
-    const { result } = compileRust({ surfaces: ["js"],
+    const { result, source } = compileRust({ surfaces: ["js"],
       target: { id: "rust", options: { outputType: "bin", crateName: "native_callback_inverse" } },
       files: { "index.ts": "export {};\n" + sourceText } });
     assert.equal(result.diagnostics.length, 0,
-      JSON.stringify(result.diagnostics.map(({ code, message }) => ({ code, message }))));
+      diagnosticSummary(result, source));
     const output = validateGeneratedProject("native-callback-inverse-" + name, result.artifacts, { run: true }).stdout;
     assert.equal(output.trim(), "7", "only the actual resolver's same-activation payload is adopted");
   });
@@ -498,9 +509,9 @@ for (const [name, declarations, expression] of nativeOpaquePayloadCases) {
     assertRejectedAsyncSource(compilation, [{ code: "RUST_ASYNC_RESULT_USE_NOT_PROVEN", kind: "KindCallExpression", text: expression }]);
   });
   test("Rust ordinary opaque callable input keeps its native value: " + name, { timeout: 300_000 }, () => {
-    const { result } = compileRust({ surfaces: ["js"], target: { id: "rust", options: { outputType: "bin",
+    const { result, source } = compileRust({ surfaces: ["js"], target: { id: "rust", options: { outputType: "bin",
       crateName: "ordinary_native_opaque_payload" } }, files: { "index.ts": "export {};\n" + declarations + "\nconsole.log(await wrap(7));" } });
-    assert.equal(result.diagnostics.length, 0, JSON.stringify(result.diagnostics.map(({ code, message }) => ({ code, message }))));
+    assert.equal(result.diagnostics.length, 0, diagnosticSummary(result, source));
     assert.equal(validateGeneratedProject("ordinary-native-opaque-" + name, result.artifacts, { run: true }).stdout.trim(), "7",
       "ordinary Awaited identity does not add a refusal or alter the native callback result");
   });

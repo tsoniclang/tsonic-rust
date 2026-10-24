@@ -29,12 +29,21 @@ export interface RustCallableSignatureRequest {
 }
 
 export interface RustCallableSignatureCompletion {
+  readonly kind: "complete";
   readonly parameterAbis: readonly RustSourceParameterAbiFact[];
   readonly result: RustSourceCallableReturnFact;
   readonly logicalReturn: TargetTypeRef;
   readonly suspension?: RustAsyncFunctionFact | RustGeneratorFact;
   readonly callableValue?: TargetTypeRef;
 }
+
+export interface RustCallableSignatureUnresolved {
+  readonly kind: "unresolved";
+  readonly sourceNode: Node;
+  readonly reason: string;
+}
+
+export type RustCallableSignatureSelection = RustCallableSignatureCompletion | RustCallableSignatureUnresolved;
 
 export interface RustCallableSignatureState {
   active: boolean;
@@ -54,16 +63,20 @@ function signatureRequestKey(request?: RustCallableSignatureRequest): string {
     contextualResult: request?.contextualResult, ownedReceiver: request?.ownedReceiver });
 }
 
+function unresolvedSignature(sourceNode: Node, reason: string): RustCallableSignatureUnresolved {
+  return Object.freeze({ kind: "unresolved", sourceNode, reason });
+}
+
 export function finalizeRustCallableSignature(
   walk: RustFactWalk, declaration: Node, request?: RustCallableSignatureRequest,
-): RustCallableSignatureCompletion | undefined {
+): RustCallableSignatureSelection {
   const { records } = walk.context;
   records.assertOpen();
   const key = signatureRequestKey(request);
   let state = walk.callableSignatures.get(declaration);
   const cached = state?.completed.get(key);
   if (cached !== undefined) return cached;
-  if (state?.active) return undefined;
+  if (state?.active) return unresolvedSignature(declaration, "The same checked callable signature is already being completed.");
   if (state === undefined) {
     state = { active: false, inputActive: false, completed: new Map(), suspensions: new Map() };
     walk.callableSignatures.set(declaration, state);
@@ -83,33 +96,50 @@ export function finalizeRustCallableSignature(
     const parameters = requireDenseSourceNodes(walk,
       sourceCallableValueParameters(ast, declaration, walk.context.semanticsFor(declaration)),
       "Function declaration contains an undefined or non-data parameter slot.");
-    if (parameters === undefined || request?.parameterAbis !== undefined &&
-      request.parameterAbis.length !== parameters.length) return undefined;
+    if (parameters === undefined) return unresolvedSignature(declaration,
+      "The checked callable value-parameter vector is not dense declaration-owned source metadata.");
+    if (request?.parameterAbis !== undefined && request.parameterAbis.length !== parameters.length)
+      return unresolvedSignature(declaration,
+        `The selected native input ABI vector has ${request.parameterAbis.length} entries for ${parameters.length} checked value parameters.`);
     let contextualResult = request?.contextualResult;
     if (request?.parameterAbis === undefined) {
-      if (finalizeRustCallableParameterAbis(walk, declaration) === undefined) return undefined;
+      if (finalizeRustCallableParameterAbis(walk, declaration) === undefined) {
+        const missing = parameters.filter(parameter => records.sourceParameterAbi.get(parameter) === undefined).map(parameter => {
+          const name = ast.name(parameter);
+          const type = Node_Type(ast, parameter);
+          return `${name === undefined ? ast.kindName(parameter) : ast.text(name)} (${type === undefined ? "contextual checked type" : ast.kindName(type)})`;
+        });
+        return unresolvedSignature(declaration, "The native callable input stage did not complete; " +
+          (missing.length === 0 ? "its checked parameter contracts are not closed."
+            : `unadmitted original parameter ABIs: ${missing.join(", ")}.`));
+      }
       const contextual = recordCallableParameterSignatureFacts(walk, declaration);
       contextualResult ??= (rustCallableProtocol(contextual) ?? rustClosureProtocol(contextual))?.result;
     } else {
       for (const [index, parameter] of parameters.entries()) {
         const selected = request.parameterAbis[index];
-        if (selected === undefined || !recordRustParameterAbiSelection(walk, parameter, selected)) return undefined;
+        if (selected === undefined) return unresolvedSignature(parameter,
+          "The selected native callable input vector has no ABI at this original value-parameter position.");
+        if (!recordRustParameterAbiSelection(walk, parameter, selected)) return unresolvedSignature(parameter,
+          "The selected native callable input ABI could not be admitted for its original value parameter.");
       }
     }
     const parameterAbis: RustSourceParameterAbiFact[] = [];
     for (const parameter of parameters) {
       const selected = records.sourceParameterAbi.get(parameter);
-      if (selected === undefined) return undefined;
+      if (selected === undefined) return unresolvedSignature(parameter,
+        "Callable signature completion requires this original value parameter's admitted native ABI.");
       parameterAbis.push(selected);
     }
     const suspensionKey = closedMetadataKey({ parameterAbis, contextualResult, ownedReceiver: request?.ownedReceiver });
     let suspension = state.suspensions.get(suspensionKey);
     if (suspension === undefined) {
       suspension = selectRustCallableSuspension(walk, declaration, request?.ownedReceiver, contextualResult);
-      if (suspension === undefined) return undefined;
-      admitSuspension(walk, declaration, suspension);
+      if (suspension === undefined) return unresolvedSignature(declaration,
+        "The native callable suspension contract is unresolved for its exact selected inputs and contextual result.");
       state.suspensions.set(suspensionKey, suspension);
     }
+    admitSuspension(walk, declaration, suspension);
     const suspendedReturn = suspension.kind === "async" ? suspension.fact.outputCarrier
       : suspension.kind === "generator" ? suspension.fact.resultCarrier : undefined;
     if (suspendedReturn !== undefined && request?.selectedReturn !== undefined &&
@@ -118,16 +148,23 @@ export function finalizeRustCallableSignature(
         "Conflicting Rust semantic plan 'tsonic.rust.sourceCallableReturn' for one exact selected logical result.", declaration);
     }
     const logical = selectRustCallableLogicalReturn(walk, declaration, suspendedReturn ?? request?.selectedReturn);
-    if (logical.kind === "pending") return undefined;
-    if (!recordRustSourceCallableReturn(walk, declaration, logical.carrier)) return undefined;
+    if (logical.kind === "pending") return unresolvedSignature(declaration,
+      "The checked callable logical return is pending its native body dependencies; no return fact was published.");
+    const diagnosticStart = walk.context.diagnostics.length;
+    if (!recordRustSourceCallableReturn(walk, declaration, logical.carrier)) {
+      const diagnostic = walk.context.diagnostics.slice(diagnosticStart).find(issue => issue.category === "error");
+      return unresolvedSignature(diagnostic?.sourceNode ?? declaration,
+        diagnostic?.message ?? "The selected callable logical result has no completed native return and retained-environment contract.");
+    }
     const result = records.sourceCallableReturn.get(declaration);
-    if (result === undefined) return undefined;
+    if (result === undefined) return unresolvedSignature(declaration,
+      "The native callable return producer completed without publishing its required original declaration record.");
     const invocation = rustCallableInvocationResult(records, declaration);
     const callableValue = invocation !== undefined && ast.body(declaration) !== undefined &&
       (ast.is.IsFunctionDeclaration(declaration) || ast.is.IsArrowFunction(declaration) || ast.is.IsFunctionExpression(declaration)) &&
       ast.typeParameters(declaration).length === 0
       ? rustCallableTargetType(parameterAbis.map(parameter => parameter.parameterCarrier), invocation) : undefined;
-    const completed = Object.freeze({ parameterAbis: Object.freeze(parameterAbis), result, logicalReturn: logical.carrier,
+    const completed = Object.freeze({ kind: "complete" as const, parameterAbis: Object.freeze(parameterAbis), result, logicalReturn: logical.carrier,
       ...(callableValue === undefined ? {} : { callableValue }),
       ...(suspension.kind === "none" ? {} : { suspension: suspension.kind === "async"
         ? records.asyncFunction.get(declaration)! : records.generator.get(declaration)! }),
@@ -144,6 +181,12 @@ export function finalizeRustCallableSignature(
 function admitSuspension(walk: RustFactWalk, declaration: Node, selection: RustCallableSuspensionSelection): void {
   if (selection.kind === "none") return;
   const { records, ast } = walk.context;
+  if (selection.retainedEnvironment !== undefined) {
+    requireRustRecord(walk.context.requiredRecords, "retainedEnvironment", declaration,
+      "native callable environment", "admitSuspension");
+    records.retainedEnvironments.retain(declaration,
+      selection.retainedEnvironment.lifetime, selection.retainedEnvironment.inputs);
+  }
   requireRustRecord(walk.context.requiredRecords, selection.kind === "async" ? "asyncFunction" : "generator",
     declaration, selection.fact.kind, "admitSuspension");
   const asynchronous = records.asyncFunction.get(declaration);
@@ -153,12 +196,6 @@ function admitSuspension(walk: RustFactWalk, declaration: Node, selection: RustC
     !rustGeneratorFactEquals(generator, selection.fact)) {
     failTargetAnalysisInvariant("tsonic-rust",
       `Conflicting Rust semantic plan 'tsonic.rust.${selection.kind === "async" ? "asyncFunction" : "generator"}' for one exact source subject.`, declaration);
-  }
-  if (selection.retainedEnvironment !== undefined) {
-    requireRustRecord(walk.context.requiredRecords, "retainedEnvironment", declaration,
-      "suspended callable environment", "admitSuspension");
-    records.retainedEnvironments.retain(declaration,
-      selection.retainedEnvironment.lifetime, selection.retainedEnvironment.inputs);
   }
   if (selection.kind === "async") {
     if (asynchronous === undefined) {
@@ -184,5 +221,6 @@ export function resolveRustCallableSignatureCarrier(
   if (walk.callableSignatures.get(declaration)?.active || ast.body(declaration) === undefined ||
     !ast.is.IsFunctionDeclaration(declaration) && !ast.is.IsArrowFunction(declaration) && !ast.is.IsFunctionExpression(declaration) ||
     ast.typeParameters(declaration).length !== 0) return undefined;
-  return finalizeRustCallableSignature(walk, declaration)?.callableValue;
+  const selected = finalizeRustCallableSignature(walk, declaration);
+  return selected.kind === "complete" ? selected.callableValue : undefined;
 }

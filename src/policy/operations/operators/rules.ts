@@ -1,6 +1,6 @@
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustCarrierHasNativeValueView } from "../js-values/carrier-protocols.js";
-import { rustTsValueTargetId } from "../../../target-model/types/carriers/source-types.js";
+import { rustCallableTargetId, rustTsValueTargetId } from "../../../target-model/types/carriers/source-types.js";
 import type { RustBinaryOperatorSelection } from "../../../target-model/operations/binary.js";
 import { selectRustNumericConstraintComparison, selectRustNumericUnionComparison } from "../numeric/union.js";
 import { rustCarrierSupportsSourceNumeric } from "../../../target-model/types/carriers/source-numeric.js";
@@ -389,7 +389,14 @@ export function selectRustBinaryOperator(
         path: `core::cmp::PartialEq::${equality === "==" ? "eq" : "ne"}`,
         fallible: false, operandModes: ["ref", "ref"] };
     }
-    if ((rustCallableProtocol(left) !== undefined || rustGenericCallableValue(left) !== undefined) && rustTargetTypeRefEquals(left, right)) {
+    const sameCallableStorage = left.kind === "target-named" && left.id === rustCallableTargetId &&
+      right.kind === "target-named" && right.id === rustCallableTargetId &&
+      rustCallableProtocol(left) !== undefined && rustCallableProtocol(right) !== undefined &&
+      left.genericArguments !== undefined && right.genericArguments?.[0]?.kind === "lifetime" &&
+      rustTargetTypeRefEquals({ ...left,
+        genericArguments: [right.genericArguments[0], ...left.genericArguments.slice(1)] }, right);
+    if (sameCallableStorage ||
+      (rustCallableProtocol(left) !== undefined || rustGenericCallableValue(left) !== undefined) && rustTargetTypeRefEquals(left, right)) {
       return { kind: "operator-token", rustOperator: equality, resultCarrier: rustSourcePrimitiveTargetType("bool"), operandModes: ["ref", "ref"] };
     }
     const sameStructuralObject = rustStructuralObjectCarrierValue(left) !== undefined &&

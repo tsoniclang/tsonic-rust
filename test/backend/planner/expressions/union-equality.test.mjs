@@ -73,7 +73,7 @@ export function stable(left: Choice, right: Choice): boolean { return left === r
   assert.equal(mutating !== undefined, true, "the whole closed-union mutation is admitted");
   assert.equal(stable !== undefined, true, "the native readonly union comparison is admitted");
   const read = program.records.readOwnership.get(mutating.left);
-  assert.equal(read?.value.kind, "clone", "the original payload is captured before replacing its owner");
+  assert.equal(read?.value.kind, "clone", `the original payload is captured before replacing its owner; readsStorage=${read?.readsStorage}; source=${read?.source.kind}; snapshot=${read?.snapshot?.kind}; stablePlace=${read?.stablePlace}`);
   assert.equal(read.borrowedAcross.has(mutating.right), false, "the snapshot does not retain a lease across mutation");
   assert.equal(mutating.leftShared, false, "union emission consumes the selected snapshot exactly once");
   assert.equal(stable.leftShared, true, "the immutable native left operand stays shared");
