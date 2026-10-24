@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { selectRustUnionEquality } from "../../../dist/policy/operations/operators/union-equality.js";
+import { selectRustUnionEquality, selectRustUnionEqualityEmission } from "../../../dist/policy/operations/operators/union-equality.js";
 import { createRustTypeDefinitionRegistry } from "../../../dist/analysis/project-types/type-definitions.js";
 import { rustAbsenceTargetType, rustOptionTargetType, rustSourceUnionTargetType,
   rustSourcePrimitiveTargetType, rustSourceTypeCarrier, rustStringTargetType } from "../../../dist/target-model/types/index.js";
@@ -135,6 +135,12 @@ test("closed union inequality selects native ne independently and preserves abse
     assert.equal(absence?.operation.rustOperator, token, operator + ": absence uses the same native polarity");
     const fact = { kind: "union-equality", operationId: "tsonic.rust.union.equality", leftCarrier: optional,
       rightCarrier: optional, resultCarrier: rustSourcePrimitiveTargetType("bool"), negated, ...selected };
+    const emission = selectRustUnionEqualityEmission(fact, definitions);
+    assert.equal(emission !== undefined && Object.isFrozen(emission) && Object.isFrozen(emission.arms) && Object.isFrozen(emission.form),
+      true, operator + ": the sole native form owner publishes immutable data");
+    assert.equal(emission.fallback, negated, operator + ": disjoint native variants keep authored polarity");
+    assert.equal(emission.arms.find(arm => arm.left.absence && arm.right.absence)?.constant, !negated,
+      operator + ": absence is selected before rendering");
     assert.equal(rustUnionEqualityFactMatches(fact, kind, optional, optional, definitions), true,
       operator + ": the sole admission validates the exact native arm operations");
     const changed = selected.arms.map(arm => arm === object
