@@ -126,7 +126,8 @@ export function different(left: Choice | undefined, right: Choice | undefined): 
       const absent = selected.arms.find(arm => arm.left.absence && arm.right.absence);
       assert.equal(absent !== undefined, true, label + ": one native absence pair remains present");
       assert.equal(absent.constant, !selected.fact.negated, label + ": the absent pair has its exact native result");
-      assert.equal(selected.fallback, selected.fact.negated, label + ": disjoint native variants keep authored polarity");
+      assert.equal(selected.unmatchedResult, selected.fact.negated, label + ": disjoint native variants keep authored polarity");
+      assert.equal(Object.hasOwn(selected, "fallback"), false, label + ": only the current unmatched-result data reaches rendering");
       const context = planningContext(program, node);
       const planned = planBinaryExpression(node, context);
       assert.equal(planned !== undefined, true, label + ": the admitted native plan renders");

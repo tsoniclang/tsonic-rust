@@ -77,12 +77,12 @@ export function selectRustUnionEqualityEmission(
   }
   const allTrue = arms.every(arm => arm.constant === true);
   const allFalse = arms.every(arm => arm.constant === false);
-  const fallback = fact.negated;
-  const form: RustUnionEqualityEmission["form"] = arms.length === 0 ? { kind: "constant", value: fallback }
-    : allTrue && (fact.exhaustive || fallback) ? { kind: "constant", value: true }
-    : allFalse && (fact.exhaustive || !fallback) ? { kind: "constant", value: false }
+  const unmatchedResult = fact.negated;
+  const form: RustUnionEqualityEmission["form"] = arms.length === 0 ? { kind: "constant", value: unmatchedResult }
+    : allTrue && (fact.exhaustive || unmatchedResult) ? { kind: "constant", value: true }
+    : allFalse && (fact.exhaustive || !unmatchedResult) ? { kind: "constant", value: false }
     : { kind: allTrue ? "matches" : "match" };
-  return Object.freeze({ fact, arms: Object.freeze(arms), form: Object.freeze(form), fallback });
+  return Object.freeze({ fact, arms: Object.freeze(arms), form: Object.freeze(form), unmatchedResult });
 }
 
 function sourceOptionElement(carrier: TargetTypeRef): TargetTypeRef | undefined {

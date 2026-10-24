@@ -138,7 +138,8 @@ test("closed union inequality selects native ne independently and preserves abse
     const emission = selectRustUnionEqualityEmission(fact, definitions);
     assert.equal(emission !== undefined && Object.isFrozen(emission) && Object.isFrozen(emission.arms) && Object.isFrozen(emission.form),
       true, operator + ": the sole native form owner publishes immutable data");
-    assert.equal(emission.fallback, negated, operator + ": disjoint native variants keep authored polarity");
+    assert.equal(emission.unmatchedResult, negated, operator + ": disjoint native variants keep authored polarity");
+    assert.equal(Object.hasOwn(emission, "fallback"), false, operator + ": the obsolete field is not a second data contract");
     assert.equal(emission.arms.find(arm => arm.left.absence && arm.right.absence)?.constant, !negated,
       operator + ": absence is selected before rendering");
     assert.equal(rustUnionEqualityFactMatches(fact, kind, optional, optional, definitions), true,

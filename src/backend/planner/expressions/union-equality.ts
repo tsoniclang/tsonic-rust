@@ -72,7 +72,7 @@ export function planRustUnionEquality(node: Node,
   else if (selected.form.kind === "matches") result = { kind: "matches", expression: input,
     pattern: arms.length === 1 ? arms[0]!.pattern : { kind: "or", alternatives: arms.map(arm => arm.pattern) } };
   else {
-    if (!fact.exhaustive) arms.push({ pattern: { kind: "wildcard" }, expression: { kind: "bool-literal", value: selected.fallback } });
+    if (!fact.exhaustive) arms.push({ pattern: { kind: "wildcard" }, expression: { kind: "bool-literal", value: selected.unmatchedResult } });
     result = { kind: "match", expression: input, arms };
   }
   return bindings.length === 0 ? result : rustValueBlock(bindings, result);
