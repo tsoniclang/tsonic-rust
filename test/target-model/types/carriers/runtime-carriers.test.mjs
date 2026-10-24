@@ -139,7 +139,8 @@ test("structural storage renders combined native method and bound-field carriers
     const carrier = rustStructuralObjectTargetType("checked.ts", [], "reference");
     const definition = { carrier, sourceCarriers: [carrier], targetName: "Checked", componentId: component,
       ownerFileName: base.source.ast.getFileName(base.sourceFiles[0]),
-      genericParameters: [], genericArguments: [], fields: [{ sourceName: "value", targetName: "value",
+      genericParameters: [], genericArguments: [], stateGenericParameters: [], stateGenericArguments: [],
+      contextMarker: undefined, contextConstructor: undefined, fields: [{ sourceName: "value", targetName: "value",
         presence: "required", readonly: false, ...extra }] };
     const shapes = { ...base.structuralShapes, definitions: [definition], instances: [definition], unionDefinitions: [],
       definitionForCarrier: selected => rustTargetTypeRefEquals(selected, carrier) ? definition : undefined,

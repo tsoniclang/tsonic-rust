@@ -129,15 +129,15 @@ for (const edition of ["2021", "2024"]) {
         method(method(path("cell"), "borrow"), "len"), {}, [{ kind: "let", name: "cell", mutable: false,
           init: call("std::cell::RefCell::new", { kind: "str-literal", value: "abc" }) }]) },
         { name: "constant_drop", params: [], returnType: { kind: "primitive", name: "u32" }, body: shaped(
-          call("consume", { kind: "reference", expr: path("TEMPORARY") }), {}, [
+          call("consume", { kind: "reference", expr: path("TEMPORARY") }), { type: { kind: "primitive", name: "u32" } }, [
             { kind: "let", name: "_local", mutable: false, init: call("Observed", { kind: "str-literal", value: "local" }) },
           ]) }] : []),
     ].map(definition => ({ kind: "function", visibility: "private", generics: emptyRustGenerics, ...definition }));
     const generated = printRustSourceFile({ headerComment: "Native tail recipe proof", items: definitions }, edition);
     if (edition === "2021") assert.equal(generated.includes("let result = cell.borrow().len();"), true,
       "2021: retain the borrowing RefCell initializer");
-    if (edition === "2021") assert.equal(generated.includes("let result = consume(&TEMPORARY);"), true,
-      "2021: a constant path is not an existing local place and retains its temporary Drop boundary");
+    if (edition === "2021") assert.equal(generated.includes("let result: u32 = consume(&TEMPORARY);"), true,
+      "2021: the native witness names consume's exact u32 output and retains its temporary Drop boundary");
     assert.equal(generated.includes("let result = value.unwrap_or(7);"), false, `${edition}: directly return the proven default recipe`);
     const project = writeGeneratedProject(`tail-recipes-${edition}`, [
       { path: "Cargo.toml", text: `[package]\nname = "tail_recipes"\nversion = "0.0.0"\nedition = "${edition}"\n` },
