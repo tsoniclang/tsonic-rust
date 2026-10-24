@@ -253,7 +253,9 @@ export function createRustNativeCallableInputPlan(input: {
     const origins = callee === undefined ? undefined : values.get(callee);
     if (origins?.kind !== "resolved" || origins.inputs.length !== 1 || origins.implementations.length !== 0) continue;
     const parameter = origins.inputs[0]!;
-    const methodArguments = rustNativeCallableInvocationArguments(parameter, operation);
+    const callIdentity = sourceNodeIdentity(input.ast, node);
+    if (callIdentity === undefined) continue;
+    const methodArguments = rustNativeCallableInvocationArguments(parameter, operation, callIdentity);
     if (methodArguments === undefined) continue;
     const completion = rustNativeCallableCompletion(operation.resultCarrier, input.definitions);
     if ((completion?.futures.length ?? 0) !== (parameter.protocol.completion?.futures.length ?? 0)) continue;
