@@ -90,9 +90,9 @@ export function analyzeRustSourceCallArguments(program: Omit<RustAnalysisProgram
             valid = false;
             storageReason = value.reason;
           } else {
-            const target = rustCallableTargetForSourceLifetime(value.carrier, input.carrier);
-            valid = rustFinalizedCarrierTransitionMatches(mapRustTargetTypes(operand.carrier, program.typeFamilies.normalize),
-              converted === undefined ? undefined : mapRustTargetTypes(value.carrier, program.typeFamilies.normalize),
+            const target = rustCallableTargetForSourceLifetime(converted ?? sourceCarrier, input.carrier);
+            valid = rustFinalizedCarrierTransitionMatches(mapRustTargetTypes(sourceCarrier, program.typeFamilies.normalize),
+              converted === undefined ? undefined : mapRustTargetTypes(converted, program.typeFamilies.normalize),
               mapRustTargetTypes(target, program.typeFamilies.normalize)) ||
               converted === undefined && program.structuralShapes.sharesStorage(operand.carrier, input.carrier);
           }
