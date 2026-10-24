@@ -37,6 +37,7 @@ import { rustPromiseBodyInvocationCarrier } from "../callables/promise-bodies.js
 import { rustSpreadElementCarrier } from "../../target-model/operations/rest-assembly.js";
 import { rustFixedArrayCarrierValue } from "../../target-model/types/carriers/native.js";
 import { rustTargetConstInteger } from "../../target-model/types/generic-arguments.js";
+import { acceptRustPolicy } from "../../policy/model/contracts.js";
 
 export function applySelectedProjectSourceCall(
   walk: RustFactWalk,
@@ -50,6 +51,14 @@ export function applySelectedProjectSourceCall(
   expected: TargetTypeRef | undefined,
 ): TargetTypeRef | undefined {
   const { ast } = walk.context;
+  const sourceCall = walk.context.semanticsFor(expression).operations.call(expression);
+  if (sourceCall === undefined || sourceCall.call !== expression ||
+    sourceCall.selectedSignature !== selectedSignature.sourceSignature) {
+    appendRustDiagnostic(walk, "RUST_SOURCE_CALL_BINDINGS_MISSING",
+      "Selected project-source call requires its identical original checked invocation and signature.", expression,
+      ["target.capability=rust.source-call.argument-bindings"]);
+    return undefined;
+  }
   const selectedMember = selectedSignature.member;
   if (!isDenseDataArray(callArguments) || callArguments.some((argument) => argument === undefined)) {
     appendMalformedSourceAst(walk, "Checked project-source call contains an undefined or non-data argument slot.");
@@ -431,7 +440,7 @@ export function applySelectedProjectSourceCall(
   const physicalResultCarrier = asyncBody === undefined ? resultCarrier : rustPromiseBodyInvocationCarrier(asyncBody);
   const finalResultCarrier = optionalCall?.resultCarrier ?? physicalResultCarrier;
   const computedKey = recordRustComputedCallEvaluation(ast, walk.context.records, walk.context.requiredRecords,
-    walk.context.semanticsFor(expression).operations.call(expression), callee,
+    sourceCall, callee,
     target.form !== "function" && target.form !== "static-method" || target.classReceiver !== undefined);
   if (computedKey !== undefined &&
     resolveExpressionCarrier(walk, computedKey, sourceFile, undefined) === undefined) return undefined;
@@ -443,13 +452,24 @@ export function applySelectedProjectSourceCall(
   walk.context.records.retainedCalls.finalize(expression, retainedLifetimes);
   recordSelectedSourceCallArguments(walk, arguments_.arguments);
   requireRustRecord(walk.context.requiredRecords, "selectedOperation", expression, "source-call", "applySelectedProjectSourceCall");
-  walk.context.records.selectedOperations.project(
-    expression,
+  walk.context.records.selectedOperations.checked(expression, acceptRustPolicy({ operation: {
     operationId,
     operationKind,
-    target.form,
-    finalResultCarrier,
-  );
+    targetOperation: target.form,
+    resultType: finalResultCarrier,
+    provenance: {
+      sourceExpression: sourceCall.call,
+      sourceReceiver: sourceCall.sourceReceiver?.expression,
+      sourceCallee: sourceCall.sourceCallee.expression,
+      sourceSelectedSignature: sourceCall.selectedSignature,
+      sourceSelectedSymbol: sourceCall.sourceCallee.selectedSymbol,
+      sourceSelectedDeclaration: sourceCall.sourceCallee.selectedDeclaration,
+      sourceCalleeSymbol: sourceCall.sourceCallee.symbol,
+      sourceCalleeDeclaration: sourceCall.sourceCallee.declaration,
+      sourceResultType: sourceCall.sourceResultType,
+      sourceReturnType: sourceCall.sourceResultType,
+    },
+  } }));
   requireRustRecord(walk.context.requiredRecords, "targetOperation", expression, "source-call", "analysis/operations/project-calls.ts");
   walk.context.records.targetOperations.source(expression, {
     kind: "source-call",

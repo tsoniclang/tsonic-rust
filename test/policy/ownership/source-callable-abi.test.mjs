@@ -169,6 +169,23 @@ export function run(): number {
     const declarations = context.sourceStorage.nodes.filter(node => ast.is.IsFunctionDeclaration(node) && ast.body(node) !== undefined);
     const read = declarations.find(node => ast.text(ast.name(node)) === "read");
     assert.equal(read !== undefined, true, "the actual closed method reader has an implementation body");
+    const calls = context.sourceStorage.nodes.filter(node => ast.is.IsCallExpression(node));
+    assert.equal(calls.length, 3, "the original closed producer retains its function call and both method calls");
+    for (const call of calls) {
+      const checked = context.semanticsFor(call).operations.call(call);
+      const operation = context.records.selectedOperation.get(call);
+      assert.equal(checked !== undefined && operation !== undefined, true, "each original invocation has its checked source and one selected operation");
+      assert.equal(operation.provenance?.sourceExpression === call, true, "the selected operation retains its original invocation Node");
+      assert.equal(operation.provenance?.sourceSelectedSignature === checked.selectedSignature, true,
+        "the operation retains the actual checked selected signature, not a reconstructed native header");
+      assert.equal(operation.provenance?.sourceReceiver === checked.sourceReceiver?.expression, true,
+        "method receiver identity and genuine function-call receiver absence are preserved");
+      assert.equal(operation.provenance?.sourceCallee === checked.sourceCallee.expression, true,
+        "the original checked callable operand is not reconstructed from emitted syntax");
+      assert.equal(operation.provenance?.sourceSelectedDeclaration === checked.sourceCallee.selectedDeclaration &&
+        operation.provenance?.sourceSelectedSymbol === checked.sourceCallee.selectedSymbol, true,
+      "the actual selected member declaration and Symbol remain one checked correspondence");
+    }
     const readParameter = ast.parameters(read)[0];
     const readDemand = context.sourceStorage.formalMemberWriteDemand(read, readParameter);
     assert.equal(readDemand.kind, "complete", "the reader has complete shared write-demand evidence");
