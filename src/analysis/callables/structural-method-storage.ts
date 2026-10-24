@@ -538,15 +538,14 @@ export function createRustStructuralMethodStorage(input: {
         if (methods.length === 0) continue;
         const first = methods[0]!.methodPlan;
         if (first?.kind !== "fixed") failTargetAnalysisInvariant("tsonic-rust", "A fixed method inventory requires its selected source declaration.");
-        const own = rustStructuralObjectCarrierValue(definition.carrier)?.implementation !== undefined;
-        const matches = literals.filter(candidate => own ? candidate.definition.componentId === definition.componentId &&
-          candidate.definition.targetName === definition.targetName : methods.every(field => {
+        const matches = literals.filter(candidate => methods.every(field => {
             const selected = field.methodPlan;
             return selected?.kind === "fixed" && candidate.definition.fields.some(actual => actual.sourceName === field.sourceName &&
               actual.methodPlan?.kind === "fixed" && actual.methodPlan.declaration === selected.declaration);
           }));
         if (matches.length !== 1) return reject(first.declaration,
           "A fixed structural contract requires its one checked complete native implementation template.");
+        const own = matches[0]!.definition.componentId === definition.componentId && matches[0]!.definition.targetName === definition.targetName;
         if (own) continue;
         for (const source of new Set([definition.carrier, ...definition.sourceCarriers])) {
           const physical = bindRustStructuralImplementationContract(matches[0]!.carrier, source);

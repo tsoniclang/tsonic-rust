@@ -9,6 +9,7 @@ import { isRustCopyCarrier, rustCarrierSupportsClone, rustCarrierSupportsTrait }
 import { rustStructuralObjectTargetType, rustStructuralObjectCarrierValue } from "../../../dist/target-model/types/carriers/source-types.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 import { bindRustStructuralReceiverParameters } from "../../../dist/analysis/declarations/structural-receiver-requirements.js";
+import { rustCallableProtocol } from "../../../dist/target-model/types/carriers/callables.js";
 
 test("native structural handle Clone requires no state or context Clone bound", () => {
   const parameter = { kind: "type-parameter", identity: "native-context", name: "Context" };
@@ -111,6 +112,46 @@ ${suffix}
       `${label}: actual writes/extraction stay distinct from the exported native body boundary`);
   });
 }
+
+test("closed structural method bodies preserve their actual native contract geometry", testContext => {
+  let context;
+  const { result } = compileRust({ surfaces: [], files: { "index.ts": `
+type Reader = { value(): number; };
+type Other = { value(): number; };
+function read(owner: Reader): number { return owner.value(); }
+export function run(): number {
+  const owner = { value(): number { return 1; } };
+  return read(owner);
+}
+` }, compileTarget(request) {
+    const analyzed = analyzeRustCheckedContext(request, original => { context = original; return original; });
+    return { kind: "resolved", value: { artifacts: [] }, diagnostics: analyzed.diagnostics };
+  } });
+  assert.equal(context !== undefined, true, "the exact checked source reaches its native layout owner");
+  const describe = carrier => {
+    const object = rustStructuralObjectCarrierValue(carrier);
+    return object === undefined ? carrier.kind : {
+      implementation: object.implementation?.kind,
+      methods: object.implementation?.methods.map(method => method.identity),
+      fields: object.fields.map(field => {
+        const protocol = rustCallableProtocol(field.type);
+        return { name: field.sourceName, kind: field.type.kind, method: field.method,
+          lifetime: protocol?.lifetime?.kind, parameters: protocol?.parameters.map(parameter => parameter.kind),
+          result: protocol?.result.kind, error: protocol?.error?.kind === "target-named" ? protocol.error.id : protocol?.error?.kind };
+      }),
+    };
+  };
+  const shapes = context.structuralShapes.definitions;
+  testContext.diagnostic(JSON.stringify(shapes.map(shape => ({ name: shape.targetName,
+    native: describe(shape.carrier), fixed: shape.fields.filter(field => field.methodPlan?.kind === "fixed")
+      .map(field => ({ name: field.sourceName, declaration: context.ast.kindName(field.methodPlan.declaration) })) }))));
+  assert.equal(result.diagnostics.length, 0, result.diagnostics.map(diagnostic => diagnostic.message).join("; "));
+  for (const shape of shapes) for (const field of shape.fields) if (field.methodPlan?.kind === "fixed") {
+    assert.equal(Object.isFrozen(field.methodPlan.payload), true, "the actual native body has its required published capture payload");
+    assert.equal(rustStructuralObjectCarrierValue(shape.carrier)?.implementation?.kind, "physical",
+      "the original checked method contract publishes the completed physical implementation");
+  }
+});
 
 test("only universally fixed actual bodies leave the retained generic family", () => {
   const { program } = analyzeRust({ files: { "index.ts": `
@@ -216,7 +257,9 @@ test("sealed fixed methods publish actual payloads and native factory receiver d
     ["factory receiver state", "export function create() { return { value: 7, async answer(pending: Promise<number>): Promise<number> { await pending; return this.value; } }; }", "value", 0, "factory"],
     ["factory physical context without this", "export function create(value: number) { return { async answer(pending: Promise<number>): Promise<number> { await pending; return value; } }; }", "value", 1, "factory"],
   ]) {
-    const { program } = analyzeRust({ surfaces: ["js"], files: { "index.ts": source } });
+    let program;
+    assert.doesNotThrow(() => { ({ program } = analyzeRust({ surfaces: ["js"], files: { "index.ts": source } })); },
+      `${label}: the actual selected native completion and capture domain is admitted`);
     const shape = program.structuralShapes.definitions.find(definition => definition.fields.some(field => field.sourceName === "answer"));
     const method = shape?.fields.find(field => field.sourceName === "answer")?.methodPlan;
     assert.equal(method?.kind, "fixed", `${label}: the actual checked native body remains concrete`);
