@@ -23,13 +23,35 @@ test("source JS calls use their Promise rejection channel rather than body-local
   }
 });
 
-test("multiple JS await producers contribute one uniform rejection effect", () => {
+test("known infallible async producers retain their native bodies without rejection effects", () => {
   const context = analyzeRustErrorEffects(`
     async function first(): Promise<number> { return 1; }
     async function second(): Promise<string> { return "two"; }
     export async function both(): Promise<number> {
       const one = await first();
       const two = await second();
+      return one + two.length;
+    }
+  `);
+  const declaration = context.sourceStorage.nodes.find(node => context.ast.is.IsFunctionDeclaration(node) &&
+    context.ast.text(context.ast.name(node)) === "both");
+  assert.equal(declaration !== undefined, true);
+  const calls = context.sourceStorage.nodes.filter(node => context.ast.is.IsCallExpression(node) &&
+    ["first", "second"].includes(context.ast.text(Node_Expression(context.ast, node))));
+  assert.equal(calls.length, 2, "both original async producers are invoked");
+  for (const call of calls) assert.equal(context.records.targetOperation.get(call)?.asyncBody !== undefined, true,
+    "the checked producer selects its genuine native body");
+  const effects = context.records.errorEffects.get(declaration);
+  assert.equal(effects !== undefined, true);
+  assert.equal(effects.localErrors, false);
+  assert.equal(effects.nativeErrors.length, 0, "infallible native bodies do not manufacture a rejection channel");
+});
+
+test("multiple JS Promise inputs contribute one uniform rejection effect", () => {
+  const context = analyzeRustErrorEffects(`
+    export async function both(first: Promise<number>, second: Promise<string>): Promise<number> {
+      const one = await first;
+      const two = await second;
       return one + two.length;
     }
   `);

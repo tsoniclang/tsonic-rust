@@ -6,12 +6,67 @@ import { rustBorrowedStringTypeParameterNames } from "../../../dist/policy/types
 import {
   mergeProviderDeclarationIdentities,
   resolveSelectedProviderDeclaration,
+  selectedCallProviderDeclaration,
+  selectedCallProviderDomain,
 } from "../../../dist/policy/identities/selected-source.js";
 import { rustCallScopedElisionLifetime } from "../../../dist/target-model/lifetimes/index.js";
 import { selectRustCheckedOperator } from "../../../dist/analysis/operations/members/operators.js";
 import { rustOptionTargetType, rustAbsenceTargetType } from "../../../dist/target-model/types/index.js";
+import { createRustProviderPackage } from "../../../dist/public/provider.js";
+import { rustCallableTargetType } from "../../../dist/target-model/types/carriers/callables.js";
+import { analyzeRustErrorEffects } from "../../helpers/rust-error-analysis.mjs";
 
 const unit = { kind: "tuple", elements: [] };
+
+test("provider invocation domains preserve aliases and distinguish returned callable signatures", () => {
+  const integer = { kind: "source-primitive", name: "int32" };
+  const callable = { kind: "function", id: "fixture.callback", parameters: [{ name: "value", type: integer }], returnType: integer };
+  const provider = createRustProviderPackage({ id: "callable-domains", version: "1.0.0", displayName: "Callable domains",
+    crates: [], modules: [{ moduleSpecifier: "test:callable-domains", providerModuleId: "test.callable-domains", exports: [{
+      id: "fixture.makeCallback", name: "makeCallback", kind: "function", signatures: [{
+        id: "fixture.makeCallback()", parameters: [], returnType: callable,
+      }],
+    }, { id: "fixture.exported", name: "exported", kind: "value", type: { ...callable, id: "fixture.exported.call" } }] }],
+    operations: [{ exportId: "fixture.makeCallback", operationKind: "method",
+      target: { form: "call", path: "fixture::make_callback" }, parameterCarriers: [],
+      resultCarrier: rustCallableTargetType([integer], integer) }, {
+      exportId: "fixture.exported", operationKind: "method", target: { form: "call", path: "fixture::exported" },
+      parameterCarriers: [integer], resultCarrier: integer,
+    }],
+  });
+  const context = analyzeRustErrorEffects(`
+    import { makeCallback, exported } from "test:callable-domains";
+    import type { int32 } from "@tsonic/core/types.js";
+    export function run(value: int32): int32 {
+      const factory = makeCallback;
+      const direct = makeCallback();
+      const callback = factory();
+      const alias = callback;
+      return direct(value) + callback(value) + alias(value) + exported(value);
+    }
+  `, { packages: [provider] });
+  const expected = new Map([["makeCallback", "operation"], ["factory", "operation"], ["direct", "value"],
+    ["callback", "value"], ["alias", "value"], ["exported", "operation"]]);
+  let visited = 0;
+  for (const node of context.sourceStorage.nodes) {
+    if (!context.ast.is.IsCallExpression(node)) continue;
+    const name = context.ast.text(context.ast.as.AsCallExpression(node)?.Expression);
+    if (!expected.has(name)) continue;
+    const semantics = context.semanticsFor(node);
+    const source = semantics.operations.call(node);
+    assert.equal(source !== undefined, true, name);
+    const request = { source, sourceSelectedDeclaration: semantics.declarations.signatureDeclaration(source.selectedSignature) };
+    const selected = selectedCallProviderDeclaration(request, context);
+    assert.equal(selected.kind, "selected", name);
+    assert.equal(selectedCallProviderDomain(request, selected.identity, context), expected.get(name), name);
+    assert.equal(selectedCallProviderDomain(request, { ...selected.identity, signatureId: "foreign.signature" }, context), undefined,
+      `${name}: a foreign signature never supplies operation evidence`);
+    assert.equal(selectedCallProviderDomain(request, { ...selected.identity, providerVersion: "different" }, context), undefined,
+      `${name}: a foreign declaration document never supplies operation evidence`);
+    visited += 1;
+  }
+  assert.equal(visited, expected.size, "every original checked direct, aliased and returned-callable use is observed");
+});
 
 test("provider optional argument inference preserves native carriers and absence", () => {
   const int64 = { kind: "source-primitive", name: "int64" };
