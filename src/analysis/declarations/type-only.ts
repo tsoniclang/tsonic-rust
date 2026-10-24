@@ -1,7 +1,10 @@
 import type { Node, SourceFile } from "@tsonic/tsts";
-import { sourceClassFieldIsTypeOnly, VariableDeclarationList_Declarations, VariableStatement_DeclarationList } from "@tsonic/target-api/source";
+import { sourceClassFieldIsTypeOnly, VariableDeclarationList_Declarations, VariableStatement_DeclarationList, type SourceDeclarationUse } from "@tsonic/target-api/source";
 import type { RustFactWalk } from "../program/walk.js";
-import { appendRustDiagnostic } from "../program/walk.js";
+import { appendRustDiagnostic, rustOperationContext } from "../program/walk.js";
+import { resolveSelectedProviderDeclaration } from "../../policy/identities/selected-source.js";
+import { selectedRustProviderGlobal } from "../../policy/identities/provider-globals.js";
+import { selectRustProviderSourceReceiver } from "../operations/members/source-qualifiers.js";
 
 export function recordRustTypeOnlyDeclarations(walk: RustFactWalk, sourceFiles: readonly SourceFile[]): void {
   walk.context.records.typeOnlyDeclarations.finalize(walk, sourceFiles);
@@ -40,19 +43,26 @@ export function rustAmbientVariableDeclarations(walk: RustFactWalk, statement: N
 }
 
 export function checkRustAmbientVariableUses(walk: RustFactWalk, declaration: Node): void {
-  const { ast, source } = walk.context;
-  const belongsToErasedMember = (node: Node): boolean => {
-    for (let current: Node | undefined = node; current !== undefined; current = ast.parent(current)) {
-      if (ast.kindName(current) === "KindPropertySignature" || sourceClassFieldIsTypeOnly(ast, current)) return true;
-      if (ast.is.IsSourceFile(current)) return false;
-    }
-    return false;
-  };
-  for (const use of source.navigation.declarationUses(declaration)) {
-    if (!walk.context.isNativeNode(use.reference)) continue;
-    if (use.kind === "source-linkage" || use.kind === "type-only" || belongsToErasedMember(use.reference)) continue;
-    appendRustDiagnostic(walk, "RUST_AMBIENT_VALUE_IMPLEMENTATION_MISSING",
-      "A runtime read of an authored ambient variable requires an exact native implementation.", use.reference,
-      ["target.capability=rust.ambient-value.implementation"]);
+  for (const use of walk.context.source.navigation.declarationUses(declaration)) {
+    checkRustAmbientVariableUse(walk, declaration, use);
   }
+}
+
+export function checkRustAmbientVariableUse(walk: RustFactWalk, declaration: Node, use: SourceDeclarationUse): void {
+  if (!walk.context.isNativeNode(use.reference) || walk.rejectedExpressions.has(use.reference) ||
+    use.kind === "source-linkage" || use.kind === "type-only") return;
+  const { ast } = walk.context;
+  for (let current: Node | undefined = use.reference; current !== undefined; current = ast.parent(current)) {
+    if (ast.kindName(current) === "KindPropertySignature" || sourceClassFieldIsTypeOnly(ast, current)) return;
+    if (ast.is.IsSourceFile(current)) break;
+  }
+  const provider = resolveSelectedProviderDeclaration(walk.context, declaration,
+    [{ subject: use.reference, precision: "exact" }]);
+  if (provider.kind !== "missing" || selectedRustProviderGlobal(declaration, walk.context,
+    walk.operationOptions.providerExports) !== undefined) return;
+  if (use.throughMember && selectRustProviderSourceReceiver(use.reference, undefined,
+    rustOperationContext(walk, use.reference), walk.operationOptions)?.kind === "compile-time") return;
+  appendRustDiagnostic(walk, "RUST_AMBIENT_VALUE_IMPLEMENTATION_MISSING",
+    "A runtime read of an authored ambient variable requires an exact native implementation.", use.reference,
+    ["target.capability=rust.ambient-value.implementation"]);
 }

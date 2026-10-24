@@ -3,6 +3,9 @@ import { assertRustInheritedRecordConflict } from "../../../helpers/records.mjs"
 import test from "node:test";
 import { createRustProgramRecordBuilder } from "../../../../dist/analysis/program/records/create.js";
 import { isRustUnitCarrier, rustCallableTargetType } from "../../../../dist/target-model/types/index.js";
+import { checkRustAmbientVariableUse } from "../../../../dist/analysis/declarations/type-only.js";
+import { compileRust } from "../../../helpers/rust-session.mjs";
+import { createTargetSourceProgram } from "@tsonic/target-api/source";
 
 const integer = { kind: "source-primitive", name: "int32" };
 const text = { kind: "target-named", id: "rust.std.String" };
@@ -229,17 +232,18 @@ function ambientFixture(builder, { malformed = false, runtime = false, nativeRef
   const reference = { kind: "KindIdentifier", parent: file };
   const events = [];
   const ast = { statements: () => [statement], parent: node => node.parent, kindName: node => node?.kind,
+    getSourceFile: () => file,
     hasModifierKind: () => true, is: { IsVariableStatement: node => node === statement,
-      IsVariableDeclarationList: node => node === list, IsSourceFile: node => node === file },
+      IsVariableDeclaration: node => node === declaration, IsVariableDeclarationList: node => node === list, IsSourceFile: node => node === file },
     as: { AsVariableStatement: () => ({ DeclarationList: list }), AsVariableDeclarationList: () => list } };
   const walk = { context: { requiredRecords: [], ast, records: builder, diagnostics: [], typeFamilies: { families: () => [] },
     isNativeNode: node => nativeReference && node === reference,
-    source: { navigation: { declarationUses(subject) {
+    source: { sourceFacts: { getFact: () => undefined }, navigation: { declarationUses(subject) {
       assert.equal(subject === declaration, true);
       events.push(builder.typeOnlyDeclaration.get(statement)?.reason);
       assert.equal(builder.typeOnlyDeclaration.get(declaration) === undefined, true, "use diagnostics precede declaration admission");
       return runtime ? [{ kind: "first-class", reference }] : [{ kind: "type-only", reference }];
-    } } } }, rejectedExpressions: new WeakSet(), resolving: new Set() };
+    } } } }, operationOptions: { providerExports: [] }, rejectedExpressions: new WeakSet(), resolving: new Set() };
   return { file, statement, declaration, reference, walk, events, list };
 }
 
@@ -294,6 +298,119 @@ test("ambient use validation reads the same exact native reference admission bef
     if (nativeReference) assert.equal(selected.walk.context.diagnostics[0].code, "RUST_AMBIENT_VALUE_IMPLEMENTATION_MISSING",
       "the active native read retains the original precise diagnostic");
   }
+});
+
+test("one demanded ambient reference shares the native-use owner without revisiting a declaration inventory", () => {
+  const builder = createRustProgramRecordBuilder();
+  const selected = ambientFixture(builder, { runtime: true });
+  selected.walk.context.source.navigation.declarationUses = () => assert.fail("one exact source use never scans another declaration or use");
+  const use = { kind: "first-class", role: "return", reference: selected.reference, throughMember: false, captured: false };
+  checkRustAmbientVariableUse(selected.walk, selected.declaration, use);
+  checkRustAmbientVariableUse(selected.walk, selected.declaration, use);
+  assert.equal(selected.walk.context.diagnostics.length, 1, "repeated reads retain the one original implementation refusal");
+  assert.equal(selected.walk.context.diagnostics[0].code, "RUST_AMBIENT_VALUE_IMPLEMENTATION_MISSING");
+  assert.equal(selected.walk.context.diagnostics[0].sourceNode === selected.reference, true, "the exact demanded occurrence owns the refusal");
+  assert.equal(selected.walk.rejectedExpressions.has(selected.reference), true, "no later raw carrier is admitted for that refused value");
+  assert.equal(builder.typeOnlyDeclaration.get(selected.statement) === undefined &&
+    builder.typeOnlyDeclaration.get(selected.declaration) === undefined, true, "a checked dependency read does not invent emitted statement or declaration facts");
+});
+
+test("the exact ambient-use owner preserves type-only, linkage, erased-member and dormant references", () => {
+  for (const kind of ["type-only", "source-linkage", "first-class"]) {
+    for (const nativeReference of [false, true]) {
+      const selected = ambientFixture(createRustProgramRecordBuilder(), { nativeReference });
+      if (kind === "first-class" && nativeReference) selected.reference.parent = { kind: "KindPropertySignature", parent: selected.file };
+      selected.walk.context.source.sourceFacts.getFact = () => assert.fail("erased source uses never request a provider or native implementation");
+      checkRustAmbientVariableUse(selected.walk, selected.declaration,
+        { kind, role: kind === "first-class" ? "value" : kind, reference: selected.reference, throughMember: false, captured: false });
+      assert.equal(selected.walk.context.diagnostics.length, 0, `${kind}/${nativeReference}: no native value obligation`);
+      assert.equal(selected.walk.rejectedExpressions.has(selected.reference), false, `${kind}/${nativeReference}: the unrelated source remains admitted`);
+    }
+  }
+});
+
+for (const surfaces of [[], ["js"]]) {
+  for (const authored of ["export declare const external: number;", "export const external: number;"]) {
+    for (const demand of ["runtime", "type-only", "dormant"]) {
+      test(`checked dependency variable keeps exact ${demand} implementation admission in ${surfaces[0] ?? "native"}: ${authored}`, () => {
+        const body = demand === "runtime"
+          ? 'import { external } from "./values.js"; export function read(): number { return external; }'
+          : demand === "type-only"
+            ? 'import type { external } from "./values.js"; export function read(value: typeof external): number { return value; }'
+            : 'import { external } from "./values.js"; export function read(value: number): number { function hidden(): number { return external; } return value; }';
+        const { source, result } = compileRust({ surfaces, files: { "index.ts": body, "values.d.ts": authored } });
+        if (demand === "runtime") {
+          assert.deepEqual(result.diagnostics.map(issue => issue.code), ["RUST_AMBIENT_VALUE_IMPLEMENTATION_MISSING"],
+            "the unimplemented dependency is refused once before physical source binding or planning");
+          const ast = createTargetSourceProgram(source).ast;
+          const issue = result.diagnostics[0];
+          assert.equal(issue.sourceNode !== undefined && ast.text(issue.sourceNode) === "external" &&
+            ast.getFileName(ast.getSourceFile(issue.sourceNode)).endsWith("/index.ts"), true,
+          "the precise diagnostic belongs to the original demanded checked occurrence, not the declaration file");
+          assert.equal(result.program === undefined && result.plan === undefined && result.artifacts.length === 0, true,
+            "no unsupported native value is materialized or published");
+        } else {
+          assert.deepEqual(result.diagnostics.map(issue => issue.code), [], "the same dependency adds no erased native obligation");
+          assert.equal(result.program !== undefined && result.plan !== undefined && result.artifacts.length !== 0, true,
+            "the actual remaining native program is still admitted");
+        }
+      });
+    }
+  }
+  test(`a real project variable retains its actual implementation in ${surfaces[0] ?? "native"}`, () => {
+    const { result } = compileRust({ surfaces, files: {
+      "index.ts": 'import { external } from "./values.js"; export function read(): number { return external; }',
+      "values.ts": "export const external: number = 7;",
+    } });
+    assert.deepEqual(result.diagnostics.map(issue => issue.code), [], "a checked project value is not an unimplemented ambient reference");
+    assert.equal(result.program !== undefined && result.plan !== undefined && result.artifacts.length !== 0, true,
+      "the original project declaration and read retain native publication");
+  });
+  for (const demand of ["runtime", "type-only", "dormant"]) {
+    test(`namespace dependency variable retains exact ${demand} implementation admission in ${surfaces[0] ?? "native"}`, () => {
+      const body = demand === "runtime"
+        ? 'import * as values from "./values.js"; export function read(): number { return values.external; }'
+        : demand === "type-only"
+          ? 'import type * as values from "./values.js"; export function read(value: typeof values.external): number { return value; }'
+          : 'import * as values from "./values.js"; export function read(value: number): number { function hidden(): number { return values.external; } return value; }';
+      const { result } = compileRust({ surfaces, files: { "index.ts": body, "values.d.ts": "export declare const external: number;" } });
+      assert.deepEqual(result.diagnostics.map(issue => issue.code),
+        demand === "runtime" ? ["RUST_AMBIENT_VALUE_IMPLEMENTATION_MISSING"] : [],
+        "qualified declaration identity has the same native-use obligation, not a member-name or namespace heuristic");
+      assert.equal(demand === "runtime"
+        ? result.program === undefined && result.plan === undefined && result.artifacts.length === 0
+        : result.program !== undefined && result.plan !== undefined && result.artifacts.length !== 0, true,
+      "only the actual unimplemented runtime occurrence prevents publication");
+    });
+  }
+  test(`canonical source absence stays independent of ambient variable storage in ${surfaces[0] ?? "native"}`, () => {
+    const { result } = compileRust({ surfaces, files: {
+      "index.ts": "export function absent(): undefined { return undefined; } export function nil(): null { return null; }",
+    } });
+    assert.deepEqual(result.diagnostics.map(issue => issue.code), [], "source absence retains its existing native owner");
+    assert.equal(result.program !== undefined && result.plan !== undefined && result.artifacts.length !== 0, true,
+      "no authored variable or native distinction between null and undefined is fabricated");
+  });
+}
+
+test("actual SDK provider qualifiers retain native operation admission without an authored variable implementation", () => {
+  const { result } = compileRust({ surfaces: ["js"], files: {
+    "index.ts": "export function read(value: number): number { return Math.abs(value); }",
+  } });
+  assert.deepEqual(result.diagnostics.map(issue => issue.code), [], "the selected SDK provider, not an invented ambient binding, owns Math.abs");
+  assert.equal(result.program !== undefined && result.plan !== undefined && result.artifacts.length !== 0, true,
+    "the existing native provider operation stays available");
+});
+
+test("an authored provider-name lookalike does not acquire a native implementation", () => {
+  const { result } = compileRust({ surfaces: ["js"], files: {
+    "index.ts": 'import { Math } from "./values.js"; export function read(value: number): number { return Math.abs(value); }',
+    "values.d.ts": "export declare const Math: { abs(value: number): number };",
+  } });
+  assert.equal(result.diagnostics.filter(issue => issue.code === "RUST_AMBIENT_VALUE_IMPLEMENTATION_MISSING").length, 1,
+    "actual checked provider identity is required; spelling and member shape are not proof");
+  assert.equal(result.program === undefined && result.plan === undefined && result.artifacts.length === 0, true,
+    "no unsupported ambient object is published as an SDK provider");
 });
 
 test("malformed ambient declarations retain the original early statement admission and invariant refusal", () => {
