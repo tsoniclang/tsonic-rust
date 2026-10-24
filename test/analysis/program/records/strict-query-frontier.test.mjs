@@ -82,7 +82,7 @@ test("identifier carrier waits for an actual callable owner without reconstructi
   assert.equal(records.sourceBinding.get(reference) === binding, true);
   assert.deepEqual([bindingWrites, moduleWrites, directWrites], [1, 0, 0]);
   const completed = finalizeRustCallableSignature(walk, declaration);
-  assert.equal(completed !== undefined, true);
+  assert.equal(completed.kind, "complete");
   assert.equal(records.sourceCallableReturn.get(declaration) === completed.result, true);
   recordPredeclaredNativeFunctionBindingFacts(walk, sourceFile);
   const module = records.moduleBinding.get(declaration);
@@ -246,10 +246,10 @@ test("default and explicit unit setter requests reuse a complete result instead 
       setter(...args) { admissions++; return records.sourceCallableReturns.setter(...args); } },
   } } };
   const first = finalizeRustCallableSignature(walk, declaration);
-  assert.equal(first !== undefined, true);
+  assert.equal(first.kind, "complete");
   assert.equal(finalizeRustCallableSignature(walk, declaration) === first, true);
   const explicit = finalizeRustCallableSignature(walk, declaration, { selectedReturn: rustUnitTargetType() });
-  assert.equal(explicit?.result === first.result, true);
+  assert.equal(explicit.kind === "complete" && explicit.result === first.result, true);
   assert.equal(finalizeRustCallableSignature(walk, declaration, { selectedReturn: rustUnitTargetType() }) === explicit, true);
   assert.equal(admissions, 1);
   assert.throws(() => records.sourceCallableReturns.setter(declaration), /Duplicate Rust semantic plan/u);

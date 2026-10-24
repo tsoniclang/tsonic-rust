@@ -248,7 +248,7 @@ export function resolveFunctionExpressionCarrier(
   }
   const finalizedReturn = walk.context.records.sourceCallableReturn.get(expression)?.returnCarrier;
   const resultInference = selectedResult.kind === "opaque" && selectedResult.id === "tsonic.rust.infer"
-    ? completedSignature !== undefined ? { kind: "complete" as const, carrier: completedSignature.logicalReturn }
+    ? completedSignature.kind === "complete" ? { kind: "complete" as const, carrier: completedSignature.logicalReturn }
     : selectRustInferredReturn(walk, expression, resolveRustTargetTypeRef(Node_Type(ast, expression) ??
         (ast.kindName(body) === KindBlock ? selectedSourceCallableReturn(walk, expression) : undefined),
       rustResolutionContext(walk, expression), walk.operationOptions))
@@ -324,7 +324,8 @@ export function resolveFunctionExpressionCarrier(
   ];
   const valueResult = selectedValueResult ?? bodyCarrier;
   if (finalizeRustCallableSignature(walk, expression,
-    { ...signatureRequest, selectedReturn: generator?.resultCarrier ?? completedSignature?.logicalReturn ?? selectedResultExpectation }) === undefined) return undefined;
+    { ...signatureRequest, selectedReturn: generator?.resultCarrier ??
+      (completedSignature.kind === "complete" ? completedSignature.logicalReturn : undefined) ?? selectedResultExpectation }).kind !== "complete") return undefined;
   const captures = collectRustLexicalCaptures(walk, expression, [...parameters.flatMap(parameter => {
     const initializer = parameter === undefined ? undefined : Node_Initializer(ast, parameter);
     return initializer === undefined ? [] : [initializer];

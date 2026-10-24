@@ -7,8 +7,9 @@ import { classifyCarrierRequirements } from "../../../dist/analysis/declarations
 import { emptyRustTypeDefinitions } from "../../../dist/target-model/types/source-union-definitions.js";
 import { createRustProjectProjectionRequirementCollector, createRustProjectProjectionImplementationIndex } from "../../../dist/analysis/declarations/project-projection-requirements.js";
 
-const base = { declaration: {}, fileName: "/source.ts", sourceName: "Base", kind: "interface" };
-const box = { declaration: {}, fileName: "/source.ts", sourceName: "Box", kind: "interface" };
+const base = { declaration: {}, fileName: "/source.ts", sourceName: "Base", kind: "interface", genericParameters: [] };
+const box = { declaration: {}, fileName: "/source.ts", sourceName: "Box", kind: "interface",
+  genericParameters: [{ kind: "type", identity: "Value", name: "Value" }] };
 const source = rustSourceTypeCarrier(base.fileName, base.sourceName, "object", []);
 const target = type => rustSourceTypeCarrier(box.fileName, box.sourceName, "object", [{ kind: "type", type }]);
 const numberType = { kind: "source-primitive", name: "float64" };

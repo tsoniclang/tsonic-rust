@@ -413,7 +413,8 @@ export function analyzeRustProgram(context: RustAnalysisContext, outputType: "bi
     for (const statement of rustSourceTypeDeclarations(sourceFile, ast, context.isNativeNode)) {
       const kind = ast.kindName(statement);
       if (kind === KindFunctionDeclaration) {
-        if (finalizeRustCallableSignature(walk, statement) === undefined) refuseRustUnresolvedParameterCarriers(walk, statement);
+        const signature = finalizeRustCallableSignature(walk, statement);
+        if (signature.kind === "unresolved") refuseRustUnresolvedParameterCarriers(walk, statement, signature);
       } else if (kind === "KindClassDeclaration" || kind === "KindClassExpression") {
         recordClassSignatureFacts(walk, statement);
       }

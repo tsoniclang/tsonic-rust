@@ -8,6 +8,8 @@ import { rustPascalCaseIdentifier } from "../../../target-model/names/identifier
 import type { RustStructuralMethodPayload } from "../../../target-model/records/structural-shapes.js";
 import { rustNamedTargetType } from "../../../target-model/types/carriers/native.js";
 import { rustTypeGenericArguments } from "../../../target-model/types/generic-arguments.js";
+import { rustTargetGenericReferences } from "../../../target-model/types/carriers/generic-references.js";
+import { rustLifetimeKey } from "../../../target-model/lifetimes/index.js";
 
 export function selectRustStructuralMethodContextCarrier(
   payload: RustStructuralMethodPayload, receiverFieldIdentities: readonly boolean[],
@@ -74,7 +76,16 @@ export function selectRustStructuralEmission(input: RustStructuralEmissionPolicy
     if (!valid || bases === undefined) return reject("RUST_STRUCTURAL_CONSTRUCTOR_TYPE_MISSING",
       "A constructor interface requires exact native dispatch signatures and property storage.", "rust.class-value.constructor");
     const lifetimes = definition.genericParameters.flatMap(parameter => parameter.kind === "lifetime" ? [parameter.lifetime] : []);
-    return { kind: "selected", value: Object.freeze({ dispatch: Object.freeze({ members: Object.freeze(members), lifetime: lifetimes.length === 1 ? lifetimes[0] : undefined }),
+    const references = rustTargetGenericReferences({ kind: "tuple", elements: [
+      ...members.flatMap(member => [...member.parameters, member.result]), ...bases,
+      ...input.genericRequirements.associatedTypes.flatMap(requirement => [
+        requirement.carrier, ...(requirement.output === undefined ? [] : [requirement.output]),
+      ]),
+    ] });
+    const genericParameterIndices = Object.freeze(definition.stateGenericParameters.flatMap((parameter, index) =>
+      parameter.kind !== "lifetime" || references.lifetimeIdentities.includes(rustLifetimeKey(parameter.lifetime)) ? [index] : []));
+    return { kind: "selected", value: Object.freeze({ dispatch: Object.freeze({ members: Object.freeze(members),
+      genericParameterIndices, lifetime: lifetimes.length === 1 ? lifetimes[0] : undefined }),
       bases, fields: Object.freeze([]), derives: Object.freeze([]) }) };
   }
   const fields: RustStructuralFieldEmission[] = [];

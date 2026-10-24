@@ -69,11 +69,11 @@ test("an incompatible contextual Promise cannot publish an environment and a lat
   const future = input.asynchronous.futureCarrier;
   assert.equal(future.genericArguments.length, 1, "the JS Promise carrier has one output argument");
   const incompatible = rustJsPromiseTargetType(rustStringTargetType());
-  assert.equal(finalizeRustCallableSignature(input.current, input.declaration, { contextualResult: incompatible }) === undefined, true);
+  assert.equal(finalizeRustCallableSignature(input.current, input.declaration, { contextualResult: incompatible }).kind, "unresolved");
   assert.equal(input.current.context.diagnostics.length, 1);
   assert.equal(input.current.context.diagnostics[0].code, "RUST_ASYNC_CONTEXTUAL_PROMISE_NOT_CLOSED");
   assertUnpublished(input);
-  assert.equal(finalizeRustCallableSignature(input.current, input.declaration, { contextualResult: future }) !== undefined, true);
+  assert.equal(finalizeRustCallableSignature(input.current, input.declaration, { contextualResult: future }).kind, "complete");
   const selected = input.current.context.records.asyncFunction.get(input.declaration);
   const retained = input.current.context.records.retainedEnvironment.get(input.declaration);
   assert.equal(selected?.kind, "js-promise");
@@ -129,11 +129,11 @@ test("a scoped contextual Promise retry publishes only its original selected lif
   const future = input.asynchronous.futureCarrier;
   assert.equal(future.genericArguments.length, 1, "the scoped Promise still has only its exact output argument");
   assert.equal(finalizeRustCallableSignature(input.current, input.declaration,
-    { contextualResult: rustJsPromiseTargetType(rustStringTargetType()) }) === undefined, true);
+    { contextualResult: rustJsPromiseTargetType(rustStringTargetType()) }).kind, "unresolved");
   assert.equal(input.current.context.diagnostics.length, 1);
   assert.equal(input.current.context.diagnostics[0].code, "RUST_ASYNC_CONTEXTUAL_PROMISE_NOT_CLOSED");
   assertUnpublished(input);
-  assert.equal(finalizeRustCallableSignature(input.current, input.declaration, { contextualResult: future }) !== undefined, true);
+  assert.equal(finalizeRustCallableSignature(input.current, input.declaration, { contextualResult: future }).kind, "complete");
   assert.equal(input.current.context.records.asyncFunction.get(input.declaration)?.kind, "js-promise");
   const retained = input.current.context.records.retainedEnvironment.get(input.declaration);
   assert.equal(retained !== undefined, true);
