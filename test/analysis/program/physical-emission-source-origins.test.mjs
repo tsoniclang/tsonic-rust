@@ -231,7 +231,8 @@ test("equal-native callable members preserve every distinct original producer an
 function verifyConstructorOrigins(program, observations) {
   const contexts = program.physicalEmissionContexts.contexts.filter(context => context.use.role === "constructor-layer");
   const rows = contexts.flatMap(context => context.sourceOrigins.flatMap(origins => {
-    assert.equal(origins.kind, "resolved", "a checked source construction retains its original region selection");
+    assert.equal(origins.kind, "resolved", "a checked source construction retains its original region selection: " +
+      (origins.kind === "unavailable" ? origins.reason : origins.kind));
     return origins.alternatives.map(origin => ({context, origins, origin}));
   }));
   assert.equal(rows.length > 0, true, "real constructor and instance-initializer provider operations retain source associations");

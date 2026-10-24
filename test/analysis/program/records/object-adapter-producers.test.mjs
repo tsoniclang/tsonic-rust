@@ -147,9 +147,9 @@ test("contradictory copied-method candidates reject before publishing any new ba
   assert.equal(first.walk.context.diagnostics.length, 0);
 });
 
-const checkedAdapters = createCompilerSessionFromFiles({ currentDirectory: "/", compilerOptions: {
+const checkedAdapters = createCompilerSessionFromFiles({ currentDirectory: "/project", compilerOptions: {
   strict: true, target: "es2022", module: "esnext",
-}, files: { "/contract.ts": `
+}, files: { "/project/contract.ts": `
   interface Contract { value(): number; }
   interface Other { value(): number; }
   class Concrete implements Contract { value(): number { return 1; } }
@@ -158,7 +158,7 @@ const checkedAdapters = createCompilerSessionFromFiles({ currentDirectory: "/", 
 assert.equal(checkedAdapters.diagnostics.length, 0, formatDiagnostics(checkedAdapters.diagnostics));
 const adapterSource = createTargetSourceProgram(checkedAdapters);
 const [contractOwner, otherOwner, concreteOwner, replacementOwner] = adapterSource.ast.statements(
-  checkedAdapters.getSourceFile("/contract.ts"));
+  checkedAdapters.getSourceFile("/project/contract.ts"));
 const contractMethod = adapterSource.ast.members(contractOwner)[0];
 const otherMethod = adapterSource.ast.members(otherOwner)[0];
 const implementationMethod = adapterSource.ast.members(concreteOwner)[0];

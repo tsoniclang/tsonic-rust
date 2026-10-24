@@ -148,7 +148,7 @@ test("borrowed structural reads require exact plain stored fields, not dispatch 
         classValues: { instanceViewImplementations: [], constructorViewImplementations: [] },
         records: createRustRecordFixture(), frozenDataWrites: { receiverFor: () => undefined },
       };
-      analyzeRustStoredFields(program, [], builder.storedFields);
+      analyzeRustStoredFields(program, [], builder.storedFieldPlans);
     }
     return rustStoredObjectFieldSupportsBorrowedRead("structural-object", carrier, 0,
       { input: { program: { records: builder.readers } } });
