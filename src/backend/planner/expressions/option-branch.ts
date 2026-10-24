@@ -29,10 +29,8 @@ export function planRustOptionBranch(option: RustExpr, carrier: TargetTypeRef, p
     // A statement-bearing subject is bound first: a block as match scrutinee is clippy::blocks_in_conditions.
     const inputName = option.kind === "block" && context.syntheticNames !== undefined
       ? allocateRustSyntheticName(context.syntheticNames, "optional_input") : undefined;
-    const branch: RustExpr = { kind: "match", expression: inputName === undefined ? option : { kind: "path", path: inputName }, arms: [
-      { pattern: { kind: "tuple-variant", path: "Some", elements: [{ kind: "binding", name: presentName }] }, expression: present },
-      { pattern: { kind: "path", path: "None" }, expression: absent },
-    ] };
+    const branch = planRustNativeOptionBranch(inputName === undefined ? option : { kind: "path", path: inputName },
+      presentName, present, absent);
     return inputName === undefined ? branch : rustValueBlock([{ name: inputName, value: option }], branch);
   }
   if (storage?.kind !== "custom" || context.syntheticNames === undefined)
@@ -47,6 +45,17 @@ export function planRustOptionBranch(option: RustExpr, carrier: TargetTypeRef, p
     whenFalse: present.kind === "path" && present.path === presentName && (present.genericArguments?.length ?? 0) === 0
       ? payload : rustValueBlock([{ name: presentName, value: payload }], present),
   });
+}
+
+export function planRustNativeOptionBranch(option: RustExpr, presentName: string,
+  present: RustExpr, absent: RustExpr): RustExpr {
+  const pattern = { kind: "tuple-variant" as const, path: "Some", elements: [{ kind: "binding" as const, name: presentName }] };
+  return absent.kind === "tuple-literal" && absent.elements.length === 0
+    ? { kind: "if-let", pattern, expression: option, whenTrue: present }
+    : { kind: "match", expression: option, arms: [
+      { pattern, expression: present },
+      { pattern: { kind: "path", path: "None" }, expression: absent },
+    ] };
 }
 
 // The pre-rewrite literal rules (target-ast/inspection/literal-defaults.ts): a literal equal to its type's Default

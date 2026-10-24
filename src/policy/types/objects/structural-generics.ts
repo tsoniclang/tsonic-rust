@@ -3,12 +3,13 @@ import type { RustLifetimeRef } from "../../../target-model/lifetimes/index.js";
 import { closedMetadataKey } from "../../../target-model/metadata/closed-data.js";
 import { mapRustTargetTypes } from "../../../target-model/types/carriers/substitution.js";
 import { rustTargetGenericReferences, rustTargetTypeParameterIdentities } from "../../../target-model/types/carriers/generic-references.js";
-import { rustStructuralObjectCarrierValue } from "../../../target-model/types/carriers/source-types.js";
+import { rustStructuralObjectCarrierValue, rustStructuralObjectTargetType } from "../../../target-model/types/carriers/source-types.js";
 import { rustCallableProtocol, rustCallableTargetType } from "../../../target-model/types/carriers/callables.js";
 import { rustOwnedStorageChild } from "../storage/owned-storage.js";
 
 export interface RustStructuralGenericCarrierSelection {
   readonly carrier: TargetTypeRef;
+  readonly dispatchLifetime: RustLifetimeRef | undefined;
   readonly nestedCarriers: readonly {
     readonly source: TargetTypeRef;
     readonly carrier: TargetTypeRef;
@@ -30,7 +31,9 @@ export function selectRustStructuralDispatchArguments(
   return Object.freeze(selected);
 }
 
-export function rustStructuralGenericCarrier(carrier: TargetTypeRef): RustStructuralGenericCarrierSelection {
+export function rustStructuralGenericCarrier(
+  carrier: TargetTypeRef, storage: "fields" | "dispatch",
+): RustStructuralGenericCarrierSelection {
   const references = rustTargetGenericReferences(carrier);
   const used = new Set(references.typeParameters.map(parameter => parameter.name));
   const lifetimeNames = new Set(references.lifetimes.map(parameter => parameter.name));
@@ -44,12 +47,24 @@ export function rustStructuralGenericCarrier(carrier: TargetTypeRef): RustStruct
   };
   const parameters = new Map<string, TargetTypeRef>();
   const nestedCarriers: { readonly source: TargetTypeRef; readonly carrier: TargetTypeRef }[] = [];
-  const selected = mapRustTargetTypes(carrier, (type, source) => {
+  const structural = storage === "dispatch" ? rustStructuralObjectCarrierValue(carrier) : undefined;
+  let objectLifetime: RustLifetimeRef | undefined;
+  const methodCarrier = (type: TargetTypeRef): TargetTypeRef => {
+    const callable = rustCallableProtocol(type);
+    if (callable?.lifetime?.kind !== "placeholder") return type;
+    objectLifetime ??= storageLifetime(lifetimeNames);
+    return rustCallableTargetType(callable.parameters, callable.result, objectLifetime, callable.error);
+  };
+  const storageCarrier = structural === undefined ? carrier : rustStructuralObjectTargetType(structural.ownerFileName,
+    structural.fields.map(field => field.method !== true ? field : Object.freeze({ ...field, type: methodCarrier(field.type) })),
+    structural.representation, structural.construction === undefined ? undefined : methodCarrier(structural.construction),
+    structural.bases, structural.implementation);
+  const selected = mapRustTargetTypes(storageCarrier, (type, source) => {
     const callable = rustCallableProtocol(type);
     if (callable?.lifetime?.kind === "placeholder") {
       type = rustCallableTargetType(callable.parameters, callable.result, storageLifetime(lifetimeNames), callable.error);
     }
-    if (source !== carrier && rustStructuralObjectCarrierValue(source) !== undefined) {
+    if (source !== storageCarrier && rustStructuralObjectCarrierValue(source) !== undefined) {
       nestedCarriers.push(Object.freeze({ source, carrier: type }));
     }
     if (!(type.kind === "associated-type" || type.kind === "type-parameter" && type.optionalStorageValue !== undefined) ||
@@ -66,6 +81,6 @@ export function rustStructuralGenericCarrier(carrier: TargetTypeRef): RustStruct
     return parameter;
   }, rustOwnedStorageChild);
   const transformed = parameters.size !== 0 || lifetimeCount !== 0;
-  return Object.freeze({ carrier: transformed ? selected : carrier,
+  return Object.freeze({ carrier: transformed ? selected : carrier, dispatchLifetime: objectLifetime,
     nestedCarriers: Object.freeze(transformed ? nestedCarriers : []) });
 }

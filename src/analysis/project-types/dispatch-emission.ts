@@ -18,7 +18,11 @@ export function analyzeRustProjectDispatchEmission(program: Omit<RustAnalysisPro
     if (view.declaration !== definition.declaration) continue;
     const shape = program.structuralShapes.definitionForCarrier(view.targetCarrier);
     if (shape === undefined) failTargetAnalysisInvariant("tsonic-rust", "An admitted structural supertrait requires its exact selected native shape.", definition.declaration);
-    const genericArguments = selectRustStructuralDispatchArguments(shape.genericArguments, objectLifetime);
+    const dispatch = program.records.structuralShapeEmission.get(shape)?.dispatch;
+    if (dispatch === undefined)
+      failTargetAnalysisInvariant("tsonic-rust", "An admitted structural supertrait requires its completed native generic membership.", definition.declaration);
+    const genericArguments = selectRustStructuralDispatchArguments(
+      dispatch.genericParameterIndices.map(index => shape.stateGenericArguments[index]!), objectLifetime);
     if (genericArguments === undefined) return Object.freeze([{
       code: "RUST_STRUCTURAL_SUPER_LIFETIME_UNRESOLVED", category: "error", source: "tsonic-rust", sourceNode: definition.declaration,
       message: "A structural supertrait requires a proven native object lifetime for its captured callable storage.",

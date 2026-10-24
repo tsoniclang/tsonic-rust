@@ -5,9 +5,11 @@ import { rustCallableProtocol, rustLocationTargetType, rustOptionTargetType, rus
 import { rustStructuralPropertyGetterStorageCarrier, rustStructuralPropertySetterStorageCarrier } from "./member-storage.js";
 import { rustRuntimeNativeMethodTargetType, rustRuntimeRecordFieldTargetType } from "../../../target-model/types/carriers/runtime-carriers.js";
 import { rustPascalCaseIdentifier } from "../../../target-model/names/identifiers.js";
-import type { RustStructuralMethodPayload } from "../../../target-model/records/structural-shapes.js";
+import type { RustStructuralMethodPayload, RustStructuralShapeDefinition } from "../../../target-model/records/structural-shapes.js";
 import { rustNamedTargetType } from "../../../target-model/types/carriers/native.js";
 import { rustTypeGenericArguments } from "../../../target-model/types/generic-arguments.js";
+import { rustTargetGenericReferences } from "../../../target-model/types/carriers/generic-references.js";
+import { rustLifetimeKey } from "../../../target-model/lifetimes/index.js";
 
 export function selectRustStructuralMethodContextCarrier(
   payload: RustStructuralMethodPayload, receiverFieldIdentities: readonly boolean[],
@@ -50,32 +52,21 @@ export function selectRustStructuralEmission(input: RustStructuralEmissionPolicy
   const { definition } = input;
   const reject = (code: string, message: string, capability: string): RustStructuralEmissionSelection => ({ kind: "unsupported", code, message, capability });
   if (definition.dispatchName !== undefined) {
-    const members: RustConstructorShapeEmission["members"][number][] = [];
-    const callable = (name: string, carrier: TargetTypeRef, construction: boolean): boolean => {
-      const protocol = rustCallableProtocol(carrier);
-      if (protocol === undefined) return false;
-      members.push(Object.freeze({ name, parameters: protocol.parameters, result: protocol.result,
-        selfMode: construction || definition.construction === undefined ? "rc" : "ref", field: undefined }));
-      return true;
-    };
-    let valid = definition.construction === undefined || callable(definition.construction.targetName, definition.construction.carrier, true);
-    for (const [index, field] of definition.fields.entries()) {
-      if (field.method) valid = callable(field.targetName, field.carrier, false) && valid;
-      else if (field.property === undefined) valid = false;
-      else {
-        members.push(Object.freeze({ name: field.property.getterTargetName, parameters: Object.freeze([]), result: field.carrier,
-          selfMode: field.property.selfMode, field: Object.freeze({ index, role: "getter" as const }) }));
-        if (field.property.setterTargetName !== undefined) members.push(Object.freeze({ name: field.property.setterTargetName,
-          parameters: Object.freeze([field.carrier]), result: rustUnitTargetType(), selfMode: field.property.selfMode,
-          field: Object.freeze({ index, role: "setter" as const }) }));
-      }
-    }
-    const bases = rustStructuralObjectCarrierValue(definition.carrier)?.bases;
-    if (!valid || bases === undefined) return reject("RUST_STRUCTURAL_CONSTRUCTOR_TYPE_MISSING",
+    const native = structuralDispatchSignature(definition);
+    const template = definition === input.template ? native : structuralDispatchSignature(input.template);
+    if (native === undefined || template === undefined) return reject("RUST_STRUCTURAL_CONSTRUCTOR_TYPE_MISSING",
       "A constructor interface requires exact native dispatch signatures and property storage.", "rust.class-value.constructor");
-    const lifetimes = definition.genericParameters.flatMap(parameter => parameter.kind === "lifetime" ? [parameter.lifetime] : []);
-    return { kind: "selected", value: Object.freeze({ dispatch: Object.freeze({ members: Object.freeze(members), lifetime: lifetimes.length === 1 ? lifetimes[0] : undefined }),
-      bases, fields: Object.freeze([]), derives: Object.freeze([]) }) };
+    const references = rustTargetGenericReferences({ kind: "tuple", elements: [
+      ...template.carriers, ...template.bases,
+      ...input.genericRequirements.associatedTypes.flatMap(requirement => [
+        requirement.carrier, ...(requirement.output === undefined ? [] : [requirement.output]),
+      ]),
+    ] });
+    const genericParameterIndices = Object.freeze(input.template.stateGenericParameters.flatMap((parameter, index) =>
+      parameter.kind !== "lifetime" || references.lifetimeIdentities.includes(rustLifetimeKey(parameter.lifetime)) ? [index] : []));
+    return { kind: "selected", value: Object.freeze({ dispatch: Object.freeze({ members: native.members,
+      genericParameterIndices, lifetime: definition.dispatchLifetime }),
+      bases: native.bases, fields: Object.freeze([]), derives: Object.freeze([]) }) };
   }
   const fields: RustStructuralFieldEmission[] = [];
   for (const field of definition.fields) {
@@ -114,4 +105,39 @@ export function selectRustStructuralEmission(input: RustStructuralEmissionPolicy
   if (input.copy) derives.push("Copy");
   if (input.default) derives.push("Default");
   return { kind: "selected", value: Object.freeze({ dispatch: undefined, bases: Object.freeze([]), fields: Object.freeze(fields), derives: Object.freeze(derives) }) };
+}
+
+export function structuralDispatchSignature(definition: RustStructuralShapeDefinition): {
+  readonly members: RustConstructorShapeEmission["members"];
+  readonly bases: readonly TargetTypeRef[];
+  readonly carriers: readonly TargetTypeRef[];
+} | undefined {
+  const members: RustConstructorShapeEmission["members"][number][] = [];
+  const carriers: TargetTypeRef[] = [];
+  const callable = (name: string, carrier: TargetTypeRef, construction: boolean): boolean => {
+    const protocol = rustCallableProtocol(carrier);
+    if (protocol === undefined) return false;
+    members.push(Object.freeze({ name, parameters: protocol.parameters, result: protocol.result,
+      selfMode: construction || definition.construction === undefined ? "rc" : "ref", field: undefined }));
+    carriers.push(...protocol.parameters, protocol.result);
+    if (protocol.error !== undefined) carriers.push(protocol.error);
+    return true;
+  };
+  if (definition.construction !== undefined && !callable(definition.construction.targetName, definition.construction.carrier, true))
+    return undefined;
+  for (const [index, field] of definition.fields.entries()) {
+    if (field.method) {
+      if (!callable(field.targetName, field.carrier, false)) return undefined;
+    } else {
+      if (field.property === undefined) return undefined;
+      members.push(Object.freeze({ name: field.property.getterTargetName, parameters: Object.freeze([]), result: field.carrier,
+        selfMode: field.property.selfMode, field: Object.freeze({ index, role: "getter" as const }) }));
+      if (field.property.setterTargetName !== undefined) members.push(Object.freeze({ name: field.property.setterTargetName,
+        parameters: Object.freeze([field.carrier]), result: rustUnitTargetType(), selfMode: field.property.selfMode,
+        field: Object.freeze({ index, role: "setter" as const }) }));
+      carriers.push(field.carrier, rustProgramErrorTargetType());
+    }
+  }
+  const bases = rustStructuralObjectCarrierValue(definition.carrier)?.bases;
+  return bases === undefined ? undefined : Object.freeze({ members: Object.freeze(members), bases, carriers: Object.freeze(carriers) });
 }

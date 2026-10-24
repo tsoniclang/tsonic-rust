@@ -24,10 +24,12 @@ import { rustSourceValueWrapperContains } from "../../policy/ownership/source-va
 import { rustSourceInputLifetime } from "./source-input-lifetimes.js";
 import { rustLifetimesEqual } from "../../target-model/lifetimes/index.js";
 import { selectRustSourceValueConversion } from "../../policy/conversions/selection.js";
-import { closeRustRetainedParameter } from "./retained-values.js";
+import { closeRustRetainedParameter, rustRetainedEnvironment } from "./retained-values.js";
+import { rustHasOpenOwnedStorage } from "../../policy/ownership/retained-storage.js";
+import { rustTargetGenericReferences } from "../../target-model/types/carriers/generic-references.js";
 import { retainRustStructuralInstantiation } from "../source-evidence/types/resolution/structural-instantiations.js";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
-import { rustResolutionContext, type RustFactWalk } from "../program/walk.js";
+import { appendRustDiagnostic, rustResolutionContext, type RustFactWalk } from "../program/walk.js";
 import type { RustSourceCallableReturnFact } from "../../target-model/records/source-declarations.js";
 import type { RustRetainedEnvironment } from "../../target-model/records/retained-environments.js";
 import { selectRustPointerReturnContract } from "./pointer-return.js";
@@ -137,6 +139,18 @@ export function selectRustSourceCallableReturn(
         rustResolutionContext(walk, declaration), walk.operationOptions);
   const carrier = asynchronous !== undefined || generator !== undefined ? rawCarrier : retained?.carrier;
   if (carrier === undefined) return undefined;
+  let retainedEnvironment = retained?.environment;
+  if (asynchronous === undefined && generator === undefined && retainedEnvironment === undefined &&
+    parameterCarriers.some(parameter => parameter !== undefined && rustHasOpenOwnedStorage(parameter) &&
+      rustTargetGenericReferences(parameter).lifetimes.length !== 0)) {
+    const inputRetention = rustRetainedEnvironment(declaration, parameterCarriers, walk.context);
+    if (inputRetention.kind === "unresolved") {
+      appendRustDiagnostic(walk, "RUST_RETAINED_ENVIRONMENT_NOT_EXACT", inputRetention.reason, declaration,
+        ["target.capability=rust.callable.retained-environment"]);
+      return undefined;
+    }
+    if (inputRetention.kind === "selected") retainedEnvironment = inputRetention.environment;
+  }
   const borrowedParameter = walk.context.sourceCallables.borrowedReturnParameter(declaration);
   const borrowedAbi = borrowedParameter === undefined ? undefined
     : walk.context.records.sourceParameterAbi.get(borrowedParameter);
@@ -156,7 +170,7 @@ export function selectRustSourceCallableReturn(
       ...(absence || pointer?.undefinedReturn ? { undefinedReturn: true } : {}),
       ...(absence && completion?.canFallThrough || pointer?.fallthroughUndefined ? { fallthroughUndefined: true } : {}),
     },
-    ...(retained?.environment === undefined ? {} : { retainedEnvironment: retained.environment }),
+    ...(retainedEnvironment === undefined ? {} : { retainedEnvironment }),
   };
 }
 

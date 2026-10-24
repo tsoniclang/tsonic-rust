@@ -98,7 +98,8 @@ export function planRustIdentifierValue(
     if (borrowed !== undefined && context.input.program.records.typeEmission.get(borrowed)?.sharedStringReference === true) {
       return access === "value" ? { kind: "owned-string-from-borrowed-str", expression: value } : value;
     }
-    if (access === "shared-receiver" && captured.borrowed === "shared" && referent === undefined) return value;
+    if (access === "shared-receiver" && captured.borrowed === "shared" &&
+      (referent === undefined || borrowed?.kind === "reference" && !borrowed.mutable)) return value;
     if (access !== "value") return referent ?? { kind: "dereference", pointer: value };
     return requireRustReadOwnership(node, context).snapshot?.kind === "copy"
       ? referent ?? { kind: "dereference", pointer: value }

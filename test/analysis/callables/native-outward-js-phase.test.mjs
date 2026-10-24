@@ -30,7 +30,8 @@ test("synchronous JS Future output preserves producer error identity before defe
     const carrier = selected.invocationFor(owner);
     assert.equal(carrier?.id, "rust.js.JsPromise", forward);
     assert.equal(Object.isFrozen(carrier), true, forward);
-    const error = rustProducerErrorReference(carrier.genericArguments[2].type);
+    assert.equal(carrier.genericArguments.length, 1, "the actual JS Promise stores only its output, not a producer error parameter");
+    const error = rustProducerErrorReference(producers.errorFor(owner, 0));
     assert.equal(error?.channel, 0, forward);
     assert.equal(producers.forIdentity(error.identity)?.declaration === owner, true, forward);
     const deferred = producers.deferredErrorFor(owner, error.channel);

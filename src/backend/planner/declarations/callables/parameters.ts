@@ -12,11 +12,13 @@ import { planRustNativeAllocation } from "../../expressions/native-memory.js";
 import { rustOptionDefaultValue } from "../../expressions/option-default.js";
 import { planRustParameterEntryConversion } from "./parameter-entry-conversion.js";
 import { rustBindingLivenessAttributes } from "../../bindings/liveness.js";
+import type { RustCallableParameterInitialization } from "../../../../target-model/records/parameter-emission.js";
 
 type RustParameterPrelude =
   | { readonly kind: "statement"; readonly statement: RustStmt }
   | { readonly kind: "default"; readonly initializer: Node; readonly name: string; readonly mutable: boolean;
-      readonly carrier: TargetTypeRef; readonly valueCarrier: TargetTypeRef; readonly retainStorage: boolean }
+      readonly carrier: TargetTypeRef; readonly valueCarrier: TargetTypeRef; readonly retainStorage: boolean;
+      readonly initialization: RustCallableParameterInitialization }
   | { readonly kind: "binding"; readonly pattern: Node; readonly name: string; readonly sourceCarrier: TargetTypeRef };
 
 export interface RustCallableParameterPlan {
@@ -50,7 +52,8 @@ export function planRustCallableParameters(contract: SourceCallableContract, con
     prelude.push(...planRustParameterEntryConversion(parameter, name, selected.mutable, context)
       .map(statement => ({ kind: "statement" as const, statement })));
     if (selected.default !== undefined) prelude.push({ kind: "default", initializer: selected.default.initializer,
-      name, mutable: selected.mutable, carrier: selected.carrier, valueCarrier: selected.default.valueCarrier, retainStorage: selected.default.retainStorage });
+      name, mutable: selected.mutable, carrier: selected.carrier, valueCarrier: selected.default.valueCarrier,
+      retainStorage: selected.default.retainStorage, initialization: selected.initialization });
     if (selected.pattern !== undefined) {
       if (selected.sourceCarrier === undefined) failRustPlannerInvariant("An admitted binding parameter requires its exact source carrier.", parameter);
       prelude.push({ kind: "binding", pattern: selected.pattern, name, sourceCarrier: selected.sourceCarrier });
@@ -73,25 +76,38 @@ export function planRustCallableParameters(contract: SourceCallableContract, con
   return { params, prelude };
 }
 
-export function planRustCallableParameterPrelude(plan: RustCallableParameterPlan, context: RustPlanContext, planExpression: RustBindingExpressionPlanner): readonly RustStmt[] {
+export function rustCallableParameterReturnContext(initialization: Extract<RustCallableParameterInitialization, { readonly kind: "return" }>,
+  expression: RustExpr, context: RustPlanContext): RustPlanContext {
+  const expressionOverrides = new Map(context.expressionOverrides);
+  expressionOverrides.set(initialization.expression, { expression, carrier: initialization.carrier, valueForm: "value" });
+  return { ...context, expressionOverrides };
+}
+
+export function planRustCallableParameterPrelude(plan: RustCallableParameterPlan, context: RustPlanContext,
+  planExpression: RustBindingExpressionPlanner): { readonly statements: readonly RustStmt[]; readonly context: RustPlanContext } {
   const statements: RustStmt[] = [];
+  let selectedContext = context;
   for (const entry of plan.prelude) {
     if (entry.kind === "statement") {
       statements.push(entry.statement);
       continue;
     }
     if (entry.kind === "default") {
-      const initializer = planExpression(entry.initializer, context);
+      const initializer = planExpression(entry.initializer, selectedContext);
       if (initializer === undefined) failRustPlannerInvariant("An admitted native default parameter requires its initializer expression.", entry.initializer);
-      const value = rustOptionDefaultValue({ kind: "path", path: entry.name }, initializer, entry.carrier, context, entry.retainStorage);
+      const value = rustOptionDefaultValue({ kind: "path", path: entry.name }, initializer, entry.carrier, selectedContext, entry.retainStorage);
+      if (entry.initialization.kind === "return") {
+        selectedContext = rustCallableParameterReturnContext(entry.initialization, value, selectedContext);
+        continue;
+      }
       // An absent default leaves the parameter itself; only a required mutability transition rebinds it.
       if (!entry.mutable && value.kind === "path" && value.path === entry.name) continue;
       statements.push({ kind: "let", name: entry.name, mutable: entry.mutable, init: value });
       continue;
     }
-    const binding = planRustBindingPattern(entry.pattern, { kind: "path", path: entry.name }, entry.sourceCarrier, context, planExpression);
+    const binding = planRustBindingPattern(entry.pattern, { kind: "path", path: entry.name }, entry.sourceCarrier, selectedContext, planExpression);
     if (binding === undefined) failRustPlannerInvariant("An admitted native binding parameter requires its destructuring plan.", entry.pattern);
     statements.push(...binding);
   }
-  return statements;
+  return { statements, context: selectedContext };
 }

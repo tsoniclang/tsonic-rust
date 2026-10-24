@@ -69,6 +69,7 @@ export interface RustStructuralShapeDefinition<MethodPlan = RustStructuralMethod
   readonly targetName: string;
   readonly genericParameters: readonly RustStructuralShapeGenericParameter[];
   readonly dispatchName?: string;
+  readonly dispatchLifetime: RustLifetimeRef | undefined;
   readonly genericArguments: readonly RustTargetGenericArgument[];
   readonly stateGenericParameters: readonly RustStructuralShapeGenericParameter[];
   readonly stateGenericArguments: readonly RustTargetGenericArgument[];

@@ -158,7 +158,7 @@ export function planProjectMethod(
       ? asyncFact.lowering.ownedReceiver : undefined),
     { ...context, syntheticNames },
   );
-  const bodyContext: RustPlanContext = {
+  const parameterContext: RustPlanContext = {
     ...receiverPlan.context,
     syntheticNames,
     controlFlow: { nextLoopId: 0 },
@@ -174,14 +174,16 @@ export function planProjectMethod(
     fallibleBoundary: callableErrorBoundary,
     returnResult: bodyErrorType === undefined ? undefined : { errorType: bodyErrorType },
   };
-  const parameterStatements = planRustCallableParameterPrelude(
+  const parameterPrelude = planRustCallableParameterPrelude(
     parameterPlan,
-    bodyContext,
+    parameterContext,
     planExpression,
   );
-  if (parameterStatements === undefined) {
+  if (parameterPrelude === undefined) {
     failRustPlannerInvariant("An admitted native method requires its complete syntax plan.", member);
   }
+  const bodyContext = parameterPrelude.context;
+  const parameterStatements = parameterPrelude.statements;
   const plannedBody = planBlockLike(bodyNode, bodyContext);
   if (plannedBody === undefined) {
     failRustPlannerInvariant("An admitted native method requires its complete syntax plan.", member);

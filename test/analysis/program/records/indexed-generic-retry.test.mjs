@@ -76,7 +76,7 @@ for (const [keySource, evaluate] of [['"value"', false], ['`value`', false], ["s
     } } };
     overlayParent.seal([]);
     parentRecords.seal(context.requiredRecords);
-    assert.equal(finalizeRustCallableSignature(current, dependency) === undefined, true, "the real dependency is in flight");
+    assert.equal(finalizeRustCallableSignature(current, dependency).kind, "unresolved", "the real dependency is in flight");
     assert.equal(finalizeProjectSourceGenericArguments(current, selected, callArguments, undefined) === undefined, true,
       "outer completion waits after its indexed key has been admitted");
     const firstKey = actualRecords.indexedFieldKeyArgument.get(key);
@@ -89,7 +89,7 @@ for (const [keySource, evaluate] of [['"value"', false], ['`value`', false], ["s
     assert.equal(actualRecords.sourceCallableReturn.get(callback) === undefined, true, "no provisional callback completion");
     current.resolvingReturns.delete(dependency);
     const completedDependency = finalizeRustCallableSignature(current, dependency);
-    assert.equal(completedDependency !== undefined, true);
+    assert.equal(completedDependency.kind, "complete");
     assert.equal(completedDependency.result.returnCarrier.kind, "source-primitive");
     assert.equal(completedDependency.result.returnCarrier.name, "native-uint");
     assert.equal(actualRecords.sourceCallableReturn.get(dependency) === completedDependency.result, true);

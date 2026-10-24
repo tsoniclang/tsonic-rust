@@ -431,24 +431,28 @@ test("the exact checked JS RangeError type qualifier retains its native predicat
   assert.match(output, /RangeError/u);
 });
 
-test("an authored Error constructor lookalike retains its exact missing implementation refusal", () => {
+test("an authored Error constructor lookalike retains its exact checked-call admission refusal", () => {
   const { result } = compileRust({ files: {
     "index.ts": 'import { Error } from "./values.js"; export function run(): Error { return new Error("authored"); }',
     "values.d.ts": "export interface Error { message: string; } export declare const Error: { new(message: string): Error };",
   } });
-  assert.equal(result.diagnostics.filter(issue => issue.code === "RUST_AMBIENT_VALUE_IMPLEMENTATION_MISSING").length, 1,
-    `a matching constructor spelling and shape never acquire checked profile ownership: ${result.diagnostics.map(issue => `${issue.code}: ${issue.message}`).join("\n")}`);
+  assert.deepEqual(result.diagnostics.map(issue => issue.code), ["RUST_SELECTED_CALL_EVIDENCE_MISSING"],
+    "the actual checked-call owner refuses a constructor without a selected native implementation");
   assert.equal(result.program === undefined && result.plan === undefined && result.artifacts.length === 0, true,
     "no authored ambient constructor or error value is materialized");
 });
 
 test("an authored Error constructor lookalike cannot become a native type-test qualifier", () => {
-  const { result } = compileRust({ files: {
-    "index.ts": 'import { Error } from "./values.js"; export function run(value: Error): boolean { return value instanceof (Error); }',
+  const { source, result } = compileRust({ files: {
+    "index.ts": 'import { Error as ForeignError } from "./values.js"; export function run(): boolean { const value = new Error("native"); return value instanceof (ForeignError); }',
     "values.d.ts": "export interface Error { message: string; } export declare const Error: { new(message: string): Error };",
   } });
   assert.equal(result.diagnostics.filter(issue => issue.code === "RUST_AMBIENT_VALUE_IMPLEMENTATION_MISSING").length, 1,
     `source type-test syntax alone never supplies a native constructor contract: ${result.diagnostics.map(issue => issue.code).join(", ")}`);
+  const ast = createTargetSourceProgram(source).ast;
+  const issue = result.diagnostics.find(issue => issue.code === "RUST_AMBIENT_VALUE_IMPLEMENTATION_MISSING");
+  assert.equal(issue.sourceNode !== undefined && ast.text(issue.sourceNode) === "ForeignError", true,
+    "the actual authored constructor reference, not the native Error operand or a wrapper, owns the refusal");
   assert.equal(result.program === undefined && result.plan === undefined && result.artifacts.length === 0, true,
     "an exact authored declaration cannot inherit the library's native error-kind predicate");
 });

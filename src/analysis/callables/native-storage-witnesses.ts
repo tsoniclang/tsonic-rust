@@ -46,7 +46,8 @@ export function selectRustNativeConversionBoundaries(input: RustNativeStorageSou
       ? input.storage.source.navigation.sourceReferenceFor(node)?.declaration : undefined;
     // A reference to a native callable input is transported as the input itself and is never on a frontier; any other
     // adapted reference (a local binding read) is a frontier stop of the storage it is written into.
-    if (declaration === undefined || !input.native.inputs.some(candidate => candidate.subject.node === declaration)) {
+    if (declaration === undefined || !input.native.isConcreteCallableParameter(declaration) &&
+      !input.native.inputs.some(candidate => candidate.subject.node === declaration)) {
       conversionBoundaries.push(selected.subject);
       continue;
     }

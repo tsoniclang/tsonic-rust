@@ -2,7 +2,7 @@ import type { RustOperationAnalysisContext } from "./operation-context.js";
 import { requireRustRecord } from "./records/required-records.js";
 import { rustPostCheckOperationKind } from "../../target-model/operations/model.js";
 import { rustSourceStorageContext } from "../source-evidence/types/resolution/source-storage-projection.js";
-import { BinaryExpression_Left, BinaryExpression_Right, Node_Operand, KindBinaryExpression, KindCallExpression, KindDeleteExpression, KindElementAccessExpression, KindIdentifier, KindNewExpression, KindPostfixUnaryExpression, KindPrefixUnaryExpression, KindPropertyAccessExpression, Node_Expression, Node_Type, ForInOrOfStatement_Initializer, VariableDeclarationList_Declarations } from "@tsonic/target-api/source";
+import { BinaryExpression_Left, BinaryExpression_Right, Node_Operand, KindBinaryExpression, KindCallExpression, KindDeleteExpression, KindElementAccessExpression, KindIdentifier, KindNewExpression, KindPostfixUnaryExpression, KindPrefixUnaryExpression, KindPropertyAccessExpression, Node_Expression, Node_Type, ForInOrOfStatement_Initializer, VariableDeclarationList_Declarations, selectSourceNativeValueGuard } from "@tsonic/target-api/source";
 import { selectRustCheckedCall, selectRustCheckedConversion, selectRustCheckedElementAccess, selectRustCheckedOperator, selectRustCheckedPropertyAccess, selectRustCheckedValue } from "../operations/members/index.js";
 import { selectRustCheckedDelete } from "../operations/member-access.js";
 import { isSharedSourceMarkerOperation } from "../operations/source-markers.js";
@@ -355,18 +355,20 @@ export function selectExpressionOperation(
   const right = kind === KindBinaryExpression
     ? BinaryExpression_Right(ast, expression)
     : undefined;
-  const rightReference = right === undefined
-    ? undefined
-    : walk.context.source.navigation.sourceReferenceFor(right);
+  const nativeGuard = operator === "instanceof" ? selectSourceNativeValueGuard({ ast,
+    navigation: walk.context.source.navigation, semanticsFor: walk.context.semanticsFor }, expression) : undefined;
+  const sourceRightDeclaration = operator === "instanceof"
+    ? nativeGuard?.kind === "nominal" ? nativeGuard.declaration : undefined
+    : right === undefined ? undefined : walk.context.source.navigation.sourceReferenceFor(right)?.declaration;
   recordPolicySelection(walk, expression, selectRustCheckedOperator({
     target: "rust",
     expression,
     operator,
     ...(left === undefined ? {} : { left }),
     ...(right === undefined ? {} : { right }),
-    ...(rightReference?.declaration === undefined
+    ...(sourceRightDeclaration === undefined
       ? {}
-      : { sourceRightDeclaration: rightReference.declaration }),
+      : { sourceRightDeclaration }),
   }, context, walk.operationOptions));
 }
 
