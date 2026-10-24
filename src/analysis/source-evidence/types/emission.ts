@@ -103,8 +103,17 @@ export function analyzeRustTypeEmission(program: Omit<RustAnalysisProgram, "reac
         pending.push(parameter.carrier);
     }
   }
-  for (const shape of program.structuralShapes.instances) pending.push(shape.carrier, ...shape.fields.flatMap(field =>
-    [field.carrier, ...(field.methodPlan?.carrier === undefined ? [] : [field.methodPlan?.carrier])]));
+  for (const shape of new Set([...program.structuralShapes.definitions, ...program.structuralShapes.instances])) {
+    pending.push(shape.carrier, ...shape.fields.flatMap(field =>
+      [field.carrier, ...(field.methodPlan?.carrier === undefined ? [] : [field.methodPlan.carrier])]));
+    const emission = program.records.structuralShapeEmission.get(shape);
+    if (emission === undefined)
+      failTargetAnalysisInvariant("tsonic-rust", "An emitted structural shape requires its complete native field and dispatch selection.");
+    pending.push(...emission.bases, ...emission.dispatch?.members.flatMap(member =>
+      [...member.parameters, member.result]) ?? [], ...emission.fields.flatMap(field => [field.carrier,
+      ...field.property === undefined ? [] : [field.property.stored, field.property.getter,
+        ...field.property.setter === undefined ? [] : [field.property.setter]]]));
+  }
   for (const view of program.classValues.instanceViewImplementations) pending.push(view.sourceCarrier, view.targetCarrier);
   for (const sourceFile of program.sourceFiles) {
     const inventory = program.records.genericDeclarations.get(sourceFile);
