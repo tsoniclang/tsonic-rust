@@ -221,7 +221,7 @@ function collectFallibilityFacts(
     const selectedImplementation = walk.context.source.navigation.callableImplementation(declaration);
     return selectedImplementation.kind === "resolved" ? selectedImplementation.implementation.declaration : undefined;
   };
-  const operationIsFallible = (node: Node): boolean => {
+  const operationIsFallible = (node: Node, invocationEffectsSelected: boolean): boolean => {
     const operation = walk.context.records.targetOperation.get(node);
     const generatorOperand = operation?.kind === "iteration" && operation.iterationKind !== "for-in"
       ? Node_Expression(ast, node) : undefined;
@@ -248,7 +248,7 @@ function collectFallibilityFacts(
               bindingProjection.sourceCarrier,
               field.sourceStorageIndex,
             )));
-    return !walk.preparedCallbackCalls.has(node) && walk.context.callableValues.native.callFor(node) === undefined &&
+    return !invocationEffectsSelected && !walk.preparedCallbackCalls.has(node) && walk.context.callableValues.native.callFor(node) === undefined &&
       !generatorOperation && rustTargetOperationIsFallible(
       operation,
       walk.context.structuralShapes,
