@@ -119,7 +119,8 @@ export function analyzeRustReadOwnership(input: {
       const referenceLoad = operation?.kind === "reference-operation" && operation.operation === "load";
       if (use?.stableAcrossEffects === true && borrowEffects.stableBindings.has(node) &&
         (laterPositions.get(use.later)?.get(value) ?? -1) >= use.laterStart ||
-        referenceLoad && borrowEffects.pureValues.has(value) ||
+        referenceLoad && (!operation.operandCarrier.mutable && isRustStringCarrier(operation.operandCarrier.referent) ||
+          borrowEffects.pureValues.has(value)) ||
         selectRustBorrowRelationship(referenceLoad ? operation.operandExpression : node, value, input.borrowEffectsInput, borrowEffects)) selected.add(value);
     }
     borrowRelationships.set(node, selected);

@@ -15,6 +15,9 @@ import { join } from "node:path";
 import { planRustReferenceOperationCall } from "../../../dist/backend/planner/expressions/reference-operations.js";
 import { rustSourcePrimitiveTargetType } from "../../../dist/target-model/types/index.js";
 import { Node_Expression } from "@tsonic/target-api/source";
+import { createRustRecordFixture } from "../../helpers/records.mjs";
+import { analyzeRustReferenceOperations } from "../../../dist/analysis/operations/reference-operations.js";
+import { createRustReferenceOperationProducer } from "../../../dist/analysis/program/records/reference-operations.js";
 
 
 test("owned exits, static text, direct helpers and scoped array reads execute without extra owners", { timeout: 300_000 }, () => {
@@ -213,11 +216,28 @@ export function read(value: Ref<string>): string { return load(value); }
     { ...fact, referenceCarrier: { ...fact.referenceCarrier, mutable: true } },
     { ...fact, resultCarrier: rustSourcePrimitiveTargetType("int32") },
   ]) {
-    const rejected = [];
-    assert.equal(planRustReferenceOperationCall(call, invalid, { input: { program }, diagnostics: rejected }, () => operand), undefined);
-    assert.equal(rejected.length, 1);
-    assert.match(rejected[0].message, /exact reference and result carrier/u);
+    const records = createRustRecordFixture({ targetOperation: { get: subject => subject === call
+      ? invalid : program.records.targetOperation.get(subject) } }, program.records);
+    const producer = createRustReferenceOperationProducer(() => {});
+    const rejected = analyzeRustReferenceOperations({ ...program, records }, [call], producer);
+    assert.equal(rejected.length, 1, "each original reference/result conflict is rejected before final publication");
+    assert.equal(rejected[0].code, "RUST_MISSING_TARGET_FACT");
+    assert.equal(rejected[0].sourceNode === call, true, "the actual checked load owns its original refusal");
+    assert.equal(rejected[0].message, "Rust reference load conflicts with its exact reference and result carrier relationship. Node kind: KindCallExpression.");
+    assert.deepEqual(rejected[0].evidence, ["target.capability=RUST_REFERENCE_LOAD_VALUE_CONFLICT"]);
+    assert.equal(producer.records.referenceOperation.get(call) === undefined, true,
+      "neither original negative admits a final native reference operation");
+    const unchanged = [];
+    assert.deepEqual(planRustReferenceOperationCall(call, invalid, { input: { program }, diagnostics: unchanged }, () => operand),
+      { kind: "owned-string-from-borrowed-str", expression: operand },
+      "post-seal source tampering cannot reselect the immutable native load");
+    assertNoTargetDiagnostics(unchanged);
   }
+  const records = createRustRecordFixture({ referenceOperation: { get: () => undefined } }, program.records);
+  assert.throws(() => planRustReferenceOperationCall(call, fact, { input: { program: { ...program, records } }, diagnostics: [] }, () => operand),
+    error => error.diagnostic?.code === "TSONIC_INTERNAL_PLANNER_INVARIANT" &&
+      error.message === "An admitted reference operation requires its exact native operand and storage plan.",
+    "the renderer cannot recreate a missing required final native load from old source facts");
 });
 
 test("shared string load ownership and borrowed observations match native allocations", { timeout: 300_000 }, () => {
@@ -339,19 +359,19 @@ use captured_append_cost::index;
 use std::cell::RefCell;
 use tsonic_rust_runtime as rt;
 
-fn handwritten(value: String) -> rt::Callable<'static, (), rt::TsonicResult<usize>> {
+fn handwritten(value: String) -> rt::Callable<'static, (), rt::TsonicResult<f64>> {
     let value = RefCell::new(value);
     rt::Callable::new(move |()| {
         value.borrow_mut().push('!');
-        Ok(value.borrow().len())
+        Ok(value.borrow().encode_utf16().count() as f64)
     })
 }
 
 #[test]
 fn exact_mutable_frame_and_append_costs() {
     for _ in 0..32 {
-        let input = String::with_capacity(64);
-        let native_input = String::with_capacity(64);
+        let input = String::with_capacity(1024);
+        let native_input = String::with_capacity(1024);
         let (generated, generated_cost) = measure(|| index::append(input));
         let (native, native_cost) = measure(|| handwritten(native_input));
         assert_eq!(generated_cost, native_cost);
@@ -359,7 +379,7 @@ fn exact_mutable_frame_and_append_costs() {
         for index in 1..=1024 {
             let (generated_result, generated_cost) = measure(|| generated.call(()).unwrap());
             let (native_result, native_cost) = measure(|| native.call(()).unwrap());
-            assert_eq!(generated_result, index);
+            assert_eq!(generated_result, f64::from(index));
             assert_eq!(generated_result, native_result);
             assert_eq!(generated_cost, native_cost);
             assert_eq!(generated_cost.allocations, 0);

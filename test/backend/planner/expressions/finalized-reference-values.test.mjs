@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { Node_Expression, Node_Initializer } from "@tsonic/target-api/source";
+import { Node_Expression, Node_Initializer, sourceTransparentExpressionOperand } from "@tsonic/target-api/source";
 import { jsonNativeProjectionSource } from "../../../../../tsonic/test/fixtures/json-native-projection.mjs";
 import { closedInstanceFiles } from "../../../../../tsonic/test/fixtures/closed-instance-tests.mjs";
-import { analyzeRust, acmeLogsinkCapability, acmeVectorsPackage } from "../../../helpers/rust-session.mjs";
+import { analyzeRust, compileRust, artifactText, acmeLogsinkCapability, acmeVectorsPackage } from "../../../helpers/rust-session.mjs";
 import { rustSourceFilePlanContext } from "../../../helpers/plan-context.mjs";
 import { createRustRecordFixture } from "../../../helpers/records.mjs";
 import { applyFinalizedRustArgumentMode, applyRustArgumentMode, createRustSharedReferenceArgument,
@@ -244,16 +244,30 @@ test("transparent shared inputs retain the source-selected capture guard without
       operation.abi.target.path === "js_abi::number_parse_int";
   });
   assert.equal(calls.length, 7, "six actual capture views plus the ordinary native parameter inverse");
+  const parameters = sourceNodes(program).filter(node => program.source.ast.is.IsParameterDeclaration(node));
+  const seed = parameters.find(node => program.source.ast.text(program.source.ast.name(node)) === "seed");
+  const value = parameters.find(node => program.source.ast.text(program.source.ast.name(node)) === "value");
+  assert.equal(seed !== undefined && value !== undefined, true, "the guarded and ordinary inputs retain their exact checked declarations");
   let guarded = 0;
   for (const node of calls) {
     const argument = program.source.ast.arguments(node)[0];
     const view = program.records.argumentView.get(argument);
+    assert.equal(view !== undefined, true, "every finalized native argument retains its selected view");
+    let source = argument;
+    for (;;) {
+      const operand = sourceTransparentExpressionOperand(program.source.ast, source);
+      if (operand === undefined) break;
+      source = operand;
+    }
+    const declaration = program.records.sourceBinding.get(source)?.sourceDeclaration;
+    assert.equal(declaration === seed || declaration === value, true, "each transparent input names its original checked capture or parameter");
     const expression = planExpression(node, rustSourceFilePlanContext(program, node));
     assert.equal(expression !== undefined, true, "the selected native input is rendered");
     const printed = printRustExpr(expression);
     assert.doesNotMatch(printed, /\.clone\(/u, "borrow selection precedes native rendering, not clone-then-strip");
-    if (view.borrowedStorage === "borrow-guard") {
+    if (declaration === seed) {
       guarded += 1;
+      assert.equal(view.borrowedStorage, undefined, "the context-converted str value is not relabelled as original raw guard storage");
       assert.match(printed, /AsRef::<str>::as_ref\(&\*/u, "transparent views keep the exact guard payload reference");
       assert.equal((printed.match(/\.borrow\(\)/gu) ?? []).length, 1, "the selected guard is acquired once");
     } else {
@@ -261,6 +275,36 @@ test("transparent shared inputs retain the source-selected capture guard without
     }
   }
   assert.equal(guarded, 6, "every identity wrapper retains the same physical source fact");
+});
+
+test("native String concatenation owns singleton results while multiple parts remain borrowed observations", () => {
+  const { result } = compileRust({ files: { "index.ts": `
+import type { Life, Ref } from "@tsonic/rust/types.js";
+import { load } from "@tsonic/rust/lang.js";
+export function suffix<Region extends Life>(value: Ref<string, Region>): string { return load(value) + ""; }
+export function prefix<Region extends Life>(value: Ref<string, Region>): string { return "" + load(value); }
+export function joined<Region extends Life>(left: Ref<string, Region>, right: Ref<string, Region>): string {
+  return load(left) + load(right);
+}
+export function observed<Region extends Life>(value: Ref<string, Region>): boolean { return load(value) === "kept"; }
+` } });
+  assert.deepEqual(result.diagnostics, [], "the native source-reference and owned-result contracts are admitted together");
+  const source = artifactText(result, "src/index.rs");
+  const sections = new Map(["suffix", "prefix", "joined", "observed"].map(name => {
+    const body = source.match(new RegExp(`fn ${name}[^]*?\\{([^]*?)\\n\\}`, "u"))?.[1];
+    assert.equal(body !== undefined, true, `${name}: the actual native function body is emitted`);
+    return [name, body];
+  }));
+  for (const name of ["suffix", "prefix"]) {
+    assert.equal((sections.get(name).match(/String::from\(value\)/gu) ?? []).length, 1,
+      `${name}: the single borrowed part creates its one required owned result`);
+    assert.doesNotMatch(sections.get(name), /\.clone\(|\.to_owned\(/u, `${name}: no competing copy recipe is emitted`);
+  }
+  assert.match(sections.get("joined"), /\.concat\(\)/u, "multiple borrowed parts share one native concatenation result");
+  assert.doesNotMatch(sections.get("joined"), /String::from|\.clone\(|\.to_owned\(/u,
+    "multiple parts never materialize intermediate owned copies");
+  assert.doesNotMatch(sections.get("observed"), /String::from|\.clone\(|\.to_owned\(/u,
+    "the separate native borrowed observation remains allocation-free");
 });
 
 test("an owned snapshot before a captured write keeps its required selected clone", () => {
