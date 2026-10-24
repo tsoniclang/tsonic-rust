@@ -8,11 +8,12 @@ import { createRustNativeStorageQueries } from "../../../dist/analysis/callables
 import { prepareRustProjectCallableFieldStorage } from "../../../dist/analysis/callables/project-field-storage.js";
 import { finalizeRustNativeParameterStorage } from "../../../dist/analysis/callables/native-parameters.js";
 import { createRustNativeCallableProducerPlan } from "../../../dist/analysis/callables/native-producers.js";
-import { createRustGenericCallablePlan } from "../../../dist/analysis/callables/generic-values.js";
+import { createRustGenericCallablePlan, rustFixedStructuralMethodDeclarations } from "../../../dist/analysis/callables/generic-values.js";
 import { createRustNativeCapturePlan } from "../../../dist/analysis/callables/native-captures.js";
 import { rustCallablePhysicalSignature } from "../../../dist/target-model/conversions/callable-physical.js";
 import { rustProducerErrorReference } from "../../../dist/target-model/types/carriers/producer-errors.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
+import { rustStructuralObjectCarrierValue, rustStructuralObjectTargetType } from "../../../dist/target-model/types/carriers/source-types.js";
 
 
 import { rustOptionElementCarrier, rustOptionTargetType } from "../../../dist/target-model/types/carriers/optional.js";
@@ -62,10 +63,11 @@ function fixture(text, options = {}) {
   const nativeNodes = participation.nodes;
   const nativeNodeSet = new Set(nativeNodes);
   const genericRegistry = createRustGenericCallablePlan(source.ast, program.records.sourceArtifacts.get().map(artifact => artifact.sourceFile), program.records, program.names, source.navigation,
-    node => nativeNodeSet.has(node));
+    node => nativeNodeSet.has(node), rustFixedStructuralMethodDeclarations(source.ast, program.structuralShapes));
   const generic = genericRegistry.plan;
   let physical;
   const input = { source, ast: source.ast, storage, nativeNodes, records: program.records, definitions: program.typeDefinitions,
+    capturesFor: declaration => captures.forDeclaration(declaration),
     structuralShapes: program.structuralShapes,
     generic, lexicalFunctions: program.lexicalFunctions, lifetimes: program.sourceLifetimes,
     physicalCarrierFor: (carrier, ownerFileName, subject, bindings, producers) =>
@@ -656,15 +658,18 @@ test("structural native dispatch signatures are not stored callable payloads and
   `);
   const value = current.declaration("selected");
   assert.equal(current.plan.valueFor(value).kind, "identity", "the native dispatch layout already owns its signatures");
-  for (const [name, field] of [
-    ["missing", () => undefined],
-    ["stored", (carrier, index) => {
-      const selected = current.input.structuralShapes.field(carrier, index);
-      return selected === undefined ? undefined : { ...selected, nativeMethod: undefined, methodStorageCarrier: undefined };
-    }],
+  const carrier = current.program.records.runtimeCarrier.get(value).carrier;
+  const shape = rustStructuralObjectCarrierValue(carrier);
+  const method = current.program.structuralShapes.definitionForCarrier(carrier).fields.find(field => field.method === true);
+  assert.equal(method.methodPlan.kind, "native-dispatch", "the single native owner publishes the actual dispatch contract");
+  for (const [name, invalid] of [
+    ["missing", rustStructuralObjectTargetType("/foreign.ts", shape.fields, shape.representation, shape.construction, shape.bases)],
+    ["stored", rustStructuralObjectTargetType(shape.ownerFileName, shape.fields.map(field =>
+      field.method === true ? { ...field, method: undefined } : field), shape.representation, shape.construction, shape.bases)],
   ]) {
-    const plan = createRustNativeStorageQueries({ ...current.input, native: current.native, structuralShapes: { field } });
-    const selected = plan.valueFor(value);
+    assert.equal(current.program.structuralShapes.definitionForCarrier(invalid), undefined,
+      `${name}: no published native owner admits the forged layout`);
+    const selected = current.plan.subjectFor(current.exactSubject(value), invalid, current.declaration("run"));
     assert.equal(selected.kind, "unresolved", name);
     assert.match(selected.reason, /layout owner/u, name);
   }
@@ -685,30 +690,36 @@ const nestedMethodStorageSource = `
 test("nested structural methods retain the canonical physical layout through stored arrays and tuples", () => {
   const current = fixture(nestedMethodStorageSource);
   const methodSlots = new Map();
+  for (const definition of current.program.structuralShapes.instances) for (const field of definition.fields)
+    if (field.method === true) methodSlots.set(field, field.methodPlan.carrier);
   const reads = [];
   const plan = createRustNativeStorageQueries({ ...current.input, native: current.native, structuralShapes: {
-    field(carrier, index) {
-      const field = current.input.structuralShapes.field(carrier, index);
-      if (field?.method === true) {
-        methodSlots.set(field, field.methodStorageCarrier);
-        reads.push(field);
-      }
-      return field;
+    ...current.input.structuralShapes,
+    definitionForCarrier(carrier) {
+      const selected = current.input.structuralShapes.definitionForCarrier(carrier);
+      reads.push(selected);
+      return selected;
     },
   } });
   for (const name of ["leaf", "nested", "elements", "array", "tuple", "tupled"]) {
     const declaration = current.declaration(name);
     const before = reads.length;
+    const sourceCarrier = current.program.records.runtimeCarrier.get(declaration).carrier;
+    const expected = current.program.callableValues.nativeStorage.valueFor(declaration);
     const selected = plan.valueFor(declaration);
-    assert.equal(selected.kind, "identity", selected.reason ?? `${name} uses its existing native structural layout`);
-    assert.equal(selected.carrier === current.program.records.runtimeCarrier.get(declaration).carrier, true,
-      `${name} preserves the exact source carrier rather than inventing an aggregate layout`);
+    assert.equal(expected.kind !== "unresolved", true, `${name}: the canonical physical selection resolves`);
+    assert.equal(selected.kind !== "unresolved", true, `${name}: the independently constructed native storage query resolves`);
+    assert.equal(selected.kind, expected.kind, selected.reason ?? `${name} uses its existing native structural layout`);
+    assert.equal(rustTargetTypeRefEquals(selected.carrier, expected.carrier), true,
+      `${name} reads the exact completed physical carrier rather than inventing an aggregate layout`);
+    assert.equal(current.program.records.runtimeCarrier.get(declaration).carrier === sourceCarrier, true,
+      `${name} preserves its distinct logical source carrier without a post-seal rewrite`);
     assert.equal(reads.length > before, true, `${name} consults its actual nested method layout`);
     assert.equal(Object.isFrozen(selected), true, `${name} has an immutable physical selection`);
   }
   for (const [field, carrier] of methodSlots) {
     assert.equal(carrier !== undefined, true, "every selected method has its canonical physical storage slot");
-    assert.equal(field.methodStorageCarrier === carrier, true, "physical selection never rewrites the method storage carrier");
+    assert.equal(field.methodPlan.carrier === carrier, true, "physical selection never rewrites the method storage carrier");
     assert.equal(Object.isFrozen(field), true, "the physical method field remains frozen");
   }
 });
@@ -717,22 +728,20 @@ test("nested native method storage rejects missing layouts, slots and foreign so
   const current = fixture(nestedMethodStorageSource);
   const declaration = current.declaration("nested");
   const rootCarrier = current.program.records.runtimeCarrier.get(declaration).carrier;
+  const leaf = current.declaration("leaf");
+  const leafCarrier = current.program.callableValues.nativeStorage.valueFor(leaf).carrier;
+  const leafShape = rustStructuralObjectCarrierValue(leafCarrier);
   for (const mode of ["missing-layout", "missing-slot", "unknown-method-role"]) {
-    let nestedReads = 0;
-    const plan = createRustNativeStorageQueries({ ...current.input, native: current.native, structuralShapes: {
-      field(carrier, index) {
-        const field = current.input.structuralShapes.field(carrier, index);
-        if (field?.method !== true) return field;
-        assert.equal(rustTargetTypeRefEquals(carrier, rootCarrier), false, `${mode} reaches the nested physical owner`);
-        nestedReads += 1;
-        return mode === "missing-layout" ? undefined : mode === "missing-slot"
-          ? { ...field, methodStorageCarrier: undefined } : { ...field, method: undefined };
-      },
-    } });
-    const selected = plan.valueFor(declaration);
+    const invalid = rustStructuralObjectTargetType(mode === "missing-layout" ? "/foreign.ts" : leafShape.ownerFileName,
+      mode === "missing-slot" ? leafShape.fields.filter(field => field.method !== true)
+        : mode === "unknown-method-role" ? leafShape.fields.map(field => field.method === true ? { ...field, method: undefined } : field)
+          : leafShape.fields, leafShape.representation, leafShape.construction, leafShape.bases, leafShape.implementation);
+    assert.equal(current.program.structuralShapes.definitionForCarrier(invalid), undefined,
+      `${mode} has no canonical nested physical owner`);
+    const selected = current.plan.subjectFor(current.exactSubject(leaf), invalid, current.declaration("run"));
     assert.equal(selected.kind, "unresolved", `${mode} cannot prove a physical layout`);
-    assert.match(selected.reason, /layout owner/u, `${mode} fails at the actual missing physical layout`);
-    assert.equal(nestedReads > 0, true, `${mode} observes the required nested slot rather than an unrelated refusal`);
+    assert.match(selected.reason, /layout owner|valid selected carrier/u, `${mode} fails at its actual physical admission boundary`);
+    assert.equal(rustTargetTypeRefEquals(leafCarrier, rootCarrier), false, `${mode} exercises the actual nested owner rather than the aggregate`);
     assert.equal(Object.isFrozen(selected), true, `${mode} preserves immutable unresolved evidence`);
   }
   const foreign = fixture(nestedMethodStorageSource);

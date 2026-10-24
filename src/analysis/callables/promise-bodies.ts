@@ -136,9 +136,14 @@ export function createRustPromiseBodySelection(): RustPromiseBodySelection {
         const name = rustPromiseBodyNativeName(context, declaration);
         const selectedDemands = new Set(demands.get(declaration));
         const binding = rustCallableExpressionValueDeclaration(declaration, context.ast);
-        // An exported module async function is an authored export, retained in a binary as in a library: its
-        // Promise-returning function keeps the authored name (direct awaits still call the native body).
+        const methodOwner = context.ast.is.IsMethodDeclaration(declaration)
+          ? context.projectTypes.definitionContainingDeclaration(declaration) : undefined;
+        const exportedMethod = methodOwner?.kind === "class" &&
+          !context.ast.hasModifierKind(declaration, "private") && !context.ast.hasModifierKind(declaration, "protected") &&
+          sourceDeclarationIsModuleScoped(methodOwner.declaration, context.ast) &&
+          context.source.navigation.declarationUseSummary(methodOwner.declaration).exported;
         if (name === undefined || context.runtimeValueUses.hasFirstClassUse(binding ?? declaration) ||
+          context.sourceBoundaries.publishedDeclarations.has(declaration) || exportedMethod ||
           binding !== undefined && sourceDeclarationIsModuleScoped(binding, context.ast) &&
           context.source.navigation.declarationUseSummary(binding).exported ||
           context.ast.is.IsFunctionDeclaration(declaration) && context.ast.hasModifierKind(declaration, "export") &&

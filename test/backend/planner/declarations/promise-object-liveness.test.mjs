@@ -36,9 +36,10 @@ for (const isStatic of [false, true]) {
     ["dead stored Promise caller", "function unused() { const pending = service.run(); return pending; } console.log(await service.run());", false],
   ]) {
     test(`${isStatic ? "static" : "instance"} Promise methods retain their own role liveness for ${label}`, () => {
+      const source = `class Service { ${isStatic ? "static " : ""}async run(): Promise<number> { return 7; } }
+          ${isStatic ? "" : "const service = new Service();"} ${isStatic ? use.replaceAll("service.", "Service.") : use}`;
       const { program } = analyzeRust({ surfaces: ["js"], target: { id: "rust", options: { outputType: "bin" } },
-        files: { "index.ts": `class Service { ${isStatic ? "static " : ""}async run(): Promise<number> { return 7; } }
-          ${isStatic ? "" : "const service = new Service();"} ${isStatic ? use.replaceAll("service.", "Service.") : use}` } });
+        files: { "index.ts": label === "native body only" ? `export ${source}` : source } });
       const ast = program.source.ast;
       const methods = [];
       const visit = node => {
@@ -54,16 +55,29 @@ for (const isStatic of [false, true]) {
       assert.equal(emission.promiseObjectDeadCode, objectUsed ? undefined : "authored-declaration",
         "method adapter use is selected by the same reachability owner as function adapter use");
       const items = planProjectMethodVariants(declaration, rustSourceFilePlanContext(program, declaration));
-      const variants = program.records.methodDeclaration.get(declaration).variants;
+      const method = program.records.methodDeclaration.get(declaration);
+      const variants = method.variants;
       const nativeVariant = variants.find(variant => variant.promiseBody);
       const adapterVariant = variants.find(variant => !variant.promiseBody);
       assert.equal(nativeVariant !== undefined && adapterVariant !== undefined, true,
         "method role names come from the sealed method inventory, including any owner prefix");
       const native = items.find(item => item.name === nativeVariant.name);
-      const adapter = items.find(item => item.name === adapterVariant.name);
+      const adapter = items.find(item => item.name === (adapterVariant.name ?? method.name));
       assert.equal(native !== undefined && adapter !== undefined, true, "both already-selected method roles remain emitted");
       assert.equal(native.deadCode, emission.deadCode, "the native method uses only its own disposition");
       assert.equal(adapter.deadCode, emission.promiseObjectDeadCode, "the Promise-object method uses only its own disposition");
+      if (label === "native body only") {
+        const local = analyzeRust({ surfaces: ["js"], target: { id: "rust", options: { outputType: "bin" } },
+          files: { "index.ts": source } }).program;
+        const localClass = local.source.ast.statements(local.sourceFiles[0]).find(node => local.source.ast.is.IsClassDeclaration(node));
+        const localMethod = local.source.ast.members(localClass).find(node => node !== undefined && local.source.ast.is.IsMethodDeclaration(node));
+        assert.equal(localMethod !== undefined, true, "the original private owner has its exact authored method");
+        const localEmission = local.records.callableDeclaration.get(localMethod);
+        assert.equal(localEmission.nativeBody !== undefined, true, "the original private immediate call retains its native body");
+        assert.equal(localEmission.promiseObject, false, "a private native-only method does not acquire retained Promise storage");
+        assert.equal(local.records.methodDeclaration.get(localMethod).variants.length, 1,
+          "the original private native-only method has no redundant Promise-object adapter");
+      }
     });
   }
 }

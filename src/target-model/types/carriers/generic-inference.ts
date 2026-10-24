@@ -408,6 +408,17 @@ export function inferRustTargetGenericBindings(
         if (leftStructural !== undefined || rightStructural !== undefined) {
           return leftStructural !== undefined && rightStructural !== undefined &&
             leftStructural.representation === rightStructural.representation &&
+            (leftStructural.implementation === undefined || rightStructural.implementation === undefined
+              ? leftStructural.implementation === rightStructural.implementation
+              : leftStructural.implementation.kind === rightStructural.implementation.kind &&
+                leftStructural.implementation.methods.length === rightStructural.implementation.methods.length &&
+                leftStructural.implementation.methods.every((method, index) => {
+                  const selected = rightStructural.implementation!.methods[index];
+                  return selected?.sourceName === method.sourceName && selected.identity === method.identity &&
+                    matchGenericArguments(method.genericArguments, selected.genericArguments,
+                      (pattern, actual) => match(pattern, actual, lifetimeContext),
+                      (pattern, actual) => matchLifetime(pattern, actual, lifetimeContext), matchConst);
+                })) &&
             leftStructural.bases.length === rightStructural.bases.length &&
             leftStructural.bases.every((base, index) => match(base, rightStructural.bases[index]!, lifetimeContext)) &&
             (leftStructural.construction === undefined || rightStructural.construction === undefined

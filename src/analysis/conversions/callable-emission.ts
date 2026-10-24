@@ -1,5 +1,4 @@
 import type { Node } from "@tsonic/tsts";
-import type { TargetSourceProgram } from "@tsonic/target-api/source";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustCallableConversionProducer } from "../program/records/callable-conversions.js";
@@ -20,12 +19,11 @@ import { rustCallableConversionPhysical } from "../../policy/conversions/callabl
 import { rustCallableInputProtocol } from "../../target-model/types/index.js";
 import { rustNativeCallableOperand } from "../callables/native-conversions.js";
 import { rustProgramNodeIsOutsideNativeCode } from "../control-flow/compile-time-statements.js";
-import { asSourceNode } from "@tsonic/target-api/source";
 import type { RustCallableValueAdapter } from "../../target-model/records/callable-adapters.js";
 import { rustNativeCallablePhysicalSource } from "../../policy/conversions/native-callables.js";
 
 export function analyzeRustCallableEmission(program: Omit<RustAnalysisProgram, "reachability">,
-  nodes: readonly Node[], producer: RustCallableConversionProducer, source: TargetSourceProgram): void {
+  nodes: readonly Node[], producer: RustCallableConversionProducer): void {
   const operand = (node: Node, source: TargetTypeRef | undefined): RustCallableOperandEmission | undefined => {
     if (source === undefined) return undefined;
     const previous = producer.records.callableOperand.get(node, source);
@@ -98,32 +96,6 @@ export function analyzeRustCallableEmission(program: Omit<RustAnalysisProgram, "
     if (carrier === undefined) failTargetAnalysisInvariant("tsonic-rust", "An erased union payload write requires the payload's exact callable error.", node);
     return Object.freeze({ source: physical, carrier });
   };
-  // A closure argument for a concrete callable parameter is built with its own error; when that error is uninhabited and
-  // the parameter's program error is not, the argument is written through the eliminating adapter.
-  const concreteParameterWrite = (node: Node): RustCallableJoinWrite | undefined => {
-    const { ast } = source;
-    const call = ast.parent(node);
-    if (call === undefined || !ast.is.IsCallExpression(call) || program.records.targetOperation.get(node)?.kind !== "closure") return undefined;
-    const index = ast.arguments(call).indexOf(node);
-    const selected = program.records.selectedCall.get(call);
-    const declaration = asSourceNode(selected?.sourceDeclaration, ast);
-    const parameter = index < 0 ? undefined : selected?.nativeParameterDeclarations[index];
-    // A parameter that is not a native callable input takes its declared runtime callable.
-    const slot = parameter === undefined ? undefined : program.records.sourceParameterAbi.get(parameter)?.parameterCarrier;
-    if (parameter === undefined || declaration === undefined || ast.as.AsParameterDeclaration(parameter)?.DotDotDotToken !== undefined ||
-      slot?.kind !== "target-named" || slot.id !== rustCallableTargetId ||
-      program.callableValues.native.inputsFor(declaration).some(input => input.subject.node === parameter)) return undefined;
-    const slotError = rustCallableProtocol(slot)?.error;
-    const carrier = program.records.runtimeCarrier.get(node)?.carrier;
-    const physical = carrier === undefined ? undefined : program.callableValues.nativeProducers.physicalFor(node, carrier);
-    const produced = physical === undefined ? undefined : rustCallablePhysicalSignature(physical)?.error;
-    const reference = rustProducerErrorReference(produced);
-    const error = reference === undefined ? produced : program.errorRegions.producerError(reference);
-    if (physical === undefined || slotError === undefined || error === undefined || !rustUninhabitedError(error) ||
-      rustUninhabitedError(slotError)) return undefined;
-    const target = rustCallableWithError(physical, slotError);
-    return target === undefined ? undefined : Object.freeze({ source: physical, carrier: target });
-  };
   for (const node of nodes) {
     if (rustProgramNodeIsOutsideNativeCode(program, node)) continue;
     const read = program.records.valueRead.get(node);
@@ -131,7 +103,7 @@ export function analyzeRustCallableEmission(program: Omit<RustAnalysisProgram, "
     const selected = program.records.contextualValueConversion.get(node);
     if (selected?.conversion.kind === "callable-adapter") contract(node, selected.conversion,
       operand(node, selected.conversion.source)?.physical);
-    const joinWrite = program.callableValues.nativeStorage.joinWriteFor(node) ?? erasedPayloadWrite(node) ?? concreteParameterWrite(node);
+    const joinWrite = program.callableValues.nativeStorage.joinWriteFor(node) ?? erasedPayloadWrite(node);
     if (joinWrite !== undefined) producer.joinWrite(node, joinWrite);
     const operation = program.records.targetOperation.get(node);
     if (operation?.kind === "source-conversion" && operation.conversion?.kind === "callable-input") operand(node, operation.conversion.source);

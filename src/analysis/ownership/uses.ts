@@ -13,6 +13,8 @@ import { rustContextualRuntimeConversionContract } from "../../policy/conversion
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import { rustTargetGenericReferences } from "../../target-model/types/carriers/generic-references.js";
 import { rustLifetimeKey } from "../../target-model/lifetimes/index.js";
+import type { RustStructuralShapePlan } from "../objects/shapes/structural-shape-plan.js";
+import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 
 export function rustNativeArgumentBorrowsRead(argument: Node, reference: Node,
   ast: AstReader, records: RustProgramRecords): boolean {
@@ -55,7 +57,8 @@ export function rustNativeArgumentBorrowsRead(argument: Node, reference: Node,
 }
 
 export function analyzeRustReadUses(ast: AstReader, nodes: readonly Node[], records: RustAnalysisRecords,
-  definitions: RustTypeDefinitions, ownsExternalArgument: (argument: Node) => boolean): ReadonlyMap<Node, RustReadUse> {
+  definitions: RustTypeDefinitions, ownsExternalArgument: (argument: Node) => boolean,
+  structuralShapes: Pick<RustStructuralShapePlan, "field">): ReadonlyMap<Node, RustReadUse> {
   const uses = new Map<Node, RustReadUse>();
   // A borrowed provider input whose argument is first converted by value (`&JsValue::from(handle)`) consumes the
   // argument's own read, so a later read of the same storage needs its clone.
@@ -76,13 +79,19 @@ export function analyzeRustReadUses(ast: AstReader, nodes: readonly Node[], reco
     const callTrait = callable?.kind === "closure" ? callable.callTrait ?? "Fn" : undefined;
     const callableMode = callTrait === "FnOnce" ? "move" : callTrait === "FnMut" ? "mutable"
       : callTrait === "Fn" || rustCallableProtocol(callable) !== undefined ? "shared" : undefined;
+    const structuralMethod = operation?.kind !== "source-call" || operation.target.form !== "structural-method" ? undefined
+      : structuralShapes.field(operation.target.receiverCarrier, operation.target.storageIndex)?.methodPlan
+        ?? failTargetAnalysisInvariant("tsonic-rust", "A structural call requires its completed native receiver contract.", node);
+    const structuralReceiverMode = structuralMethod?.kind === "fixed" && operation?.kind === "source-call" && operation.asyncBody === undefined
+      ? structuralMethod.factoryReceiver : "shared";
     const left = operation?.kind === "runtime-set" ? BinaryExpression_Left(ast, node) : undefined;
     const argumentsList = operation?.kind === "runtime-set"
       ? operation.abi.operationKind === "index-set"
         ? [left === undefined ? undefined : ElementAccessExpression_ArgumentExpression(ast, left), BinaryExpression_Right(ast, node)]
         : [BinaryExpression_Right(ast, node)]
       : rustBorrowedOperationArguments(node, ast);
-    const selected = selectRustOperationReadUses(ast, node, { operation, computedMember, address, location, guard, callableMode, arguments: argumentsList,
+    const selected = selectRustOperationReadUses(ast, node, { operation, computedMember, address, location, guard, callableMode,
+      structuralReceiverMode, arguments: argumentsList,
       nativeInputs: operation?.kind === "provider-operation" || operation?.kind === "runtime-set" ? rustFinalizedSourceInputs(operation.abi).map(input =>
         ({ source: input.source, mode: argumentConsumed(input.source, argumentsList) ? undefined : rustProviderInputBorrowMode(input) })) : [],
       argumentModes: (argumentsList ?? []).map(argument => records.argumentPassing.get(argument)?.mode) });

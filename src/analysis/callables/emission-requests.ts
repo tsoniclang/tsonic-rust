@@ -294,7 +294,7 @@ export function prepareRustPhysicalCallableEmissionRequests(
       // invocation storage, which is prepared together with the other physical callable storage.
       const storedStructuralMethod = target.form === "structural-method" && callable !== undefined &&
         rustCallableProtocol(callable) !== undefined &&
-        input.structuralShapes.field(target.receiverCarrier, target.storageIndex)?.nativeMethod !== true;
+        input.structuralShapes.field(target.receiverCarrier, target.storageIndex)?.methodPlan?.kind !== "native-dispatch";
       if (input.native.callFor(node) === undefined && (rustGenericCallableValue(callable) !== undefined || storedStructuralMethod))
         request(owner, node, "invocation", { kind: "invocation" }, node);
     } else if (operation?.kind === "closure") {
@@ -319,7 +319,10 @@ export function prepareRustPhysicalCallableEmissionRequests(
           const generic = rustGenericCallableValue(field?.carrier);
           if (expression !== undefined && generic !== undefined && generic.physical === undefined)
             runtime(owner, expression, `member:${index}`, node);
-        } else if (contribution.kind === "method" || contribution.kind === "structural-method") visitUse(contribution.expression, owner, `member:${index}`, node);
+        } else if (contribution.kind === "structural-method" && input.structuralShapes.field(
+          operation.resultCarrier, contribution.targetStorageIndex)?.methodPlan?.kind === "fixed")
+          visitConstruct(contribution.expression, contribution.expression);
+        else if (contribution.kind === "method" || contribution.kind === "structural-method") visitUse(contribution.expression, owner, `member:${index}`, node);
         // An accessor is a callable created where the literal is evaluated, so it is a used native producer like a method.
         else if (contribution.kind === "accessor") visitUse(contribution.property, owner, `member:${index}`, node);
         else visitUse(contribution.expression, owner, `member:${index}`, node);

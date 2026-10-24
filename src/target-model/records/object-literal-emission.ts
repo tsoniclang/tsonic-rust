@@ -1,7 +1,7 @@
 import type { Node, SourceFile } from "@tsonic/tsts";
 import type { TargetTypeRef } from "../types/model.js";
 import type { RustTargetOperationFact } from "./operations.js";
-import type { RustStructuralShapeDefinition, RustStructuralShapeField } from "./structural-shapes.js";
+import type { RustStructuralShapeDefinition, RustStructuralShapeField, RustStructuralMethodPayload } from "./structural-shapes.js";
 import type { RustProjectTypeDefinition, RustProjectInstanceContract } from "../types/project-types.js";
 import type { RustProjectMethodDispatchVariant } from "./method-dispatch.js";
 import type { RustObjectLiteralMethodAdapterFact } from "./object-methods.js";
@@ -12,7 +12,10 @@ export interface RustStructuralLiteralFieldEmission {
   readonly field: RustStructuralShapeField;
   readonly copy: boolean;
   readonly frozen: boolean;
-  readonly method: { readonly parameters: readonly TargetTypeRef[]; readonly result: TargetTypeRef; readonly storage: TargetTypeRef } | undefined;
+  readonly method: ({ readonly parameters: readonly TargetTypeRef[]; readonly result: TargetTypeRef; readonly storage: TargetTypeRef } & (
+    | { readonly kind: "fixed"; readonly declaration: Node; readonly payload: RustStructuralMethodPayload }
+    | { readonly kind: "stored" }
+  )) | undefined;
   readonly accessor: { readonly getter: TargetTypeRef; readonly setter: TargetTypeRef | undefined } | undefined;
 }
 

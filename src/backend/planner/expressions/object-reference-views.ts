@@ -20,6 +20,7 @@ export function planRustObjectReferenceView(
 ): RustExpr | undefined {
   const selected = context.input.program.records.objectReferenceEmission.get(node)
     ?? failRustPlannerInvariant("An admitted object reference view requires its native construction plan.", node);
+  if (selected.kind === "identity") return value;
   const fact = selected.view;
   if (selected.kind === "project") return planRustProjectStructuralConversion(value, fact.sourceCarrier, fact.targetCarrier, context);
   if (selected.kind === "constructor") {
@@ -79,6 +80,6 @@ export function planRustObjectReferenceView(
   const identity = clone({kind: "call", path: "rt::ObjectIdentityCarrier::object_identity", args: [{kind: "reference", expr: owner}]});
   const implementation = context.objectLiteralImplementations?.forReferenceView(node);
   const constructed = !selected.dispatch ? createRustStructuralObjectFromCarrier(fact.targetCarrier, initializers, context, identity)
-    : implementation?.kind === "structural" ? constructRustStructuralLiteral(implementation, initializers, identity) : undefined;
+    : implementation?.kind === "structural" ? constructRustStructuralLiteral(implementation, initializers, context, identity) : undefined;
   return constructed === undefined ? undefined : rustValueBlock(bindings, constructed);
 }

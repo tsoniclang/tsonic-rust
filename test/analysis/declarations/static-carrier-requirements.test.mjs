@@ -140,7 +140,9 @@ test("structural methods require their actual selected storage rather than their
   const carrier = rustStructuralObjectTargetType("/source.ts", [{ sourceName: "read", type: { kind: "closure", args: [], result: number },
     presence: "required", readonly: true, method: true }]);
   assert.equal(selected(carrier).kind, "unresolved", "no selected method storage");
-  const shapes = methodStorageCarrier => ({ instances: [{ carrier, fields: [{ methodStorageCarrier }] }] });
+  const shapes = storage => ({ instances: [{ carrier, fields: [{ methodPlan: {
+    kind: "stored", carrier: storage, constructions: [], receiver: "included",
+  } }] }] });
   const infallible = { kind: "target-named", id: rustInfallibleTargetId };
   assert.equal(selected(carrier, { evidence: evidence({ structuralShapes: shapes(rustCallableTargetType([], number, staticLifetime, infallible)) }) }).kind,
     "supported", "the admitted physical method storage is owned");

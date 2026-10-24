@@ -24,19 +24,21 @@ export function analyzeRustStoredFields(program: Omit<RustAnalysisProgram, "reac
     if (invocations.has(key)) return;
     invocations.add(key);
     const shape = program.structuralShapes.definitionForCarrier(carrier);
-    const field = shape?.fields[index];
+    const field = program.structuralShapes.field(carrier, index);
     if (field?.method !== true) return;
     const callableCarrier = rustStructuralMethodCallableCarrier(field.carrier, field.presence);
     const generic = rustGenericCallableValue(callableCarrier);
     const protocol = generic === undefined ? rustCallableProtocol(callableCarrier) : rustGenericCallableProtocol(callableCarrier, arguments_);
-    const rawStorage = field.presence === "optional" ? rustOptionElementCarrier(field.methodStorageCarrier) : field.methodStorageCarrier;
+    const rawStorage = field.presence === "optional" ? rustOptionElementCarrier(field.methodPlan?.carrier) : field.methodPlan?.carrier;
     if (protocol === undefined || rawStorage === undefined) {
       if (generic !== undefined && arguments_.length === 0) return;
       failTargetAnalysisInvariant("tsonic-rust", "An admitted structural invocation requires its exact native callable and storage.");
     }
+    if (field.methodPlan === undefined) failTargetAnalysisInvariant("tsonic-rust", "An admitted structural method requires its selected native representation.");
     producer.invocation(carrier, index, arguments_, { result: protocol.result, parameterCount: protocol.parameters.length,
-      rawStorage, generic: generic !== undefined, native: field.nativeMethod === true,
-      cloneDispatch: shape!.construction === undefined, receiverIndependent: field.receiverIndependent === true });
+      rawStorage, ...(field.methodPlan.kind === "fixed" ? { kind: "fixed", owner: shape!.carrier, factoryReceiver: field.methodPlan.factoryReceiver }
+        : field.methodPlan.kind === "native-dispatch" ? { kind: "native-dispatch", cloneDispatch: shape!.construction === undefined }
+          : { kind: "stored", generic: generic !== undefined, receiver: field.methodPlan.receiver }) });
   };
   for (const node of new Set(nodes)) {
     const runtime = program.records.runtimeCarrier.get(node)?.carrier;
@@ -86,7 +88,12 @@ export function analyzeRustStoredFields(program: Omit<RustAnalysisProgram, "reac
     const shape = program.structuralShapes.definitionForCarrier(carrier);
     if (shape !== undefined) {
       const value = rustStructuralObjectCarrierValue(carrier)?.representation === "value";
-      const fields = shape.fields.map(field => {
+      const sourceFields = rustStructuralObjectCarrierValue(carrier)?.fields;
+      if (sourceFields === undefined) failTargetAnalysisInvariant("tsonic-rust", "A structural field inventory requires its checked source field domain.");
+      const fields = sourceFields.map((sourceField, index) => {
+        const field = program.structuralShapes.field(carrier, index);
+        if (field === undefined || field.sourceName !== sourceField.sourceName)
+          failTargetAnalysisInvariant("tsonic-rust", "A structural field requires its exact checked-to-physical member correspondence.");
         const propertyValue = field.property === undefined ? undefined : rustStructuralPropertyValueCarrier(field.carrier, field.presence);
         const getter = field.property === undefined ? undefined : rustStructuralPropertyGetterStorageCarrier(carrier, field.carrier, field.presence);
         const setter = field.property === undefined || field.readonly ? undefined : rustStructuralPropertySetterStorageCarrier(carrier, field.carrier, field.presence);

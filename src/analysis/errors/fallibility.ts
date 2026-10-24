@@ -15,7 +15,7 @@ import {
 import { appendRustDiagnostic, rustOperationContext } from "../program/walk.js";
 import { rustStructuralFieldIsFallible } from "../../policy/operations/members/native-contracts.js";
 import { finalizeRustPreparedCheckedCall } from "../operations/members/index.js";
-import { recordSelectedOperationInputs } from "../operations/inputs.js";
+import { recordFinalizedOperationInputEffects } from "../operations/inputs.js";
 import { rustCallableProtocol } from "../../target-model/types/index.js";
 import { rustNativeCallableCompletion } from "../../policy/types/callables/native-completion.js";
 import { rustSourceCallCallableStorageCarrier } from "../../policy/operations/members/native-contracts.js";
@@ -51,6 +51,7 @@ import { rustGeneratorSourceInvocationKind } from "../../policy/operations/sourc
 import { getRustGeneratorProtocol } from "../../target-model/types/carriers/callables.js";
 import { requireRustRecord } from "../program/records/required-records.js";
 import type { SourceNativeTaskGraph } from "@tsonic/target-api/analysis";
+import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 
 export interface RustSourceFallibilityConstruction {
   readonly sourceErrors: RustSourceErrorEffectSelection;
@@ -200,6 +201,10 @@ function collectFallibilityFacts(
   }
   const selectedProjectDeclaration = (node: Node): Node | undefined => {
     const operation = walk.context.records.targetOperation.get(node);
+    if (operation?.kind === "source-call" && operation.target.form === "structural-method") {
+      const method = walk.context.structuralShapes.field(operation.target.receiverCarrier, operation.target.storageIndex)?.methodPlan;
+      if (method?.kind === "fixed") return method.declaration;
+    }
     if (operation?.kind === "source-call" && operation.target.form === "callable" &&
       rustCallableProtocol(operation.target.carrier)?.error !== undefined) return undefined;
     const selected = walk.context.records.selectedCall.get(node);
@@ -348,17 +353,6 @@ function collectFallibilityFacts(
       budget.step();
       ownedCallbackClosures.add(subject);
     }
-    const sourceFile = ast.getSourceFile(call);
-    if (sourceFile === undefined) {
-      appendRustDiagnostic(
-        walk,
-        "RUST_CALLBACK_SOURCE_FILE_MISSING",
-        "Prepared callback operation has no owning checked source file.",
-        call,
-        ["target.capability=rust.callback.exact-source"],
-      );
-      continue;
-    }
     const callbackFallible = callbackAnalysis.fallible;
     const finalized = finalizeRustPreparedCheckedCall(
       pending.request,
@@ -372,7 +366,9 @@ function collectFallibilityFacts(
       continue;
     }
     const operation = walk.context.records.targetOperation.get(call);
-    recordSelectedOperationInputs(walk, call, sourceFile, operation);
+    if (operation?.kind !== "provider-operation") failTargetAnalysisInvariant("tsonic-rust",
+      "An admitted prepared callback requires its finalized native operation.", call);
+    recordFinalizedOperationInputEffects(walk, call, operation);
     if (callbackAnalysis.implementationFallible) {
       for (const subject of callbackAnalysis.subjects) {
         fallibleSubjects.add(subject);
@@ -452,12 +448,14 @@ function collectFallibilityFacts(
         const operation = walk.context.records.targetOperation.get(node);
         if (operation?.kind === "source-call") {
           const declaration = selectedProjectDeclaration(node);
+          const fixedMethod = operation.target.form === "structural-method" &&
+            walk.context.structuralShapes.field(operation.target.receiverCarrier, operation.target.storageIndex)?.methodPlan?.kind === "fixed";
           const nativeCallable = operation.target.form === "callable" &&
             (operation.target.carrier.kind === "closure" || operation.target.carrier.kind === "function-pointer");
           const runtimeCallable = (operation.target.form === "callable" &&
               (rustCallableProtocol(operation.target.carrier) !== undefined ||
                 operation.target.carrier.kind === "closure" && operation.target.carrier.fallible === true)) ||
-            (operation.target.form === "structural-method" || operation.target.form === "constructor-value") &&
+            (!fixedMethod && operation.target.form === "structural-method" || operation.target.form === "constructor-value") &&
               rustCallableProtocol(operation.target.callableCarrier) !== undefined;
           const nativeInput = walk.context.callableValues.native.callFor(node);
           const generic = nativeInput === undefined &&

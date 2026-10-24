@@ -176,7 +176,7 @@ export function rustCallableTargetForSourceLifetime(sourceCarrier: TargetTypeRef
       return { ...field, type };
     });
     return changed ? rustStructuralObjectTargetType(targetObject.ownerFileName, fields, targetObject.representation,
-      targetObject.construction, targetObject.bases) : targetCarrier;
+      targetObject.construction, targetObject.bases, targetObject.implementation) : targetCarrier;
   }
   const sourceCallable = rustCallableConversionSource(sourceCarrier);
   const targetCallable = rustCallableProtocol(targetCarrier);

@@ -6,7 +6,7 @@ import { analyzeRustFrozenReceiverCaptures } from "./frozen-receiver-captures.js
 import { rustStructuralObjectCarrierValue } from "../../target-model/types/carriers/source-types.js";
 import type { RustProjectTypeDefinition, RustProjectTypePolicy } from "../project-types/index.js";
 import type { RustObjectRepresentationPlan } from "../project-types/object-representation.js";
-import type { RustStructuralShapePlan } from "./shapes/structural-shape-plan.js";
+import type { RustStructuralShapeLayoutPlan } from "./shapes/structural-shape-plan.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 
 import type { RustFrozenWriteReceiver } from "../../target-model/records/field-writes.js";
@@ -21,7 +21,7 @@ export interface RustFrozenDataWriteRegistry extends RustFrozenDataWritePlan {
     readonly ast: AstReader;
     readonly projectTypes: RustProjectTypePolicy;
     readonly representations: RustObjectRepresentationPlan;
-    readonly structuralShapes: RustStructuralShapePlan;
+    readonly structuralShapes: RustStructuralShapeLayoutPlan;
     readonly sourceFiles: readonly SourceFile[];
     readonly isNativeNode: (node: Node) => boolean;
     readonly records: RustProgramRecords;
@@ -82,7 +82,7 @@ export function createRustFrozenDataWriteRegistry(): RustFrozenDataWriteRegistry
         for (let index = 0; index < value.fields.length; index += 1) {
           const field = input.structuralShapes.field(carrier, index);
           if (field !== undefined && field.storage !== "bound" &&
-            (field.method !== true || field.receiverIndependent === true) && field.nativeLayout === undefined) writable.add(index);
+            (field.method !== true || field.methodPlan?.receiver === "independent") && field.nativeLayout === undefined) writable.add(index);
         }
         structuralFields.set(closedMetadataKey(carrier), writable);
       }

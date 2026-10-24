@@ -9,6 +9,7 @@ import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import type { RustStructuralShapePlan } from "./shapes/structural-shape-plan.js";
+import type { RustStructuralShapeDefinition } from "../../target-model/records/structural-shapes.js";
 import { inferRustTargetTypeParameterBindings } from "../../target-model/types/carriers/generic-inference.js";
 import { rustTargetTypeParameterIdentities } from "../../target-model/types/carriers/generic-references.js";
 
@@ -23,7 +24,9 @@ export function analyzeRustFrozenReceiverCaptures(input: {
   readonly projectTypes: RustProjectTypePolicy;
   readonly views: readonly RustProjectStructuralView[];
   readonly captures: RustReceiverFieldCaptureQueries;
-  readonly structuralShapes: RustStructuralShapePlan;
+  readonly structuralShapes: Pick<RustStructuralShapePlan, "sharesStorage"> & {
+    readonly definitions: readonly Pick<RustStructuralShapeDefinition, "sourceCarriers">[];
+  };
   readonly typeDefinitions: RustTypeDefinitions;
 }): RustFrozenReceiverCapturePlan {
   const frozen = new Set<RustProjectTypeDefinition>();

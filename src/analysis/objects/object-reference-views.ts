@@ -6,8 +6,9 @@ import type { RustObjectReferenceEmissionProducer } from "../program/records/obj
 import type { RustObjectReferenceEmission } from "../../target-model/records/object-reference-views.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustClassConstructorInstance } from "../../target-model/types/carriers/class-constructors.js";
-import { rustOptionElementCarrier } from "../../target-model/types/index.js";
+import { rustOptionElementCarrier, rustStructuralObjectCarrierValue } from "../../target-model/types/index.js";
 import { rustStructuralPropertyGetterStorageCarrier, rustStructuralPropertySetterStorageCarrier } from "../../policy/types/objects/member-storage.js";
+import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 
 export function analyzeRustObjectReferenceEmission(program: Omit<RustAnalysisProgram, "reachability">,
   nodes: readonly Node[], producer: RustObjectReferenceEmissionProducer) {
@@ -30,6 +31,25 @@ export function analyzeRustObjectReferenceEmission(program: Omit<RustAnalysisPro
       continue;
     }
     const shape = program.structuralShapes.definitionForCarrier(view.targetCarrier);
+    const source = program.structuralShapes.definitionForCarrier(view.sourceCarrier);
+    if (shape !== undefined && source !== undefined &&
+      rustStructuralObjectCarrierValue(shape.carrier)?.representation === "reference" &&
+      rustStructuralObjectCarrierValue(source.carrier)?.representation === "reference" &&
+      program.structuralShapes.sharesStorage(view.sourceCarrier, view.targetCarrier) && view.fields.every(field => {
+        const origin = program.structuralShapes.field(view.sourceCarrier, field.source.storageIndex);
+        const destination = program.structuralShapes.field(view.targetCarrier, field.destinationIndex);
+        return field.source.storage === "structural-object" && field.source.dispatch === undefined &&
+          rustTargetTypeRefEquals(field.source.receiverCarrier, view.sourceCarrier) && origin !== undefined && destination !== undefined &&
+          origin.sourceName === destination.sourceName && origin.targetName === destination.targetName &&
+          origin.storage === destination.storage && origin.presence === destination.presence && origin.method === destination.method &&
+          rustTargetTypeRefEquals(origin.carrier, destination.carrier) && (!field.writable || !origin.readonly) &&
+          origin.property?.getterTargetName === destination.property?.getterTargetName &&
+          origin.property?.setterTargetName === destination.property?.setterTargetName &&
+          origin.property?.selfMode === destination.property?.selfMode;
+      })) {
+      producer.publish(node, { kind: "identity", view });
+      continue;
+    }
     if (shape === undefined || shape.fields.length !== view.fields.length) { refuse(node); continue; }
     const fields: Extract<RustObjectReferenceEmission, { readonly kind: "structural" }>["fields"][number][] = [];
     for (const [index, field] of view.fields.entries()) {

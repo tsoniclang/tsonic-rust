@@ -10,6 +10,14 @@ import { rustTargetGenericReferences } from "../../target-model/types/carriers/g
 import type { RustClassEnvironment } from "../../target-model/records/class-values.js";
 import { isRustCopyCarrier } from "../constraints/native-traits.js";
 
+export function selectRustStructuralFactoryReceiver(input: {
+  readonly factory: boolean;
+  readonly usesThis: boolean;
+  readonly capturedValues: number;
+}): "value" | "shared" {
+  return input.factory && (input.usesThis || input.capturedValues !== 0) ? "value" : "shared";
+}
+
 export function selectRustNativeFutureEnvironmentRetention(input: {
   readonly lifetime: RustLifetimeRef;
   readonly carriers: readonly TargetTypeRef[];

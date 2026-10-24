@@ -63,10 +63,11 @@ export function rustSourceDeclarationGenerics(
 export function planRustCallableGenerics(
   declaration: Node,
   context: RustPlanContext,
+  ownerLifetimes: ReadonlySet<string>,
   specialization?: ReadonlyMap<string, TargetTypeRef>,
   capturedParameters: readonly RustSourceGenericParameterContract[] = [],
 ): RustCallableGenericPlan {
-  const source = planRustSourceCallableGenerics(declaration, context, specialization, capturedParameters);
+  const source = planRustSourceCallableGenerics(declaration, context, ownerLifetimes, specialization, capturedParameters);
   const native = planRustNativeCallableGenerics(declaration, source);
   return planRustRetainedGenerics(declaration, native);
 }
@@ -74,6 +75,7 @@ export function planRustCallableGenerics(
 function planRustSourceCallableGenerics(
   declaration: Node,
   context: RustPlanContext,
+  ownerLifetimes: ReadonlySet<string>,
   specialization?: ReadonlyMap<string, TargetTypeRef>,
   capturedParameters: readonly RustSourceGenericParameterContract[] = [],
 ): RustCallableGenericPlan {
@@ -112,8 +114,9 @@ function planRustSourceCallableGenerics(
   );
   const typeParameterNames = new Map(context.typeParameterNames);
   for (const parameter of ordinaryParameters) typeParameterNames.set(parameter.identity, parameter.targetName);
-  const selectedCaptures = capturedParameters.filter(parameter => parameter.kind !== "type" ||
-    context.typeParameterSubstitutions?.has(parameter.identity) !== true);
+  const selectedCaptures = capturedParameters.filter(parameter => parameter.kind === "type"
+    ? context.typeParameterSubstitutions?.has(parameter.identity) !== true
+    : !ownerLifetimes.has(rustLifetimeKey(parameter.lifetime)));
   const usedNames = new Set(ordinaryParameters.map(parameter => parameter.targetName));
   const lifetimeSubstitutions = new Map(context.lifetimeSubstitutions);
   for (const parameter of sourceContract.parameters) {

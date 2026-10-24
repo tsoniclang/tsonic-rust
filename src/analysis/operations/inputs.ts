@@ -20,6 +20,53 @@ import type { RustTargetOperationFact } from "../../target-model/records/operati
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 
 import { rustMemberAccessReceiver } from "../../target-model/syntax/expressions.js";
+import type { RustCheckedCallSelectionInput } from "../../policy/model/contracts.js";
+import type { RustPreparedDeferredCheckedCall } from "../../target-model/records/deferred-callbacks.js";
+import { selectedCallArgumentNodes } from "./members/operators.js";
+import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
+
+export function recordPreparedOperationInputs(
+  walk: RustFactWalk,
+  request: RustCheckedCallSelectionInput,
+  sourceFile: SourceFile,
+  prepared: RustPreparedDeferredCheckedCall,
+): boolean {
+  let complete = true;
+  for (const [index, argument] of selectedCallArgumentNodes(request).entries()) {
+    const expected = prepared.parameterCarriers[index];
+    if (expected === undefined) failTargetAnalysisInvariant("tsonic-rust",
+      "A prepared callback requires its finalized source parameter correspondence.", request.source.call);
+    if (resolveExpressionCarrier(walk, argument, sourceFile, expected) === undefined) {
+      appendRustDiagnostic(walk, "RUST_SELECTED_CALLBACK_CARRIER_MISSING",
+        "The selected callback argument has no closed carrier for its finalized source contract.", argument,
+        ["target.capability=rust.callback.exact-source"]);
+      complete = false;
+    }
+  }
+  return complete;
+}
+
+function recordProviderArgumentEffects(walk: RustFactWalk, argument: Node, mode: "value" | "ref" | "mut-ref" | undefined): void {
+  if (mode === undefined) return;
+  validateFlowMarkerAgainstMode(walk, argument, mode);
+  if (mode === "mut-ref") recordBindingWrite(walk, argument, "referent");
+}
+
+export function recordFinalizedOperationInputEffects(
+  walk: RustFactWalk,
+  expression: Node,
+  fact: Extract<RustTargetOperationFact, { readonly kind: "provider-operation" }>,
+): void {
+  const ast = walk.context.ast;
+  const callee = Node_Expression(ast, expression);
+  const receiver = callee === undefined ? undefined : rustMemberAccessReceiver(ast, callee);
+  if (receiver !== undefined && rustProviderOperationSourceReceiverMode(fact) === "mut-ref")
+    recordBindingWrite(walk, receiver, "referent");
+  for (const [index, argument] of ast.arguments(expression).entries()) {
+    if (argument === undefined) continue;
+    recordProviderArgumentEffects(walk, argument, fact.abi.sourceArguments.find(candidate => candidate.sourceIndex === index)?.mode);
+  }
+}
 
 export function recordSelectedOperationInputs(
   walk: RustFactWalk,
@@ -171,14 +218,7 @@ export function recordSelectedOperationInputs(
       if (fact?.kind !== "provider-operation") {
         continue;
       }
-      const mode = finalizedProviderArgument?.mode;
-      if (mode === undefined) {
-        continue;
-      }
-      validateFlowMarkerAgainstMode(walk, argument, mode);
-      if (mode === "mut-ref") {
-        recordBindingWrite(walk, argument, "referent");
-      }
+      recordProviderArgumentEffects(walk, argument, finalizedProviderArgument?.mode);
     }
   }
 }

@@ -1,4 +1,6 @@
 import { createRustNativeStorageSelection } from "./native-storage-selection.js";
+import type { RustNativeCaptureSelection } from "../../target-model/records/native-captures.js";
+import type { RustStructuralShapePlanRegistry } from "../objects/shapes/structural-shape-plan.js";
 import type { AstReader, Node } from "@tsonic/tsts";
 import type { SourceStorageBindings, SourceStorageBindingsSelection, SourceStorageQueries, SourceStorageSubject, SourceStorageSubjectsSelection, SourceStorageProducersSelection } from "@tsonic/target-api/analysis";
 import { isSourceCallableBodyBoundary, sourceEnclosingCallable, sourceCallableValueParameters } from "@tsonic/target-api/source";
@@ -85,7 +87,8 @@ export function createRustNativeStorageQueries(input: {
   readonly physicalCarrierFor: RustGenericCallablePhysicalCarrierSelector;
   readonly lifetimes: RustLifetimeIndex;
   readonly lexicalFunctions: RustLexicalFunctionEnvironments;
-  readonly structuralShapes: RustStructuralStorageLookup;
+  readonly structuralShapes: RustStructuralStorageLookup & Pick<RustStructuralShapePlanRegistry, "completePhysicalCarrier" | "definitionForCarrier">;
+  readonly capturesFor: (declaration: Node) => RustNativeCaptureSelection;
   readonly carrierHost: RustValueDomainCarrierHost;
   // Resolved after the error regions; storage shared by distinct producers is selected only once it is available.
   readonly producerErrorFor: (reference: RustProducerErrorReference) => TargetTypeRef | undefined;
@@ -159,7 +162,7 @@ export function createRustNativeStorageQueries(input: {
   };
   const recordMembers = createRustRecordMemberProducers({ ...input, bindingsFor });
   const select = createRustNativeStorageSelection(input, { inputs, futures, conversions, recordMembers,
-    genericInvocationBindingsFor, joinWrites, ownerFor, valueOwnerFor });
+    genericInvocationBindingsFor, joinWrites, ownerFor, valueOwnerFor, logicalCarrierFor });
   const selectReturn = (declaration: Node): RustNativeStorageSelection => {
     const result = input.records.sourceCallableReturn.get(declaration);
     const parameter = result?.borrowedParameter;

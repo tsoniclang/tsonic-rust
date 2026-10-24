@@ -15,10 +15,12 @@ export function rustStructuralShapeContext<Context extends RustTypeRenderingCont
 
 export function rustStructuralShapeGenerics(
   definition: RustStructuralShapeDefinition, context: RustTypeRenderingContext & Pick<RustPlanContext, "input">,
+  placement: "complete" | "state",
 ): RustGenerics {
   const requirements = context.input.program.records.structuralGenerics.get(definition.carrier);
   if (requirements === undefined) failRustPlannerInvariant("A structural shape has no sealed generic requirements.");
-  return rustGenericsWithAssociatedBounds(definition.genericParameters.map(parameter => parameter.kind === "lifetime"
+  const parameters = placement === "state" ? definition.stateGenericParameters : definition.genericParameters;
+  return rustGenericsWithAssociatedBounds(parameters.map(parameter => parameter.kind === "lifetime"
     ? { kind: "lifetime", name: parameter.lifetime.name, outlives: [] }
     : { kind: "type", name: context.typeParameterNames?.get(parameter.identity) ?? parameter.name, bounds: rustGenericRequirementBounds(
       requirements.typeParameters.find(candidate => candidate.identity === parameter.identity)!.requirements) }),

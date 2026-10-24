@@ -1,5 +1,6 @@
 import { requireRustRecord } from "../program/records/required-records.js";
-import { KindSpreadAssignment, ObjectLiteralProperty_Value, SpreadAssignment_Expression } from "@tsonic/target-api/source";
+import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
+import { KindSpreadAssignment, ObjectLiteralProperty_Value, SpreadAssignment_Expression, sourceNodeIdentity } from "@tsonic/target-api/source";
 import { rustEmptyObjectTargetId, rustEmptyObjectTargetType, rustSourceTypeCarrierValue, rustSourceUnionCarrierValue, rustStructuralObjectCarrierValue } from "../../target-model/types/index.js";
 
 import { appendRustDiagnostic, rustResolutionContext } from "../program/walk.js";
@@ -220,6 +221,30 @@ export function resolveRecordLiteralCarrier(
       selectedExpected = adapted;
     }
   }
+  const structural = rustStructuralObjectCarrierValue(selectedExpected);
+  if (structural !== undefined) {
+    const methods = properties.flatMap(property => {
+      if (!ast.is.IsMethodDeclaration(property) || ast.body(property) === undefined) return [];
+      const sourceName = rustRecordPropertySourceName(walk, ast.name(property));
+      const identity = sourceNodeIdentity(ast, property);
+      if (identity === undefined) failTargetAnalysisInvariant("tsonic-rust", "A literal method requires its original checked source identity.", property);
+      return sourceName === undefined || !structural.fields.some(field => field.sourceName === sourceName && field.method)
+        ? [] : [{ sourceName, identity, genericArguments: Object.freeze([]) }];
+    }).sort((left, right) => structural.fields.findIndex(field => field.sourceName === left.sourceName) -
+      structural.fields.findIndex(field => field.sourceName === right.sourceName));
+    if (methods.length !== 0) {
+      const bodyCarrier = rustStructuralObjectTargetType(ast.getFileName(sourceFile), structural.fields,
+        structural.representation, structural.construction, structural.bases, { kind: "source", methods });
+      if (!retainRustStructuralInstantiation(sourceType, selectedExpected, bodyCarrier,
+        rustResolutionContext(walk, expression), walk.operationOptions)) {
+        appendRustDiagnostic(walk, "RUST_STRUCTURAL_PROPERTY_IMPLEMENTATION_CONFLICT",
+          "An object method requires its exact checked literal body and contextual member correspondence.", expression,
+          ["target.capability=rust.structural-property.closed-storage"]);
+        return undefined;
+      }
+      selectedExpected = bodyCarrier;
+    }
+  }
   const layout = selectRustRecordLiteralLayout(walk, expression, selectedExpected, accessorSelection);
   if (layout === undefined) return undefined;
   const { resultCarrier, storage, selectedFields, selectedMethodDeclarations } = layout;
@@ -349,7 +374,7 @@ function rustSpreadSlotLifetimes(walk: RustFactWalk, sourceFile: SourceFile, car
     changed = true;
     return { ...field, type };
   });
-  return changed ? rustStructuralObjectTargetType(target.ownerFileName, fields, target.representation, target.construction, target.bases)
+  return changed ? rustStructuralObjectTargetType(target.ownerFileName, fields, target.representation, target.construction, target.bases, target.implementation)
     : carrier;
 }
 
@@ -369,5 +394,5 @@ function rustAdoptStructuralSlotLifetimes(target: TargetTypeRef, source: TargetT
     return { ...field, type };
   });
   return changed ? rustStructuralObjectTargetType(targetValue.ownerFileName, fields, targetValue.representation,
-    targetValue.construction, targetValue.bases) : target;
+    targetValue.construction, targetValue.bases, targetValue.implementation) : target;
 }

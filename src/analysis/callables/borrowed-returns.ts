@@ -49,6 +49,10 @@ function selectSourceBorrowedReturnParameter(
   const origin = origins.subjects[0]!;
   if (origin.kind !== "input" || origin.projection.length !== 0 || parameters?.includes(origin.node) !== true) return undefined;
   const parameter = origin.node;
+  const returnedType = sourceStorage.typeFor(result.subject);
+  const inputType = sourceStorage.typeFor(origin);
+  if (returnedType.kind !== "resolved" || inputType.kind !== "resolved" ||
+    source.semantics.forNode(declaration).types.relationship(returnedType.type, inputType.type) !== "identical") return undefined;
   const summary = source.navigation.parameterUseSummary(parameter);
   if (summary === undefined || summary.bindingWritten || summary.memberWritten || summary.captured ||
     summary.yielded || summary.passedAsArgument || summary.aliasedOrStored || summary.exported ||

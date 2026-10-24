@@ -29,7 +29,7 @@ export function rustCarrierWithTargetPlaceholderLifetimes(source: TargetTypeRef,
       : rustCarrierWithTargetPlaceholderLifetimes(sourceObject.construction, targetObject.construction, accepts);
     if (construction !== sourceObject.construction) changed = true;
     return changed
-      ? rustStructuralObjectTargetType(sourceObject.ownerFileName, fields, sourceObject.representation, construction, sourceObject.bases)
+      ? rustStructuralObjectTargetType(sourceObject.ownerFileName, fields, sourceObject.representation, construction, sourceObject.bases, sourceObject.implementation)
       : source;
   }
   if (source.kind !== "target-named" || target.kind !== "target-named" || source.id !== target.id) return source;

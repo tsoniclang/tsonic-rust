@@ -10,7 +10,7 @@ import { rustStringTargetType } from "../../../dist/target-model/types/index.js"
 
 function select(ast, node, operation) {
   return selectRustOperationReadUses(ast, node, { operation, computedMember: undefined, nativeInputs: [], argumentModes: [],
-    arguments: undefined, address: undefined, location: undefined, guard: undefined, callableMode: undefined });
+    arguments: undefined, address: undefined, location: undefined, guard: undefined, callableMode: undefined, structuralReceiverMode: "shared" });
 }
 
 test("nested native result lifetimes retain only their corresponding reference input", async () => {
@@ -130,7 +130,7 @@ function observed(receiver: Native, value: Native, index: number): void {
     assert.equal(abi !== undefined, true, `${operationKind} has a canonical source-evaluation ABI`);
     const operation = { kind: binary === undefined ? "provider-operation" : "runtime-set", operationId: "fixture::observe", abi };
     const uses = selectRustOperationReadUses(source.ast, node, { operation, computedMember: undefined, arguments: argumentsList,
-      nativeInputs: [], argumentModes: [], address: undefined, location: undefined, guard: undefined, callableMode: undefined });
+      nativeInputs: [], argumentModes: [], address: undefined, location: undefined, guard: undefined, callableMode: undefined, structuralReceiverMode: "shared" });
     const use = uses.get(receiver);
     assert.equal(use?.mode, "shared", `${operationKind} does not consume its source-only receiver`);
     assert.equal(use.later.length, 0, `${operationKind} holds no receiver borrow across later arguments`);
@@ -183,7 +183,7 @@ function assign(values: number[], fields: Fields, first: number, second: number)
     } };
     const select = selected => selectRustOperationReadUses(source.ast, selected.kind === "runtime-set" ? node : binary.Left, { operation: selected, computedMember: undefined,
       arguments: argumentsList, nativeInputs, argumentModes: [], address: undefined, location: undefined,
-      guard: undefined, callableMode: undefined });
+      guard: undefined, callableMode: undefined, structuralReceiverMode: "shared" });
     assert.equal(select(operation).size, 0, "consumed runtime-set native inputs do not acquire new read uses");
     const evaluationOnly = select({ ...operation, abi: { ...operation.abi,
       sourceReceiver: { ...operation.abi.sourceReceiver, disposition: "evaluation-only" },
@@ -278,7 +278,7 @@ function use(value: Value, selected: "value", holder: Key, argument: string): nu
     const literal = source.ast.is.IsStringLiteral(element.ArgumentExpression);
     for (const operation of operations) for (const accessMode of ["read", "write", "read-write"]) {
       const input = { operation, arguments: [consumed], argumentModes: [undefined], nativeInputs: [],
-        address: undefined, location: undefined, guard: undefined, callableMode: undefined };
+        address: undefined, location: undefined, guard: undefined, callableMode: undefined, structuralReceiverMode: "shared" };
       const before = selectRustOperationReadUses(source.ast, node, { ...input, computedMember: undefined });
       const fact = Object.freeze({ receiver: element.Expression, key: element.ArgumentExpression,
         evaluateReceiver: true, evaluateKey: !literal, accessMode });
@@ -322,7 +322,7 @@ export function read(value: Value, key: "value"): number { return value[key]; }
   // The published records omit the memory location families; this source has no raw addresses or typed locations.
   const computedOnly = analyzeRustReadUses(ast, [computed, fact.key], { ...program.records,
     rawAddressPlan: { get: () => undefined }, typedLocationPlan: { get: () => undefined },
-    targetOperation: { get: () => undefined } }, program.typeDefinitions, () => false);
+    targetOperation: { get: () => undefined } }, program.typeDefinitions, () => false, program.structuralShapes);
   assert.equal(computedOnly.get(fact.key)?.mode, "shared", "computed-only evidence reaches the same policy with no operation fallback");
   const read = program.ownership.reads.get(fact.key);
   assert.equal(read?.source.kind, "borrow", "the producer selects a nonconsuming source read before rendering");

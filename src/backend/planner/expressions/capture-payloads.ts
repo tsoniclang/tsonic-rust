@@ -25,8 +25,9 @@ export function rustCallablePayloadTypes(
 
 export function rustCallablePayloadContext(
   payload: RustCallableCapturePayload, owner: RustExpr, context: RustPlanContext,
+  layout: "named" | "tuple",
 ): RustPlanContext {
-  const field = (index: number): RustExpr => ({ kind: "field", receiver: owner, name: `capture_${index}` });
+  const field = (index: number): RustExpr => ({ kind: "field", receiver: owner, name: layout === "named" ? `capture_${index}` : String(index) });
   const fields = rustCapturedReceiverFieldContext(payload.receiverFields, { ...context,
     capturedBindings: payload.captures.map((capture, index) => ({
       declaration: capture.declaration, expression: { kind: "reference", expr: field(index) }, referent: field(index),

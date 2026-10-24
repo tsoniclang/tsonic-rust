@@ -187,7 +187,7 @@ export function planRustCallableExpressionBody(
       (!suspended || callableProtocol === undefined || ownedStateName === undefined)) {
     failRustPlannerInvariant("A suspended callable's retained owner conflicts with its finalized callable contract.", node);
   }
-  const leadingPlan = planRustCallableLeadingParameters(node, context);
+  const leadingPlan = planRustCallableLeadingParameters(node, context, undefined);
   if (leadingPlan === undefined) {
     failRustPlannerInvariant("Callable expression leading parameters require a finalized hygienic-name scope.", node);
   }

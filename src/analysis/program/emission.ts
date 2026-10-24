@@ -265,7 +265,7 @@ export function finalizeRustNativeEmission(
   if (propertyReadIssues.length !== 0) return rejectedTargetStage(propertyReadIssues);
   const lambdaEmissionIssues = analyzeRustLambdaEmission(program, context.nativeNodes, context.records.lambdaEmissionPlans);
   if (lambdaEmissionIssues.length !== 0) return rejectedTargetStage(lambdaEmissionIssues);
-  analyzeRustCallableEmission(program, context.nativeNodes, context.records.callableConversionPlans, context.source);
+  analyzeRustCallableEmission(program, context.nativeNodes, context.records.callableConversionPlans);
   const recordFieldIssues = analyzeRustRecordFieldStorage(program, context.nativeNodes, context.records.callableConversionPlans);
   if (recordFieldIssues.length !== 0) return rejectedTargetStage(recordFieldIssues);
   const sourceCallIssues = analyzeRustSourceCalls(program, context.nativeNodes, context.records.sourceCallPlans);

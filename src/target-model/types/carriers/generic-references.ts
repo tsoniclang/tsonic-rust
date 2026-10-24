@@ -278,6 +278,7 @@ function collectRustTargetGenericReferences(
           structural.bases.forEach(base => visitType(base, bound));
           structural.fields.forEach((field) => visitType(field.type, bound));
           if (structural.construction !== undefined) visitType(structural.construction, bound);
+          for (const method of structural.implementation?.methods ?? []) visitArguments(method.genericArguments, bound);
           return;
         }
         const union = rustSourceUnionCarrierValue(value);

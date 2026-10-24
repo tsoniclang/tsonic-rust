@@ -19,7 +19,7 @@ test("one generated union owner finalizes checked and physical definitions after
   const authoredSource = union("/src/checked.ts", [integer, rustStringTargetType()]);
   const physical = union("/src/completion.ts", [pending("LeftError"), pending("RightError")]);
   assert.throws(() => shapes.initializeUnions([]), /before source analysis/u);
-  shapes.initialize([], [], () => "root", [], []);
+  shapes.initialize([], [], () => "root", [], [], new Map());
   assert.equal(shapes.isInitialized(), true);
   assert.equal(shapes.definitions.length, 0);
   assert.throws(() => shapes.seal(), /after physical value selection/u);
@@ -30,13 +30,14 @@ test("one generated union owner finalizes checked and physical definitions after
   assert.equal(Object.isFrozen(definitions.generatedUnions()), true);
   assert.equal(definitions.generatedUnions().every(record => Object.isFrozen(record)), true);
   shapes.initializeUnions(definitions.generatedUnions());
+  shapes.finalizeMethodStorage(new Map());
   const finalized = shapes.seal();
   assert.equal(finalized.unionDefinitions.length, 1);
   assert.equal(finalized.unionForCarrier(authoredSource.carrier) === finalized.unionForCarrier(physical.carrier), true);
   assert.equal(finalized.unionForCarrier(physical.carrier).sourceCarriers.length, 2);
   assert.equal(definitions.seal().sourceUnionVariants(physical.carrier).length, 2);
   assert.throws(() => shapes.initializeUnions([]), /only once/u);
-  assert.throws(() => shapes.initialize([], [], () => "other", [], []), /only once/u);
+  assert.throws(() => shapes.initialize([], [], () => "other", [], [], new Map()), /only once/u);
 });
 
 test("physical union boundary rejects source stand-ins and hostile accessors without executing them", () => {

@@ -96,6 +96,10 @@ export function retainRustStructuralInstantiation(
     options.sourceTypes.structuralObjectForType(sourceType, carrier) !== undefined) return true;
   const template = options.sourceTypes.structuralObjectForCarrier(templateCarrier);
   if (template === undefined) return false;
+  const implementation = structural.implementation;
+  const templateImplementation = rustStructuralObjectCarrierValue(templateCarrier)?.implementation;
+  const ownsBody = implementation !== undefined && (templateImplementation === undefined ||
+    implementation.methods.some((method, index) => method.identity !== templateImplementation.methods[index]?.identity));
   const selectedContext = bindRustSourceAliasArguments(sourceType, context, options, resolving, authoredTypeNode);
   if (selectedContext === undefined) return false;
   context = selectedContext;
@@ -118,8 +122,8 @@ export function retainRustStructuralInstantiation(
     if (selected.kind !== "present" || targetField === undefined ||
       targetField.sourceName !== field.sourceName || targetField.presence !== field.presence ||
       targetField.readonly !== field.readonly ||
-      selected.source.property.optional !== selected.destination.property.optional ||
-      selected.source.property.readonly !== selected.destination.property.readonly ||
+      (!ownsBody && (selected.source.property.optional !== selected.destination.property.optional ||
+      selected.source.property.readonly !== selected.destination.property.readonly)) ||
       selected.source.read !== selected.destination.read ||
       selected.destination.declarations.length !== field.declarations.length ||
       selected.destination.declarations.some(declaration => !field.declarations.includes(declaration))) return undefined;
@@ -164,10 +168,11 @@ export function retainRustStructuralInstantiation(
     };
   });
   if (fields.some(field => field === undefined)) return false;
-  return options.sourceTypes.registerStructuralObject({ ...template, sourceType, carrier,
+  const { sourceAlias: _sourceAlias, ...literalTemplate } = template;
+  return options.sourceTypes.registerStructuralObject({ ...(ownsBody ? literalTemplate : template), sourceType, carrier,
     // The construction registers with the closed carrier it was proven equal to (placeholder lifetimes taken from it).
     ...(construction === undefined ? {} : { construction: { ...construction, carrier: structural.construction ?? construction.carrier } }),
-    fields: fields as NonNullable<(typeof fields)[number]>[] }, templateCarrier);
+    fields: fields as NonNullable<(typeof fields)[number]>[] }, ownsBody ? undefined : templateCarrier);
 }
 
 function containsStructuralStorage(carrier: TargetTypeRef, options: RustTargetTypeResolutionOptions): boolean | undefined {

@@ -360,6 +360,8 @@ function classifyStaticCarrier(
           if (structural !== undefined) {
             const fields = structural.fields.map((field, index) => {
               if (field.method !== true) return visit(field.type, bound);
+              const method = evidence?.structuralShapes?.field(value, index)?.methodPlan;
+              if (method?.kind === "fixed") return visit(method.context, bound);
               const selected = structuralMethodStorage(evidence?.structuralShapes, value, index);
               return selected === undefined
                 ? unresolved("A structural method requires its completed physical storage, not its logical call signature.")
@@ -440,10 +442,12 @@ function structuralMethodStorage(shapes: RustStructuralShapePlan | undefined, ca
   if (shapes === undefined) return undefined;
   const logical = logicalProgramErrorKey;
   const key = logical(carrier);
+  const source = rustStructuralObjectCarrierValue(carrier)?.fields[index];
+  if (source === undefined) return undefined;
   const selected = new Map<string, TargetTypeRef>();
   for (const instance of shapes.instances) {
     if (logical(instance.carrier) !== key) continue;
-    const storage = instance.fields[index]?.methodStorageCarrier;
+    const storage = instance.fields.find(field => field.sourceName === source.sourceName)?.methodPlan?.carrier;
     if (storage === undefined) return undefined;
     selected.set(closedMetadataKey(storage), storage);
   }
