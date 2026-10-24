@@ -8,7 +8,6 @@ import { rustStructuralObjectCarrierValue } from "../../target-model/types/index
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 
 import { rustCopiedMethodReceiverIsPreserved } from "../../policy/ownership/copied-methods.js";
-import { rustStructuralMethodProducers } from "../callables/structural-method-producers.js";
 
 export type RustCopiedMethodDecision =
   | { readonly kind: "proven"; readonly subject: Node }
@@ -138,10 +137,10 @@ export function selectRustCopiedMethods(
     const sources = incoming.get(identity) ?? new Set<string>();
     incoming.set(identity, sources);
     for (const requested of selected) {
-      const producers = rustStructuralMethodProducers(storage, requested.subject, requested.bindings, undefined);
+      const producers = storage.storageProducersFor(requested.subject, requested.bindings);
       if (producers.kind !== "complete") {
         independent.set(identity, { kind: "rejected", reason: producers.kind === "unresolved" ? producers.reason
-          : `The original method implementation domain remains open (${[...new Set(producers.boundaries?.map(boundary => boundary.kind) ?? ["unqualified-input"])].join(", ")}).` });
+          : `The original method implementation domain remains open (${[...new Set(producers.boundaries.map(boundary => boundary.kind))].join(", ")}).` });
         continue;
       }
       if (producers.producers.length === 0) {
