@@ -72,6 +72,44 @@ for (const [name, source] of capturedResolverPrograms) {
   });
 }
 
+for (const [name, source] of [
+  ["callback-signature-alone-does-not-prove-resolver", "function wrap<Value>(value: Value): Promise<number> {\n  return new Promise<number>(resolve => {\n    const observer = (actual: Value): void => { void actual; };\n    [value].forEach(observer);\n    resolve(7);\n  });\n}\nconsole.log(await wrap(Promise.resolve(5)));\n"],
+  ["authored-this-nonresolver", "function wrap<Value>(value: Value): Promise<number> { return new Promise<number>(resolve => { function observe(this: void, actual: Value): void { void actual; } [value].forEach(observe); resolve(7); }); }\nconsole.log(await wrap(Promise.resolve(5)));\n"],
+]) {
+  test(`prepared native callbacks retain their invocation channel independently of resolver effects: ${name}`, () => {
+    const context = analyzeRustErrorEffects("export {};\n" + source, {
+      target: { id: "rust", options: { outputType: "bin", crateName: "native_callback_inverse" } },
+    });
+    const invocations = context.sourceStorage.nodes.filter(node => {
+      const operation = context.records.targetOperation.get(node);
+      return operation?.kind === "provider-operation" && operation.operationId === "tsonic.rust.js.Array.forEach.call.value";
+    });
+    assert.equal(invocations.length, 1, "the original source has exactly one prepared native callback invocation");
+    const invocation = invocations[0];
+    const callback = context.ast.arguments(invocation)[0];
+    const callbackError = rustCallableProtocol(context.records.runtimeCarrier.get(callback)?.carrier)?.error;
+    assert.equal(rustTargetTypeRefEquals(callbackError, rustProgramErrorTargetType()), true,
+      "the selected stored callback retains its exact native program-error ABI despite its pure body");
+    const effects = context.records.errorEffects.get(invocation);
+    assert.equal(effects !== undefined, true, "the prepared invocation publishes its actual native effects");
+    assert.equal(effects.localErrors, true, "the selected native callback channel is not erased by pure implementation effects");
+    assert.equal(effects.nativeErrors.length, 0, "the sibling resolver channel is not attributed to this separate invocation");
+    const resolvers = context.sourceStorage.nodes.filter(node => {
+      const operation = context.records.targetOperation.get(node);
+      return operation?.kind === "source-call" && operation.target.form === "callable" &&
+        rustTargetTypeRefEquals(rustCallableProtocol(operation.target.carrier)?.error, rustJsValueTargetType());
+    });
+    assert.equal(resolvers.length, 1, "the independent checked resolver invocation is retained");
+    const resolverEffects = context.records.errorEffects.get(resolvers[0]);
+    assert.equal(resolverEffects !== undefined, true, "the resolver publishes its own native error selection");
+    assert.equal(resolverEffects.localErrors, false, "a genuine JsValue resolver error is not relabelled as a local error");
+    assert.equal(resolverEffects.nativeErrors.length, 1, "the resolver keeps exactly one rejection channel");
+    assert.equal(resolverEffects.nativeErrors[0].identity, "js-rejection");
+    assert.equal(rustTargetTypeRefEquals(resolverEffects.nativeErrors[0].errorType, rustJsValueTargetType()), true,
+      "the full native resolver error remains unchanged");
+  });
+}
+
 for (const [name, error, localErrors, nativeErrors] of [
   ["uninhabited", rustNamedTargetType(rustInfallibleTargetId, "Infallible"), false, 0],
   ["local program", rustProgramErrorTargetType(), true, 0],

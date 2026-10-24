@@ -4,7 +4,7 @@ import { KindCallExpression, KindNewExpression, KindVariableDeclaration, Node_Ex
 import { appendRustDiagnostic, rustOperationContext, type RustFactWalk } from "../program/walk.js";
 import type { RustEffectsWorkBudget } from "./effects-work-budget.js";
 import { rustJsRejectionErrorIdentity, type RustErrorEffectsFact } from "../../target-model/records/error-effects.js";
-import { rustLocalErrorEffects, rustPureErrorEffects } from "./error-effects.js";
+import { rustCallableInvocationErrorEffects, rustLocalErrorEffects } from "./error-effects.js";
 import type { RustSourceErrorEffectEdge } from "../../target-model/records/source-error-effects.js";
 import type { RustSourceErrorEffectSelection } from "./source-error-effects.js";
 import type { RustAwaitSourceErrorBranch } from "../../target-model/records/await-source-error-effects.js";
@@ -23,9 +23,6 @@ import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
 import { rustSourceCallCallableStorageCarrier } from "../../policy/operations/members/native-contracts.js";
 import { rustCallableProtocol } from "../../target-model/types/carriers/callables.js";
-import { rustProgramErrorOwner } from "../../target-model/types/carriers/program-errors.js";
-import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
-import { rustUninhabitedError } from "../../policy/conversions/callable-physical.js";
 
 interface RustDirectErrorEffectsInput {
   readonly walk: RustFactWalk;
@@ -100,31 +97,22 @@ export function createRustDirectErrorEffects(
     const nativeInput = walk.context.callableValues.native.callFor(node);
     const invokedError = nativeInput === undefined
       ? rustCallableProtocol(rustSourceCallCallableStorageCarrier(operation, walk.context.structuralShapes))?.error : undefined;
-    if (invokedError !== undefined) {
-      budget.metadata(invokedError);
-      const owner = rustProgramErrorOwner(invokedError);
-      if (rustUninhabitedError(invokedError)) selected.push(rustPureErrorEffects);
-      else if (owner?.kind === "logical" || owner?.kind === "physical" && owner.domain === "runtime")
-        selected.push(rustLocalErrorEffects);
-      else {
-        const identity = rustTargetTypeRefEquals(invokedError, rustJsValueTargetType())
-          ? rustJsRejectionErrorIdentity : `runtime-callable-error:${closedMetadataKey(invokedError)}`;
-        budget.metadata(identity);
-        const effects = { localErrors: false, nativeErrors: [{ identity, errorType: invokedError }] };
-        if (!selectSourceErrors.register(effects.nativeErrors)) {
-          appendRustDiagnostic(walk, "RUST_ERROR_EFFECT_CONFLICT",
-            "One native error identity has inconsistent exact carriers in this evaluation region.", node,
-            ["target.capability=rust.native-error.exact-effects"]);
-          return undefined;
-        }
-        selected.push(effects);
-      }
-    }
+    const invocationEffects = invokedError === undefined ? undefined : rustCallableInvocationErrorEffects(invokedError);
     if (kind === "KindThrowStatement" || kind === "KindRegularExpressionLiteral" ||
       operationIsFallible(node, invokedError !== undefined)) selected.push(rustLocalErrorEffects);
     const callbackEffects = preparedCallbackOperationEffects(node);
     if (callbackEffects === undefined) return undefined;
-    selected.push(callbackEffects);
+    for (const effects of [invocationEffects, callbackEffects]) {
+      if (effects === undefined) continue;
+      budget.metadata(effects);
+      if (!selectSourceErrors.register(effects.nativeErrors)) {
+        appendRustDiagnostic(walk, "RUST_ERROR_EFFECT_CONFLICT",
+          "One native error identity has inconsistent exact carriers in this evaluation region.", node,
+          ["target.capability=rust.native-error.exact-effects"]);
+        return undefined;
+      }
+      selected.push(effects);
+    }
     if (nativeInput !== undefined) selected.push({ localErrors: false,
       nativeErrors: [{ identity: nativeInput.invocationErrorSource, errorType: nativeInput.invocationError }] });
     if (kind === KindVariableDeclaration &&
