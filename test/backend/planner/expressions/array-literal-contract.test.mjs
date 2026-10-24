@@ -10,6 +10,31 @@ import { rustSourcePrimitiveTargetType } from "../../../../dist/target-model/typ
 import { analyzeRustArrayLiterals } from "../../../../dist/analysis/operations/array-literals.js";
 import { createRustArrayLiteralProducer } from "../../../../dist/analysis/program/records/array-literals.js";
 
+for (const surfaces of [[], ["js"]]) {
+  test(`array demand uses its selected formal instead of the constructor result on ${surfaces[0] ?? "native"}`, () => {
+    const { program } = analyzeRust({ surfaces, files: { "index.ts": `
+class Storage {
+  readonly values: number[] | null;
+  constructor(values: number[] | null) { this.values = values; }
+}
+export function make(): Storage { return new Storage([7]); }
+export function returned(values: number[]): number[] { return [...values]; }
+` } });
+    const { ast } = program.source;
+    const literals = [];
+    const visit = node => {
+      if (ast.is.IsArrayLiteralExpression(node)) literals.push(node);
+      ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+    };
+    program.sourceFiles.forEach(visit);
+    assert.equal(literals.length, 2, "both original constructor and return demand sites remain present");
+    for (const node of literals) {
+      assert.equal(program.records.targetOperation.get(node)?.kind, "array-literal",
+        "the selected array demand publishes its exact admitted native array record");
+    }
+  });
+}
+
 test("array construction rejects stale contribution carriers, positions and destination storage", () => {
   const { program } = analyzeRust({ surfaces: ["js"], files: { "index.ts": `
 import type { int32 } from "@tsonic/core/types.js";
