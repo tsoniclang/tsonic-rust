@@ -732,6 +732,20 @@ function createRustStructuralShapeConstruction(
         return selected;
       };
       const instances = new Map<string, RustStructuralShapeDefinition>();
+      const physicalInstances = new Map<string, RustStructuralShapeDefinition>();
+      const instantiatePhysical = (definition: RustStructuralShapeDefinition, carrier: TargetTypeRef): RustStructuralShapeDefinition | undefined => {
+        const owner = canonicalFor(definition);
+        const key = closedMetadataKey(carrier);
+        const previous = physicalInstances.get(key);
+        if (previous !== undefined) {
+          if (previous.componentId !== owner.componentId || previous.targetName !== owner.targetName)
+            failTargetAnalysisInvariant("tsonic-rust", "An exact physical structural carrier requires its one canonical native implementation owner.");
+          return previous;
+        }
+        const selected = instantiateStructuralDefinition(owner, carrier);
+        if (selected !== undefined) physicalInstances.set(key, selected);
+        return selected;
+      };
       for (const [key, selected] of byKey) {
         const origin = originsByKey.get(key);
         const replacement = origin === undefined ? undefined : replacements.get(origin);
@@ -745,22 +759,22 @@ function createRustStructuralShapeConstruction(
         const instanceCarrier = completed !== undefined ? completed.carrier : rustStructuralObjectCarrierValue(selected.carrier)?.implementation?.kind === "physical"
           ? selected.carrier : replacement === undefined || sourceBindings === undefined
           ? undefined : substituteRustTargetGenerics(replacement.carrier, sourceBindings.types, sourceBindings.lifetimes, sourceBindings.consts);
-        const instance = replacement === undefined || instanceCarrier === undefined ? undefined : instantiateStructuralDefinition(replacement, instanceCarrier);
+        const instance = replacement === undefined || instanceCarrier === undefined ? undefined : instantiatePhysical(replacement, instanceCarrier);
         if (instance === undefined) throw new Error("Structural physical storage lost its exact template-to-instance correspondence.");
         instances.set(key, instance);
       }
       const storageOwners = new Map([...byStorageKey].map(([key, definition]) => [key, canonicalFor(replacements.get(definition)!)]));
       const instanceOwners = new Map([...originsByKey].map(([key, definition]) => [key, canonicalFor(replacements.get(definition)!)]));
-      let finalInstances = Object.freeze([...instances.values()]);
+      let finalInstances = Object.freeze([...physicalInstances.values()]);
       definitions = finalDefinitions;
       const registerFinal = (definition: RustStructuralShapeDefinition, carrier: TargetTypeRef): RustStructuralShapeDefinition | undefined => {
-        const selected = instantiateStructuralDefinition(definition, carrier);
+        const selected = instantiatePhysical(definition, carrier);
         if (selected === undefined) return undefined;
         const key = closedMetadataKey(carrier);
         instances.set(key, selected);
         instanceOwners.set(key, definition);
         storageOwners.set(structuralStorageKey(carrier, componentForFile), definition);
-        finalInstances = Object.freeze([...instances.values()]);
+        finalInstances = Object.freeze([...physicalInstances.values()]);
         publishedInstances = finalInstances;
         return selected;
       };
@@ -769,7 +783,7 @@ function createRustStructuralShapeConstruction(
         if (registerFinal(replacement, selected.carrier) === undefined)
           failTargetAnalysisInvariant("tsonic-rust", "A completed structural method requires its admitted native template arguments.");
       }
-      finalInstances = Object.freeze([...instances.values()]);
+      finalInstances = Object.freeze([...physicalInstances.values()]);
       publishedInstances = finalInstances;
       const finalDefinitionFor = (carrier: TargetTypeRef | undefined): RustStructuralShapeDefinition | undefined => {
         if (carrier === undefined || rustStructuralObjectCarrierValue(carrier) === undefined) return undefined;
