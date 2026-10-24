@@ -10,9 +10,14 @@ import { rustStructuralObjectTargetType } from "../../../dist/target-model/types
 import { planRustPropertyValueProjection } from "../../../dist/backend/planner/expressions/property-value-projection.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 import { fakeAstReader, fakeSourceFile, fakeStatement } from "../../helpers/fake-compile-input.mjs";
-import { rustProgramWithTypeEmissions } from "../../helpers/plan-context.mjs";
+import { rustProgramWithTypeEmissions, rustSourceFilePlanContext } from "../../helpers/plan-context.mjs";
 import { analyzeRustPropertyValueProjection } from "../../../dist/analysis/conversions/property-value-projection.js";
 import { createRustPropertyValueProjectionProducer } from "../../../dist/analysis/program/records/property-value-projection.js";
+import { analyzeRust } from "../../helpers/rust-session.mjs";
+import { nativePropertyProjectionSource } from "../../../../tsonic/test/fixtures/native-property-projections.mjs";
+import { Node_Expression } from "@tsonic/target-api/source";
+import { planExpressionBeforeContextualConversion } from "../../../dist/backend/planner/expressions/entry.js";
+import { printRustExpr } from "../../../dist/print/source/index.js";
 
 function fixture() {
   const scalar = rustSourcePrimitiveTargetType("uint64");
@@ -107,5 +112,43 @@ test("property planning rejects absent or carrier-conflicting sealed native read
         assert.equal(producer.records.propertyValueProjection.get(node, input.source) === undefined, true,
           "a conflicting native read is never admitted");
     }
+  }
+});
+
+test("empty native property projections keep their exact source binding and temporary scope", () => {
+  const { program } = analyzeRust({ surfaces: ["js"], files: { "index.ts": nativePropertyProjectionSource } });
+  const ast = program.source.ast;
+  const nodes = [];
+  const visit = node => { nodes.push(node); ast.forEachChild(node, child => { if (child !== undefined) visit(child); }); };
+  program.sourceFiles.forEach(visit);
+  const selected = nodes.flatMap(node => {
+    const callee = ast.is.IsCallExpression(node) ? Node_Expression(ast, node) : undefined;
+    const label = ast.is.IsIdentifier(node) && ast.text(node) === "empty" ? "stored source"
+      : callee !== undefined && ast.is.IsIdentifier(callee) && ast.text(callee) === "supplyEmpty" ? "effectful source" : undefined;
+    const projection = program.records.propertyProjection.get(node)?.cases.find(value =>
+      value.conversion.kind === "js-value-from-properties" && value.conversion.fields.length === 0);
+    return label === undefined || projection === undefined ? [] : [{ node, label, projection }];
+  });
+  assert.equal(selected.length, 2, "both original empty source classes reach their actual selected projection");
+  for (const { node, label, projection } of selected) {
+    const plan = program.records.propertyValueProjection.get(node, projection.source);
+    assert.equal(plan?.contract.fields.length, 0, `${label}: absence of native field consumers is admitted before rendering`);
+    const context = rustSourceFilePlanContext(program, node);
+    const value = planExpressionBeforeContextualConversion(node, context);
+    assert.equal(value !== undefined, true, `${label}: retain the actual selected native source evaluation`);
+    const result = planRustPropertyValueProjection(plan.contract, value, context, node,
+      () => assert.fail(`${label}: an empty selected projection must not read a getter or convert a field`));
+    assert.equal(result?.kind, "block", `${label}: the existing native temporary scope remains`);
+    const bindings = result.body.statements.filter(statement => statement.kind === "let");
+    assert.equal(bindings.length, 1, `${label}: the one original source binding is neither dropped nor duplicated`);
+    assert.equal(bindings[0].init === value, true, `${label}: the exact original expression retains its evaluation and Drop scope`);
+    assert.match(bindings[0].name, /^_property_source(?:_[0-9]+)?$/u,
+      `${label}: only the intentionally unread compiler-owned binding changes its name`);
+    const tail = result.body.statements.at(-1);
+    assert.equal(tail.kind === "tail" && tail.expr.kind === "call" && tail.expr.path === "js_abi::js_value_from_optional_pairs" &&
+      tail.expr.args[0].kind === "vec-literal" && tail.expr.args[0].elements.length === 0, true,
+      `${label}: the original empty native projection result is unchanged`);
+    assert.doesNotMatch(printRustExpr(result), /let\s+_\s*=|#\[(?:allow|expect)\(/u,
+      `${label}: no wildcard Drop change or native lint waiver replaces the real binding`);
   }
 });
