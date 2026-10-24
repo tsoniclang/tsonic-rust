@@ -44,8 +44,9 @@ for (const surfaces of [[], ["js"]]) {
       const read = nodes.find(node => {
         if (!ast.is.IsPropertyAccessExpression(node)) return false;
         const access = ast.as.AsPropertyAccessExpression(node);
-        return ast.is.IsIdentifier(access.Expression) && ast.is.IsIdentifier(access.Name) &&
-          ast.text(access.Expression) === "view" && ast.text(access.Name) === "callback";
+        const name = ast.name(node);
+        return ast.is.IsIdentifier(access.Expression) && ast.is.IsIdentifier(name) &&
+          ast.text(access.Expression) === "view" && ast.text(name) === "callback";
       });
       assert.equal(read !== undefined, true, "the exact authored view.callback read is selected");
       const operation = program.records.targetOperation.get(read);

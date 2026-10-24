@@ -1,6 +1,7 @@
 import { createRustRecordFixture } from "../../helpers/records.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
+import { sourceNodeIdentity } from "@tsonic/target-api/source";
 import { analyzeRustErrorEffects } from "../../helpers/rust-error-analysis.mjs";
 import { createRustNativeOutwardResults } from "../../../dist/analysis/callables/native-outward-results.js";
 
@@ -188,7 +189,9 @@ test("callback Future physical storage reuses canonical protocol completion incl
   assert.equal(native.calls.length, 3);
   for (const call of native.calls) {
     const operation = current.context.records.targetOperation.get(call.node);
-    const arguments_ = rustNativeCallableInvocationArguments(call.input, operation);
+    const callIdentity = sourceNodeIdentity(current.context.ast, call.node);
+    assert.equal(callIdentity !== undefined, true, "the native invocation retains its original checked source identity");
+    const arguments_ = rustNativeCallableInvocationArguments(call.input, operation, callIdentity);
     assert.equal(arguments_ !== undefined, true);
     const signature = rustNativeCallableInputPhysicalSignature(call.input, arguments_);
     assert.equal(signature !== undefined, true);

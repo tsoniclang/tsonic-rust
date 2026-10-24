@@ -154,7 +154,9 @@ export function createRustNativeStorageSelection(
       const nativeCall = input.native.callFor(origin.node);
       if (nativeCall !== undefined) {
         const selected = nativeCall.input;
-        const arguments_ = rustNativeCallableInvocationArguments(selected, operation);
+        const callIdentity = sourceNodeIdentity(input.ast, origin.node);
+        const arguments_ = callIdentity === undefined ? undefined
+          : rustNativeCallableInvocationArguments(selected, operation, callIdentity);
         const signature = arguments_ === undefined ? undefined
           : rustNativeCallableInputPhysicalSignature(selected, arguments_);
         if (signature === undefined) return undefined;
