@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { targetUseSiteRef } from "@tsonic/target-api/analysis";
 import { analyzeRustErrorEffects } from "../../helpers/rust-error-analysis.mjs";
-import { boolCarrier } from "../../helpers/rust-session.mjs";
+import { analyzeRust, boolCarrier } from "../../helpers/rust-session.mjs";
 import { createRustPhysicalCallableLifecycle } from "../../../dist/analysis/callables/physical-lifecycle.js";
 import { createRustNativeCallableProducerPlan } from "../../../dist/analysis/callables/native-producers.js";
 import { createRustGenericCallablePhysicalPlan } from "../../../dist/analysis/callables/generic-physical.js";
@@ -21,6 +21,49 @@ import { prepareRustProviderSourceOccurrences } from "../../../dist/analysis/ope
 
 let checkedContext;
 let checkedProviderContext;
+for (const surfaces of [[], ["js"]]) test(`physical source inventory closes binding defaults, exports and native aggregates in ${surfaces[0] ?? "native"}`, () => {
+  const { program } = analyzeRust({ surfaces, files: { "index.ts": `
+function identity(value: boolean): boolean { return value; }
+export const { first, second = first } = { first: true, second: undefined };
+export default second;
+export function read(values: boolean[]): boolean {
+  const [head = false, ...tail] = values;
+  const functions = [identity];
+  const record = { read(): boolean { return head; } };
+  return functions[0](record.read()) && tail.length === 0;
+}
+` } });
+  const { ast } = program.source;
+  const counts = new Map();
+  const check = (node, role) => {
+    const selected = program.callableValues.nativeStorage.valueFor(node);
+    assert.equal(selected.kind !== "unresolved", true,
+      `${role}: ${selected.kind === "unresolved" ? selected.reason : "completed physical storage"}`);
+    assert.equal(program.callableValues.nativeStorage.valueFor(node) === selected, true,
+      `${role}: publication reads the original completed selection`);
+    counts.set(role, (counts.get(role) ?? 0) + 1);
+  };
+  const visit = node => {
+    if (ast.is.IsBindingElement(node)) {
+      const initializer = ast.as.AsBindingElement(node)?.Initializer;
+      if (initializer !== undefined) check(initializer, "binding default");
+    }
+    if (ast.is.IsExportAssignment(node)) check(ast.as.AsExportAssignment(node).Expression, "default export");
+    const operation = program.records.targetOperation.get(node);
+    if (operation?.kind === "array-literal" && rustCallableProtocol(operation.elementCarrier) !== undefined)
+      check(node, "callable aggregate");
+    if (operation?.kind === "record-literal" && operation.storage === "structural-object" &&
+      operation.contributions.some(contribution => contribution.kind === "structural-method"))
+      check(node, "fixed-method literal");
+    ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+  };
+  program.sourceFiles.forEach(visit);
+  assert.equal(counts.get("binding default"), 2, "both scalar and native array defaults have original physical value keys");
+  assert.equal(counts.get("default export"), 1, "the module snapshot has its actual checked expression key");
+  assert.equal(counts.get("callable aggregate"), 1, "the callable write owner has its actual aggregate key");
+  assert.equal(counts.get("fixed-method literal"), 1, "the fixed native method finalizer has its actual literal key");
+});
+
 const fixtureSource = `
 type Scalar = boolean;
 export function owner(value: boolean): boolean { return value; }

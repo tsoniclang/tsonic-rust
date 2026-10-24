@@ -9,6 +9,7 @@ import type { RustTargetGenericBindings } from "../../target-model/types/carrier
 import type { RustTargetGenericArgument, TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustProjectTypePolicy } from "../../target-model/types/project-types.js";
 import { rustCallableProtocol, rustCallableTargetType } from "../../target-model/types/carriers/callables.js";
+import { rustStructuralObjectCarrierValue } from "../../target-model/types/carriers/source-types.js";
 import { rustFrameCallableValue } from "../../target-model/types/carriers/frame-callables.js";
 import { rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
 import type { RustGenericCallableConversion } from "../../target-model/conversions/generic-callable.js";
@@ -308,6 +309,8 @@ export function prepareRustPhysicalCallableEmissionRequests(
         producer(owner, node, node, carrier);
       visitConstruct(node, node);
     } else if (operation?.kind === "record-literal") {
+      if (operation.storage === "structural-object" && rustStructuralObjectCarrierValue(operation.resultCarrier)?.implementation !== undefined)
+        request(owner, node, role, { kind: "value" }, sourceOwner);
       for (const [index, contribution] of operation.contributions.entries()) {
         if (contribution.kind === "property") {
           const property = contribution.property;
@@ -338,6 +341,8 @@ export function prepareRustPhysicalCallableEmissionRequests(
       operation?.kind === "source-accessor" && operation.receiver.kind === "static") {
       if (operation.kind === "source-static-field" && operation.classReceiver !== undefined) visitUse(operation.classReceiver, owner, "receiver", node);
     } else {
+      if (operation?.kind === "array-literal" && rustCallableProtocol(operation.elementCarrier) !== undefined)
+        request(owner, node, role, { kind: "value" }, sourceOwner);
       const children = sourceExpressionValueInputs(ast, node);
       if (children === undefined) diagnostics.push(emissionDiagnostic(node, "An emitted source value requires an admitted operation and exact source operand occurrences."));
       else for (const child of children) visitUse(child.expression, owner, inputRole(child), child.owner);
@@ -429,7 +434,12 @@ export function prepareRustPhysicalCallableEmissionRequests(
       if (operation.iterationKind === "for-in") type(owner, node, "iteration-input", operation.iterableCarrier);
     }
     const roots = sourceConstructValueInputs(ast, node);
-    for (const root of roots) visitUse(root.expression, owner, inputRole(root), root.owner);
+    for (const root of roots) {
+      visitUse(root.expression, owner, inputRole(root), root.owner);
+      if (ast.is.IsBindingElement(node) && root.slot.kind === "default" ||
+        ast.is.IsExportAssignment(node) && root.slot.kind === "initializer")
+        request(owner, root.expression, inputRole(root), { kind: "value" }, root.owner);
+    }
     const expressions = new Set(roots.map(root => root.expression));
     ast.forEachChild(node, child => {
       if (child !== undefined && !expressions.has(child) && sourceExpressionValueInputs(ast, child) === undefined &&
