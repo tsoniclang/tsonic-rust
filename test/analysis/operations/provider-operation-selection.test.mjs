@@ -15,8 +15,23 @@ import { rustOptionTargetType, rustAbsenceTargetType } from "../../../dist/targe
 import { createRustProviderPackage } from "../../../dist/public/provider.js";
 import { rustCallableTargetType } from "../../../dist/target-model/types/carriers/callables.js";
 import { analyzeRustErrorEffects } from "../../helpers/rust-error-analysis.mjs";
+import { rustUninhabitedError } from "../../../dist/policy/conversions/callable-physical.js";
+import { rustNamedTargetType } from "../../../dist/target-model/types/carriers/native.js";
+import { rustInfallibleTargetId } from "../../../dist/target-model/types/carriers/source-types.js";
 
 const unit = { kind: "tuple", elements: [] };
+
+test("uninhabited native errors retain exact identity and reject generic or foreign payloads", () => {
+  assert.equal(rustUninhabitedError({ kind: "target-named", id: rustInfallibleTargetId }), true, "native builtin identity");
+  assert.equal(rustUninhabitedError(rustNamedTargetType(rustInfallibleTargetId, "core::convert::Infallible")), true,
+    "the canonical named native declaration is uninhabited");
+  assert.equal(rustUninhabitedError(rustNamedTargetType(rustInfallibleTargetId, "core::convert::Infallible",
+    [{ kind: "type", type: unit }])), false, "an altered native generic signature is not Infallible");
+  assert.equal(rustUninhabitedError(rustNamedTargetType("fixture.Failure", "Infallible")), false,
+    "the native spelling does not substitute for declaration identity");
+  assert.equal(rustUninhabitedError({ kind: "target-named", id: rustInfallibleTargetId,
+    genericArguments: [{ kind: "type", type: unit }] }), false, "a generic builtin is not Infallible");
+});
 
 test("provider invocation domains preserve aliases and distinguish returned callable signatures", () => {
   const integer = { kind: "source-primitive", name: "int32" };
@@ -30,8 +45,8 @@ test("provider invocation domains preserve aliases and distinguish returned call
     operations: [{ exportId: "fixture.makeCallback", operationKind: "method",
       target: { form: "call", path: "fixture::make_callback" }, parameterCarriers: [],
       resultCarrier: rustCallableTargetType([integer], integer) }, {
-      exportId: "fixture.exported", operationKind: "method", target: { form: "call", path: "fixture::exported" },
-      parameterCarriers: [integer], resultCarrier: integer,
+      exportId: "fixture.exported", operationKind: "property", target: { form: "path", path: "fixture::exported" },
+      parameterCarriers: [], resultCarrier: rustCallableTargetType([integer], integer),
     }],
   });
   const context = analyzeRustErrorEffects(`
@@ -46,7 +61,7 @@ test("provider invocation domains preserve aliases and distinguish returned call
     }
   `, { packages: [provider] });
   const expected = new Map([["makeCallback", "operation"], ["factory", "operation"], ["direct", "value"],
-    ["callback", "value"], ["alias", "value"], ["exported", "operation"]]);
+    ["callback", "value"], ["alias", "value"], ["exported", "value"]]);
   let visited = 0;
   for (const node of context.sourceStorage.nodes) {
     if (!context.ast.is.IsCallExpression(node)) continue;
