@@ -55,9 +55,15 @@ class Box<Value> {
 }
 function view<Value>(owner: Box<Value>): View<Value> { return owner; }
 function detached(): (value: int32) => int32 { return view(new Box<int32>(3 as int32)).identity; }
+function detachedAlias(): (value: int32) => int32 {
+  const selected = view(new Box<int32>(5 as int32)).identity;
+  return selected;
+}
 export function main(): void {
   const identity = detached();
   if (identity(17 as int32) !== 17) throw new Error("capture-free getter escaped temporary");
+  const alias = detachedAlias();
+  if (alias(23 as int32) !== 23) throw new Error("aliased capture-free getter escaped temporary");
 }
 main();
 ` } });
