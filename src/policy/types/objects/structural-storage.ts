@@ -11,6 +11,7 @@ import { substituteRustTargetTypeParameters, substituteRustTargetGenerics } from
 import { inferRustTargetGenericBindings } from "../../../target-model/types/carriers/generic-inference.js";
 import { rustLifetimeKey } from "../../../target-model/lifetimes/index.js";
 import { rustCarrierWithTargetPlaceholderLifetimes } from "../../../target-model/types/placeholder-lifetimes.js";
+import { rustCallableTargetForSourceLifetime } from "../../conversions/value-carrier-reconciliation.js";
 
 export function structuralStorageKey(carrier: TargetTypeRef, componentForFile: (fileName: string) => string): string {
   const substitutions = new Map<string, TargetTypeRef>();
@@ -95,7 +96,7 @@ export function bindRustStructuralImplementationContract(
   contract: TargetTypeRef,
 ): TargetTypeRef | undefined {
   const source = rustStructuralObjectCarrierValue(implementation);
-  const target = rustStructuralObjectCarrierValue(contract);
+  const target = rustStructuralObjectCarrierValue(rustCallableTargetForSourceLifetime(implementation, contract));
   if (source === undefined || target === undefined) return undefined;
   const fields = target.fields.map(field => {
     const selected = source.fields.find(candidate => candidate.sourceName === field.sourceName);

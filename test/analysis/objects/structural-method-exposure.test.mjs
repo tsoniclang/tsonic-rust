@@ -30,6 +30,45 @@ test("native structural handle Clone requires no state or context Clone bound", 
     "an opaque unknown carrier does not inherit a structural handle contract");
 });
 
+for (const surfaces of [[], ["js"]]) test(`own-literal method write admission does not inherit a helper formal (${surfaces[0] ?? "native"})`, () => {
+  let context;
+  compileRust({ surfaces, files: { "index.ts": `
+function id<Value>(value: Value): Value { return value; }
+export function run(): number {
+  const local = id({ value(): number { return 1; } });
+  local.value = () => 2;
+  return local.value();
+}
+` }, compileTarget(request) {
+    context = analyzeRustCheckedContext(request);
+    return { kind: "resolved", value: { artifacts: [] }, diagnostics: context.diagnostics };
+  } });
+  assert.equal(context !== undefined, true, "the actual source owner is analyzed before native materialization");
+  const { ast, sourceStorage, source, records } = context;
+  const target = sourceStorage.nodes.find(node => ast.is.IsPropertyAccessExpression(node) &&
+    source.semantics.forNode(node).operations.propertyAccess(node)?.accessMode === "write");
+  assert.equal(target !== undefined, true, "the counterdomain retains its original checked write target");
+  const checked = source.semantics.forNode(target).operations.propertyAccess(target);
+  assert.equal(checked?.selectedDeclaration !== undefined && ast.is.IsMethodDeclaration(checked.selectedDeclaration), true,
+    "the selected member is the actual own literal body, not a shared formal signature");
+  const receiver = sourceStorage.subjectFor(checked.receiver.expression);
+  assert.equal(receiver.kind, "resolved", "the exact receiver has checked source provenance");
+  const ancestry = sourceStorage.ancestorsFor(receiver.subject);
+  const helper = sourceStorage.nodes.find(node => ast.is.IsFunctionDeclaration(node) && ast.text(ast.name(node)) === "id");
+  const parameter = helper === undefined ? undefined : ast.parameters(helper)[0];
+  assert.equal(ancestry.kind === "resolved" && ancestry.subjects.some(subject =>
+    subject.kind === "input" && subject.node === parameter), true,
+    "unscoped ancestry really contains the unrelated helper input and cannot prove receiver scope");
+  const selected = records.targetOperation.get(target);
+  assert.equal(selected?.kind === "source-field" && selected.accessMode === "write" && selected.valueSemantics.kind === "method", true,
+    "the owning source admission preserves the original concrete method write route");
+  assert.equal(records.selectedOperation.get(target)?.provenance?.sourceSelectedDeclaration === checked.selectedDeclaration, true,
+    "native selection retains the identical checked own-literal member");
+  assert.equal(context.diagnostics.some(diagnostic => diagnostic.code === "RUST_STRUCTURAL_METHOD_WRITE_UNSUPPORTED" ||
+    diagnostic.code === "RUST_STRUCTURAL_METHOD_WRITE_PROVENANCE_MISSING"), false,
+    "a helper's formal never relabels an own-literal receiver as the shared-formal v1 cut");
+});
+
 test("fixed native methods require complete readonly, required and exact body evidence", () => {
   const selected = { writes: "none", boundary: "none", extracted: false, implementations: 1, presence: "required" };
   assert.equal(selectRustStructuralMethodExposure(selected), "fixed", "one required native body has no stored callable");

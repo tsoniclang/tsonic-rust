@@ -19,17 +19,19 @@ import { rustCallableTargetId } from "../../target-model/types/carriers/source-t
 import { rustProgramErrorTargetType } from "../../target-model/types/carriers/js.js";
 import { rustJsArrayLikeElementTargetType } from "../../target-model/types/carriers/js.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
+import { rustFixedStructuralMethodDeclarations } from "./generic-values.js";
 
 export function analyzeRustLambdaEmission(program: Omit<RustAnalysisProgram, "reachability">,
   nodes: readonly Node[], producer: RustLambdaEmissionProducer): readonly TargetDiagnostic[] {
   const { ast } = program.source;
+  const fixedMethods = rustFixedStructuralMethodDeclarations(ast, program.structuralShapes);
   const issues: TargetDiagnostic[] = [];
   const reject = (node: Node, capability: string, message: string): void => {
     issues.push({ code: "RUST_UNSUPPORTED_AST", source: "tsonic-rust", category: "error", sourceNode: node,
       message: `${message} Node kind: ${ast.kindName(node)}.`, evidence: [`target.capability=${capability}`] });
   };
   for (const node of nodes) {
-    if (rustProgramNodeIsOutsideNativeCode(program, node)) continue;
+    if (fixedMethods.has(node) || rustProgramNodeIsOutsideNativeCode(program, node)) continue;
     const closure = program.records.targetOperation.get(node);
     if (closure?.kind !== "closure" || program.records.nativeParticipation.get(node) === "erased") continue;
     const captures = program.records.closureCapture.get(node);

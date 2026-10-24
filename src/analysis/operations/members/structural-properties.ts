@@ -212,13 +212,23 @@ export function selectStructuralSourceProperty(
     rustStructuralObjectCarrierValue(receiverCarrier)?.representation === "reference" &&
     (request.accessMode === "write" || request.accessMode === "read-write")) {
     const receiver = context.sourceStorage.subjectFor(request.receiver);
-    const ancestry = receiver.kind === "resolved"
-      ? context.sourceStorage.ancestorsFor(receiver.subject) : receiver;
-    if (ancestry.kind === "unresolved") {
+    const bindings = context.sourceStorage.bindingsForLexicalOwner(request.receiver);
+    if (receiver.kind === "unresolved") {
       return rejectSelectedOperation(request.expression, context,
-        "RUST_STRUCTURAL_METHOD_WRITE_PROVENANCE_MISSING", ancestry.reason);
+        "RUST_STRUCTURAL_METHOD_WRITE_PROVENANCE_MISSING", receiver.reason);
     }
-    if (ancestry.subjects.some(subject => subject.kind === "input" && subject.projection.length === 0 &&
+    if (bindings.kind === "unresolved") {
+      return rejectSelectedOperation(request.expression, context,
+        "RUST_STRUCTURAL_METHOD_WRITE_PROVENANCE_MISSING", bindings.reason);
+    }
+    const origins = context.sourceStorage.boundOriginsFor(receiver.subject, bindings.bindings);
+    const write = context.sourceStorage.writeAt(request.expression, bindings.bindings);
+    if (origins.kind === "unresolved" || write.kind === "unresolved" || write.write.reason !== undefined) {
+      return rejectSelectedOperation(request.expression, context,
+        "RUST_STRUCTURAL_METHOD_WRITE_PROVENANCE_MISSING",
+        origins.kind === "unresolved" ? origins.reason : write.kind === "unresolved" ? write.reason : write.write.reason!);
+    }
+    if (origins.subjects.some(subject => subject.kind === "input" && subject.projection.length === 0 &&
       context.ast.is.IsParameterDeclaration(subject.node))) {
       return rejectSelectedOperation(request.expression, context,
         "RUST_STRUCTURAL_METHOD_WRITE_UNSUPPORTED",

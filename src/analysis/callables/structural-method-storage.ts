@@ -399,18 +399,22 @@ export function createRustStructuralMethodStorage(input: {
           }
         }
       }
-    } else if (operation?.kind === "source-call" && operation.target.form === "structural-method") {
-      const destination = destinationFor(operation.target.receiverCarrier, operation.target.storageIndex);
+    } else {
+      const method = operation?.kind === "source-call" && operation.target.form === "structural-method" ? operation.target
+        : operation?.kind === "source-field" && operation.storage === "structural-object" && operation.valueSemantics.kind === "method" ? operation : undefined;
+      if (method === undefined) continue;
+      const destination = destinationFor(method.receiverCarrier, method.storageIndex);
       if (destination === undefined) continue;
-      const callee = Node_Expression(ast, node);
-      const subject = callee === undefined ? undefined : sourceStorage.subjectFor(callee);
-      if (subject?.kind === "resolved") register(node, destination, subject.subject);
-    } else if (operation?.kind === "source-field" && operation.storage === "structural-object" &&
-      operation.valueSemantics.kind === "method") {
-      const destination = destinationFor(operation.receiverCarrier, operation.storageIndex);
-      if (destination === undefined) continue;
-      const subject = sourceStorage.subjectFor(node);
-      if (subject.kind === "resolved") register(node, destination, subject.subject);
+      const selected = records.selectedOperation.get(node)?.provenance;
+      const receiver = asSourceNode(selected?.sourceReceiver, ast);
+      const declaration = asSourceNode(selected?.sourceSelectedDeclaration, ast);
+      if (receiver === undefined || declaration === undefined) {
+        sourceIssues.push({ subject: node, message: "Structural method storage requires its original checked receiver and member." });
+        continue;
+      }
+      const subject = sourceStorage.storageSubjectFor(receiver, [{ kind: "method-value", declaration }]);
+      if (subject.kind === "unresolved") sourceIssues.push({ subject: node, message: subject.reason });
+      else register(node, destination, subject.subject);
     }
   }
   // A method slot read through a parameter is produced by the arguments of every checked activation of the

@@ -9,6 +9,8 @@ import { rustStructuralObjectCarrierValue, rustStructuralObjectTargetType } from
 import { selectRustStructuralFieldProjection } from "../../../dist/policy/types/objects/structural-fields.js";
 import { closedMetadataKey } from "../../../dist/target-model/metadata/closed-data.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
+import { bindRustStructuralImplementationContract } from "../../../dist/policy/types/objects/structural-storage.js";
+import { rustCallableProtocol, rustCallableTargetType } from "../../../dist/target-model/types/carriers/callables.js";
 
 const scalar = { kind: "source-primitive", name: "int32" };
 const parameter = { kind: "type-parameter", identity: "T", name: "T" };
@@ -17,6 +19,27 @@ const projection = identity => ({ kind: "associated-type", owner: parameter, nam
     sourceItem: { fileName: "/source.ts", typeName: identity }, genericArguments: [], associatedConstraints: [] } });
 const field = (name, type) => ({ sourceName: name, type, presence: "required", readonly: false });
 const carrier = types => rustStructuralObjectTargetType("/source.ts", types.map((type, index) => field(`field${index}`, type)));
+
+test("structural method contracts select only actual source placeholder lifetimes before strict binding", () => {
+  const object = callable => rustStructuralObjectTargetType("/source.ts", [{ ...field("read", callable), method: true }]);
+  const contract = object(rustCallableTargetType([], scalar));
+  const concrete = object(rustCallableTargetType([], scalar, { kind: "static" }));
+  const selected = bindRustStructuralImplementationContract(concrete, contract);
+  assert.equal(selected !== undefined, true, "an actual capture-free native method completes its placeholder contract");
+  assert.equal(rustTargetTypeRefEquals(selected, concrete), true, "the exact physical implementation is preserved");
+  assert.equal(rustCallableProtocol(rustStructuralObjectCarrierValue(contract).fields[0].type).lifetime.kind, "placeholder",
+    "logical checked method metadata is never rewritten by physical completion");
+  const borrowed = { kind: "parameter", identity: "actual-native-capture", name: "capture" };
+  const captured = object(rustCallableTargetType([], scalar, borrowed));
+  const selectedBorrow = bindRustStructuralImplementationContract(captured, contract);
+  assert.equal(selectedBorrow !== undefined && rustTargetTypeRefEquals(selectedBorrow, captured), true,
+    "a real borrowed native lifetime retains its exact identity rather than becoming static");
+  const explicit = object(rustCallableTargetType([], scalar, { kind: "parameter", identity: "other-owner", name: "other" }));
+  assert.equal(bindRustStructuralImplementationContract(concrete, explicit) === undefined, true,
+    "an authored non-placeholder native lifetime is not relaxed to force compatibility");
+  assert.equal(bindRustStructuralImplementationContract(concrete, object(rustCallableTargetType([scalar], scalar))) === undefined, true,
+    "lifetime completion never relaxes the exact native parameter geometry");
+});
 
 function registeredShape(selected, sourceType, sourceAlias) {
   return { sourceType, ...(sourceAlias === undefined ? {} : { sourceAlias }), carrier: selected, storage: "structural-object",
