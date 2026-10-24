@@ -1,5 +1,5 @@
 import type { TargetTypeRef } from "../model.js";
-import { rustNamedTargetType, rustNativeTraitRef } from "./native.js";
+import { rustNamedTargetType, rustNativeTraitRef, rustNamedTypeTraitContract } from "./native.js";
 import type { RustLifetimeRef } from "../../lifetimes/index.js";
 import { rustCallableTargetId } from "./source-types.js";
 
@@ -22,11 +22,11 @@ export function rustRuntimeCallableTargetType(
     { kind: "lifetime", lifetime },
     { kind: "type", type: { kind: "tuple", elements: parameters } },
     { kind: "type", type: completion },
-  ], [], { implementations: [
+  ], [], rustNamedTypeTraitContract([
     { trait: rustNativeTraitRef("core::clone::Clone"), requirements: [] },
     { trait: rustNativeTraitRef("core::cmp::PartialEq"), requirements: [] },
     { trait: rustNativeTraitRef("core::cmp::Eq"), requirements: [] },
-  ] });
+  ]));
 }
 
 export function rustRuntimeRecordFieldTargetType(value: TargetTypeRef, error: TargetTypeRef): TargetTypeRef {

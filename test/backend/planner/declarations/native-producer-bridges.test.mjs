@@ -23,6 +23,33 @@ function withProtocolRecord(fixture, variant) {
 const integer = rustSourcePrimitiveTargetType("uint64");
 const borrowed = { kind: "reference", referent: rustStrTargetType(), mutable: false };
 
+test("producer fixtures preserve the complete sealed native-input contract and exact source-item identity", () => {
+  const fixture = nativeProducerFixture({ parameters: [integer], result: integer });
+  const native = fixture.program.callableValues.native;
+  const protocol = fixture.protocol;
+  assert.equal(Object.isFrozen(native), true, "native input plan is sealed");
+  for (const method of ["callFor", "inputsFor", "capturesFor", "protocolForSourceItem",
+    "isConcreteCallableParameter", "isNativeRetainedParameter"]) {
+    assert.equal(typeof native[method], "function", `native input contract includes ${method}`);
+  }
+  for (const inventory of ["inputs", "calls", "protocols"]) {
+    assert.equal(Object.isFrozen(native[inventory]), true, `native ${inventory} inventory is sealed`);
+  }
+  assert.equal(native.inputs.length, 0, "checked probe has no native input parameters");
+  assert.equal(native.calls.length, 0, "checked probe has no native input calls");
+  assert.equal(native.protocols.includes(protocol), true, "bound protocol is in the actual registry inventory");
+  assert.equal(native.protocolForSourceItem(protocol.ownerFileName, protocol.targetName) === protocol,
+    true, "exact source-item owner and name select the bound protocol");
+  assert.equal(native.protocolForSourceItem(`${protocol.ownerFileName}.foreign`, protocol.targetName) === undefined,
+    true, "another source owner cannot claim the protocol");
+  assert.equal(native.protocolForSourceItem(protocol.ownerFileName, `${protocol.targetName}Missing`) === undefined,
+    true, "an absent source-item name cannot manufacture a protocol");
+  assert.deepEqual(fixture.program.records.sourceTypeIdentity.get(protocol.ownerFileName, protocol.targetName),
+    { targetName: protocol.targetName, native: true }, "project admission records the actual native source identity");
+  assert.equal(fixture.program.records.sourceTypeIdentity.get(`${protocol.ownerFileName}.foreign`, protocol.targetName) === undefined,
+    true, "project admission does not publish a foreign source identity");
+});
+
 test("unbound protocols receive one exact producer impl without intermediate traits or storage", () => {
   const fixture = nativeProducerFixture({ parameters: [integer], result: integer });
   const items = nativeProducerItems(fixture);
