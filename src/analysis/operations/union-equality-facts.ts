@@ -18,6 +18,6 @@ export function rustUnionEqualityFactMatches(
     operator !== (fact.negated ? "KindExclamationEqualsEqualsToken" : "KindEqualsEqualsEqualsToken") ||
     !rustTargetTypeRefEquals(leftCarrier, fact.leftCarrier) || !rustTargetTypeRefEquals(rightCarrier, fact.rightCarrier) ||
     !rustTargetTypeRefEquals(fact.resultCarrier, rustSourcePrimitiveTargetType("bool"))) return false;
-  const contract = selectRustUnionEquality(fact.leftCarrier, fact.rightCarrier, definitions);
+  const contract = selectRustUnionEquality(fact.negated ? "!==" : "===", fact.leftCarrier, fact.rightCarrier, definitions);
   return contract !== undefined && contract.exhaustive === fact.exhaustive && closedMetadataEquals(contract.arms, fact.arms);
 }

@@ -84,7 +84,7 @@ import { analyzeRustConstructionEmission } from "../project-types/construction-e
 import { analyzeRustClassEmission } from "../declarations/classes/planning.js";
 import { analyzeRustNativeMemberVisibility } from "../names/native-member-names.js";
 import { analyzeRustProjectEmission } from "../project-types/emission.js";
-import { analyzeRustOptionalStorageEmission } from "../project-types/optional-storage-emission.js";
+import { analyzeRustOptionalStorageCallEmission } from "../project-types/optional-storage-emission.js";
 import { analyzeRustClassValueEmission } from "../objects/class-value-emission.js";
 import { analyzeRustCarrierReads } from "../ownership/carrier-reads.js";
 import { analyzeRustProviderMutableEmission } from "../storage/provider-mutable-emission.js";
@@ -199,7 +199,7 @@ export function finalizeRustNativeEmission(
     context.records.errorTransportEmissionPlans, context.records.conversionEmissionPlans);
   if (closedErrorValueIssues.length !== 0) return rejectedTargetStage(closedErrorValueIssues);
   analyzeRustProjectEmission({ program, nodes: context.nativeNodes, producer: context.records.projectEmissionPlans });
-  analyzeRustOptionalStorageEmission(program, context.nativeNodes, context.records.projectEmissionPlans);
+  analyzeRustOptionalStorageCallEmission(program, context.nativeNodes, context.records.projectEmissionPlans);
   const structuralEmissionIssues = analyzeRustStructuralEmission(program, context.records.structuralEmissionPlans);
   if (structuralEmissionIssues.length !== 0) return rejectedTargetStage(structuralEmissionIssues);
   analyzeRustStoredFields(program, context.nativeNodes, context.records.storedFieldPlans);
@@ -338,7 +338,7 @@ export function finalizeRustNativeEmission(
   const errorObservationIssues = admitRustErrorObservations(program, context.nativeNodes);
   if (errorObservationIssues.length !== 0) return rejectedTargetStage(errorObservationIssues);
   analyzeRustTypeEmission(program, context.nativeNodes, context.records.typeEmissionPlans,
-    [...nativeLayoutTypes, ...sourceCallableEmission.types, ...objectReferenceEmission.types]);
+    [...nativeLayoutTypes, ...sourceCallableEmission.types, ...objectReferenceEmission.types], context.records.projectEmissionPlans);
   const errorModuleIssues = analyzeRustProgramErrorModuleEmission(program, errorEmission.plan, context.records.errorTransportEmissionPlans);
   if (errorModuleIssues.length !== 0) return rejectedTargetStage(errorModuleIssues);
   // Storage visibility covers every declaration a native class layout stores: members, constructor parameter

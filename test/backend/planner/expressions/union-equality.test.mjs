@@ -96,6 +96,52 @@ export function stable(left: Choice, right: Choice): boolean { return left === r
     "the first native statement releases temporary guards before the later mutation");
 });
 
+test("native union equality keeps independent eq and ne calls and exact absent-arm polarity", () => {
+  for (const surfaces of [[], ["js"]]) {
+    const { program } = analyzeRust({ surfaces, files: { "index.ts": `
+class Token { value: number = 1; }
+type Choice = string | Token;
+export function same(left: Choice | undefined, right: Choice | undefined): boolean { return left === right; }
+export function different(left: Choice | undefined, right: Choice | undefined): boolean { return left !== right; }
+` } });
+    const ast = program.source.ast;
+    const comparisons = [];
+    const visit = node => {
+      const selected = program.records.unionEquality.get(node);
+      if (selected !== undefined) comparisons.push({ node, selected });
+      ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+    };
+    program.sourceFiles.forEach(visit);
+    assert.equal(comparisons.length, 2, "both authored native union comparisons reach the sealed owner");
+    for (const { node, selected } of comparisons) {
+      const method = selected.fact.negated ? "ne" : "eq";
+      const label = (surfaces[0] ?? "native") + ": " + method;
+      const object = selected.arms.find(arm => arm.operation.kind === "operator-call" &&
+        arm.operation.path.startsWith("core::cmp::PartialEq::"));
+      assert.equal(object !== undefined, true, label + ": the original native object arm remains present");
+      assert.equal(object.operation.path, `core::cmp::PartialEq::${method}`,
+        label + ": the native ne implementation is not derived from eq");
+      assert.equal(object.operation.operandModes.every(mode => mode === "ref"), true,
+        label + ": native object comparison borrows both original payloads");
+      const absent = selected.arms.find(arm => arm.left.absence && arm.right.absence);
+      assert.equal(absent !== undefined, true, label + ": one native absence pair remains present");
+      assert.equal(absent.constant, !selected.fact.negated, label + ": the absent pair has its exact native result");
+      assert.equal(selected.unmatchedResult, selected.fact.negated, label + ": disjoint native variants keep authored polarity");
+      assert.equal(Object.hasOwn(selected, "fallback"), false, label + ": only the current unmatched-result data reaches rendering");
+      const context = planningContext(program, node);
+      const planned = planBinaryExpression(node, context);
+      assert.equal(planned !== undefined, true, label + ": the admitted native plan renders");
+      assertNoTargetDiagnostics(context.diagnostics);
+      const output = printRustExpr(planned);
+      assert.equal(output.includes(`core::cmp::PartialEq::${method}`), true, label + ": exact native call emitted");
+      assert.equal(output.includes(`core::cmp::PartialEq::${method === "eq" ? "ne" : "eq"}`), false,
+        label + ": opposite native implementation is not substituted");
+      assert.doesNotMatch(output, /!\s*match|\.clone\(|Box::|Arc::|Rc::|dyn |from_closed/u,
+        label + ": no global negation, copied payload or new compatibility carrier");
+    }
+  }
+});
+
 test("inferred cross-file optional unions retain absence and compare literals without enum injection", () => {
   const { program } = analyzeRust({ target: { id: "rust", options: { outputType: "bin" } }, files: {
     ...crossFileBranchUnionFiles, "index.ts": crossFileBranchUnionFiles["index.ts"] +

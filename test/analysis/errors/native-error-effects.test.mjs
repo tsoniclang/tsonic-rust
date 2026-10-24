@@ -42,7 +42,11 @@ function analyzedFixture(program) {
   return { program, ast, nodes, declaration, effects,
     initializer: name => Node_Initializer(ast, declaration(name)),
     callable: name => effects(declaration(name)),
-    calls: name => nodes.filter(node => ast.is.IsCallExpression(node) && ast.text(Node_Expression(ast, node)) === name) };
+    calls: name => nodes.filter(node => {
+      if (!ast.is.IsCallExpression(node)) return false;
+      const callee = Node_Expression(ast, node);
+      return callee !== undefined && ast.is.IsIdentifier(callee) && ast.text(callee) === name;
+    }) };
 }
 
 function assertChannels(actual, expected, localErrors = false) {
@@ -156,8 +160,13 @@ for (const [name, body, callbacks, localErrors] of [
       return { identity: native.invocationErrorSource, errorType: native.invocationError };
     });
     assertChannels(current.callable("deliver"), expected, localErrors);
-    const prepared = current.nodes.filter(node => current.ast.is.IsCallExpression(node) &&
-      current.ast.text(Node_Expression(current.ast, node)).endsWith(".forEach"));
+    const prepared = current.nodes.filter(node => {
+      if (!current.ast.is.IsCallExpression(node)) return false;
+      const callee = Node_Expression(current.ast, node);
+      const name = callee !== undefined && current.ast.is.IsPropertyAccessExpression(callee)
+        ? current.ast.name(callee) : undefined;
+      return name !== undefined && current.ast.is.IsIdentifier(name) && current.ast.text(name) === "forEach";
+    });
     assert.equal(prepared.length, name === "nested prepared callbacks" ? 2 : 1,
       "every prepared operation remains in the checked source");
     for (const operation of prepared) assertChannels(current.effects(operation), expected, localErrors);
