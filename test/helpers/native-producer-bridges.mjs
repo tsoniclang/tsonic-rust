@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { createRustNativeCallableProtocolRegistry } from "../../dist/analysis/callables/native-protocols.js";
 import { analyzeRustNativeProtocolEmission } from "../../dist/analysis/callables/native-protocol-emission.js";
 import { createRustNativeProtocolProducer } from "../../dist/analysis/program/records/native-protocol-emission.js";
+import { sealRustNativeCallableDispatch } from "../../dist/analysis/program/records/native-dispatch.js";
 import { analyzeRustTypeEmission } from "../../dist/analysis/source-evidence/types/emission.js";
 import { createRustTypeEmissionProducer } from "../../dist/analysis/program/records/type-emission.js";
 import { analyzeRustProjectEmission } from "../../dist/analysis/project-types/emission.js";
@@ -28,11 +29,18 @@ export function nativeProducerFixture({
   const [sourceFile] = rustProgramSourceFiles(base);
   const protocol = protocols.bind(base.source.ast.getFileName(sourceFile), carrier)?.protocol;
   assert.equal(protocol !== undefined, true, `${identity}: protocol exists`);
+  const selectedProtocols = protocols.definitions();
+  const sourceProtocols = new Map(selectedProtocols.map(selected => [selected.targetName, selected]));
+  const nativeInputs = Object.freeze({ ...base.callableValues.native, protocols: selectedProtocols,
+    protocolForSourceItem: (fileName, typeName) => {
+      const selected = sourceProtocols.get(typeName);
+      return selected?.ownerFileName === fileName ? selected : undefined;
+    } });
   const native = createRustNativeProtocolProducer(() => {});
   const callableValues = { ...base.callableValues,
-    native: { inputs: [], calls: [], protocols: protocols.definitions() },
-    nativeDispatch: { requiredFor: candidate => candidate === protocol },
-    nativeGenericProducers: { unresolved: [], forProtocol: () => [] } };
+    native: nativeInputs,
+    nativeDispatch: sealRustNativeCallableDispatch(new Map(selectedProtocols.map(selected =>
+      [selected, selected === protocol]))) };
   const issues = analyzeRustNativeProtocolEmission({ program: { ...base, typeDefinitions: definitions, callableValues },
     sourceFiles: [sourceFile], producer: native });
   assert.deepEqual(issues, [], `${identity}: native protocol emission`);
