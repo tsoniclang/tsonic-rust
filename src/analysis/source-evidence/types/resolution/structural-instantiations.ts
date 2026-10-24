@@ -172,7 +172,8 @@ export function retainRustStructuralInstantiation(
   return options.sourceTypes.registerStructuralObject({ ...(ownsBody ? literalTemplate : template), sourceType, carrier,
     // The construction registers with the closed carrier it was proven equal to (placeholder lifetimes taken from it).
     ...(construction === undefined ? {} : { construction: { ...construction, carrier: structural.construction ?? construction.carrier } }),
-    fields: fields as NonNullable<(typeof fields)[number]>[] }, ownsBody ? undefined : templateCarrier);
+    fields: fields as NonNullable<(typeof fields)[number]>[] }, ownsBody
+    ? { kind: "root" } : { kind: "generic-instantiation", template: templateCarrier });
 }
 
 function containsStructuralStorage(carrier: TargetTypeRef, options: RustTargetTypeResolutionOptions): boolean | undefined {

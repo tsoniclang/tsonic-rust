@@ -18,6 +18,52 @@ const projection = identity => ({ kind: "associated-type", owner: parameter, nam
 const field = (name, type) => ({ sourceName: name, type, presence: "required", readonly: false });
 const carrier = types => rustStructuralObjectTargetType("/source.ts", types.map((type, index) => field(`field${index}`, type)));
 
+function registeredShape(selected, sourceType, sourceAlias) {
+  return { sourceType, ...(sourceAlias === undefined ? {} : { sourceAlias }), carrier: selected, storage: "structural-object",
+    fields: rustStructuralObjectCarrierValue(selected).fields.map((entry, storageIndex) => ({ ...entry,
+      declarations: [], symbols: [], sourceType, resultCarrier: entry.type, storageIndex })) };
+}
+
+test("structural registration requires the actual relation instead of accepting the superseded template argument", () => {
+  const registry = createRustSourceTypeRegistry();
+  const shape = registeredShape(carrier([scalar]), {});
+  for (const registration of [undefined, null, shape.carrier, { kind: "generic-instantiation" },
+    { kind: "unqualified", template: shape.carrier }]) {
+    assert.equal(registry.registerStructuralObject(shape, registration), false, "malformed or superseded registration is rejected");
+    assert.equal(registry.structuralObjects().length, 0, "rejection publishes no partial shape");
+  }
+  assert.equal(registry.registerStructuralObject(shape, { kind: "root" }), true);
+  assert.equal(registry.structuralInstantiations().length, 0, "an actual root invents no generic edge");
+});
+
+test("late alias registration cannot turn an explicitly independent root into a generic instance", () => {
+  for (const aliasFirst of [true, false]) {
+    const registry = createRustSourceTypeRegistry();
+    const declaration = {};
+    const template = carrier([parameter]);
+    const independent = carrier([scalar]);
+    assert.equal(registry.registerStructuralObject(registeredShape(template, {}, declaration), { kind: "root" }), true);
+    if (aliasFirst) assert.equal(registry.registerRepresentationAlias(declaration, template), true);
+    assert.equal(registry.registerStructuralObject(registeredShape(independent, {}, declaration), { kind: "root" }), true);
+    assert.equal(registry.registerRepresentationAlias(declaration, template), true);
+    assert.equal(registry.structuralInstantiations().length, 0, "only an actual generic producer may publish a generic edge");
+    const plan = createRustStructuralShapePlan(registry.structuralObjects(), [], () => "source", [], new Map(), registry.structuralInstantiations());
+    assert.equal(plan.definitions.length, 2, "the registry preserves the actual independent physical roots");
+    assert.equal(plan.sharesStorage(template, independent), false);
+  }
+});
+
+test("declaring a generic relation never weakens exact native geometry and generic correspondence", () => {
+  const original = carrier([parameter]);
+  const incompatible = rustStructuralObjectTargetType("/source.ts", [{ ...field("field0", scalar), readonly: true }]);
+  const registry = createRustSourceTypeRegistry();
+  assert.equal(registry.registerStructuralObject(registeredShape(original, {}), { kind: "root" }), true);
+  assert.equal(registry.registerStructuralObject(registeredShape(incompatible, {}),
+    { kind: "generic-instantiation", template: original }), true);
+  assert.throws(() => createRustStructuralShapePlan(registry.structuralObjects(), [], () => "source", [], new Map(), registry.structuralInstantiations()),
+    /exact generic-parameter correspondence/u, "a producer cannot use a generic tag to bypass mismatched native field contracts");
+});
+
 test("physical instances do not replace or ambiguate the checked logical type template", () => {
   const sourceType = {};
   const registry = createRustSourceTypeRegistry();
@@ -27,14 +73,14 @@ test("physical instances do not replace or ambiguate the checked logical type te
     fields: rustStructuralObjectCarrierValue(selectedCarrier).fields.map((entry, storageIndex) => ({
       ...entry, declarations: [], symbols: [], sourceType: {}, resultCarrier: entry.type, storageIndex,
     })) });
-  assert.equal(registry.registerStructuralObject(shape(template)), true);
-  assert.equal(registry.registerStructuralObject(shape(instance), template), true);
-  assert.equal(registry.registerStructuralObject(shape(instance), template), true);
+  assert.equal(registry.registerStructuralObject(shape(template), { kind: "root" }), true);
+  assert.equal(registry.registerStructuralObject(shape(instance), { kind: "generic-instantiation", template }), true);
+  assert.equal(registry.registerStructuralObject(shape(instance), { kind: "generic-instantiation", template }), true);
   assert.equal(rustTargetTypeRefEquals(registry.structuralObjectForType(sourceType).carrier, template), true);
   assert.equal(rustTargetTypeRefEquals(registry.structuralObjectForType(sourceType, instance).carrier, instance), true);
   assert.equal(registry.structuralObjectForType({}, instance), undefined);
   assert.equal(registry.structuralInstantiations().length, 1);
-  assert.equal(registry.registerStructuralObject(shape(carrier([{ kind: "source-primitive", name: "uint32" }]))), true);
+  assert.equal(registry.registerStructuralObject(shape(carrier([{ kind: "source-primitive", name: "uint32" }])), { kind: "root" }), true);
   assert.equal(registry.structuralObjectForType(sourceType), undefined);
 });
 
@@ -66,12 +112,12 @@ test("exact structural alias instances retain their generic root in either regis
   });
   for (const aliasFirst of [true, false]) {
     const registry = createRustSourceTypeRegistry();
-    assert.equal(registry.registerStructuralObject(shape(root, declaration)), true);
+    assert.equal(registry.registerStructuralObject(shape(root, declaration), { kind: "root" }), true);
     if (aliasFirst) assert.equal(registry.registerRepresentationAlias(declaration, root), true);
     const partial = shape(middle, declaration);
-    assert.equal(registry.registerStructuralObject(partial), true);
-    assert.equal(registry.registerStructuralObject(partial), true);
-    assert.equal(registry.registerStructuralObject(shape(selected, otherDeclaration), middle), true);
+    assert.equal(registry.registerStructuralObject(partial, { kind: "generic-instantiation", template: root }), true);
+    assert.equal(registry.registerStructuralObject(partial, { kind: "generic-instantiation", template: root }), true);
+    assert.equal(registry.registerStructuralObject(shape(selected, otherDeclaration), { kind: "generic-instantiation", template: middle }), true);
     if (!aliasFirst) assert.equal(registry.registerRepresentationAlias(declaration, root), true);
     assert.equal(registry.registerRepresentationAlias(declaration, root), true);
     assert.equal(registry.structuralInstantiations().length, 2);
@@ -97,9 +143,9 @@ test("structural alias registration never joins unrelated declarations by their 
   const root = carrier([parameter]);
   const selected = carrier([scalar]);
   assert.equal(registry.registerStructuralObject({ sourceType: {}, sourceAlias: declaration,
-    carrier: root, storage: "structural-object", fields: [] }), true);
+    carrier: root, storage: "structural-object", fields: [] }, { kind: "root" }), true);
   assert.equal(registry.registerStructuralObject({ sourceType: {}, sourceAlias: otherDeclaration,
-    carrier: selected, storage: "structural-object", fields: [] }), true);
+    carrier: selected, storage: "structural-object", fields: [] }, { kind: "root" }), true);
   assert.equal(registry.registerRepresentationAlias(declaration, root), true);
   assert.deepEqual(registry.structuralInstantiations(), []);
 });
@@ -118,7 +164,7 @@ function fixture() {
     sourceType: {}, resultCarrier: entry.type, storageIndex: index,
   }));
   assert.equal(sourceTypes.registerStructuralObject({ sourceType: templateType, carrier: templateCarrier,
-    storage: "structural-object", fields }), true);
+    storage: "structural-object", fields }, { kind: "root" }), true);
   const member = (symbol, declaration) => ({ property: { symbol, rootSymbols: [], optional: false, readonly: false, type: {} },
     declarations: [declaration], getters: [], setters: [], read: "property" });
   const correspondence = { kind: "available",

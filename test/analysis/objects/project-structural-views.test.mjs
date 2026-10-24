@@ -125,7 +125,7 @@ function structuralFieldSelection({ callable = false, accessor = false, nativeRe
   // A generalized destination registers its own shape storage as an instance of the view's structural template.
   const registrations = [];
   const sourceTypes = { structuralInstantiations: () => [{ template, instance: carrier }], typeFamilies: { get: () => undefined },
-    registerStructuralObject: (shape, selectedTemplate) => { registrations.push({ shape, template: selectedTemplate }); return true; } };
+    registerStructuralObject: (shape, registration) => { registrations.push({ shape, registration }); return true; } };
   const walk = { sourceTypes, operationOptions: { projectTypes, sourceTypes, receiverFieldAliases: { aliasFor: () => undefined } },
     context: { ast, projectTypes, typeDefinitions: emptyRustTypeDefinitions, semanticsFor: () => semantics,
       sourceStorage: {
@@ -166,7 +166,7 @@ for (const accessor of [false, true]) for (const nativeReadonly of [false, true]
       ...(field.accessor === undefined ? {} : { accessor: { ...field.accessor, setter: true } }),
     })), logical.representation, logical.construction, logical.bases, logical.implementation);
     const originalField = shape.fields[0];
-    walk.sourceTypes.structuralInstantiations = () => [{ template: logicalTemplate, instance: shape.carrier }];
+    walk.sourceTypes.structuralInstantiations = () => [{ template, instance: shape.carrier }];
     const generalized = generalizeRustProjectStructuralView(view, shape, walk, sources);
     assert.equal(generalized !== undefined, true, "the selected native role survives generic inference");
     const physical = rustStructuralObjectCarrierValue(generalized.targetCarrier);
@@ -176,7 +176,8 @@ for (const accessor of [false, true]) for (const nativeReadonly of [false, true]
       "all native type and role correspondence remains exact");
     const registration = registrations[0];
     assert.equal(registration !== undefined, true, "the generalized native instance is registered before publication");
-    assert.equal(registration.template === logicalTemplate, true, "the original logical template is the existing registration seam");
+    assert.equal(registration.registration.kind, "generic-instantiation", "only actual substitution shares native storage");
+    assert.equal(registration.registration.template === template, true, "the selected native template owns the actual generic instance");
     assert.equal(registration.shape.sourceType === shape.sourceType, true, "the checked logical source type is unchanged");
     assert.equal(registration.shape.fields[0].declarations === originalField.declarations, true, "member declarations are unchanged");
     assert.equal(registration.shape.fields[0].symbols === originalField.symbols, true, "member symbols are unchanged");
@@ -235,7 +236,8 @@ test("open structural selection rejects malformed identity and contradictory ada
     assert.equal(generalizeRustProjectStructuralView(candidate, shape, walk, sources) === undefined, true, label);
   }
   walk.sourceTypes.structuralInstantiations = () => [{ template: shape.carrier, instance: shape.carrier },
-    { template: target(parameter), instance: shape.carrier }, { template: target(otherParameter), instance: shape.carrier }];
+    { template: target(parameter), instance: shape.carrier },
+    { template: target(otherParameter), instance: shape.carrier }];
   assert.equal(generalizeRustProjectStructuralView(view, shape, walk, sources) === undefined, true, "ambiguous destination templates");
 });
 

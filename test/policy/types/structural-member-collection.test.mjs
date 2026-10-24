@@ -31,7 +31,11 @@ function scenario(count) {
       },
     },
   };
-  const options = { sourceTypes: { registerStructuralObject() { publications++; return true; } } };
+  const options = { sourceTypes: { registerStructuralObject(shape, registration) {
+    assert.equal(registration.kind, "root", "checked structural collection registers its actual root");
+    publications++;
+    return true;
+  } } };
   return { context, options, counts: () => ({ laterReads, publications }) };
 }
 

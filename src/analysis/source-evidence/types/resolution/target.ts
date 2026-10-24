@@ -482,7 +482,7 @@ export function resolveStructuralObjectType(
     storage: "structural-object",
     fields,
     ...(construction === undefined ? {} : { construction }),
-  })
+  }, { kind: "root" })
     ? carrier
     : undefined;
 }
