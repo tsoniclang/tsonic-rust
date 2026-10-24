@@ -32,14 +32,24 @@ export function create(): (value: int32) => int64 {
   const selectedRecords = createRustRecordFixture({ contextualValueConversion: { get: node => node === current.node
     ? { sourceCarrier: source, targetCarrier: target, conversion } : records.contextualValueConversion.get(node) } }, records);
   const nativeNodes = new Set(rustNativeFixtureNodes(current.program));
+  const nativeTasks = [...nativeNodes].flatMap(node => {
+    const selected = records.nativeTaskUse.get(node);
+    return selected?.kind === "spawn" ? [{ node, operand: selected.operand, selection: selected.completion }] : [];
+  });
   const regions = analyzeRustErrorRegions({ ast: current.program.source.ast, sourceFiles: current.program.records.sourceArtifacts.get().map(artifact => artifact.sourceFile),
     isNativeNode: node => nativeNodes.has(node), records: selectedRecords, names: current.program.names,
     components: current.program.sourcePackageComponents, producers: current.program.callableValues.nativeProducers,
     definitions: current.program.typeDefinitions, callables: current.program.callableValues,
-    promiseBodies: current.program.promiseBodies });
+    promiseBodies: current.program.promiseBodies, nativeTasks, binaryHooks: current.program.binaryHooks });
   assert.equal(regions.kind, "resolved", "the exact constructed adapter inputs publish their required native error joins");
+  const initialization = current.program.errorRegions.initialization;
+  const owner = initialization.binary.lifecycle.region.localOwner;
+  assert.equal(owner !== undefined, true, "the actual synchronous adapter fixture has its selected lifecycle owner");
+  const lifecycle = regions.value.lifecycleFor([initialization.root,
+    ...initialization.workers.map(worker => worker.initializer)], owner);
+  assert.equal(lifecycle.kind, "resolved", "the actual initializer and task inventory select their native lifecycle");
   const program = { ...current.program, records: selectedRecords,
-    errorRegions: { ...regions.value, initialization: current.program.errorRegions.initialization } };
+    errorRegions: regions.value.complete(initialization) };
   current.context.input = createRustPlanningContext(program);
   const expression = current.plan();
   assert.equal(expression !== undefined, true, "physical fallible producer plans");
