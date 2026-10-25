@@ -17,15 +17,21 @@ import { mapRustTargetTypes, substituteRustTargetTypeParameters } from "../../ta
 import { rustTypeFamilyNormalizer } from "../project-types/type-family-normalization.js";
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
 import { rustJsArrayEntriesElementTargetType } from "../../target-model/types/carriers/array-entries.js";
+import { rustJsArrayLikeElementTargetType } from "../../target-model/types/carriers/js.js";
 import { rustTargetTypeParameterIdentities } from "../../target-model/types/carriers/generic-references.js";
 
 import { createRustProjectProjectionRequirementCollector } from "./project-projection-requirements.js";
 
 import { ElementAccessExpression_ArgumentExpression, KindBinaryExpression, KindExpressionStatement, Node_Expression, sourceParameterIsProperty } from "@tsonic/target-api/source";
-import { rustValueCarrierBeforeOptionProjection } from "../conversions/value-carrier-queries.js";
+import { rustEffectiveValueCarrier, rustValueCarrierBeforeOptionProjection } from "../conversions/value-carrier-queries.js";
 import { isRustAssignmentOperator } from "../../target-model/syntax/tokens.js";
 
 import { rustValueConversionContract } from "../../policy/conversions/contracts.js";
+import { rustContextualRuntimeConversionContract } from "../../policy/conversions/contextual.js";
+import { rustPhysicalPayloadFor } from "../../policy/conversions/physical-payloads.js";
+import { rustMemberAccessReceiver } from "../../target-model/syntax/expressions.js";
+import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
+import { isClosedMetadata, isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 import { isRustFinalizedArrayInput, isRustFinalizedSliceInput } from "../../target-model/operations/finalized-inputs.js";
 import { getRustGeneratorProtocol, rustClosureProtocol, rustSourceTypeCarrierValue } from "../../target-model/types/index.js";
 import { isRustCopyCarrier } from "../../policy/constraints/native-traits.js";
@@ -52,6 +58,7 @@ interface CallableRequirementVisitState {
   readonly addUse: (node: Node, carrier: TargetTypeRef | undefined, requirements: readonly RustGenericRequirement[], nativeStorage?: boolean) => string | undefined;
 }
 
+
 export function createRustCallableRequirementVisitor(input: RustCallableRequirementInput, state: CallableRequirementVisitState): (node: Node) => string | undefined {
   const { ast, declaration, records } = input;
   const { declared, dependencies, definition, normalizeFamily, optionalStorage, associated, projections, addUse } = state;
@@ -59,6 +66,12 @@ export function createRustCallableRequirementVisitor(input: RustCallableRequirem
   const copiedCapture = (capture: { readonly storage: string; readonly carrier: TargetTypeRef }): boolean =>
     isRustCopyCarrier(capture.storage === "location" ? rustLocationTargetType(capture.carrier) : capture.carrier,
       selected => input.genericCallables.definitionFor(selected)?.copy === true);
+  const addPhysicalCloneUse = (node: Node): string | undefined => {
+    const selected = input.nativeStorage.operandFor(node);
+    if (selected.kind === "unresolved") return selected.reason;
+    return isRustCopyCarrier(selected.carrier, carrier => input.genericCallables.definitionFor(carrier)?.copy === true)
+      ? undefined : addUse(node, selected.carrier, ["clone"]);
+  };
   const visit = (node: Node): string | undefined => {
     if (node !== declaration && (isRustIndependentCallable(ast, node) || isRustGenericTypeDeclaration(ast, node))) {
       const nestedId = input.idByDeclaration.get(node);
@@ -225,10 +238,11 @@ export function createRustCallableRequirementVisitor(input: RustCallableRequirem
       }
     }
     const indexedField = records.targetOperation.get(node);
-    if (indexedField?.kind === "source-field" && indexedField.valueSemantics.kind === "stored" &&
+    if ((indexedField?.kind === "tuple-index" ||
+      indexedField?.kind === "source-field" && indexedField.valueSemantics.kind === "stored") &&
       input.readsValue(node) && !input.ownershipFlow.movingReads.has(node) &&
       !isRustBorrowedValueRead(node, ast, records)) {
-      const fieldError = addUse(node, indexedField.resultCarrier, ["clone"]);
+      const fieldError = addPhysicalCloneUse(node);
       if (fieldError !== undefined) return fieldError;
     }
     if (indexedField?.kind === "source-indexed-field" && !associated.requireField(indexedField.projection,
@@ -322,7 +336,7 @@ export function createRustCallableRequirementVisitor(input: RustCallableRequirem
       const fields = operation.kind === "source-field" ? [operation]
         : operation.selectedVariantIndexes.map(index => operation.variants[index]?.field);
       if (fields.some(field => field?.storage === "structural-object" && field.valueSemantics.kind === "stored")) {
-        const error = addUse(node, operation.resultCarrier, ["clone"]);
+        const error = addPhysicalCloneUse(node);
         if (error !== undefined) return error;
       }
     }
@@ -391,14 +405,50 @@ export function createRustCallableRequirementVisitor(input: RustCallableRequirem
             ? ElementAccessExpression_ArgumentExpression(ast, node) : undefined;
         if (expression === undefined || !ast.is.IsIdentifier(expression) ||
           input.ownershipFlow.movingReads.has(expression)) continue;
-        const carrier = records.runtimeCarrier.get(expression)?.carrier;
-        if (carrier === undefined) return "A provider argument lost its exact source storage carrier.";
-        if (isRustCopyCarrier(carrier)) continue;
-        const error = addUse(expression, carrier, ["clone"]);
+        const conversion = records.contextualValueConversion.get(expression);
+        if (conversion !== undefined &&
+          rustContextualRuntimeConversionContract(conversion.conversion, input.typeDefinitions)?.sourceMode === "ref") continue;
+        const error = addPhysicalCloneUse(expression);
         if (error !== undefined) return error;
       }
       for (const requirement of providerOperation.carrierRequirements ?? []) {
-        const error = addUse(node, requirement.carrier, [requirement.requirement]);
+        const source = requirement.source;
+        if (source === undefined || source === null || !isClosedMetadata(source) || !isDenseDataArray(source.projection) ||
+          source.projection.some(index => index !== "array-element" &&
+            (typeof index !== "number" || !Number.isSafeInteger(index) || index < 0)) ||
+          source.kind !== "receiver" && (source.kind !== "argument" ||
+            !Number.isSafeInteger(source.sourceIndex) || source.sourceIndex < 0))
+          return "A provider carrier requirement has no exact source input and component correspondence.";
+        const sourceInput = source.kind === "receiver" ? providerOperation.abi.sourceReceiver
+          : providerOperation.abi.sourceArguments.find(argument => argument.sourceIndex === source.sourceIndex);
+        const expression = source.kind === "receiver"
+          ? rustMemberAccessReceiver(ast, ast.is.IsCallExpression(node) || ast.is.IsNewExpression(node)
+            ? Node_Expression(ast, node) : node)
+          : ast.is.IsCallExpression(node) || ast.is.IsNewExpression(node) ? ast.arguments(node)[source.sourceIndex]
+            : ast.is.IsElementAccessExpression(node) && source.sourceIndex === 0
+              ? ElementAccessExpression_ArgumentExpression(ast, node) : undefined;
+        if (expression === undefined || sourceInput === undefined || !("carrier" in sourceInput) ||
+          sourceInput.disposition !== "runtime") return "A provider carrier requirement lost its original runtime source input.";
+        const logical = rustEffectiveValueCarrier(records, expression);
+        const physical = input.nativeStorage.valueFor(expression);
+        if (physical.kind === "unresolved") return physical.reason;
+        let logicalComponent: TargetTypeRef | undefined = sourceInput.carrier;
+        let physicalComponent = logical === undefined ? undefined
+          : rustPhysicalPayloadFor(logical, physical.carrier, sourceInput.carrier, input.typeDefinitions);
+        for (const index of source.projection) {
+          logicalComponent = logicalComponent === undefined ? undefined : index === "array-element"
+            ? rustJsArrayLikeElementTargetType(logicalComponent) : rustTargetTypeChildren(logicalComponent)[index];
+          physicalComponent = physicalComponent === undefined ? undefined : index === "array-element"
+            ? rustJsArrayLikeElementTargetType(physicalComponent) : rustTargetTypeChildren(physicalComponent)[index];
+        }
+        if (logicalComponent === undefined || physicalComponent === undefined ||
+          !rustTargetTypeRefEquals(logicalComponent, requirement.carrier))
+          return "A provider carrier requirement conflicts with its selected source and physical component identity.";
+        if (requirement.requirement === "clone" && source.kind === "receiver" &&
+          providerOperation.abi.target.form === "index" && providerOperation.abi.result.kind === "sync" &&
+          rustTargetTypeRefEquals(requirement.carrier, providerOperation.abi.result.rawCarrier) &&
+          input.borrowFor(node) !== undefined) continue;
+        const error = addUse(node, physicalComponent, [requirement.requirement]);
         if (error !== undefined) return error;
       }
     }

@@ -347,7 +347,7 @@ export function probe(): void {}
     const reads = createRustValueReadProducer(() => {});
     const projections = createRustValueProjectionProducer(() => {});
     const conversions = createRustConversionEmissionProducer(() => {});
-    const issues = analyzeRustValueReads(admitted, [node], reads, projections, conversions);
+    const issues = analyzeRustValueReads(admitted, [node], [], reads, projections, conversions);
     assert.equal(issues.length, 0, "the actual pre-seal owner admits the ordered source-to-contextual composition");
     const mappings = createRustProjectUnionMappingProducer(() => {});
     const mappingIssues = analyzeRustProjectUnionMappings(admitted, [node], mappings);

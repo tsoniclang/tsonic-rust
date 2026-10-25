@@ -1,7 +1,7 @@
 import type { ProviderDeclarationKind } from "@tsonic/tsts";
 import type { RustFallibleErrorBoundary } from "../operations/error-boundary.js";
 import type { RustDispatchContextInput } from "../operations/dispatch-contexts.js";
-import type { RustProviderGenericParameter, RustProviderOperationForm, RustProviderTypeParameterRequirement, RustValueConversion } from "../operations/model.js";
+import type { RustCallbackOperationTemplate, RustProviderGenericParameter, RustProviderOperationForm, RustProviderTypeParameterRequirement, RustValueConversion } from "../operations/model.js";
 import type { RustTargetGenericArgument, TargetTypeRef } from "../types/model.js";
 
 export type RustProviderOperationKind =
@@ -15,6 +15,7 @@ export type RustProviderOperationKind =
 export interface RustProviderImmediateCallbackDefinition {
   readonly sourceArgumentIndex: number;
   readonly fallibleTarget: RustProviderOperationForm;
+  readonly resultError: Extract<RustCallbackOperationTemplate["failure"], { readonly kind: "invocation" }>["resultError"];
 }
 
 interface RustProviderOperationDefinitionBase<

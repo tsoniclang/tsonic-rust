@@ -93,7 +93,7 @@ import { analyzeRustProviderEvaluation } from "../storage/provider-evaluation.js
 import { analyzeRustProviderInputs } from "../operations/provider-inputs.js";
 import { analyzeRustLambdaEmission } from "../callables/lambda-emission.js";
 import { analyzeRustIntegerTruncation } from "../operations/integer-truncation.js";
-import { analyzeRustProviderForms } from "../operations/provider-forms.js";
+import { analyzeRustProviderForms, selectRustProviderReads } from "../operations/provider-forms.js";
 import { analyzeRustCallableEmission } from "../conversions/callable-emission.js";
 import { analyzeRustRecordFieldStorage } from "../objects/record-field-storage.js";
 import { analyzeRustArgumentViews } from "../operations/argument-views.js";
@@ -265,8 +265,8 @@ export function finalizeRustNativeEmission(
   const genericRequirementEmissionIssues = analyzeRustGenericRequirementEmission(program, context.nativeNodes, context.records.nativeGenericPlans);
   if (genericRequirementEmissionIssues.length !== 0) return rejectedTargetStage(genericRequirementEmissionIssues);
   // Provider reads select Copy/Clone from the declaration-owned clone guarantees published just above.
-  const providerFormIssues = analyzeRustProviderForms(program, context.nativeNodes, context.records.providerFormPlans, operationAttempts);
-  if (providerFormIssues.length !== 0) return rejectedTargetStage(providerFormIssues);
+  const providerReads = selectRustProviderReads(program, context.nativeNodes);
+  if (providerReads.diagnostics.length !== 0) return rejectedTargetStage(providerReads.diagnostics);
   const arrayLiteralIssues = analyzeRustArrayLiterals(program, context.nativeNodes, context.records.arrayLiteralPlans);
   if (arrayLiteralIssues.length !== 0) return rejectedTargetStage(arrayLiteralIssues);
   const propertyProjectionIssues = analyzeRustPropertyValueProjection(program, context.nativeNodes, context.records.propertyValueProjectionPlans);
@@ -275,7 +275,7 @@ export function finalizeRustNativeEmission(
   if (optionalChainIssues.length !== 0) return rejectedTargetStage(optionalChainIssues);
   analyzeRustExpressionExits(program, context.nativeNodes, context.records.expressionExitPlans);
   analyzeRustCompletionBindings(program, context.nativeNodes, context.records.completionBindingPlans);
-  const valueReadIssues = analyzeRustValueReads(program, context.nativeNodes, context.records.valueReadPlans,
+  const valueReadIssues = analyzeRustValueReads(program, context.nativeNodes, providerReads.reads, context.records.valueReadPlans,
     context.records.valueProjectionPlans, context.records.conversionEmissionPlans);
   if (valueReadIssues.length !== 0) return rejectedTargetStage(valueReadIssues);
   context.records.valueReadPlans.promises(program.promiseResults);
@@ -284,6 +284,8 @@ export function finalizeRustNativeEmission(
   const lambdaEmissionIssues = analyzeRustLambdaEmission(program, context.nativeNodes, context.records.lambdaEmissionPlans);
   if (lambdaEmissionIssues.length !== 0) return rejectedTargetStage(lambdaEmissionIssues);
   const callableEmissionTypes = analyzeRustCallableEmission(program, context.nativeNodes, context.records.callableConversionPlans);
+  const providerFormIssues = analyzeRustProviderForms(program, providerReads.reads, context.records.providerFormPlans, operationAttempts);
+  if (providerFormIssues.length !== 0) return rejectedTargetStage(providerFormIssues);
   const recordFieldIssues = analyzeRustRecordFieldStorage(program, context.nativeNodes, context.records.callableConversionPlans);
   if (recordFieldIssues.length !== 0) return rejectedTargetStage(recordFieldIssues);
   const sourceCallIssues = analyzeRustSourceCalls(program, context.nativeNodes, context.records.sourceCallPlans);

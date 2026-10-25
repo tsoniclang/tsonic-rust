@@ -3,7 +3,8 @@ import test from "node:test";
 import { createTargetSourceProgram, sourceEnclosingCallable } from "@tsonic/target-api/source";
 import { createSourceStorageQuery } from "@tsonic/target-api/analysis";
 import { checkedSource } from "../../../../tsonic/test/fixtures/source-navigation.mjs";
-import { analyzeRustReadOwnership } from "../../../dist/analysis/ownership/reads.js";
+import { prepareRustReadOwnership } from "../../../dist/analysis/ownership/reads.js";
+import * as readOwnership from "../../../dist/analysis/ownership/reads.js";
 import { analyzeRustOwnershipFlow } from "../../../dist/analysis/ownership/flow.js";
 import { createRustProgramRecordBuilder } from "../../../dist/analysis/program/records/create.js";
 import { emptyRustTypeDefinitions } from "../../../dist/target-model/types/source-union-definitions.js";
@@ -165,13 +166,15 @@ for (const projection of [false, true]) test(`owned native getter results remain
       });
       const records = builder.seal([]);
       const uses = analyzeRustReadUses(ast, storage.nodes, records, emptyRustTypeDefinitions, () => false, program.structuralShapes);
-      const selected = analyzeRustReadOwnership({ storage, nativeNodes: storage.nodes, records, uses,
+      const prepared = prepareRustReadOwnership({ storage, nativeNodes: storage.nodes, records, uses,
         flow: { movingReads: new Set(owned ? [element] : []), captureTransfers: new Map() },
         borrowEffects: { pureValues: new Set(), fieldWrites: new Map(), stableBindings: new Set(), nativeWrites: new Map() },
         borrowEffectsInput: readBorrowEffectsInput(source, program, storage.nodes, records), definitions: emptyRustTypeDefinitions,
-        genericRequirements: { supportsClone: () => true }, genericCallables: { definitionFor: () => undefined },
+        genericCallables: { definitionFor: () => undefined },
         capturesFor: () => undefined, invocationTransfersCapture: () => false,
       });
+      assert.equal(prepared.kind, "resolved", `${label}: the checked borrow preparation closes before traits`);
+      const selected = prepared.complete({ supportsClone: () => true });
       assert.equal(selected.kind, "resolved", `${label}: the complete checked read inventory closes`);
       assert.equal(selected.ownership.uses === uses, true, `${label}: read ownership publishes the identical native-use map without another collection`);
       const read = selected.ownership.reads.get(element);
@@ -338,18 +341,26 @@ async function fixture() {
     borrowEffects: { pureValues: new Set(), fieldWrites: new Map(), stableBindings: new Set(), nativeWrites: new Map() },
     borrowEffectsInput: readBorrowEffectsInput(source, program, storage.nodes, records),
     definitions: emptyRustTypeDefinitions,
-    genericRequirements: { supportsClone: () => true },
     genericCallables: { definitionFor: () => undefined },
     capturesFor: () => undefined,
     invocationTransfersCapture: () => false,
   };
-  return { input, selected };
+  return { input, selected, genericRequirements: { supportsClone: () => true } };
 }
 
 test("transparent storage reads are classified once from the complete checked inventory", async () => {
-  const { input, selected } = await fixture();
-  const selectedAnalysis = analyzeRustReadOwnership(input);
+  const { input, selected, genericRequirements } = await fixture();
+  let cloneQueries = 0;
+  const prepared = prepareRustReadOwnership(input);
+  assert.equal(prepared.kind, "resolved");
+  assert.equal(cloneQueries, 0, "borrow preparation does not inspect an unfinished trait index");
+  assert.equal(readOwnership.analyzeRustReadOwnership, undefined, "the superseded complete-in-one-call API is removed");
+  const selectedAnalysis = prepared.complete({ supportsClone: (...argumentsList) => {
+    cloneQueries += 1;
+    return genericRequirements.supportsClone(...argumentsList);
+  } });
   assert.equal(selectedAnalysis.kind, "resolved");
+  assert.equal(cloneQueries, 0, "native String retains its built-in Clone without inventing a generic obligation");
   const wrappers = selected.filter(node => input.storage.source.ast.is.IsParenthesizedExpression(node));
   assert.equal(wrappers.length, 80);
   for (const node of selected) {
@@ -365,7 +376,7 @@ test("an incomplete or unordered transparent inventory never silently selects a 
     input.storage.source.ast.is.IsParenthesizedExpression(input.storage.source.ast.parent(node)));
   assert.equal(operand !== undefined, true, "the incomplete inventory removes the actual innermost checked operand");
   for (const nodes of [input.storage.nodes.filter(node => node !== operand), [...input.storage.nodes].reverse()]) {
-    const result = analyzeRustReadOwnership({ ...input, nativeNodes: nodes, storage: { ...input.storage, nodes } });
+    const result = prepareRustReadOwnership({ ...input, nativeNodes: nodes, storage: { ...input.storage, nodes } });
     assert.equal(result.kind, "rejected");
     assert.equal(result.diagnostics[0]?.code, "RUST_OWNERSHIP_SOURCE_INVENTORY_INVALID");
     assert.equal("ownership" in result, false);
@@ -375,7 +386,7 @@ test("an incomplete or unordered transparent inventory never silently selects a 
 test("storage-read materialization respects finite node, work and row budgets before publication", async () => {
   const { input } = await fixture();
   for (const limits of [{ maximumNodes: 1 }, { maximumSteps: 1 }, { maximumTransportRows: 1 }]) {
-    const result = analyzeRustReadOwnership({ ...input, limits });
+    const result = prepareRustReadOwnership({ ...input, limits });
     assert.equal(result.kind, "rejected");
     assert.equal(result.diagnostics[0]?.code, "RUST_OWNERSHIP_READ_BUDGET_EXCEEDED");
     assert.equal("ownership" in result, false);
@@ -418,16 +429,17 @@ for (const projection of [false, true]) {
       }
       const records = builder.seal([]);
       const uses = analyzeRustReadUses(ast, storage.nodes, records, emptyRustTypeDefinitions, () => false, program.structuralShapes);
-      const selected = analyzeRustReadOwnership({
+      const prepared = prepareRustReadOwnership({
         storage, nativeNodes: storage.nodes, records, uses,
         flow: { movingReads: new Set(), captureTransfers: new Map() },
         borrowEffects: { pureValues: new Set(), fieldWrites: new Map(), stableBindings: new Set(), nativeWrites: new Map() },
         borrowEffectsInput: readBorrowEffectsInput(source, program, storage.nodes, records),
         definitions: emptyRustTypeDefinitions,
-        genericRequirements: { supportsClone: () => true },
         genericCallables: { definitionFor: () => undefined },
         capturesFor: () => undefined, invocationTransfersCapture: () => false,
       });
+      assert.equal(prepared.kind, "resolved", "borrow preparation closes before generic requirements");
+      const selected = prepared.complete({ supportsClone: () => true });
       assert.equal(selected.kind, "resolved", "the complete checked inventory admits the reads");
       const owned = selected.ownership.reads.get(temporary);
       const shared = selected.ownership.reads.get(stored);

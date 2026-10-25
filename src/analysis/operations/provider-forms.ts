@@ -13,10 +13,30 @@ import { rustFrameInvocationErrorOperand, selectRustErrorRegion } from "../error
 import { rustFrameCallableValue } from "../../target-model/types/carriers/frame-callables.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustUninhabitedError } from "../../policy/conversions/callable-physical.js";
+import { rustPreparedCallbackResultEffects } from "../errors/callback-effects.js";
+import { rustNativeCallableOperand } from "../callables/native-conversions.js";
+import { rustValueCarrierBeforeContextualConversion } from "../conversions/value-carrier-queries.js";
+import { rustNativeErrorJoinTargetType } from "../../target-model/types/native-error-joins.js";
+import { rustProgramErrorTargetType } from "../../target-model/types/carriers/js.js";
+import type { RustFinalizedOperationAbi } from "../../target-model/records/finalized-operation.js";
+import { rustRuntimeErrorTargetType } from "../../target-model/types/carriers/runtime-carriers.js";
 
-export function analyzeRustProviderForms(program: Omit<RustAnalysisProgram, "reachability">, nodes: readonly Node[],
-  producer: RustProviderFormProducer, attempts: Pick<WeakMap<Node, RustOperationAttempt>, "get">): readonly TargetDiagnostic[] {
+export interface RustProviderReadSelection {
+  readonly node: Node;
+  readonly abi: RustFinalizedOperationAbi;
+  readonly bodies: readonly {
+    readonly body: true | undefined;
+    readonly read: RustProviderFormEmission["read"];
+  }[];
+}
+
+export function selectRustProviderReads(program: Omit<RustAnalysisProgram, "reachability">, nodes: readonly Node[]): {
+  readonly reads: readonly RustProviderReadSelection[];
+  readonly diagnostics: readonly TargetDiagnostic[];
+} {
   const issues: TargetDiagnostic[] = [];
+  const reads: RustProviderReadSelection[] = [];
+  const selected = new WeakMap<Node, Set<RustFinalizedOperationAbi>>();
   const { ast } = program.source;
   // A provider disposer is planned at its resource declaration, outside the source operation occurrences.
   const disposals = nodes.flatMap(node => {
@@ -26,11 +46,45 @@ export function analyzeRustProviderForms(program: Omit<RustAnalysisProgram, "rea
   const occurrences = program.physicalEmissionContexts.sourceOccurrences.map(occurrence =>
     ({ node: occurrence.node, abi: occurrence.operation.abi, runtimeSet: occurrence.operation.kind === "runtime-set" }));
   for (const { node, abi, runtimeSet } of [...occurrences, ...disposals]) {
+    const previous = selected.get(node) ?? new Set<RustFinalizedOperationAbi>();
+    if (previous.has(abi)) continue;
+    previous.add(abi);
+    selected.set(node, previous);
     const form = abi.target;
     const owner = sourceEnclosingCallable(node, ast);
     const native = owner === undefined ? undefined : program.records.callableDeclaration.get(owner)?.nativeBody;
     const bodies: (true | undefined)[] = native === undefined ? [undefined]
       : program.promiseBodies.objects.has(owner!) ? [undefined, true] : [true];
+    const contexts: RustProviderReadSelection["bodies"][number][] = [];
+    for (const body of bodies) {
+      let read: RustProviderFormEmission["read"] = "storage";
+      if (!runtimeSet && (form.form === "field" || form.form === "index")) {
+        const carrier = abi.result.kind === "async" ? abi.result.futureCarrier : abi.result.carrier;
+        const physical = program.records.carrierRead.get(carrier);
+        if (physical === undefined) failTargetAnalysisInvariant("tsonic-rust", "An admitted provider read requires its exact native carrier guarantees.", node);
+        const clone = owner === undefined ? physical.clone : program.records.carrierClone.get(carrier, owner, body);
+        if (physical.copy) read = "copy";
+        else if (clone === true) read = "clone";
+        else if (program.ownership.reads.get(node)?.source.kind !== "borrow") {
+          issues.push({ code: "RUST_UNSUPPORTED_AST", source: "tsonic-rust", category: "error", sourceNode: node,
+            message: `A provider ${form.form} read requires an exact Copy or Clone result-carrier contract. Node kind: ${ast.kindName(node)}.`,
+            evidence: [`target.capability=rust.backend.provider-${form.form}-read-ownership`] });
+          continue;
+        }
+      }
+      contexts.push(Object.freeze({ body, read }));
+    }
+    reads.push(Object.freeze({ node, abi, bodies: Object.freeze(contexts) }));
+  }
+  return Object.freeze({ reads: Object.freeze(reads), diagnostics: Object.freeze(issues) });
+}
+
+export function analyzeRustProviderForms(program: Omit<RustAnalysisProgram, "reachability">, reads: readonly RustProviderReadSelection[],
+  producer: RustProviderFormProducer, attempts: Pick<WeakMap<Node, RustOperationAttempt>, "get">): readonly TargetDiagnostic[] {
+  const issues: TargetDiagnostic[] = [];
+  const { ast } = program.source;
+  for (const { node, abi, bodies } of reads) {
+    const form = abi.target;
     let worker: RustProviderFormEmission["worker"];
     let nativeResult: RustProviderFormEmission["nativeResult"];
     const operation = program.records.targetOperation.get(node);
@@ -48,15 +102,30 @@ export function analyzeRustProviderForms(program: Omit<RustAnalysisProgram, "rea
     const attempt = attempts.get(node);
     const callback = attempt?.kind === "checked-call" ? attempt.prepared : undefined;
     if (attempt?.kind === "checked-call" && callback !== undefined && callback.value.callback.failure.kind !== "returned-future" &&
-      abi.effects.invocation === "fallible" && (callback.callbackEffects.invocationEffects.localErrors ||
-        callback.callbackEffects.invocationEffects.nativeErrors.length !== 0)) {
-      const effects = callback.callbackEffects.invocationEffects;
+      abi.effects.invocation === "fallible") {
+      const effects = rustPreparedCallbackResultEffects(callback.value, callback.callbackEffects.invocationEffects);
+      if (effects === undefined)
+        failTargetAnalysisInvariant("tsonic-rust", "An admitted provider callback requires its completed native Result effects.", node);
       const argument = attempt.request.source.sourceArguments[callback.value.callback.sourceArgumentIndex]?.expression;
-      const physical = argument === undefined ? undefined : program.callableValues.nativeStorage.operandFor(argument);
-      if (argument === undefined || physical === undefined || physical.kind === "unresolved")
+      const source = argument === undefined ? undefined : rustValueCarrierBeforeContextualConversion(program.records, argument);
+      const physical = argument === undefined || source === undefined ? undefined : rustNativeCallableOperand(source, argument, {
+        records: program.records, storage: program.callableValues.nativeStorage,
+        producers: program.callableValues.nativeProducers, frames: program.callableValues.frames,
+      });
+      const conversion = argument === undefined ? undefined : program.records.contextualValueConversion.get(argument)?.conversion;
+      const adapted = conversion?.kind !== "callable-adapter" || argument === undefined ? undefined
+        : program.records.callableContract.get(argument, conversion);
+      if (argument === undefined || physical === undefined || conversion?.kind === "callable-adapter" && adapted === undefined)
         failTargetAnalysisInvariant("tsonic-rust", "An admitted provider callback requires its exact physical invocation operand.", node);
-      const frame = rustFrameCallableValue(physical.carrier);
-      const selected = frame === undefined ? selectRustErrorRegion(callback.callbackEffects.invocationOwner, effects,
+      const signature = adapted?.physical ?? physical.signature;
+      const callbackFallible = callback.callbackEffects.invocationEffects.localErrors ||
+        callback.callbackEffects.invocationEffects.nativeErrors.length !== 0;
+      const helperError = abi.effects.errorCarrier;
+      if (abi.effects.errorBoundary === "provider-native" && helperError === undefined)
+        failTargetAnalysisInvariant("tsonic-rust", "An admitted intrinsic callback helper requires its exact selected native Result error carrier.", node);
+      const frame = !callbackFallible || helperError !== undefined || adapted !== undefined ? undefined : rustFrameCallableValue(physical.carrier);
+      const selected = frame === undefined ? selectRustErrorRegion(!callbackFallible || helperError !== undefined ? node
+        : callback.callbackEffects.invocationOwner, effects,
         { ast, records: program.records, producers: program.callableValues.nativeProducers,
           definitions: program.typeDefinitions, components: program.sourcePackageComponents, promiseBodies: program.promiseBodies }, false) : undefined;
       if (selected?.kind === "rejected") {
@@ -69,6 +138,14 @@ export function analyzeRustProviderForms(program: Omit<RustAnalysisProgram, "rea
         operand.sources.length !== effects.nativeErrors.length || operand.sources.some(source =>
           !effects.nativeErrors.some(error => error.identity === source.identity && rustTargetTypeRefEquals(error.errorType, source.errorType))))
         failTargetAnalysisInvariant("tsonic-rust", "An admitted provider callback requires its exact selected physical error correspondence.", node);
+      const local = operand.localOwner === undefined ? undefined
+        : operand.localOwner.kind === "physical" && operand.localOwner.domain === "runtime"
+          ? rustRuntimeErrorTargetType() : rustProgramErrorTargetType(operand.localOwner);
+      const expected = helperError ?? rustNativeErrorJoinTargetType(
+        operand.fileName, [...(local === undefined ? [] : [local]), ...operand.sources.map(source => source.errorType)]);
+      if (expected === undefined || callbackFallible && !rustTargetTypeRefEquals(signature.error, expected) &&
+        !(helperError !== undefined && rustUninhabitedError(signature.error)))
+        failTargetAnalysisInvariant("tsonic-rust", "An admitted provider Result requires its exact selected callback adapter error contract.", node);
       nativeResult = materializeRustSourceErrorRegion(node, { operand,
         local: operand.localOwner === undefined ? undefined : { kind: "local" },
         channels: operand.sources.map(source => ({ sourceIdentity: source.identity, targetIdentity: source.identity,
@@ -88,23 +165,7 @@ export function analyzeRustProviderForms(program: Omit<RustAnalysisProgram, "rea
         failTargetAnalysisInvariant("tsonic-rust", "An admitted source-module constructor requires its worker identity and immutable source argument.", node);
       worker = Object.freeze({ fileName, argumentIndex, mode: input.mode });
     }
-    for (const body of bodies) {
-      if (producer.records.providerForm.get(node, abi, body) !== undefined) continue;
-      let read: RustProviderFormEmission["read"] = "storage";
-      if (!runtimeSet && (form.form === "field" || form.form === "index")) {
-        const carrier = abi.result.kind === "async" ? abi.result.futureCarrier : abi.result.carrier;
-        const physical = program.records.carrierRead.get(carrier);
-        if (physical === undefined) failTargetAnalysisInvariant("tsonic-rust", "An admitted provider read requires its exact native carrier guarantees.", node);
-        const clone = owner === undefined ? physical.clone : program.records.carrierClone.get(carrier, owner, body);
-        if (physical.copy) read = "copy";
-        else if (clone === true) read = "clone";
-        else if (program.ownership.reads.get(node)?.source.kind !== "borrow") {
-          issues.push({ code: "RUST_UNSUPPORTED_AST", source: "tsonic-rust", category: "error", sourceNode: node,
-            message: `A provider ${form.form} read requires an exact Copy or Clone result-carrier contract. Node kind: ${ast.kindName(node)}.`,
-            evidence: [`target.capability=rust.backend.provider-${form.form}-read-ownership`] });
-          continue;
-        }
-      }
+    for (const { body, read } of bodies) {
       producer.publish(node, abi, body, { read, worker, nativeResult });
     }
   }
