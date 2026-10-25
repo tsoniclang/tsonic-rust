@@ -1,6 +1,6 @@
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
 import { failTargetAnalysisInvariant, rejectedTargetStage, resolvedTargetStage } from "@tsonic/target-api/artifacts";
-import { isSourceCallableBodyBoundary, sourceEnclosingCallable, TryStatement_CatchClause,
+import { isSourceCallableBodyBoundary, TryStatement_CatchClause,
   TryStatement_TryBlock } from "@tsonic/target-api/source";
 import type { TargetDiagnostic, TargetStageResult } from "@tsonic/target-api/artifacts";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
@@ -338,10 +338,7 @@ export function analyzeRustErrorRegions(input: RustErrorTypeContext & {
       if (effects !== undefined) {
         const selected = regionFor(node, effects, true);
         if (selected !== undefined) regions.set(node, selected);
-        // Only callable boundaries and source files plan their error region as a join; a nested block's errors are
-        // unified by its try/catch completion. A settled js-promise body converts each native error into its rejection
-        // value where it occurs, so it forms no join either.
-        const plannedRegion = input.ast.is.IsSourceFile(node) || sourceEnclosingCallable(node, input.ast) === node;
+        const plannedRegion = localOwner === node;
         const asynchronous = input.records.asyncFunction.get(node);
         const settledPromise = asynchronous?.kind === "js-promise" && asynchronous.lowering.kind === "settled";
         const nativeRegion = selected?.jsRejection === undefined || input.promiseBodies.declarations.has(node);
