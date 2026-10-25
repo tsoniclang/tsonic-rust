@@ -19,14 +19,15 @@ import { resolveRustTargetType } from "../../../dist/analysis/source-evidence/ty
 import {
   rustFixedArrayCarrierValue, rustFixedArrayTargetType, rustTargetConstInteger, rustTargetConstSafeInteger,
   rustVecTargetType, rustJsArrayTargetType, rustSourcePrimitiveTargetType, rustOptionTargetType,
-  rustAbsenceTargetType, rustCallableTargetType,
+  rustAbsenceTargetType, rustCallableTargetType, rustStringTargetType,
 } from "../../../dist/target-model/types/index.js";
 import { rustTupleTargetType } from "../../../dist/policy/types/collections/tuple-carrier.js";
+import { selectRustSourceParameterBorrowCarrier } from "../../../dist/policy/ownership/source-parameter-contracts.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 import { rustSpreadElementCarrier } from "../../../dist/target-model/operations/rest-assembly.js";
 import { rustTypeFromCarrier } from "../../../dist/backend/planner/types/carrier-syntax.js";
 import { printRustType } from "../../../dist/print/source/types.js";
-import { acmePlatformPackage, acmeTestingPackage, artifactText, compileRust } from "../../helpers/rust-session.mjs";
+import { acmePlatformPackage, acmeTestingPackage, analyzeRust, artifactText, compileRust } from "../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 
 const element = Object.freeze({ kind: "source-primitive", name: "uint32" });
@@ -443,6 +444,58 @@ test("fixed-array literals reject out-of-range ordinals and noninteger dynamic i
     assert.ok(result.diagnostics.some(diagnostic => diagnostic.code === code),
       `${index}: ${JSON.stringify(result.diagnostics)}`);
     assert.equal(result.artifacts.length, 0);
+  }
+});
+
+test("fixed-array formal borrowing requires the exact non-Copy native input lane", () => {
+  const value = rustFixedArrayTargetType(rustStringTargetType(), 2);
+  const selected = selectRustSourceParameterBorrowCarrier(value, value);
+  assert.equal(selected?.kind === "reference" && selected.mutable === false &&
+    rustTargetTypeRefEquals(selected.referent, value), true,
+  "a readonly native affine array uses a reference to that exact extent and element carrier");
+  for (const [label, base, lane] of [
+    ["Copy array keeps its existing native value ABI", rustFixedArrayTargetType(element, 2), rustFixedArrayTargetType(element, 2)],
+    ["missing selected input is not invented", value, undefined],
+    ["different exact extent cannot borrow this input", value, rustFixedArrayTargetType(rustStringTargetType(), 3)],
+    ["different element carrier cannot borrow this input", value, rustFixedArrayTargetType(element, 2)],
+    ["an already borrowed lane is not reinterpreted", value, { kind: "reference", referent: value, mutable: false }],
+  ]) assert.equal(selectRustSourceParameterBorrowCarrier(base, lane) === undefined, true, label);
+});
+
+test("fixed-array formal borrowing preserves whole-value retention, writes and captures", () => {
+  const { program } = analyzeRust({ files: { "index.ts": `
+import type { FixedArray, int32 } from "@tsonic/core/types.js";
+export function read(values: FixedArray<string, 2>, index: int32): string { return values[index]; }
+export function own(values: FixedArray<string, 2>): FixedArray<string, 2> { return values; }
+export function replace(values: FixedArray<string, 2>, replacement: FixedArray<string, 2>): FixedArray<string, 2> {
+  values = replacement;
+  return values;
+}
+export function capture(values: FixedArray<string, 2>): () => string { return () => values[0]; }
+` } });
+  const { ast } = program.source;
+  const selected = new Map();
+  const visit = node => {
+    if (ast.is.IsFunctionDeclaration(node)) {
+      const name = ast.text(ast.name(node));
+      if (["read", "own", "replace", "capture"].includes(name)) {
+        selected.set(name, program.records.sourceParameterAbi.get(ast.parameters(node)[0]));
+      }
+    }
+    ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+  };
+  program.sourceFiles.forEach(visit);
+  assert.equal(selected.size, 4, "all four original checked source formals publish their own ABI");
+  for (const [name, mode] of [["read", "ref"], ["own", "value"], ["replace", "value"], ["capture", "value"]]) {
+    const abi = selected.get(name);
+    assert.equal(abi?.mode === mode, true, `${name}: only the actual nonretaining readonly formal borrows`);
+    assert.equal(rustFixedArrayCarrierValue(abi?.valueCarrier)?.length.value === "2", true,
+      `${name}: the body retains its exact native array value carrier`);
+    assert.equal(mode === "ref"
+      ? abi.parameterCarrier.kind === "reference" && abi.parameterCarrier.mutable === false &&
+        rustTargetTypeRefEquals(abi.parameterCarrier.referent, abi.valueCarrier)
+      : rustTargetTypeRefEquals(abi.parameterCarrier, abi.valueCarrier), true,
+    `${name}: the physical input implements the completed checked ownership obligation`);
   }
 });
 
