@@ -8,10 +8,12 @@ import { emptyRustTypeDefinitions } from "../../../dist/target-model/types/sourc
 const sourceText = `
 function fail(label: string): never { throw label; }
 function mark(_label: string): void {}
+function consume(_value: never, _body: () => void): void {}
 export function local(): void {
   try {
     fail("local");
     function deferred(): void { fail("deferred"); }
+    consume(fail("eager"), () => { fail("inline"); });
   } catch { mark("catch"); }
   finally { mark("finally"); }
 }
@@ -52,12 +54,17 @@ function fixture({ missingProtected = false, moduleFallible = false, excludedLab
   visit(file);
   const functions = new Map(nodes.filter(node => source.ast.is.IsFunctionDeclaration(node)).map(node =>
     [source.ast.text(source.ast.name(node)), node]));
-  const calls = new Map(nodes.filter(node => source.ast.is.IsCallExpression(node)).map(node =>
-    [source.ast.text(source.ast.arguments(node)[0]), node]));
+  const calls = new Map(nodes.filter(node => source.ast.is.IsCallExpression(node)).flatMap(node => {
+    const label = source.ast.arguments(node)[0];
+    return label !== undefined && source.ast.is.IsStringLiteral(label) ? [[source.ast.text(label), node]] : [];
+  }));
   const effects = new Map([[file, Object.freeze({ localErrors: false, nativeErrors: Object.freeze([]) })]]);
   const fallible = new Set(["fail", "deferred", "finallyOnly", "outward"]);
   for (const [name, node] of functions) effects.set(node,
     Object.freeze({ localErrors: fallible.has(name), nativeErrors: Object.freeze([]) }));
+  const callbacks = nodes.filter(node => source.ast.is.IsArrowFunction(node));
+  for (const node of callbacks) effects.set(node,
+    Object.freeze({ localErrors: true, nativeErrors: Object.freeze([]) }));
   for (const node of nodes.filter(candidate => source.ast.is.IsTryStatement(candidate))) {
     const body = TryStatement_TryBlock(source.ast, node);
     if (missingProtected && body === source.ast.parent(source.ast.parent(calls.get("local")))) continue;
@@ -101,7 +108,7 @@ function fixture({ missingProtected = false, moduleFallible = false, excludedLab
   const initialization = Object.freeze({ entrySourceFile: file, root, workers: Object.freeze([]),
     binary: Object.freeze({ lifecycle: lifecycle.value, sources: Object.freeze([]) }),
     moduleFor: candidate => candidate === file ? module : undefined, workerFor: () => undefined });
-  return { ast: source.ast, file, functions, calls, regions, module,
+  return { ast: source.ast, file, functions, callbacks, calls, regions, module,
     complete: () => regions.complete(initialization), closeSourceQueries: () => { sourceQueriesClosed = true; } };
 }
 
@@ -140,6 +147,19 @@ test("finally-only, outward fallibility and nested callable boundaries retain di
   assert.equal(catalog.localFor(current.calls.get("outward-escape")) === outward, true, "a later escaping operation retains its own selected ABI");
   assert.equal(catalog.localFor(current.calls.get("outward-protected")) === outward, false,
     "a local protected body remains a distinct exact region even in a fallible callable");
+});
+
+test("eager argument evaluation and an inline deferred body keep distinct exact regions", () => {
+  const current = fixture();
+  const catalog = current.complete();
+  const protectedRegion = catalog.localFor(current.calls.get("local"));
+  const callback = current.callbacks[0];
+  assert.equal(catalog.localFor(current.calls.get("eager")) === protectedRegion, true,
+    "ordinary argument evaluation remains protected by the surrounding try body");
+  assert.equal(catalog.localFor(current.calls.get("inline")) === catalog.get(callback), true,
+    "the inline arrow body uses its own selected execution owner");
+  assert.equal(catalog.localFor(current.calls.get("inline")) === protectedRegion, false,
+    "declaration-site protection never becomes a deferred callback's handler");
 });
 
 test("module-local completion uses the finalized initializer rather than an earlier source-file selection", () => {
