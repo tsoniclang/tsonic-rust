@@ -360,7 +360,7 @@ test("transparent storage reads are classified once from the complete checked in
     return genericRequirements.supportsClone(...argumentsList);
   } });
   assert.equal(selectedAnalysis.kind, "resolved");
-  assert.equal(cloneQueries > 0, true, "completion consumes the actual later trait index");
+  assert.equal(cloneQueries, 0, "native String retains its built-in Clone without inventing a generic obligation");
   const wrappers = selected.filter(node => input.storage.source.ast.is.IsParenthesizedExpression(node));
   assert.equal(wrappers.length, 80);
   for (const node of selected) {
