@@ -16,7 +16,7 @@ import { printRustExpr } from "../../../dist/print/source/expressions/core.js";
 import { rustNamedTypeCarrierValue } from "../../../dist/target-model/types/index.js";
 import { analyzeRustProviderEvaluation } from "../../../dist/analysis/storage/provider-evaluation.js";
 import { createRustProviderEvaluationProducer } from "../../../dist/analysis/program/records/provider-evaluation.js";
-import { analyzeRustProviderForms } from "../../../dist/analysis/operations/provider-forms.js";
+import { analyzeRustProviderForms, selectRustProviderReads } from "../../../dist/analysis/operations/provider-forms.js";
 import { createRustProviderFormProducer } from "../../../dist/analysis/program/records/provider-forms.js";
 import { createRustRecordFixture } from "../../helpers/records.mjs";
 import { analyzeRustProviderMutableEmission } from "../../../dist/analysis/storage/provider-mutable-emission.js";
@@ -333,7 +333,12 @@ export function borrowingUnwind(): number {
   const evaluationIssues = analyzeRustProviderEvaluation({ ...program, physicalEmissionContexts }, evaluations);
   assert.equal(evaluationIssues.length, 0, "the actual pre-seal owner admits the omitted operand's drop schedule");
   const forms = createRustProviderFormProducer(() => undefined);
-  const formIssues = analyzeRustProviderForms({ ...program, physicalEmissionContexts }, [], forms, { get: () => undefined });
+  const providerProgram = { ...program, physicalEmissionContexts };
+  const selectedReads = selectRustProviderReads(providerProgram, []);
+  assert.equal(selectedReads.diagnostics.length, 0, "the exact synthetic ABI has its canonical provider read inventory");
+  assert.equal(selectedReads.reads.some(read => read.node === omitted && read.abi === abi), true,
+    "the immutable inventory retains the actual new operation identity");
+  const formIssues = analyzeRustProviderForms(providerProgram, selectedReads.reads, forms, { get: () => undefined });
   assert.equal(formIssues.length, 0, "the existing native form owner admits the new exact ABI identity");
   const nativeContext = rustSourceFilePlanContext(program, omitted);
   const records = createRustRecordFixture({ ...evaluations.records, ...forms.records }, nativeContext.input.program.records);
