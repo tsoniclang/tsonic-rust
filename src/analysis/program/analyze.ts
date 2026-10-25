@@ -66,7 +66,10 @@ import { type RustSourcePackageComponentClassifications } from "../../target-mod
 import type { RustSourceTypeRegistry } from "../project-types/source-type-model.js";
 import { completeRustNativeTaskValues, type RustNativeTaskCompletion } from "../callables/native-tasks.js";
 
+import type { RustOperationAttempt } from "./operation-attempts.js";
+
 interface RustSourceStageOutput {
+  readonly operationAttempts: Pick<WeakMap<Node, RustOperationAttempt>, "get">;
   readonly nativeTasks: SourceNativeTaskGraph;
   readonly nativeTaskCompletions: readonly RustNativeTaskCompletion[];
   readonly lexicalFunctions: RustLexicalFunctionQueries;
@@ -638,6 +641,7 @@ export function analyzeRustProgram(context: RustAnalysisContext, outputType: "bi
     context.diagnostics.splice(selectedIssuePosition, 0, ...context.diagnostics.splice(effectDiagnosticEnd));
   }
   return Object.freeze({ lexicalFunctions, nativeTasks, nativeTaskCompletions: nativeTaskCompletions.value,
+    operationAttempts: walk.operationAttempts,
     sourcePackageComponents: sourcePackageComponents.plan,
     sourceTypes: Object.freeze({ structuralObjectForType: sourceTypes.structuralObjectForType }) });
 }

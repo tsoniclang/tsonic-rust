@@ -325,7 +325,7 @@ export function borrowingUnwind(): number {
   const evaluationIssues = analyzeRustProviderEvaluation({ ...program, physicalEmissionContexts }, evaluations);
   assert.equal(evaluationIssues.length, 0, "the actual pre-seal owner admits the omitted operand's drop schedule");
   const forms = createRustProviderFormProducer(() => undefined);
-  const formIssues = analyzeRustProviderForms({ ...program, physicalEmissionContexts }, [], forms);
+  const formIssues = analyzeRustProviderForms({ ...program, physicalEmissionContexts }, [], forms, { get: () => undefined });
   assert.equal(formIssues.length, 0, "the existing native form owner admits the new exact ABI identity");
   const records = createRustRecordFixture({ ...evaluations.records, ...forms.records }, program.records);
   const context = { input: { program: { ...program, records } }, sourceFile: ast.getSourceFile(omitted), diagnostics: [],
