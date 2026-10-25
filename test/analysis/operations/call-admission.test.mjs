@@ -106,22 +106,34 @@ test("prepared calls retain their complete contract and failure Boolean before s
 });
 
 test("prepared callback cache rejects equal fallibility with different exact native identities and carriers", () => {
-  const { context, walk } = analyzeRustOperations("export function each(values: number[]): void { values.forEach(value => { throw value; }); }");
-  const call = context.sourceStorage.nodes.find(node => walk.operationAttempts.get(node)?.prepared !== undefined);
+  const { context, walk } = analyzeRustOperations(`
+function wrap<Value>(value: Value): Promise<number> {
+  return new Promise<number>(resolve => {
+    [value].reduce((accumulator, actual) => {
+      void actual;
+      resolve(accumulator);
+      return accumulator;
+    }, 7);
+  });
+}
+console.log(await wrap(Promise.resolve(5)));
+`);
+  const call = context.sourceStorage.nodes.find(node => walk.operationAttempts.get(node)?.prepared?.value.callback.shape === "reduce");
   assert.equal(call !== undefined, true, "the checked native callback call was prepared");
   const completed = walk.operationAttempts.get(call);
   const { value, callbackEffects } = completed.prepared;
   const current = { ...rustOperationContext(walk, call), ast: forbidden, currentSemantics: forbidden };
-  const domain = ["invocationEffects", "implementationEffects"].find(name => callbackEffects[name].nativeErrors.length !== 0);
-  assert.equal(domain !== undefined, true, "the real selected callback carries a native error channel");
-  const selected = callbackEffects[domain];
-  const original = selected.nativeErrors[0];
-  for (const error of [
-    { ...original, identity: `${original.identity}:contradictory` },
-    { ...original, errorType: { kind: "tuple", elements: [] } },
-  ]) {
-    const changed = { ...callbackEffects, [domain]: { ...selected, nativeErrors: [error, ...selected.nativeErrors.slice(1)] } };
-    assert.throws(() => finalizeRustPreparedCheckedCall(completed.request, value, changed, current, walk.operationOptions), /Conflicting Rust completed prepared call/u);
+  for (const domain of ["invocationEffects", "implementationEffects"]) {
+    const selected = callbackEffects[domain];
+    assert.equal(selected.nativeErrors.length !== 0, true, `the real selected callback carries its ${domain} native error channel`);
+    const original = selected.nativeErrors[0];
+    for (const error of [
+      { ...original, identity: `${original.identity}:contradictory` },
+      { ...original, errorType: { kind: "tuple", elements: [] } },
+    ]) {
+      const changed = { ...callbackEffects, [domain]: { ...selected, nativeErrors: [error, ...selected.nativeErrors.slice(1)] } };
+      assert.throws(() => finalizeRustPreparedCheckedCall(completed.request, value, changed, current, walk.operationOptions), /Conflicting Rust completed prepared call/u);
+    }
   }
   assert.equal(walk.operationAttempts.get(call) === completed, true, "refused channel changes never replace the canonical attempt");
 });
