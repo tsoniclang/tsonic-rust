@@ -30,12 +30,15 @@ function policyFixture(text) {
   assert.equal(parameter !== undefined, true);
   const selection = storage.subject(parameter, "value");
   assert.equal(selection.kind, "resolved");
+  const scope = storage.bindingsForDeclaration(ast.parent(parameter));
+  assert.equal(scope.kind, "resolved", "the actual recursive owner supplies its binding");
   const sourceTypes = createRustSourceTypeRegistry();
   const records = createRustRecordFixture({
 runtimeCarrier: { get: () => undefined },
 selectedOperation: { get: () => undefined },
 selectedCall: { get: () => undefined }});
-  const context = { source, ast, sourceStorage: storage, sourceStorageSubject: selection.subject,
+  const context = { source, ast, sourceStorage: storage,
+    sourceStorageResolution: { kind: "resolved", subject: selection.subject, bindings: scope.bindings },
     currentSourceFile: ast.getSourceFile(parameter), currentSemantics: source.semantics.forNode(parameter),
     semanticsFor: source.semantics.forNode, semantics: source.semantics.forFile, records,
     typeDefinitions: sourceTypes, callableRepresentation: "storage", sourceLifetimes: emptyRustLifetimeIndex,
@@ -73,7 +76,8 @@ test("projected callback storage cannot acquire the whole formal's signature pri
   assert.equal(projection.kind, "resolved");
   const carrier = rustCallableTargetType([], { kind: "source-primitive", name: "float64" });
   const selected = resolveRustCallableStorageCarrier(carrier,
-    { ...current.context, sourceStorageSubject: projection.subject }, current.options, new Set());
+    { ...current.context, sourceStorageResolution: { ...current.context.sourceStorageResolution,
+      subject: projection.subject } }, current.options, new Set());
   assert.equal(selected === undefined, true, "projected storage still requires its exact physical owner");
   assert.equal(current.selections(), 1);
 });

@@ -14,12 +14,15 @@ import { analyzeRustNativeParticipation } from "../../../dist/analysis/callables
 import { createRustProgramRecordBuilder } from "../../../dist/analysis/program/records/create.js";
 import { analyzeRustLifetimes } from "../../../dist/analysis/declarations/lifetimes.js";
 import { rustProjectGenericParameters } from "../../../dist/policy/types/project/project-generic-contract.js";
-import { createRustCallableOwnershipRegistry } from "../../../dist/analysis/callables/ownership-plan.js";
+import { createRustCallableOwnershipRegistry, selectRustCallableStorageOwnership } from "../../../dist/analysis/callables/ownership-plan.js";
 import { selectRustCallableOwnershipCarrier } from "../../../dist/analysis/callables/ownership-carriers.js";
 import { rustCallableTargetType, rustCallableProtocol } from "../../../dist/target-model/types/carriers/callables.js";
 import { rustFrameCallableValue } from "../../../dist/target-model/types/carriers/frame-callables.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 import { rustTargetTypeParameterIdentities } from "../../../dist/target-model/types/carriers/generic-references.js";
+import { analyzeRustOperations } from "../../helpers/rust-operation-analysis.mjs";
+import { resolveRustCallableStorageCarrier } from "../../../dist/analysis/source-evidence/types/resolution/source-evidence.js";
+import { rustResolutionContext } from "../../../dist/analysis/program/walk.js";
 
 const lexicalSource = `
 export function escaped(seed: number): (count: number) => number {
@@ -38,6 +41,36 @@ class Value {
   }
 }
 `;
+
+function storageOwnership(current, registry, subject, declaration) {
+  const scope = declaration === undefined ? current.storage.bindingsForLexicalOwner(subject.node)
+    : current.storage.bindingsForDeclaration(declaration);
+  const producers = scope.kind === "unresolved" ? scope
+    : current.storage.storageProducersFor(subject, scope.bindings);
+  return selectRustCallableStorageOwnership(registry, subject, producers);
+}
+
+function physicalInput(current, registry, subject, logicalCarrier) {
+  const scope = current.storage.bindingsForLexicalOwner(subject.node);
+  assert.equal(scope.kind, "resolved", "physical selection retains its actual original source binding");
+  return { ast: current.source.ast, ownership: registry, source: { subject, bindings: scope.bindings },
+    producers: current.storage.storageProducersFor(subject, scope.bindings), logicalCarrier };
+}
+
+function ordinaryFormalSelection(text) {
+  const { context, walk } = analyzeRustOperations(text, { surfaces: [] });
+  const parameter = context.sourceStorage.nodes.find(node => context.ast.is.IsParameterDeclaration(node) &&
+    context.ast.text(context.ast.name(node)) === "value");
+  assert.equal(parameter !== undefined, true, "the original native formal owns its checked contract");
+  const number = { kind: "source-primitive", name: "float64" };
+  const logical = rustCallableTargetType([number], number);
+  const carrier = resolveRustCallableStorageCarrier(logical, rustResolutionContext(walk, parameter, "value"),
+    { ...walk.operationOptions, callableStorageCarrier() {
+      assert.fail("the actual formal ABI cannot invent a frame environment from an open producer domain");
+    } }, new Set());
+  assert.equal(carrier === logical, true, "the original formal's exact ordinary native ABI remains unchanged");
+  return carrier;
+}
 
 function fixture(text, options = {}) {
   const checked = createCompilerSessionFromFiles({ currentDirectory: "/project",
@@ -154,6 +187,7 @@ test("owning activation selection is initialized once before source ABI consumer
   assert.throws(() => registry.seal(), /before declaration ABI selection/);
   const plan = registry.initialize(current.input);
   assert.equal(registry.seal() === plan, true);
+  assert.equal(Object.hasOwn(plan, "storageFor"), false, "the published ownership plan has no source-query service");
   assert.throws(() => registry.initialize(current.input), /only once/);
   const slot = current.named("selected", "KindVariableDeclaration")[0];
   const alias = current.named("before", "KindVariableDeclaration")[0];
@@ -161,7 +195,7 @@ test("owning activation selection is initialized once before source ABI consumer
   for (const node of [slot, alias, returned]) {
     const subject = current.storage.storageSubjectFor(node);
     assert.equal(subject.kind, "resolved", "exact source storage subject");
-    const selection = registry.storageFor(subject.subject);
+    const selection = storageOwnership(current, registry, subject.subject);
     assert.equal(selection.kind, "frame", "same activation survives checked binding and return transport");
     assert.equal(selection.activation === plan.activations[0], true, "one exact physical activation");
     assert.equal(selection.activation.components[0] === plan.components[0], true, "original exact dispatch component");
@@ -169,16 +203,18 @@ test("owning activation selection is initialized once before source ABI consumer
 });
 
 test("plain callback storage does not invent a cyclic owning activation", () => {
-  const current = fixture("export function identity(value: (count: number) => number) { return value; }");
+  const text = "export function identity(value: (count: number) => number) { return value; }";
+  const current = fixture(text);
   const registry = createRustCallableOwnershipRegistry();
   registry.initialize(current.input);
   const subject = current.storage.storageSubjectFor(current.named("value", "KindParameter")[0]);
   assert.equal(subject.kind, "resolved");
-  const selected = registry.storageFor(subject.subject);
-  assert.equal(selected.kind, "ordinary");
+  const selected = storageOwnership(current, registry, subject.subject);
+  assert.equal(selected.kind, "unresolved", "open source producers do not fabricate a closed owning activation");
+  assert.equal(rustFrameCallableValue(ordinaryFormalSelection(text)), undefined, "the actual native formal still uses ordinary storage");
 });
 
-test("uncalled constructor storage selects ordinary ownership only from a complete frame-free inventory", () => {
+test("uncalled constructor storage selects ordinary ownership only from its complete original construction binding", () => {
   const text = `class LocalCapture {
     get: () => string;
     constructor(public seed: string) { this.get = (): string => seed; }
@@ -193,13 +229,21 @@ test("uncalled constructor storage selects ordinary ownership only from a comple
   assert.equal(subject.kind, "resolved", "the original constructor field has its exact checked subject");
   assert.equal(current.storage.storageProducersFor(subject.subject).kind, "unresolved",
     "uninvoked constructor values do not acquire a fabricated correlated producer");
-  assert.equal(registry.storageFor(subject.subject).kind, "ordinary",
-    "a completed frame-free ownership inventory does not require concrete constructor invocation");
+  const constructor = current.input.storage.nodes.find(node => current.source.ast.is.IsConstructorDeclaration(node));
+  assert.equal(constructor !== undefined, true, "the existing original construction body owns the value binding");
+  const scope = current.storage.bindingsForDeclaration(constructor);
+  assert.equal(scope.kind, "resolved");
+  const producers = current.storage.storageProducersFor(subject.subject, scope.bindings);
+  assert.equal(producers.kind, "complete", "the original declaration binding closes the actual stored arrow");
+  assert.equal(producers.producers.length, 1, "the actual original producer is not an empty-inventory proof");
+  assert.equal(current.source.ast.is.IsArrowFunction(producers.producers[0].subject.node), true);
+  assert.equal(storageOwnership(current, registry, subject.subject, constructor).kind, "ordinary",
+    "completed producer evidence, not an empty component count, proves native ordinary storage");
   const other = fixture(text);
   const foreign = other.storage.storageSubjectFor(other.named("get", "KindPropertyDeclaration")[0]);
   assert.equal(foreign.kind, "resolved");
-  assert.equal(registry.storageFor(foreign.subject).kind, "unresolved", "frame-free selection still rejects foreign graphs");
-  assert.equal(registry.storageFor({ ...subject.subject }).kind, "unresolved", "frame-free selection still rejects forged subjects");
+  assert.equal(storageOwnership(current, registry, foreign.subject).kind, "unresolved", "frame-free selection still rejects foreign graphs");
+  assert.equal(storageOwnership(current, registry, { ...subject.subject }).kind, "unresolved", "frame-free selection still rejects forged subjects");
 });
 
 test("observed frame callers cannot close an exported ordinary callback parameter", () => {
@@ -213,7 +257,7 @@ test("observed frame callers cannot close an exported ordinary callback paramete
   const subject = current.storage.storageSubjectFor(parameter);
   assert.equal(subject.kind, "resolved");
   assert.equal(current.storage.closedOriginsFor(subject.subject).kind, "open");
-  assert.equal(registry.storageFor(subject.subject).kind, "unresolved", "unknown contributors cannot acquire the observed private frame");
+  assert.equal(storageOwnership(current, registry, subject.subject).kind, "unresolved", "unknown contributors cannot acquire the observed private frame");
 });
 
 test("an exported writable callback field cannot claim a closed native dispatch component", () => {
@@ -230,7 +274,7 @@ test("an exported writable callback field cannot claim a closed native dispatch 
   assert.equal(queries.componentForSlot(slot) === undefined, true);
   const registry = createRustCallableOwnershipRegistry();
   registry.initialize(current.input);
-  assert.equal(registry.storageFor(subject.subject).kind === "frame", false,
+  assert.equal(storageOwnership(current, registry, subject.subject).kind === "frame", false,
     "an unknown replacement cannot acquire one observed native activation family");
 });
 
@@ -253,7 +297,7 @@ export function create(): (count: number, seed: number) => number {
   for (const [node, kind] of [[binding, "value"], [creation, "value"], [returned, "return"]]) {
     const subject = current.storage.subject(node, kind);
     assert.equal(subject.kind, "resolved");
-    assert.equal(registry.storageFor(subject.subject).kind, "ordinary", kind);
+    assert.equal(storageOwnership(current, registry, subject.subject).kind, "ordinary", kind);
   }
 });
 
@@ -267,9 +311,9 @@ test("function values and returned callbacks retain distinct exact storage roles
   const returned = current.storage.subject(declaration, "return");
   const creation = current.storage.subjectFor(callable);
   for (const subject of [value, returned, creation]) assert.equal(subject.kind, "resolved");
-  assert.equal(registry.storageFor(value.subject).kind, "ordinary", "a function returning a frame does not itself become that frame");
-  const returnedOwner = registry.storageFor(returned.subject);
-  const createdOwner = registry.storageFor(creation.subject);
+  assert.equal(storageOwnership(current, registry, value.subject).kind, "ordinary", "a function returning a frame does not itself become that frame");
+  const returnedOwner = storageOwnership(current, registry, returned.subject);
+  const createdOwner = storageOwnership(current, registry, creation.subject);
   assert.equal(returnedOwner.kind, "frame");
   assert.equal(createdOwner.kind, "frame");
   assert.equal(returnedOwner.activation === createdOwner.activation, true, "return and creation have the same exact activation owner");
@@ -284,8 +328,8 @@ test("foreign or forged source storage subjects cannot select a physical activat
   const foreign = other.storage.storageSubjectFor(other.named("selected", "KindVariableDeclaration")[0]);
   assert.equal(selected.kind, "resolved");
   assert.equal(foreign.kind, "resolved");
-  assert.equal(registry.storageFor(foreign.subject).kind, "unresolved");
-  assert.equal(registry.storageFor({ ...selected.subject }).kind, "unresolved", "matching shape is not graph ownership");
+  assert.equal(storageOwnership(current, registry, foreign.subject).kind, "unresolved");
+  assert.equal(storageOwnership(current, registry, { ...selected.subject }).kind, "unresolved", "matching shape is not graph ownership");
 });
 
 test("physical callable selection retains its exact logical signature and owning creation", () => {
@@ -297,8 +341,8 @@ test("physical callable selection retains its exact logical signature and owning
   const select = node => {
     const subject = current.storage.storageSubjectFor(node);
     assert.equal(subject.kind, "resolved");
-    return selectRustCallableOwnershipCarrier({ ast: current.source.ast, ownership: registry,
-      subject: subject.subject, logicalCarrier, environmentFor: () => [] });
+    return selectRustCallableOwnershipCarrier({ ...physicalInput(current, registry, subject.subject, logicalCarrier),
+      environmentFor: () => [], classFrameFor: () => undefined });
   };
   const slot = select(current.named("selected", "KindVariableDeclaration")[0]);
   const alias = select(current.named("before", "KindVariableDeclaration")[0]);
@@ -312,17 +356,10 @@ test("physical callable selection retains its exact logical signature and owning
 });
 
 test("ordinary callable storage is unchanged and does not resolve a frame environment", () => {
-  const current = fixture("export function identity(value: (count: number) => number) { return value; }");
-  const registry = createRustCallableOwnershipRegistry();
-  registry.initialize(current.input);
+  const selected = ordinaryFormalSelection("export function identity(value: (count: number) => number) { return value; }");
   const number = { kind: "source-primitive", name: "float64" };
   const logicalCarrier = rustCallableTargetType([number], number);
-  const subject = current.storage.storageSubjectFor(current.named("value", "KindParameter")[0]);
-  assert.equal(subject.kind, "resolved");
-  const selection = selectRustCallableOwnershipCarrier({ ast: current.source.ast, ownership: registry,
-    subject: subject.subject, logicalCarrier, environmentFor: () => { throw new Error("invented frame environment"); } });
-  assert.equal(selection.kind, "selected");
-  assert.equal(selection.carrier === logicalCarrier, true);
+  assert.equal(rustTargetTypeRefEquals(selected, logicalCarrier), true, "the ordinary native callable contract is exact");
 });
 
 test("frame signatures retain captured body-only types and reject missing ownership evidence", () => {
@@ -333,7 +370,7 @@ test("frame signatures retain captured body-only types and reject missing owners
   const logicalCarrier = rustCallableTargetType([number], number);
   const subject = current.storage.storageSubjectFor(current.named("selected", "KindVariableDeclaration")[0]);
   assert.equal(subject.kind, "resolved");
-  const input = { ast: current.source.ast, ownership: registry, subject: subject.subject, logicalCarrier };
+  const input = { ...physicalInput(current, registry, subject.subject, logicalCarrier), classFrameFor: () => undefined };
   const hidden = { kind: "type-parameter", identity: "checked:captured-type", name: "Hidden" };
   const selection = selectRustCallableOwnershipCarrier({ ...input, environmentFor: () => [hidden] });
   assert.equal(selection.kind, "selected");
@@ -392,7 +429,7 @@ test("independent dispatch components in one activation share its exact physical
   registry.initialize(current.input);
   const subject = current.storage.storageSubjectFor(current.named("select", "KindFunctionDeclaration")[0]);
   assert.equal(subject.kind, "resolved");
-  const selection = registry.storageFor(subject.subject);
+  const selection = storageOwnership(current, registry, subject.subject);
   assert.equal(selection.kind, "frame");
   assert.equal(selection.activation.components.length, 2);
   assert.equal(selection.activation.slotDeclarations.length, 2);
@@ -422,7 +459,7 @@ test("different source activations cannot be relabeled as one physical frame", (
   assert.equal(scopes.size, 2);
   const subject = current.storage.storageSubjectFor(current.named("select", "KindFunctionDeclaration")[0]);
   assert.equal(subject.kind, "resolved");
-  assert.equal(registry.storageFor(subject.subject).kind, "unresolved");
+  assert.equal(storageOwnership(current, registry, subject.subject).kind, "unresolved");
 });
 
 test("bounded ownership failure cannot be read as ordinary callback storage", () => {
@@ -431,7 +468,7 @@ test("bounded ownership failure cannot be read as ordinary callback storage", ()
   registry.initialize({ ...current.input, limits: { ...defaultRustCallableOwnershipLimits, maximumSteps: 1 } });
   const subject = current.storage.storageSubjectFor(current.named("selected", "KindVariableDeclaration")[0]);
   assert.equal(subject.kind, "resolved");
-  assert.equal(registry.storageFor(subject.subject).kind, "unresolved");
+  assert.equal(storageOwnership(current, registry, subject.subject).kind, "unresolved");
   assert.equal(registry.isCyclicSlot(current.named("selected", "KindVariableDeclaration")[0]), false);
 });
 

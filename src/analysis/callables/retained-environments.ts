@@ -33,8 +33,7 @@ export function rustRetainedCallLifetimes(
   const environment = selected.environment;
   if (!references.lifetimeIdentities.includes(rustLifetimeKey(environment.lifetime))) return new Map();
   const caller = sourceEnclosingCallable(invocation, ast);
-  const callerBindings = caller === undefined ? { kind: "resolved" as const, bindings: storage.emptyBindings }
-    : storage.bindingsForLexicalOwner(caller);
+  const callerBindings = storage.bindingsForLexicalOwner(invocation);
   if (callerBindings.kind !== "resolved") return undefined;
   const activation = storage.bindingsForInvocation(declaration, invocation, callerBindings.bindings);
   if (activation.kind !== "resolved") return undefined;
@@ -48,9 +47,9 @@ export function rustRetainedCallLifetimes(
   const retainedCaller = knownCaller ?? (callerEnvironment.kind === "selected" ? callerEnvironment.environment : undefined);
   const carriers: TargetTypeRef[] = [];
   const scopeLifetimes: RustLifetimeRef[] = [];
-  const projected = new Map<SourceStorageSubject, TargetTypeRef | undefined>();
+  const projected = new Map<SourceStorageSubject, Map<SourceStorageBindings, TargetTypeRef | undefined>>();
   const lexicalVisits = new Set<Node>();
-  const carrierFor =(subject: SourceStorageSubject): TargetTypeRef | undefined => {
+  const carrierFor = (subject: SourceStorageSubject, bindings: SourceStorageBindings | undefined): TargetTypeRef | undefined => {
     if (subject.kind === "value" && subject.projection.length === 0 &&
       records.targetOperation.get(subject.node)?.kind === "closure") {
       const captures = records.closureCapture.get(subject.node);
@@ -70,7 +69,7 @@ export function rustRetainedCallLifetimes(
       const captured: TargetTypeRef[] = [];
       for (const capture of lexical.captures) {
         const source = storage.subjectFor(capture.references[0]!);
-        const carrier = source.kind === "resolved" ? carrierFor(source.subject) : undefined;
+        const carrier = source.kind === "resolved" ? carrierFor(source.subject, bindings) : undefined;
         if (carrier === undefined) return undefined;
         captured.push(carrier);
       }
@@ -82,12 +81,16 @@ export function rustRetainedCallLifetimes(
       ? records.sourceParameterAbi.get(subject.node)?.parameterCarrier
       : records.runtimeCarrier.get(subject.node)?.carrier;
     if (subject.projection.length === 0) return root;
-    if (projected.has(subject)) return projected.get(subject);
+    if (bindings === undefined) return undefined;
+    const previous = projected.get(subject);
+    if (previous?.has(bindings)) return previous.get(bindings);
     const carrier = rustSourceStorageProjectedCarrier({ sourceStorage: storage, sourceTypes: walk.sourceTypes,
       projectFieldProjection: walk.operationOptions.projectFieldProjection, semantics: walk.context.semantics,
       types: { resolveNode: node => records.runtimeCarrier.get(node)?.carrier },
-    }, subject, root);
-    projected.set(subject, carrier);
+    }, { subject, bindings }, root);
+    const entries = previous ?? new Map<SourceStorageBindings, TargetTypeRef | undefined>();
+    entries.set(bindings, carrier);
+    projected.set(subject, entries);
     return carrier;
   };
   const reference = (lifetime: RustLifetimeRef): TargetTypeRef => ({ kind: "reference", mutable: false,
@@ -134,11 +137,11 @@ export function rustRetainedCallLifetimes(
     const sources = storage.boundOriginsFor(subject.subject, activation.bindings);
     if (sources.kind !== "resolved" || sources.subjects.length === 0) return undefined;
     const producers = storage.storageProducersFor(subject.subject, activation.bindings);
-    const producerBindings = new Map(producers.kind === "unresolved" ? []
-      : producers.producers.map(producer => [producer.subject, producer.bindings] as const));
+    if (producers.kind === "unresolved") return undefined;
+    const producerBindings = new Map(producers.producers.map(producer => [producer.subject, producer.bindings] as const));
     for (const source of sources.subjects) {
       const node = source.node;
-      const unsubstituted = carrierFor(source);
+      const unsubstituted = carrierFor(source, producerBindings.get(source));
       const carrier = unsubstituted === undefined ? undefined : throughCalls(source, producerBindings.get(source), unsubstituted);
       if (carrier === undefined) return undefined;
       const lifetime = rustCallableProtocol(carrier)?.lifetime;

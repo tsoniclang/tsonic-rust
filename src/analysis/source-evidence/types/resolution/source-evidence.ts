@@ -23,6 +23,7 @@ import { retainRustCallableStructuralStorage } from "./structural-instantiations
 import { resolveRustCallableInputCarrier } from "./callable-inputs.js";
 import { sourceEnclosingCallable, sourceReceiverOwner } from "@tsonic/target-api/source";
 import { rustRetainedValueLifetime } from "../../../callables/retained-values.js";
+import { rustSourceStorageSubjectContext } from "./source-storage-projection.js";
 
 export function resolveRustCallableEvidence(
   callable: SourceCallableTypeEvidence,
@@ -41,7 +42,9 @@ export function resolveRustCallableStorageCarrier(
   resolving: Set<object>,
 ): TargetTypeRef | undefined {
   if (context.callableRepresentation === "signature") return carrier;
-  const subject = context.sourceStorageSubject;
+  const source = context.sourceStorageResolution;
+  if (source?.kind === "unresolved" || context.callableRepresentation === "storage" && source?.subject === undefined) return undefined;
+  const subject = source?.subject;
   const parameterNode = subject?.kind === "value" && subject.projection.length === 0 ? subject.node : undefined;
   const parameter = parameterNode === undefined ? undefined : context.ast.as.AsParameterDeclaration(parameterNode);
   const uses = parameterNode === undefined || parameter === undefined ? undefined :
@@ -55,8 +58,8 @@ export function resolveRustCallableStorageCarrier(
     const semantics = context.semanticsFor(parameterNode!);
     const declared = semantics.declarations.declaredValueType(parameterNode!);
     const declaredCarrier = declared === undefined ? undefined : resolveRustTargetType(declared,
-      { ...context, currentSemantics: semantics, sourceStorageSubject: undefined,
-        callableRepresentation: "signature" }, options, new Set());
+      rustSourceStorageSubjectContext({ ...context, currentSemantics: semantics,
+        callableRepresentation: "signature" }, undefined), options, new Set());
     if (rustTargetTypeRefEquals(rustOptionElementCarrier(declaredCarrier) ?? declaredCarrier, carrier)) {
       return nativeDeclaration && protocol !== undefined && parameter.DotDotDotToken === undefined &&
         parameter.Initializer === undefined && parameter.QuestionToken === undefined &&
@@ -66,18 +69,19 @@ export function resolveRustCallableStorageCarrier(
         : carrier;
     }
   }
-  return carrier === undefined || subject === undefined ? carrier : options.callableStorageCarrier(subject, carrier,
+  if (carrier === undefined || subject === undefined || source === undefined) return carrier;
+  const producers = context.sourceStorage.storageProducersFor(subject, source.bindings);
+  return options.callableStorageCarrier({ subject, bindings: source.bindings }, producers, carrier,
     (owner, excludedCaptures) => resolveRustCallableEnvironment(owner, context, options, resolving, excludedCaptures),
     owner => {
       const receiver = context.sourceStorage.subject(owner, "receiver");
-      const producers = context.sourceStorage.storageProducersFor(subject);
       if (options.sourceTypes.carrierForDeclaration(owner) === undefined || receiver.kind === "unresolved" ||
         producers.kind !== "complete" || producers.producers.length === 0) return undefined;
       const checkedInstance = context.sourceStorage.typeFor(receiver.subject);
       if (checkedInstance.kind === "unresolved") return undefined;
-      const template = resolveRustTargetType(checkedInstance.type, { ...context,
-        currentSemantics: context.semanticsFor(owner), sourceStorageSubject: receiver.subject,
-        sourceTypeParameterSubstitutions: new Map() }, options, new Set());
+      const template = resolveRustTargetType(checkedInstance.type,
+        rustSourceStorageSubjectContext({ ...context, currentSemantics: context.semanticsFor(owner),
+          sourceTypeParameterSubstitutions: new Map() }, receiver), options, new Set());
       if (template === undefined) return undefined;
       const references = rustTargetGenericReferences(template);
       let instance: TargetTypeRef | undefined;
@@ -85,9 +89,9 @@ export function resolveRustCallableStorageCarrier(
       for (const producer of producers.producers) {
         const checkedTemplate = context.sourceStorage.typeFor(producer.subject);
         if (checkedTemplate.kind === "unresolved") return undefined;
-        const templateCarrier = resolveRustTargetType(checkedTemplate.type, { ...context,
-          currentSemantics: context.semanticsFor(producer.subject.node), sourceStorageSubject: undefined,
-          sourceTypeParameterSubstitutions: new Map(), callableRepresentation: "signature" }, options, new Set());
+        const templateCarrier = resolveRustTargetType(checkedTemplate.type,
+          rustSourceStorageSubjectContext({ ...context, currentSemantics: context.semanticsFor(producer.subject.node),
+            sourceTypeParameterSubstitutions: new Map(), callableRepresentation: "signature" }, undefined), options, new Set());
         const templateProtocol = rustCallableProtocol(templateCarrier);
         if (templateProtocol === undefined || selectedProtocol !== undefined &&
           (selectedProtocol.parameters.length !== templateProtocol.parameters.length ||
@@ -103,7 +107,8 @@ export function resolveRustCallableStorageCarrier(
           const checked = context.sourceStorage.typeFor(actual);
           if (checked.kind === "unresolved") return undefined;
           const carrier = resolveRustTargetType(checked.type, { ...context,
-            currentSemantics: context.semanticsFor(actual.node), sourceStorageSubject: actual }, options, resolving);
+            currentSemantics: context.semanticsFor(actual.node),
+            sourceStorageResolution: { kind: "resolved", subject: actual, bindings: producer.bindings } }, options, resolving);
           if (carrier === undefined || instance !== undefined && !rustTargetTypeRefEquals(instance, carrier)) return undefined;
           instance = carrier;
         }
@@ -143,7 +148,7 @@ function resolveRustCallableSignatureCarrier(
   const returned = declaration === undefined ? undefined : context.sourceStorage.subject(declaration, "return");
   const result = resolveRustTypeComponentEvidence(
     callable.result,
-    { ...context, sourceStorageSubject: returned?.kind === "resolved" ? returned.subject : undefined },
+    rustSourceStorageSubjectContext(context, returned),
     options,
     resolving,
   );
@@ -219,7 +224,7 @@ export function resolveRustSignatureParameterEvidence(
             ...(authoredTypeNode === undefined ? {} : { authoredTypeNode }),
           }),
     },
-    { ...context, sourceStorageSubject: selection?.kind === "resolved" ? selection.subject : undefined },
+    rustSourceStorageSubjectContext(context, selection),
     options,
     resolving,
   );

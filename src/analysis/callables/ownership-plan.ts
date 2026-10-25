@@ -1,6 +1,6 @@
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { Node } from "@tsonic/tsts";
-import type { SourceStorageQueries, SourceStorageSubject } from "@tsonic/target-api/analysis";
+import type { SourceStorageProducersSelection, SourceStorageSubject } from "@tsonic/target-api/analysis";
 import { createRustCallableOwnershipComponentQueries } from "./ownership-components.js";
 import { type RustCallableOwnershipComponentQueries } from "../../target-model/records/callable-ownership.js";
 import type { RustCallableOwnershipComponent } from "../../target-model/records/callable-ownership.js";
@@ -14,7 +14,7 @@ export type RustCallableStorageOwnership =
 
 export interface RustCallableOwnershipPlan extends RustCallableOwnershipComponentQueries {
   readonly activations: readonly RustCallableActivation[];
-  storageFor(subject: SourceStorageSubject): RustCallableStorageOwnership;
+  activationForCallable(declaration: Node): RustCallableActivation | undefined;
 }
 
 export interface RustCallableOwnershipRegistry extends RustCallableOwnershipPlan {
@@ -31,7 +31,7 @@ export function createRustCallableOwnershipRegistry(): RustCallableOwnershipRegi
   return Object.freeze({
     initialize(input: Parameters<typeof createRustCallableOwnershipComponentQueries>[0]) {
       if (current !== undefined) failTargetAnalysisInvariant("tsonic-rust", "Callable ownership can be initialized only once.");
-      current = createRustCallableOwnershipPlan(input.storage, createRustCallableOwnershipComponentQueries(input));
+      current = createRustCallableOwnershipPlan(createRustCallableOwnershipComponentQueries(input));
       return current;
     },
     seal: requireCurrent,
@@ -45,16 +45,13 @@ export function createRustCallableOwnershipRegistry(): RustCallableOwnershipRegi
     isCyclicSlot: (declaration: Node) => requireCurrent().isCyclicSlot(declaration),
     isIndependentCallable: (declaration: Node) => requireCurrent().isIndependentCallable(declaration),
     instanceReceiverOwner: (receiver: Node) => requireCurrent().instanceReceiverOwner(receiver),
-    storageFor: (subject: SourceStorageSubject) => requireCurrent().storageFor(subject),
+    activationForCallable: (declaration: Node) => requireCurrent().activationForCallable(declaration),
   });
 }
 
 export function createRustCallableOwnershipPlan(
-  storage: SourceStorageQueries,
   components: RustCallableOwnershipComponentQueries,
 ): RustCallableOwnershipPlan {
-  const ordinary: RustCallableStorageOwnership = Object.freeze({ kind: "ordinary" });
-  const unresolved = (reason: string): RustCallableStorageOwnership => Object.freeze({ kind: "unresolved", reason });
   const groups = new Map<Node, RustCallableOwnershipComponent[]>();
   for (const component of components.components) {
     const group = groups.get(component.activationScope) ?? [];
@@ -79,34 +76,39 @@ export function createRustCallableOwnershipPlan(
     return activation;
   }));
   return Object.freeze({ ...components, activations,
-    storageFor(subject: SourceStorageSubject): RustCallableStorageOwnership {
-      const failure = components.failureReason() ?? storage.failureReason();
-      if (failure !== undefined) return unresolved(failure);
-      if (activations.length === 0 && components.issues.length === 0) {
-        const reason = storage.unresolvedFor(subject);
-        return reason === undefined ? ordinary : unresolved(reason);
-      }
-      const origins = storage.storageProducersFor(subject);
-      if (origins.kind === "unresolved") return unresolved(origins.reason);
-      let selected: RustCallableActivation | undefined;
-      let ordinaryOrigins = false;
-      for (const origin of origins.producers) {
-        const declaration = origin.subject.node;
-        const component = origin.subject.kind === "value" && origin.subject.projection.length === 0
-          ? components.componentForCallable(declaration) : undefined;
-        if (component === undefined) {
-          if (components.isCyclicCallable(declaration) || components.isCyclicSlot(declaration))
-            return unresolved("A cyclic callback origin has no closed physical activation owner.");
-          ordinaryOrigins = true;
-        } else if (selected !== undefined && byComponent.get(component) !== selected) {
-          return unresolved("Callable storage receives different physical activation families.");
-        } else selected = byComponent.get(component);
-      }
-      if (selected === undefined) return components.isCyclicSlot(subject.node)
-        ? unresolved("Cyclic callback storage has no exact contributing callback creation.") : ordinary;
-      if (origins.kind !== "complete") return unresolved("An open callable storage domain cannot select one physical activation family.");
-      return ordinaryOrigins ? unresolved("Callable storage mixes an owning frame with an independent callable origin.")
-        : Object.freeze({ kind: "frame", activation: selected });
+    activationForCallable(declaration: Node): RustCallableActivation | undefined {
+      const component = components.componentForCallable(declaration);
+      return component === undefined ? undefined : byComponent.get(component);
     },
   });
+}
+
+export function selectRustCallableStorageOwnership(
+  ownership: RustCallableOwnershipPlan,
+  subject: SourceStorageSubject,
+  origins: SourceStorageProducersSelection,
+): RustCallableStorageOwnership {
+  const unresolved = (reason: string): RustCallableStorageOwnership => Object.freeze({ kind: "unresolved", reason });
+  const failure = ownership.failureReason();
+  if (failure !== undefined) return unresolved(failure);
+  if (origins.kind === "unresolved") return unresolved(origins.reason);
+  if (origins.kind !== "complete") return unresolved("An open callable storage domain cannot select one physical activation family.");
+  let selected: RustCallableActivation | undefined;
+  let ordinaryOrigins = false;
+  for (const origin of origins.producers) {
+    const declaration = origin.subject.node;
+    const activation = origin.subject.kind === "value" && origin.subject.projection.length === 0
+      ? ownership.activationForCallable(declaration) : undefined;
+    if (activation === undefined) {
+      if (ownership.isCyclicCallable(declaration) || ownership.isCyclicSlot(declaration))
+        return unresolved("A cyclic callback origin has no closed physical activation owner.");
+      ordinaryOrigins = true;
+    } else if (selected !== undefined && activation !== selected) {
+      return unresolved("Callable storage receives different physical activation families.");
+    } else selected = activation;
+  }
+  if (selected === undefined) return ownership.isCyclicSlot(subject.node)
+    ? unresolved("Cyclic callback storage has no exact contributing callback creation.") : Object.freeze({ kind: "ordinary" });
+  return ordinaryOrigins ? unresolved("Callable storage mixes an owning frame with an independent callable origin.")
+    : Object.freeze({ kind: "frame", activation: selected });
 }
