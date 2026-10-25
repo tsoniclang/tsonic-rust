@@ -471,6 +471,10 @@ export function replace(values: FixedArray<string, 2>, replacement: FixedArray<s
   values = replacement;
   return values;
 }
+export function write(values: FixedArray<string, 2>, value: string): string {
+  values[0] = value;
+  return values[0];
+}
 export function capture(values: FixedArray<string, 2>): () => string { return () => values[0]; }
 ` } });
   const { ast } = program.source;
@@ -478,15 +482,15 @@ export function capture(values: FixedArray<string, 2>): () => string { return ()
   const visit = node => {
     if (ast.is.IsFunctionDeclaration(node)) {
       const name = ast.text(ast.name(node));
-      if (["read", "own", "replace", "capture"].includes(name)) {
+      if (["read", "own", "replace", "write", "capture"].includes(name)) {
         selected.set(name, program.records.sourceParameterAbi.get(ast.parameters(node)[0]));
       }
     }
     ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
   };
   program.sourceFiles.forEach(visit);
-  assert.equal(selected.size, 4, "all four original checked source formals publish their own ABI");
-  for (const [name, mode] of [["read", "ref"], ["own", "value"], ["replace", "value"], ["capture", "value"]]) {
+  assert.equal(selected.size, 5, "all five original checked source formals publish their own ABI");
+  for (const [name, mode] of [["read", "ref"], ["own", "value"], ["replace", "value"], ["write", "value"], ["capture", "value"]]) {
     const abi = selected.get(name);
     assert.equal(abi?.mode === mode, true, `${name}: only the actual nonretaining readonly formal borrows`);
     assert.equal(rustFixedArrayCarrierValue(abi?.valueCarrier)?.length.value === "2", true,
