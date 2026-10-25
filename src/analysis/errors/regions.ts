@@ -41,9 +41,8 @@ import { rustRuntimeErrorTargetType } from "../../target-model/types/carriers/ru
 import { rustJsRejectionErrorIdentity } from "../../target-model/records/error-effects.js";
 import type { RustFrameCallableDefinition, RustFrameCallableEntryDefinition, RustFrameCallableImplementation,
   RustFrameEntryErrorSelection, RustFrameImplementationErrorSelection } from "../../target-model/records/frame-callables.js";
-import { mergeRustErrorEffects, rustCallableInvocationErrorEffects } from "./error-effects.js";
+import { mergeRustErrorEffects, rustProducerInvocationErrorEffects } from "./error-effects.js";
 import { rustUninhabitedError } from "../../policy/conversions/callable-physical.js";
-import { selectRustProducerError } from "../callables/producer-errors.js";
 import type { RustFrameCallablePlan } from "../../target-model/records/frame-callables.js";
 import { rustFrameCallableValue } from "../../target-model/types/carriers/frame-callables.js";
 import { rustFrameCallableEnvironmentBindings } from "../callables/frame-values.js";
@@ -108,21 +107,12 @@ export function selectRustFrameEntryErrors(
     const selected = effectsFor(implementation.declaration);
     if (selected === undefined) failTargetAnalysisInvariant("tsonic-rust",
       "A native frame entry requires completed intrinsic effects for every original implementation.", implementation.declaration);
-    const producer = input.producers.forDeclaration(implementation.declaration);
-    const invocation = producer === undefined ? undefined : selectRustProducerError({ identity: producer.identity,
-      fileName: producer.fileName, channel: "invoke", genericArguments: producer.environment }, input);
+    const invocation = rustProducerInvocationErrorEffects(implementation.declaration, input);
     if (invocation === undefined) failTargetAnalysisInvariant("tsonic-rust",
       "A native frame implementation requires its original selected producer invocation channel.", implementation.declaration);
-    const region = selectRustErrorRegion(implementation.declaration,
-      invocation.kind === "region" ? invocation.effects : rustCallableInvocationErrorEffects(invocation.carrier),
-      input, invocation.kind === "region");
+    const region = selectRustErrorRegion(implementation.declaration, invocation, input, false);
     if (region.kind === "rejected") return region;
-    const uniform = region.value.jsRejection !== undefined && !input.promiseBodies.declarations.has(implementation.declaration);
-    const operand: RustErrorRegionSelection = uniform ? Object.freeze({
-      kind: "native", fileName: region.value.fileName, localOwner: undefined,
-      sources: Object.freeze([Object.freeze({ identity: rustJsRejectionErrorIdentity,
-        variant: "Error0", errorType: rustJsValueTargetType() })]),
-    }) : region.value;
+    const operand = region.value;
     operands.set(implementation, operand);
     effects.push({ localErrors: operand.localOwner !== undefined,
       nativeErrors: operand.sources.map(source => ({ identity: source.identity, errorType: source.errorType })) });

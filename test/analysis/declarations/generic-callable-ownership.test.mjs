@@ -143,7 +143,12 @@ closureCapture: { get: (node) => {
     files.map(file => ({ fileName: file.name })),
   ), records, names, navigation: currentSource.navigation, lifetimes: emptyRustLifetimeIndex,
     classValueAdapters: [], closedSourceFiles: new Set(),
-    ownership: { components: [], activations: [], failureReason: () => undefined } };
+    ownership: { components: [], activations: [], failureReason: () => undefined,
+      instanceReceiverOwner(node) {
+        assert.equal(files.includes(node) || files.includes(ast.parent(node)), true,
+          "the virtual callable fixture has only file-owned declarations, never instance receivers");
+        return undefined;
+      } } };
   const materialize = () => {
     const sourceStorage = createSourceStorageQuery(currentSource, files);
     const builder = createRustProgramRecordBuilder();

@@ -414,13 +414,6 @@ export const callablesCarrierRegistry = Object.freeze([
     frozen: false,
   },
   {
-    id: "src/policy/conversions/native-callables.ts#rustFrameCallableError",
-    kinds: ["array", "associated-type", "closure", "function-pointer", "impl-trait", "opaque", "pointer", "reference", "slice", "source-primitive", "target-named", "target-specific", "trait-object", "trait-ref", "tuple", "type-parameter"],
-    declaration: { module: "src/policy/conversions/native-callables.ts", symbol: "rustFrameCallableError" },
-    responsibility: "callables/frame-callable-error",
-    frozen: false,
-  },
-  {
     id: "src/policy/conversions/value-carrier-reconciliation.ts#rustCallableTargetForSourceLifetime",
     kinds: ["array", "associated-type", "closure", "function-pointer", "impl-trait", "opaque", "pointer", "reference", "slice", "source-primitive", "target-named", "target-specific", "trait-object", "trait-ref", "tuple", "type-parameter"],
     declaration: { module: "src/policy/conversions/value-carrier-reconciliation.ts", symbol: "rustCallableTargetForSourceLifetime" },

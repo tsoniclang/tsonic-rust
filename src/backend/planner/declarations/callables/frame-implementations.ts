@@ -11,6 +11,7 @@ import { failRustPlannerInvariant } from "../../diagnostics.js";
 import { rustGeneratedTypeParameterContext } from "../../names/type-parameters.js";
 import { rustFrameCallableTypes } from "../../types/frame-callables.js";
 import { rustTypeFromCarrierInContext } from "../../types/render.js";
+import { isRustUnitCarrier } from "../../../../target-model/types/carriers/js.js";
 import { rustCallablePayloadContext, rustCallablePayloadTypes } from "../../expressions/capture-payloads.js";
 import { rustFrameBindingContext, rustFrameBindingType } from "../../bindings/frame-storage.js";
 import { planNativeModuleFunction } from "./functions.js";
@@ -199,8 +200,12 @@ function planFrameEntry(
         { targetIdentity: channel.targetIdentity, uninhabited: channel.uninhabited, jsRejection: false }])) }, call, entryContext);
     if (transport.kind === "mapped" && mapped === undefined)
       failRustPlannerInvariant("An admitted frame implementation requires its complete selected invocation error syntax.", implementation.declaration);
-    const invoked = transport.kind === "mapped" ? { kind: "call" as const, path: "Ok", args: [mapped!] }
-      : fallible ? call : { kind: "call" as const, path: "Ok", args: [call] };
+    const value = transport.kind === "mapped" ? mapped! : call;
+    const unit = isRustUnitCarrier(callable.resultCarrier);
+    const success: RustExpr = { kind: "call", path: "Ok",
+      args: [unit ? { kind: "tuple-literal", elements: [] } : value] };
+    const invoked: RustExpr = transport.kind !== "mapped" && fallible ? call
+      : unit ? { kind: "evaluate-then", effect: value, discard: "unit", value: success } : success;
     arms.push({ pattern: { kind: "tuple-variant", path: `Self::${implementation.variantName}`, elements: [
       { kind: "wildcard" }, ...(!entryHasPayload(implementation, emission) ? [] : [captures.length === 0
         ? { kind: "wildcard" as const } : { kind: "binding" as const, name: "state" }]),
