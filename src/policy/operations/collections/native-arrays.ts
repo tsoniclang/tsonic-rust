@@ -18,6 +18,7 @@ export function selectRustNativeArrayElementPlan(ownerName: "Array" | "ReadonlyA
     isFallible: false,
     errorBoundary: "none",
     ...((accessMode === "read" || accessMode === "read-write") && !isRustCopyCarrier(element)
-      ? { carrierRequirements: [{ carrier: element, requirement: "clone" as const }] } : {}),
+      ? { carrierRequirements: [{ carrier: element, requirement: "clone" as const,
+          source: { kind: "receiver" as const, projection: [0] } }] } : {}),
   };
 }

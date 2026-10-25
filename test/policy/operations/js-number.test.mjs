@@ -41,8 +41,24 @@ test("generic predicate selection requires exact domain evidence and seals its n
   assert.equal(selectJsSurfaceOperation({ ...request, numericParameterArgument: () => false }), undefined);
   const selected = selectJsSurfaceOperation({ ...request, numericParameterArgument: (index, actual, domain) =>
     index === 0 && actual === carrier && domain === "number" });
-  assert.deepEqual(selected?.fact.carrierRequirements, [{ carrier, requirement: "number-predicate" }]);
+  assert.deepEqual(selected?.fact.carrierRequirements, [{ carrier, requirement: "number-predicate",
+    source: { kind: "argument", sourceIndex: 0, projection: [] } }]);
   assert.deepEqual(selected?.fact.target.argModes, ["ref"]);
+});
+
+test("generic numeric constructors retain the exact original argument for their native bound", () => {
+  const carrier = { kind: "type-parameter", identity: "numeric:Value", name: "Value" };
+  for (const ownerName of ["NumberConstructor", "BigIntConstructor"]) {
+    const request = { ownerName, memberName: "call", operationKind: "call", argumentCarriers: [carrier] };
+    assert.equal(selectJsSurfaceOperation(request) === undefined, true,
+      `${ownerName}: a generic constructor still requires proved numeric-domain evidence`);
+    const selected = selectJsSurfaceOperation({ ...request, numericParameterArgument: (index, actual, domain) =>
+      index === 0 && actual === carrier && domain === "numeric" });
+    assert.deepEqual(selected?.fact.carrierRequirements, [{ carrier, requirement: "source-numeric",
+      source: { kind: "argument", sourceIndex: 0, projection: [] } }],
+    `${ownerName}: the native bound names its actual argument without guessing a carrier binding`);
+    assert.deepEqual(selected?.fact.target.argModes, ["ref"]);
+  }
 });
 
 test("Number rows select only exact source and carrier contracts", () => {

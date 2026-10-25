@@ -22,10 +22,15 @@ import { rustTargetTypeParameterIdentities } from "../../target-model/types/carr
 import { createRustProjectProjectionRequirementCollector } from "./project-projection-requirements.js";
 
 import { ElementAccessExpression_ArgumentExpression, KindBinaryExpression, KindExpressionStatement, Node_Expression, sourceParameterIsProperty } from "@tsonic/target-api/source";
-import { rustValueCarrierBeforeOptionProjection } from "../conversions/value-carrier-queries.js";
+import { rustEffectiveValueCarrier, rustValueCarrierBeforeOptionProjection } from "../conversions/value-carrier-queries.js";
 import { isRustAssignmentOperator } from "../../target-model/syntax/tokens.js";
 
 import { rustValueConversionContract } from "../../policy/conversions/contracts.js";
+import { rustContextualRuntimeConversionContract } from "../../policy/conversions/contextual.js";
+import { rustPhysicalPayloadFor } from "../../policy/conversions/physical-payloads.js";
+import { rustMemberAccessReceiver } from "../../target-model/syntax/expressions.js";
+import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
+import { isClosedMetadata, isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 import { isRustFinalizedArrayInput, isRustFinalizedSliceInput } from "../../target-model/operations/finalized-inputs.js";
 import { getRustGeneratorProtocol, rustClosureProtocol, rustSourceTypeCarrierValue } from "../../target-model/types/index.js";
 import { isRustCopyCarrier } from "../../policy/constraints/native-traits.js";
@@ -398,11 +403,43 @@ export function createRustCallableRequirementVisitor(input: RustCallableRequirem
             ? ElementAccessExpression_ArgumentExpression(ast, node) : undefined;
         if (expression === undefined || !ast.is.IsIdentifier(expression) ||
           input.ownershipFlow.movingReads.has(expression)) continue;
+        const conversion = records.contextualValueConversion.get(expression);
+        if (conversion !== undefined &&
+          rustContextualRuntimeConversionContract(conversion.conversion, input.typeDefinitions)?.sourceMode === "ref") continue;
         const error = addPhysicalCloneUse(expression);
         if (error !== undefined) return error;
       }
       for (const requirement of providerOperation.carrierRequirements ?? []) {
-        const error = addUse(node, requirement.carrier, [requirement.requirement]);
+        const source = requirement.source;
+        if (source === undefined || source === null || !isClosedMetadata(source) || !isDenseDataArray(source.projection) ||
+          source.projection.some(index => !Number.isSafeInteger(index) || index < 0) ||
+          source.kind !== "receiver" && (source.kind !== "argument" ||
+            !Number.isSafeInteger(source.sourceIndex) || source.sourceIndex < 0))
+          return "A provider carrier requirement has no exact source input and component correspondence.";
+        const sourceInput = source.kind === "receiver" ? providerOperation.abi.sourceReceiver
+          : providerOperation.abi.sourceArguments.find(argument => argument.sourceIndex === source.sourceIndex);
+        const expression = source.kind === "receiver"
+          ? rustMemberAccessReceiver(ast, ast.is.IsCallExpression(node) || ast.is.IsNewExpression(node)
+            ? Node_Expression(ast, node) : node)
+          : ast.is.IsCallExpression(node) || ast.is.IsNewExpression(node) ? ast.arguments(node)[source.sourceIndex]
+            : ast.is.IsElementAccessExpression(node) && source.sourceIndex === 0
+              ? ElementAccessExpression_ArgumentExpression(ast, node) : undefined;
+        if (expression === undefined || sourceInput === undefined || !("carrier" in sourceInput) ||
+          sourceInput.disposition !== "runtime") return "A provider carrier requirement lost its original runtime source input.";
+        const logical = rustEffectiveValueCarrier(records, expression);
+        const physical = input.nativeStorage.valueFor(expression);
+        if (physical.kind === "unresolved") return physical.reason;
+        let logicalComponent: TargetTypeRef | undefined = sourceInput.carrier;
+        let physicalComponent = logical === undefined ? undefined
+          : rustPhysicalPayloadFor(logical, physical.carrier, sourceInput.carrier, input.typeDefinitions);
+        for (const index of source.projection) {
+          logicalComponent = logicalComponent === undefined ? undefined : rustTargetTypeChildren(logicalComponent)[index];
+          physicalComponent = physicalComponent === undefined ? undefined : rustTargetTypeChildren(physicalComponent)[index];
+        }
+        if (logicalComponent === undefined || physicalComponent === undefined ||
+          !rustTargetTypeRefEquals(logicalComponent, requirement.carrier))
+          return "A provider carrier requirement conflicts with its selected source and physical component identity.";
+        const error = addUse(node, physicalComponent, [requirement.requirement]);
         if (error !== undefined) return error;
       }
     }
