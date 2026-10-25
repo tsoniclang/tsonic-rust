@@ -232,7 +232,8 @@ export function main(): void {
   const sum = scalar += 3n;
   check(sum === 15n && scalar === 15n);
   let failed = false;
-  try { const impossible = scalar /= 0n; check(impossible === 0n); } catch { failed = true; }
+  try { const impossible = scalar /= 0n; check(impossible === 0n); }
+  ${surfaces.length === 0 ? "catch { failed = true; }" : "catch (error) { failed = error instanceof RangeError; }"}
   check(failed && scalar === 15n);
   const values = [7n];
   let indexReads = 0;
@@ -240,7 +241,8 @@ export function main(): void {
   const accumulated = values[index()] += values[0];
   check(accumulated === 14n && values[0] === 14n && indexReads === 1);
   failed = false;
-  try { const impossible = values[index()] /= 0n; check(impossible === 0n); } catch { failed = true; }
+  try { const impossible = values[index()] /= 0n; check(impossible === 0n); }
+  ${surfaces.length === 0 ? "catch { failed = true; }" : "catch (error) { failed = error instanceof RangeError; }"}
   check(failed && values[0] === 14n && indexReads === 2);
   const fresh = make()[0] += 2n;
   check(fresh === 5n);
