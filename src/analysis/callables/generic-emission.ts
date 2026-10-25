@@ -1,5 +1,6 @@
 import type { Node, SourceFile } from "@tsonic/tsts";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
+import { sourceCallableValueParameters, type TargetSourceProgram } from "@tsonic/target-api/source";
 import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustGenericEmissionProducer } from "../program/records/generic-emission.js";
 import type { RustGenericMemberEmission } from "../../target-model/records/generic-emission.js";
@@ -12,16 +13,34 @@ import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustSourceCallableValueFact } from "../../target-model/records/operation-selections.js";
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
 import { rustProgramNodeIsOutsideNativeCode } from "../control-flow/compile-time-statements.js";
+import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
+import { rustStructuralObjectCarrierValue } from "../../target-model/types/carriers/source-types.js";
+import { substituteRustTargetGenerics } from "../../target-model/types/carriers/substitution.js";
 
 export function analyzeRustGenericEmission(input: {
   readonly program: Omit<RustAnalysisProgram, "reachability">;
+  readonly source: TargetSourceProgram;
   readonly sourceFiles: readonly SourceFile[];
   readonly nodes: readonly Node[];
   readonly producer: RustGenericEmissionProducer;
   readonly sourceValues: readonly RustSourceCallableValueFact[];
 }): void {
-  const { program, producer } = input;
+  const { program, producer, source } = input;
   const generic = program.callableValues.generic;
+  const nativeHeaderTypes = new Set<string>();
+  const admitNativeHeader = (roots: readonly TargetTypeRef[]): void => {
+    const pending = [...roots];
+    for (let index = 0; index < pending.length; index++) {
+      const carrier = pending[index]!;
+      const key = closedMetadataKey(carrier);
+      if (nativeHeaderTypes.has(key)) continue;
+      nativeHeaderTypes.add(key);
+      if (rustStructuralObjectCarrierValue(carrier) !== undefined &&
+        program.structuralShapes.definitionForCarrier(carrier) === undefined)
+        failTargetAnalysisInvariant("tsonic-rust", "An admitted generic native header requires its exact structural template application.");
+      pending.push(...rustTargetTypeChildren(carrier));
+    }
+  };
   const implementations = new Set<RustGenericCallableImplementation>();
   for (const definition of generic.definitions) for (const implementation of definition.implementations) {
     if (implementations.has(implementation)) continue;
@@ -30,6 +49,20 @@ export function analyzeRustGenericEmission(input: {
     const requirements = program.declarationGenericRequirements.contractFor(implementation.declaration);
     if (environment === undefined || requirements === undefined) failTargetAnalysisInvariant("tsonic-rust",
       "An admitted generic implementation requires its finalized physical environment and generic contract.", implementation.declaration);
+    const returned = program.records.sourceCallableReturn.get(implementation.declaration);
+    const parameters = sourceCallableValueParameters(source.ast, implementation.declaration,
+      source.semantics.forNode(implementation.declaration));
+    if (returned === undefined || parameters === undefined)
+      failTargetAnalysisInvariant("tsonic-rust", "An admitted generic native helper requires its exact source parameter and return contract.", implementation.declaration);
+    const helperTypes = [returned.returnCarrier];
+    for (const parameter of parameters) {
+      const abi = parameter === undefined ? undefined : program.records.sourceParameterAbi.get(parameter);
+      if (abi === undefined)
+        failTargetAnalysisInvariant("tsonic-rust", "An admitted generic native helper requires every exact source parameter ABI.", parameter);
+      helperTypes.push(abi.parameterCarrier, abi.valueCarrier);
+    }
+    admitNativeHeader(helperTypes.map(carrier => substituteRustTargetGenerics(carrier,
+      environment.substitutions.types, environment.substitutions.lifetimes, environment.substitutions.consts)));
     producer.implementation(implementation, { environment, requirements,
       arguments: rustGenericCallableStorageArguments(definition.signature.environmentParameters, environment.parameters),
       suspended: program.records.asyncFunction.get(implementation.declaration) !== undefined || program.records.generator.get(implementation.declaration) !== undefined });
@@ -119,7 +152,9 @@ export function analyzeRustGenericEmission(input: {
         }),
       }));
     }
-    producer.definition(definition, { invoked, result: future?.output ?? completion.result, parameters: protocol.parameters,
+    const result = future?.output ?? completion.result;
+    admitNativeHeader([...protocol.parameters, result]);
+    producer.definition(definition, { invoked, result, parameters: protocol.parameters,
       identity,
       nativeFuture: future === undefined ? undefined : Object.freeze({ optional: future.optional }), members });
   }

@@ -126,6 +126,15 @@ export function analyzeRustReadUses(ast: AstReader, nodes: readonly Node[], reco
     if (use === undefined) continue;
     const operand = sourceTransparentExpressionOperand(ast, node);
     if (operand !== undefined) uses.set(operand, use);
+    const operation = records.targetOperation.get(node);
+    if ((use.mode === "shared" || use.mode === "mutable") &&
+      (operation?.kind === "tuple-index" || operation?.kind === "fixed-index")) {
+      const receiver = Node_Expression(ast, node);
+      const index = ElementAccessExpression_ArgumentExpression(ast, node);
+      if (receiver !== undefined) uses.set(receiver, Object.freeze({ ...use,
+        later: Object.freeze([...(index === undefined ? [] : [index]), ...use.later.slice(use.laterStart)]),
+        laterStart: 0, stableAcrossEffects: false }));
+    }
   }
   return uses;
 }

@@ -1,6 +1,7 @@
-import type { Node } from "@tsonic/tsts";
+import type { AstReader, Node } from "@tsonic/tsts";
 import { sourceEnclosingCallable, sourceNodeIdentity, sourceCallableValueParameters } from "@tsonic/target-api/source";
-import type { RustAnalysisContext } from "../program/context.js";
+import type { RustProgramRecords } from "../../target-model/records/program.js";
+import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import type { RustErrorEffectsFact, RustNativeErrorEffect } from "../../target-model/records/error-effects.js";
 import { rustJsRejectionErrorIdentity } from "../../target-model/records/error-effects.js";
 import { rustJsValueTargetType } from "../../target-model/types/carriers/js.js";
@@ -19,7 +20,7 @@ import type { RustNativeCallableProducer } from "../../target-model/records/nati
 import { rustNativeCallableErrorChannel } from "../../policy/types/callables/native-protocols.js";
 import { isRustAbsenceCarrier } from "../../target-model/types/carriers/native.js";
 import { rustOptionElementCarrier } from "../../target-model/types/carriers/optional.js";
-import type { SourceStorageBindings, SourceStorageSubject } from "@tsonic/target-api/analysis";
+import type { SourceStorageBindings, SourceStorageQueries, SourceStorageSubject } from "@tsonic/target-api/analysis";
 import { rustCallableProtocol, rustNativeCallableProtocol } from "../../target-model/types/carriers/callables.js";
 import { rustGenericCallableProtocol } from "../../target-model/types/carriers/generic-callables.js";
 import { inferRustTargetGenericBindings } from "../../target-model/types/carriers/generic-inference.js";
@@ -31,7 +32,11 @@ import type { RustNativeStoragePlan } from "../callables/native-storage.js";
 import type { RustNativeCallableInputPlan } from "../callables/native-inputs.js";
 import type { RustNativeCallableProducerPlan } from "../../target-model/records/native-producers.js";
 
-type RustSourceErrorContext = Pick<RustAnalysisContext, "ast" | "records" | "sourceStorage" | "typeDefinitions"> & {
+type RustSourceErrorContext = {
+  readonly ast: AstReader;
+  readonly records: RustProgramRecords;
+  readonly sourceStorage: SourceStorageQueries;
+  readonly typeDefinitions: RustTypeDefinitions;
   readonly callableValues: {
     readonly native: RustNativeCallableInputPlan;
     readonly nativeProducers: Pick<RustNativeCallableProducerPlan, "forDeclaration" | "errorFor">;

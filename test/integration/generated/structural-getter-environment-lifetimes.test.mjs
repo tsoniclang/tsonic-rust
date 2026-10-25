@@ -5,6 +5,35 @@ import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 
 for (const surfaces of [[], ["js"]]) {
   const surface = surfaces[0] ?? "native";
+  test(`structural callable getters compose selected arity adapters before direct and aliased returns in ${surface}`, { timeout: 300_000 }, () => {
+    const { result } = compileRust({ surfaces,
+      target: { id: "rust", options: { outputType: "bin", crateName: `adapted_getter_${surface}` } },
+      files: { "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+type View = { readonly read: () => int32 };
+class Box {
+  constructor(public value: int32) {}
+  read = (): int32 => 3 as int32;
+}
+function view(owner: Box): View { return owner; }
+function create(): (unused: int32) => int32 { return view(new Box(1 as int32)).read; }
+function createAlias(): (unused: int32) => int32 {
+  const adapted: (unused: int32) => int32 = view(new Box(2 as int32)).read;
+  return adapted;
+}
+export function main(): void {
+  const direct = create();
+  if (direct(7 as int32) !== 3) throw new Error("direct getter arity adapter");
+  const alias = createAlias();
+  if (alias(11 as int32) !== 3) throw new Error("aliased getter arity adapter");
+}
+main();
+` } });
+    assert.equal(result.diagnostics.length, 0, result.diagnostics.map(diagnostic => `${diagnostic.code}: ${diagnostic.message}`).join("\n"));
+    const executed = validateGeneratedProject(`adapted-getter-${surface}`, result.artifacts, { run: true });
+    assert.equal(executed.status, 0, executed.stderr);
+  });
+
   test(`independent structural callable getters outlive a shorter capture and the view in ${surface}`, { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces,
       target: { id: "rust", options: { outputType: "bin", crateName: `independent_getter_lifetimes_${surface}` } },
@@ -55,9 +84,15 @@ class Box<Value> {
 }
 function view<Value>(owner: Box<Value>): View<Value> { return owner; }
 function detached(): (value: int32) => int32 { return view(new Box<int32>(3 as int32)).identity; }
+function detachedAlias(): (value: int32) => int32 {
+  const selected = view(new Box<int32>(5 as int32)).identity;
+  return selected;
+}
 export function main(): void {
   const identity = detached();
   if (identity(17 as int32) !== 17) throw new Error("capture-free getter escaped temporary");
+  const alias = detachedAlias();
+  if (alias(23 as int32) !== 23) throw new Error("aliased capture-free getter escaped temporary");
 }
 main();
 ` } });

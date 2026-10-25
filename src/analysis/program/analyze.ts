@@ -138,11 +138,20 @@ export function analyzeRustProgram(context: RustAnalysisContext, outputType: "bi
       const demand = subject === undefined ? undefined : context.errorStorageDemands.storageFor(subject);
       if (demand?.kind === "unresolved") return undefined;
       if (demand?.kind === "writable") return rustWritableSourceErrorTargetType();
-      const origins = subject === undefined ? undefined : context.errorStorageDemands.storageOriginsFor(subject);
-      if (origins?.kind === "resolved" && origins.origins.some(origin => {
-        const types = context.source.semantics.forNode(origin.node).types;
-        return types.isUnknown(origin.type) || types.isAny(origin.type);
-      })) return rustSourceErrorTargetType();
+      const origins = subject === undefined ? undefined : context.sourceStorage.originsFor(subject);
+      if (origins?.kind === "unresolved") return undefined;
+      let requiresSourceError = false;
+      if (origins?.kind === "resolved") {
+        for (const origin of origins.origins) {
+          const originDemand = context.errorStorageDemands.storageFor(origin.subject);
+          if (originDemand.kind === "unresolved") return undefined;
+          const types = context.source.semantics.forNode(origin.subject.node).types;
+          if (originDemand.kind === "writable" || types.isUnknown(origin.type) || types.isAny(origin.type)) {
+            requiresSourceError = true;
+          }
+        }
+      }
+      if (requiresSourceError) return rustSourceErrorTargetType();
       return subject !== undefined && context.errorStorageDemands.receivesWritableNative(subject)
           ? rustSourceErrorTargetType() : context.errorStorageDemands.retainedBoundaries.length !== 0
             ? rustSourceErrorTargetType() : context.projectTypes.sourceErrorCarrier();

@@ -73,8 +73,7 @@ export function selectRustOperationReadUses(ast: AstReader, node: Node, input: {
     select(ast.arguments(node)[0], operation.state === "moved" ? "move" : operation.state === "borrowed-mut" ? "mutable" : "shared");
   } else if (operation?.kind === "project-type-test" || operation?.kind === "closed-type-test") {
     select(BinaryExpression_Left(ast, node), "shared");
-  } else if (operation?.kind === "void-expression") {
-    // A discarded storage read is planned as a shared reference (backend/planner/expressions/discarded-values.ts).
+  } else if (operation?.kind === "void-expression" || operation?.kind === "typeof") {
     select(Node_Expression(ast, node), "shared");
   } else if (operation?.kind === "option-check") {
     // An Option presence test (is_some / is_none / is_absent) only borrows its Option operand.
@@ -89,9 +88,10 @@ export function selectRustOperationReadUses(ast: AstReader, node: Node, input: {
     const binary = ast.is.IsBinaryExpression(node);
     const left = binary ? BinaryExpression_Left(ast, node) : Node_Operand(ast, node);
     const right = binary ? BinaryExpression_Right(ast, node) : undefined;
-    if (operation.operandModes[0] !== "value") select(left, operation.operandModes[0] === "ref" ? "shared" : "mutable", right === undefined ? [] : [right]);
+    select(left, operation.operandModes[0] === "ref" ? "shared"
+      : operation.operandModes[0] === "mut-ref" ? "mutable" : "value", right === undefined ? [] : [right]);
     const rightMode = operation.operandModes[1];
-    if (rightMode !== undefined && rightMode !== "value") select(right, rightMode === "ref" ? "shared" : "mutable");
+    if (rightMode !== undefined) select(right, rightMode === "ref" ? "shared" : rightMode === "mut-ref" ? "mutable" : "value");
   } else if (operation?.kind === "source-indexed-field") {
     const key = ElementAccessExpression_ArgumentExpression(ast, node);
     select(receiver, "shared", key === undefined ? [] : [key], 0, true);

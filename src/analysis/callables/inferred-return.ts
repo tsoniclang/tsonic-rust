@@ -1,8 +1,8 @@
-import { BinaryExpression_Left, BinaryExpression_Right, Node_Expression, Node_Initializer, Node_Operand, Node_Type, sourceCallableValueParameters } from "@tsonic/target-api/source";
+import { BinaryExpression_Left, BinaryExpression_Right, Node_Expression, Node_Initializer, Node_Operand, Node_Type, sourceCallableValueParameters, sourceReceiverOwner } from "@tsonic/target-api/source";
 import type { Node } from "@tsonic/tsts";
 import { createRustCarrierProbe } from "../program/carrier-probe.js";
 
-import { rustOperationContext, rustResolutionContext } from "../program/walk.js";
+import { rustResolutionContext } from "../program/walk.js";
 import type { RustFactWalk } from "../program/walk.js";
 import { resolveRustTargetTypeRef } from "../source-evidence/types/resolution/source.js";
 import { selectRustNumericBinaryPromotion } from "../../policy/operations/numeric/promotion.js";
@@ -15,8 +15,6 @@ import { rustSourceOptionalElementCarrier } from "../../target-model/types/carri
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 
-import { checkedPropertySelectionInput } from "../operations/member-access.js";
-import { selectRustCheckedPropertyAccess } from "../operations/selected-members.js";
 import { resolveExpressionCarrier } from "../source-evidence/types/resolution/expression-carriers.js";
 import { selectRustConditionalNumericCarrier } from "../../policy/types/conditional-numeric-carrier.js";
 import { resolveRustBranchUnion } from "../source-evidence/types/resolution/branch-unions.js";
@@ -24,6 +22,7 @@ import { finalizeRustCallableSignature } from "./signature-query.js";
 import { setCarrierFact } from "../operations/project-calls.js";
 import type { RustSourceParameterAbiFact } from "../../target-model/records/callables-and-resources.js";
 import type { RustProgramRecordBuilder } from "../program/records/model.js";
+import { rustClassCallableMemberOwner, rustClassReceiverCarriers } from "../declarations/classes/receivers.js";
 
 export type RustInferredReturnSelection =
   | { readonly kind: "complete"; readonly carrier: TargetTypeRef }
@@ -78,6 +77,12 @@ function selectReturn(
   const parameterAbis: RustSourceParameterAbiFact[] = [];
   const parameters = sourceCallableValueParameters(ast, declaration, walk.context.semanticsFor(declaration));
   if (parameters === undefined) return { kind: "pending", hint: baseline };
+  const lexicalOwner = ast.is.IsArrowFunction(declaration) ? sourceReceiverOwner(declaration, ast, "storage") : undefined;
+  const classOwner = lexicalOwner === undefined ? undefined : rustClassCallableMemberOwner(walk, lexicalOwner);
+  const receivers = classOwner === undefined ? undefined : rustClassReceiverCarriers(walk, classOwner);
+  if (classOwner !== undefined && receivers === undefined) return { kind: "pending", hint: baseline };
+  const receiver = classOwner === undefined ? walk.currentThisCarrier : receivers?.thisCarrier;
+  const superReceiver = classOwner === undefined ? walk.currentSuperCarrier : receivers?.superCarrier;
   for (const parameter of parameters) {
     const selected = walk.context.records.sourceParameterAbi.get(parameter);
     if (selected === undefined) return { kind: "pending", hint: baseline };
@@ -86,13 +91,14 @@ function selectReturn(
   const memo = walk.inferredReturns.get(walk.context.records);
   const completed = memo?.get(declaration)?.find(entry => entry.role === role && rustTargetTypeRefEquals(entry.baseline, baseline) &&
     entry.parameterAbis.length === parameterAbis.length && entry.parameterAbis.every((abi, index) => abi === parameterAbis[index]) &&
-    entry.callable === walk.currentCallableDeclaration && rustTargetTypeRefEquals(entry.receiver, walk.currentThisCarrier) &&
-    rustTargetTypeRefEquals(entry.superReceiver, walk.currentSuperCarrier));
+    entry.callable === walk.currentCallableDeclaration && rustTargetTypeRefEquals(entry.receiver, receiver) &&
+    rustTargetTypeRefEquals(entry.superReceiver, superReceiver));
   if (completed !== undefined) return { kind: "complete", carrier: completed.carrier };
   if (walk.resolvingReturns.has(declaration)) return { kind: "pending", hint: baseline };
   walk.resolvingReturns.add(declaration);
   try {
-    const probe = createRustCarrierProbe({ ...walk, currentCallableDeclaration: declaration });
+    const probe = createRustCarrierProbe({ ...walk, currentCallableDeclaration: declaration,
+      currentThisCarrier: receiver, currentSuperCarrier: superReceiver });
     const records = probe.context.records;
     const expressions = directReturns(walk, declaration);
     const active = new Set<Node>();
@@ -133,7 +139,7 @@ function selectReturn(
     if (local === undefined) walk.inferredReturns.set(walk.context.records, local = new WeakMap());
     local.set(declaration, Object.freeze([...(local.get(declaration) ?? []), Object.freeze({ role, baseline,
       parameterAbis: Object.freeze(parameterAbis), callable: walk.currentCallableDeclaration,
-      receiver: walk.currentThisCarrier, superReceiver: walk.currentSuperCarrier, carrier: result,
+      receiver, superReceiver, carrier: result,
     })]));
     return { kind: "complete", carrier: result };
 
@@ -227,11 +233,8 @@ function selectReturn(
           const receiverCarrier = expressionCarrier(receiver);
           if (receiverCarrier === undefined) return undefined;
           if (setCarrierFact(probe, receiver, receiverCarrier) === undefined) return undefined;
-          const selection = selectRustCheckedPropertyAccess(
-            checkedPropertySelectionInput(rustOperationContext(probe, expression), expression, source),
-            rustOperationContext(probe, expression), probe.operationOptions,
-          );
-          return selection.kind === "accept" ? selection.value.resultType : undefined;
+          const sourceFile = ast.getSourceFile(expression);
+          return sourceFile === undefined ? undefined : resolveExpressionCarrier(probe, expression, sourceFile, expected);
         }
         const operands = kind === "KindBinaryExpression"
           ? [BinaryExpression_Left(ast, expression), BinaryExpression_Right(ast, expression)]

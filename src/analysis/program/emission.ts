@@ -165,7 +165,7 @@ export function finalizeRustNativeEmission(
     producer: context.records.errorEmissionPlans });
   const sourceCallableEmission = analyzeRustSourceCallableEmission(program, context.nativeNodes, context.records.sourceCallableEmissionPlans);
   if (sourceCallableEmission.issues.length !== 0) return rejectedTargetStage(sourceCallableEmission.issues);
-  analyzeRustGenericEmission({ program, sourceFiles: context.sourceFiles, nodes: context.nativeNodes,
+  analyzeRustGenericEmission({ program, source: context.source, sourceFiles: context.sourceFiles, nodes: context.nativeNodes,
     producer: context.records.genericEmissionPlans, sourceValues: sourceCallableEmission.values });
   const nativeDeclarations = analyzeRustNativeDeclarationForms({ ast: context.ast, sourceFiles: context.sourceFiles,
     semanticsFor: context.semanticsFor,
@@ -229,7 +229,7 @@ export function finalizeRustNativeEmission(
     navigation: context.source.navigation, names: context.names, aliases: program.localStorageAliases,
     representations: objectRepresentations, projectTypes, nativeStorage: program.callableValues.nativeStorage,
     lexicalFunctions: program.lexicalFunctions, producer: context.records.localBindings, required: context.requiredRecords,
-    runtimeValueUses: context.runtimeValueUses });
+    runtimeValueUses: context.runtimeValueUses, safetyApplications: program.safetyApplications });
   if (localBindingIssues.length !== 0) return rejectedTargetStage(localBindingIssues);
   const classEmissionIssues = analyzeRustClassEmission({ program, source: context.source, reachability, producer: context.records.classEmissionPlans });
   if (classEmissionIssues.length !== 0) return rejectedTargetStage(classEmissionIssues);

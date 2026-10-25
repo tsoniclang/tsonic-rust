@@ -301,7 +301,7 @@ test("the planner phase label starts at publication, after the actual callable s
   assert.equal(ordinary.result.diagnostics.length, 0, ordinary.result.diagnostics.map(issue => issue.message).join("\n").slice(0, 2048));
   assert.equal(ordinary.result.artifacts.length > 0, true, "uninjected ordinary pipeline reaches emission");
   const registryUrl = new URL("../../../dist/analysis/callables/value-plan.js", import.meta.url).href;
-  const componentsUrl = new URL("../../../dist/analysis/program/source-package-components.js", import.meta.url).href;
+  const componentsUrl = new URL("../../../dist/analysis/source-modules/component-semantics.js", import.meta.url).href;
   const handlerUrl = new URL("../../../dist/analysis/operations/native-handlers.js", import.meta.url).href;
   const collectorUrl = new URL("../../../dist/analysis/callables/emission-requests.js", import.meta.url).href;
   const storageUrl = new URL("../../../dist/analysis/callables/native-storage.js", import.meta.url).href;

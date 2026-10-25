@@ -17,8 +17,8 @@ export function planRustConstructorShape(
   visibility: RustVisibility,
   errorType: RustType,
   render: (carrier: TargetTypeRef) => RustType | undefined,
-  superTraits: readonly RustType[] = [],
-  fieldDeadCode: (index: number, role: "getter" | "setter") => RustDeadCodeDisposition | undefined = () => undefined,
+  superTraits: readonly RustType[],
+  fieldDeadCode: (index: number, role: "value" | "getter" | "setter") => RustDeadCodeDisposition | undefined,
 ): readonly RustItem[] | undefined {
   if (definition.dispatchName === undefined || type.kind !== "named") failRustPlannerInvariant("An admitted constructor shape requires its named native dispatch type.");
   const functions: RustTraitFunction[] = [];

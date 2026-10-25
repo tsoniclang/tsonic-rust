@@ -11,7 +11,7 @@ import type { RustProgramRecords } from "../../target-model/records/program.js";
 import { rustBorrowPrimitiveCopyValue, rustBorrowPureCopyValue, rustBorrowValueIsUnprojected } from "../storage/borrowed-element-purity.js";
 
 import { validatedRustCapturedFieldStorageFact } from "../storage/receiver-captures.js";
-import { rustNativeStoragePathsDisjoint, rustNativeStorageProjections, rustNativeStorageRoot } from "../storage/native-paths.js";
+import { rustNativeIndexStorageProjection, rustNativeStoragePathsDisjoint, rustNativeStorageProjections, rustNativeStorageRoot } from "../storage/native-paths.js";
 import { rustNativeWriteTargets, rustNoNativeWrites } from "./effect-paths.js";
 
 import { rustSourceValueWrapperContains } from "../../policy/ownership/source-value-wrappers.js";
@@ -172,8 +172,9 @@ export function selectRustBorrowRelationship(source: Node, later: Node,
   const root = rustNativeStorageRoot(source, input);
   const path = root === undefined ? undefined : rustNativeStorageProjections(source, root, input);
   const binding = path?.length === 0 && input.records.sourceBinding.get(source)?.scope === "lexical";
+  const indexed = path?.[path.length - 1] === rustNativeIndexStorageProjection;
   const field = input.records.targetOperation.get(source);
-  if (!binding && (!rustDirectBorrowField(source, input) || field?.kind !== "source-field" || field.accessMode !== "read")) return false;
+  if (!binding && !indexed && (!rustDirectBorrowField(source, input) || field?.kind !== "source-field" || field.accessMode !== "read")) return false;
   const targets = effects.pureValues.has(later) ? rustNoNativeWrites : effects.nativeWrites.get(later);
   return root !== undefined && path !== undefined && targets !== undefined && targets.every(target => {
     const targetRoot = rustNativeStorageRoot(target, input);
