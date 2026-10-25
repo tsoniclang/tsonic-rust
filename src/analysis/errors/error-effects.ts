@@ -6,6 +6,10 @@ import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustProgramErrorOwner } from "../../target-model/types/carriers/program-errors.js";
 import { rustJsValueTargetType } from "../../target-model/types/carriers/js.js";
 import { rustUninhabitedError } from "../../policy/conversions/callable-physical.js";
+import type { Node } from "@tsonic/tsts";
+import type { RustPromiseBodies } from "../../target-model/records/callables-and-resources.js";
+import { rustCallableProtocol } from "../../target-model/types/carriers/callables.js";
+import { selectRustProducerError, type RustProducerErrorContext } from "../callables/producer-errors.js";
 
 export const rustPureErrorEffects: RustErrorEffectsFact = Object.freeze({
   localErrors: false, nativeErrors: Object.freeze([]),
@@ -29,6 +33,24 @@ export function rustCallableInvocationErrorEffects(error: TargetTypeRef): RustEr
 
 export function rustErrorEffectsAreFallible(effects: RustErrorEffectsFact): boolean {
   return effects.localErrors || effects.nativeErrors.length !== 0;
+}
+
+export function rustProducerInvocationErrorEffects(
+  declaration: Node,
+  input: RustProducerErrorContext & {
+    readonly promiseBodies: Pick<RustPromiseBodies, "objects" | "declarations">;
+  },
+): RustErrorEffectsFact | undefined {
+  const producer = input.producers.forDeclaration(declaration);
+  const invocation = producer === undefined ? undefined : selectRustProducerError({ identity: producer.identity,
+    fileName: producer.fileName, channel: "invoke", genericArguments: producer.environment }, input);
+  if (invocation === undefined) return undefined;
+  if (invocation.kind === "carrier") return rustCallableInvocationErrorEffects(invocation.carrier);
+  const operation = input.records.targetOperation.get(declaration);
+  const callback = operation?.kind === "closure" ? rustCallableProtocol(operation.resultCarrier) : undefined;
+  return !input.promiseBodies.declarations.has(declaration) && (input.promiseBodies.objects.has(declaration) ||
+    rustTargetTypeRefEquals(callback?.error, rustJsValueTargetType()))
+    ? rustCallableInvocationErrorEffects(rustJsValueTargetType()) : invocation.effects;
 }
 
 export function rustErrorEffectsEqual(left: RustErrorEffectsFact, right: RustErrorEffectsFact): boolean {

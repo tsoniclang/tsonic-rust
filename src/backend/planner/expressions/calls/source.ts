@@ -25,7 +25,7 @@ import { allocateRustSyntheticName } from "../../names/synthetic.js";
 import { planRustUnionMethodCall } from "./union-methods.js";
 import { planRustNativeInputInvocation, planRustNativeInputPropagation } from "./native-input.js";
 import { planRustGenericCallableErrorPropagation } from "./generic-errors.js";
-import { planRustSourceErrorPropagation } from "./source-errors.js";
+import { planRustSourceErrorPropagation, planRustSelectedSourceErrorPropagation } from "./source-errors.js";
 import { planRustNativeTaskCallArguments } from "../../program/native-tasks.js";
 
 export function planSelectedSourceCall(node: Node, callee: Node | undefined, argumentPlan: RustSourceArgumentEvaluation,
@@ -186,6 +186,7 @@ export function planSelectedSourceCall(node: Node, callee: Node | undefined, arg
   const generic = context.input.program.records.genericCallableInvocation.get(node);
   let result: RustExpr | undefined;
   if (generic !== undefined) result = planRustGenericCallableErrorPropagation(node, generic, "invocation", planned, context);
+  else if (selection.frameError !== undefined) result = planRustSelectedSourceErrorPropagation(node, selection.frameError, planned, context);
   else if (selection.errorEdge !== undefined) result = planRustSourceErrorPropagation(node, selection.errorEdge, planned, context);
   else if (selection.physicalCallableError !== undefined && rustActiveErrorType(context) !== undefined &&
     rustTypeEquals(rustTypeFromCarrierInContext(selection.physicalCallableError, context) ?? { kind: "infer" }, rustActiveErrorType(context)!)) {

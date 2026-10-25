@@ -26,7 +26,7 @@ import { resolveRustTargetTypeRef } from "../../../source-evidence/types/resolut
 import { createRustPropertyProjectionSelector } from "../../../conversions/property-projections.js";
 
 import { selectedCallArgumentCarriers, selectedCallArgumentNodes, selectedCallCalleeDeclaration } from "../operators.js";
-import { selectedCallProviderDeclaration } from "../../../../policy/identities/selected-source.js";
+import { selectedCallProviderDeclaration, selectedCallProviderDomain } from "../../../../policy/identities/selected-source.js";
 import { selectedValueCarrier } from "../../selected-values.js";
 import { selectJsSurfaceConstructorBySourceOwner } from "../../../../policy/operations/source-profiles/js/index.js";
 import { selectJsSurfaceOperation } from "../../../../policy/operations/source-profiles/js/selection.js";
@@ -101,14 +101,20 @@ export function resolveRustCheckedCall(
   }
   if (providerEvidence.kind === "selected" && selectedSourceMember === undefined) {
     const provider = providerEvidence.identity;
+    const operationKind = checkedCallIsConstruction(request, context) ? "constructor" : "method";
+    const selection = selectRustProviderOperation(options.providerRows, provider, operationKind);
+    const domain = selectedCallProviderDomain(request, provider, selection, context);
+    if (domain === undefined) return rejectSelectedOperation(request.source.call, context,
+      "RUST_SELECTED_PROVIDER_EVIDENCE_CONFLICT", "The selected provider invocation requires its exact retained callable signature and declaration owner.");
+    if (domain === "value") return acceptRuntimeCallableCall(request, context, options) ?? rejectSelectedOperation(
+      request.source.call, context, "RUST_SOURCE_CALLABLE_CARRIER_MISSING",
+      "The selected provider-origin callable value requires its exact native invocation carrier.");
     const sourceMarker = provider.exportId === undefined
       ? undefined
       : sourceCallMarkerByIdentity.get(`${provider.moduleSpecifier}::${provider.exportId}`);
     if (sourceMarker !== undefined) {
       return mapRustSourceMarkerCall(request, provider, sourceMarker, context, options);
     }
-    const operationKind = checkedCallIsConstruction(request, context) ? "constructor" : "method";
-    const selection = selectRustProviderOperation(options.providerRows, provider, operationKind);
     if (selection.kind === "missing") {
       return rejectSelectedOperation(request.source.call, context, "RUST_PROVIDER_OPERATION_NOT_MAPPED", `No Rust operation row matches selected provider declaration '${providerIdentityText(provider)}' as ${operationKind}.`);
     }

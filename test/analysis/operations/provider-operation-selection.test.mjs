@@ -6,12 +6,144 @@ import { rustBorrowedStringTypeParameterNames } from "../../../dist/policy/types
 import {
   mergeProviderDeclarationIdentities,
   resolveSelectedProviderDeclaration,
+  selectedCallProviderDeclaration,
+  selectedCallProviderDomain,
 } from "../../../dist/policy/identities/selected-source.js";
 import { rustCallScopedElisionLifetime } from "../../../dist/target-model/lifetimes/index.js";
 import { selectRustCheckedOperator } from "../../../dist/analysis/operations/members/operators.js";
 import { rustOptionTargetType, rustAbsenceTargetType } from "../../../dist/target-model/types/index.js";
+import { createRustProviderPackage } from "../../../dist/public/provider.js";
+import { rustCallableTargetType } from "../../../dist/target-model/types/carriers/callables.js";
+import { analyzeRustErrorEffects } from "../../helpers/rust-error-analysis.mjs";
+import { rustUninhabitedError } from "../../../dist/policy/conversions/callable-physical.js";
+import { rustNamedTargetType } from "../../../dist/target-model/types/carriers/native.js";
+import { rustInfallibleTargetId } from "../../../dist/target-model/types/carriers/source-types.js";
+import { nodejsCapability } from "../../helpers/rust-session.mjs";
 
 const unit = { kind: "tuple", elements: [] };
+
+test("uninhabited native errors retain exact identity and reject generic or foreign payloads", () => {
+  assert.equal(rustUninhabitedError({ kind: "target-named", id: rustInfallibleTargetId }), true, "native builtin identity");
+  assert.equal(rustUninhabitedError(rustNamedTargetType(rustInfallibleTargetId, "core::convert::Infallible")), true,
+    "the canonical named native declaration is uninhabited");
+  assert.equal(rustUninhabitedError(rustNamedTargetType(rustInfallibleTargetId, "core::convert::Infallible",
+    [{ kind: "type", type: unit }])), false, "an altered native generic signature is not Infallible");
+  assert.equal(rustUninhabitedError(rustNamedTargetType("fixture.Failure", "Infallible")), false,
+    "the native spelling does not substitute for declaration identity");
+  assert.equal(rustUninhabitedError({ kind: "target-named", id: rustInfallibleTargetId,
+    genericArguments: [{ kind: "type", type: unit }] }), false, "a generic builtin is not Infallible");
+});
+
+test("provider invocation domains preserve aliases and distinguish returned callable signatures", () => {
+  const integer = { kind: "source-primitive", name: "int32" };
+  const callable = { kind: "function", id: "fixture.callback", parameters: [{ name: "value", type: integer }], returnType: integer };
+  const provider = createRustProviderPackage({ id: "callable-domains", version: "1.0.0", displayName: "Callable domains",
+    crates: [], modules: [{ moduleSpecifier: "test:callable-domains", providerModuleId: "test.callable-domains", exports: [{
+      id: "fixture.makeCallback", name: "makeCallback", kind: "function", signatures: [{
+        id: "fixture.makeCallback()", parameters: [], returnType: callable,
+      }],
+    }, { id: "fixture.exported", name: "exported", kind: "value", type: { ...callable, id: "fixture.exported.call" } }] }],
+    operations: [{ exportId: "fixture.makeCallback", operationKind: "method",
+      target: { form: "call", path: "fixture::make_callback" }, parameterCarriers: [],
+      resultCarrier: rustCallableTargetType([integer], integer) }, {
+      exportId: "fixture.exported", operationKind: "property", target: { form: "path", path: "fixture::exported" },
+      parameterCarriers: [], resultCarrier: rustCallableTargetType([integer], integer),
+    }],
+  });
+  const context = analyzeRustErrorEffects(`
+    import { makeCallback, exported } from "test:callable-domains";
+    import type { int32 } from "@tsonic/core/types.js";
+    export function run(value: int32): int32 {
+      const factory = makeCallback;
+      const direct = makeCallback();
+      const callback = factory();
+      const alias = callback;
+      return direct(value) + callback(value) + alias(value) + exported(value);
+    }
+  `, { packages: [provider] });
+  const expected = new Map([["makeCallback", "operation"], ["factory", "operation"], ["direct", "value"],
+    ["callback", "value"], ["alias", "value"], ["exported", "value"]]);
+  let visited = 0;
+  for (const node of context.sourceStorage.nodes) {
+    if (!context.ast.is.IsCallExpression(node)) continue;
+    const name = context.ast.text(context.ast.as.AsCallExpression(node)?.Expression);
+    if (!expected.has(name)) continue;
+    const semantics = context.semanticsFor(node);
+    const source = semantics.operations.call(node);
+    assert.equal(source !== undefined, true, name);
+    const request = { source, sourceSelectedDeclaration: semantics.declarations.signatureDeclaration(source.selectedSignature) };
+    const selected = selectedCallProviderDeclaration(request, context);
+    assert.equal(selected.kind, "selected", name);
+    const operation = selectRustProviderOperation(context.providerSemantics.operations, selected.identity, "method");
+    assert.equal(selectedCallProviderDomain(request, selected.identity, operation, context), expected.get(name), name);
+    assert.equal(selectedCallProviderDomain(request, { ...selected.identity, signatureId: "foreign.signature" }, operation, context), undefined,
+      `${name}: a foreign signature never supplies operation evidence`);
+    assert.equal(selectedCallProviderDomain(request, { ...selected.identity, providerVersion: "different" }, operation, context), undefined,
+      `${name}: a foreign declaration document never supplies operation evidence`);
+    visited += 1;
+  }
+  assert.equal(visited, expected.size, "every original checked direct, aliased and returned-callable use is observed");
+});
+
+test("explicit native invocation rows select callable intersections without a runtime Fn carrier", async () => {
+  const context = analyzeRustErrorEffects(`
+    import { realpathSync as resolvePath } from "node:fs";
+    import { Buffer } from "node:buffer";
+    export function run(): void {
+      resolvePath(".");
+      const path = Buffer.from(".");
+      resolvePath(path);
+      resolvePath(".", { encoding: "buffer" });
+      resolvePath(path, { encoding: "buffer" });
+      resolvePath.native(".");
+      resolvePath.native(path);
+      resolvePath.native(".", { encoding: "buffer" });
+      resolvePath.native(path, { encoding: "buffer" });
+    }
+  `, { capabilities: [await nodejsCapability()] });
+  const observed = new Set();
+  let calls = 0;
+  for (const node of context.sourceStorage.nodes) {
+    if (!context.ast.is.IsCallExpression(node)) continue;
+    const semantics = context.semanticsFor(node);
+    const source = semantics.operations.call(node);
+    if (source === undefined) continue;
+    const request = { source, sourceSelectedDeclaration: semantics.declarations.signatureDeclaration(source.selectedSignature) };
+    const selected = selectedCallProviderDeclaration(request, context);
+    if (selected.kind !== "selected" || selected.identity.moduleSpecifier !== "node:fs") continue;
+    const operation = selectRustProviderOperation(context.providerSemantics.operations, selected.identity, "method");
+    assert.equal(operation.kind, "selected", "each checked native invocation has one exact provider row");
+    assert.equal(operation.row.signatureId, selected.identity.signatureId,
+      "every overload retains its exact checked signature identity");
+    assert.equal(selectedCallProviderDomain(request, selected.identity, operation, context), "operation",
+      "a native callable-object operation is not a runtime Fn invocation");
+    assert.equal(selectedCallProviderDomain(request, { ...selected.identity, signatureId: "foreign.signature" }, operation, context), undefined,
+      "an explicit native row cannot repair a foreign checked signature");
+    assert.equal(selectedCallProviderDomain(request, { ...selected.identity, providerVersion: "foreign.version" }, operation, context), undefined,
+      "an explicit native row cannot repair a foreign declaration document");
+    const duplicate = selectRustProviderOperation([...context.providerSemantics.operations, operation.row], selected.identity, "method");
+    assert.equal(duplicate.kind, "ambiguous", "duplicate exact native rows remain an ambiguity");
+    assert.equal(selectedCallProviderDomain(request, selected.identity, duplicate, context), "operation",
+      "a native ambiguity cannot be hidden by a runtime-value route");
+    if (selected.identity.memberId === undefined) {
+      const missing = selectRustProviderOperation(context.providerSemantics.operations.filter(row =>
+        row.operationKind !== "method" || row.signatureId !== selected.identity.signatureId), selected.identity, "method");
+      assert.equal(missing.kind, "missing", "a sibling overload is not an exact native invocation");
+      assert.equal(selectedCallProviderDomain(request, selected.identity, missing, context), "value",
+        "a function type without a native operation row still needs its actual callable-value ABI");
+      const { signatureId: omittedSignature, ...group } = operation.row;
+      assert.equal(omittedSignature, selected.identity.signatureId, "the inverse removes only the selected signature identity");
+      const grouped = selectRustProviderOperation([group], selected.identity, "method");
+      assert.equal(grouped.kind, "selected", "the existing explicit overload-group selector is unchanged");
+      assert.equal(selectedCallProviderDomain(request, selected.identity, grouped, context), "value",
+        "a group row cannot promote a callable-value signature to a native operation");
+      observed.add(selected.identity.signatureId);
+    }
+    calls += 1;
+  }
+  assert.equal(calls, 8, "all four native callable-object and four native member overloads retain their identities");
+  assert.equal(observed.size, 4, "the complete callable intersection selects every exact overload without a copied type walker");
+});
 
 test("provider optional argument inference preserves native carriers and absence", () => {
   const int64 = { kind: "source-primitive", name: "int64" };

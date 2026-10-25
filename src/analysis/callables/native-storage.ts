@@ -41,6 +41,7 @@ import type { RustGenericCallablePhysicalCarrierSelector } from "./generic-physi
 import type { RustLexicalFunctionEnvironments } from "../../target-model/records/lexical-functions.js";
 import { Node_Expression } from "@tsonic/target-api/source";
 import { rustSourceCallCallableStorageCarrier } from "../../policy/operations/members/native-contracts.js";
+import type { RustFrameCallablePlan } from "../../target-model/records/frame-callables.js";
 import type { RustStructuralStorageLookup } from "../../policy/model/operation-record-inputs.js";
 import { rustSourceStorageProjectedCarrier, type RustValueDomainCarrierHost } from "../objects/value-domain-carriers.js";
 import { selectRustSourceCallableInvocationBindings } from "./native-storage-generics.js";
@@ -78,6 +79,7 @@ export interface RustNativeStorageConstruction extends RustNativeStoragePlan {
 export type RustNativeStorageQueries = Omit<RustNativeStorageConstruction, "parameterFor">;
 
 export function createRustNativeStorageQueries(input: {
+  readonly frames: Pick<RustFrameCallablePlan, "errorFor">;
   readonly ast: AstReader;
   readonly nativeNodes: readonly Node[];
   readonly storage: SourceStorageQueries;

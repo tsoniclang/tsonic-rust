@@ -6,10 +6,12 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { sourceErrorConstructorCostProof, sourceErrorConstructorProof, sourceExplicitErrorInitializationCostProof,
   sourceExplicitErrorInitializationProof, sourceJsErrorConstructorProof, sourceOwnedErrorConstructorProof } from "../../../../tsonic/test/fixtures/source-error-constructors.mjs";
-import { compileRust } from "../../helpers/rust-session.mjs";
+import { analyzeRust, compileRust } from "../../helpers/rust-session.mjs";
 import { runCargo, validateGeneratedProject, writeGeneratedProject } from "../../helpers/cargo-projects.mjs";
 import { nativeOwnershipCostSupport } from "../../helpers/native-ownership-cost.mjs";
 import { planRustExternalProjectInitialization } from "../../../dist/backend/planner/objects/polymorphism/external-construction.js";
+import { analyzeRustConstructionEmission } from "../../../dist/analysis/project-types/construction-emission.js";
+import { createRustConstructionProducer } from "../../../dist/analysis/program/records/construction.js";
 
 import { rustBorrowedStrTargetType, rustSourceOptionalTargetType, rustStringTargetType } from "../../../dist/target-model/types/index.js";
 import { rustOptionalStringToBorrowedStrValueConversion } from "../../../dist/target-model/conversions/model.js";
@@ -149,42 +151,81 @@ fn optional_and_required_inputs_match_native_costs() {
 });
 
 test("inherited native initialization consumes one selected owned message without a temporary base error", () => {
-  const declaration = {};
-  const parameter = {};
-  const signature = { implicit: true, declaration, parameters: [{ parameterDeclaration: parameter,
-    parameterName: "message", acceptsOmission: true, rest: false }] };
-  const carrier = rustSourceOptionalTargetType(rustStringTargetType());
-  const abi = { form: "optional", mode: "value", parameterCarrier: carrier, valueCarrier: carrier };
-  const base = { constructorDeclarations: [declaration], fields: [
-    { initializer: { kind: "string", value: "Error" } }, { initializer: { kind: "message", parameterIndex: 0 } },
-    { initializer: { kind: "none" } },
-  ] };
-  const context = selected => ({ diagnostics: [], input: { program: {
-    records: createRustRecordFixture({sourceParameterAbi: { get: (node) => node === parameter ? selected : undefined }}),
-    source: { ast: { getSourceFile: () => undefined, getFileName: () => "", getSourceText: () => "", pos: () => 0, end: () => 0,
-      kindName: () => "KindClassDeclaration" } },
-  } } });
-  const input = context(abi);
-  const planned = planRustExternalProjectInitialization(base, signature, declaration, undefined, input);
+  const { program } = analyzeRust({ files: { "index.ts": sourceErrorConstructorProof } });
+  const definition = program.projectTypes.definitions.find(candidate => candidate.kind === "class" &&
+    program.projectConstructions.forDefinition(candidate)?.layers.some(layer => layer.baseCall === undefined &&
+      layer.signature.implicit && program.projectTypes.externalBaseForDefinition(layer.definition) !== undefined));
+  assert.equal(definition !== undefined, true, "the original checked Error subclass has an inherited native constructor");
+  const plan = program.projectConstructions.forDefinition(definition);
+  const layer = plan.layers.find(candidate => candidate.baseCall === undefined && candidate.signature.implicit &&
+    program.projectTypes.externalBaseForDefinition(candidate.definition) !== undefined);
+  const signature = layer.signature;
+  const parameter = signature.parameters[0];
+  const abi = program.records.sourceParameterAbi.get(parameter.parameterDeclaration);
+  const base = program.projectTypes.externalBaseForDefinition(layer.definition);
+  assert.equal(abi !== undefined, true, "the real inherited constructor parameter has its selected native ABI");
+  assert.equal(base.constructorDeclarations.includes(signature.declaration), true,
+    "the original checked constructor belongs to this exact native base");
+  const prepare = (selectedBase, selectedSignature, selectedAbi) => {
+    let open = true;
+    const producer = createRustConstructionProducer(() => assert.equal(open, true, "constructor publication is preseal only"));
+    const selectedProgram = { ...program,
+      records: createRustRecordFixture({ sourceParameterAbi: {
+        get: node => node === parameter.parameterDeclaration ? selectedAbi : program.records.sourceParameterAbi.get(node),
+      } }, program.records),
+      projectTypes: { ...program.projectTypes, definitions: [definition],
+        constructorsForDefinition: candidate => program.projectTypes.constructorsForDefinition(candidate)
+          .map(selected => selected === signature ? selectedSignature : selected),
+        externalBaseForDefinition: candidate => candidate === layer.definition ? selectedBase
+          : program.projectTypes.externalBaseForDefinition(candidate),
+      },
+      projectConstructions: { ...program.projectConstructions,
+        forDefinition: candidate => candidate === definition ? { ...plan,
+          layers: plan.layers.map(selected => selected === layer ? { ...selected, signature: selectedSignature } : selected),
+        } : program.projectConstructions.forDefinition(candidate),
+      },
+    };
+    return { producer, admit: () => {
+      try { return analyzeRustConstructionEmission({ program: selectedProgram, producer }); }
+      finally { open = false; }
+    } };
+  };
+  const admitted = prepare(base, signature, abi);
+  assertNoTargetDiagnostics(admitted.admit());
+  assert.equal(admitted.producer.records.get(definition.declaration) !== undefined, true,
+    "the real preseal owner publishes the complete checked construction");
+  const input = { diagnostics: [], input: { program: { ...program,
+    records: createRustRecordFixture(admitted.producer.emissionRecords, program.records),
+  } } };
+  const planned = planRustExternalProjectInitialization(base, signature, definition.declaration, undefined, input);
   assertNoTargetDiagnostics(input.diagnostics);
   assert.deepEqual(planned, [{ kind: "string-literal", value: "Error" },
     { kind: "method-call", receiver: { kind: "path", path: "message" }, method: "unwrap_or_default", args: [] },
     { kind: "none" }]);
-  for (const [changedBase, changedSignature, selected] of [
-    [base, signature, undefined], [base, signature, { ...abi, mode: "ref" }],
-    [base, signature, { ...abi, parameterCarrier: rustStringTargetType() }],
-    [base, signature, { ...abi, valueCarrier: rustStringTargetType() }],
-    [{ ...base, constructorDeclarations: [{}] }, signature, abi],
-    [base, { ...signature, implicit: false }, abi],
-    [base, { ...signature, declaration: {} }, abi],
-    [base, { ...signature, parameters: [] }, abi],
-    [base, { ...signature, parameters: [{ ...signature.parameters[0], rest: true }] }, abi],
-    [base, { ...signature, parameters: [{ ...signature.parameters[0], acceptsOmission: false }] }, abi],
-    [{ ...base, fields: [{ initializer: { kind: "message", parameterIndex: 1 } }] }, signature, abi],
+  for (const [label, changedBase, changedSignature, selected] of [
+    ["missing ABI", base, signature, undefined],
+    ["borrowed message", base, signature, { ...abi, mode: "ref" }],
+    ["nonoptional parameter", base, signature, { ...abi, parameterCarrier: rustStringTargetType() }],
+    ["different value carrier", base, signature, { ...abi, valueCarrier: rustStringTargetType() }],
+    ["foreign native constructor", { ...base, constructorDeclarations: [parameter.parameterDeclaration] }, signature, abi],
+    ["explicit signature", base, { ...signature, implicit: false }, abi],
+    ["foreign signature declaration", base, { ...signature, declaration: parameter.parameterDeclaration }, abi],
+    ["missing parameter", base, { ...signature, parameters: [] }, abi],
+    ["rest parameter", base, { ...signature, parameters: [{ ...parameter, rest: true }] }, abi],
+    ["required parameter", base, { ...signature, parameters: [{ ...parameter, acceptsOmission: false }] }, abi],
+    ["wrong message index", { ...base, fields: base.fields.map(field => field.initializer.kind === "message"
+      ? { ...field, initializer: { ...field.initializer, parameterIndex: 1 } } : field) }, signature, abi],
   ]) {
-    const input = context(selected);
-    assert.equal(planRustExternalProjectInitialization(changedBase, changedSignature, declaration, undefined, input), undefined);
-    assert.equal(input.diagnostics.length, 1);
-    assert.match(input.diagnostics[0].message, /exact selected native constructor/u);
+    const rejected = prepare(changedBase, changedSignature, selected);
+    assert.throws(rejected.admit, error => error.phase === "analysis" &&
+      error.diagnostic?.code === "TSONIC_INTERNAL_ANALYSIS_INVARIANT" && error.diagnostic.source === "tsonic-rust" &&
+      error.diagnostic.sourceNode === (selected === undefined ? parameter.parameterDeclaration : layer.definition.declaration) &&
+      error.message === (selected === undefined
+        ? "An inherited effective constructor parameter requires its exact instantiated native ABI and authored name."
+        : "An admitted inherited external constructor requires its exact optional string ABI."), label);
+    assert.equal(rejected.producer.emissionRecords.inheritedExternalInitialization.get(changedSignature) === undefined, true,
+      label + ": no admitted inherited native argument is published");
+    assert.equal(rejected.producer.records.get(definition.declaration) === undefined, true,
+      label + ": no complete construction is published or sent to the planner");
   }
 });

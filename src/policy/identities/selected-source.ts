@@ -6,6 +6,7 @@ import type { RustSourceProfileRegistry } from "../types/model/source-profile.js
 import { jsSourceSemanticsIdentity } from "@tsonic/js-source-profile";
 import { selectedSourcePropertyDeclarations } from "@tsonic/target-api/source";
 import type { RustCheckedCallSelectionInput } from "../model/contracts.js";
+import type { RustProviderOperationSelection } from "../operations/provider-selection.js";
 
 export interface RustSelectedSourceMemberIdentity {
   readonly profile: "native" | "js";
@@ -73,6 +74,32 @@ export function selectedCallProviderDeclaration(
     { subject: request.source.sourceCallee.selectedDeclaration ?? request.source.sourceCallee.declaration, precision: "declaration" },
     { subject: request.source.sourceCallee.selectedSymbol ?? request.source.sourceCallee.symbol, precision: "declaration" },
   ]);
+}
+
+export function selectedCallProviderDomain(
+  request: RustCheckedCallSelectionInput,
+  identity: ProviderDeclarationIdentity,
+  operation: RustProviderOperationSelection<"method" | "constructor">,
+  context: Pick<RustSourcePolicyContext, "source" | "semanticsFor">,
+): "operation" | "value" | undefined {
+  const selected = context.semanticsFor(request.source.call).operations.callResult(request.source)?.providerSignature;
+  const document = identity.artifactFileName === undefined ? undefined
+    : context.source.sourceFacts.getVirtualDeclarationDocument(identity.artifactFileName);
+  if (selected?.kind !== "available" || selected.signature.id !== identity.signatureId || document === undefined ||
+    document.provider.id !== identity.providerId || document.provider.version !== identity.providerVersion ||
+    document.providerModuleId !== identity.providerModuleId || document.moduleSpecifier !== identity.moduleSpecifier) return undefined;
+  const exports = document.declarationModel.exports.filter(declaration => declaration.id === identity.exportId);
+  if (exports.length !== 1) return undefined;
+  const exported = exports[0]!;
+  const members = identity.memberId === undefined ? [exported]
+    : (exported.members ?? []).filter(member => member.id === identity.memberId);
+  if (members.length !== 1) return undefined;
+  const owner = members[0]!;
+  const explicitNativeSignature = operation.kind === "selected"
+    ? operation.row.signatureId === selected.signature.id
+    : operation.kind === "ambiguous" && operation.rows.some(row => row.signatureId === selected.signature.id);
+  return owner.signatures?.some(signature => signature.id === selected.signature.id) === true || explicitNativeSignature
+    ? "operation" : "value";
 }
 
 function providerDeclarationIdentityWithoutSignature(
