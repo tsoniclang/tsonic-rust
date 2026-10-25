@@ -88,8 +88,11 @@ export function escaped(flag: boolean): (count: number) => number {
   return chosen;
 }` } });
       if (mixed) {
-        assert.equal(result.diagnostics.some(issue => String(issue.code).startsWith("RUST_") && issue.category === "error"), true,
-          "incompatible actual receiver arguments require a precise native source refusal");
+        assert.equal(result.diagnostics.some(issue => issue.code === "RUST_CALLABLE_FRAME_RECEIVER_NOT_PROVEN" &&
+          issue.category === "error" &&
+          issue.message === "Class callback storage receives different actual native receiver instantiations."), true,
+          "incompatible actual receiver arguments require their exact native source refusal: " +
+          result.diagnostics.slice(0, 4).map(issue => issue.code + ": " + issue.message).join("; "));
         assert.equal(result.diagnostics.some(issue => String(issue.code).includes("INTERNAL")), false,
           "a checked mixed receiver domain is not relabelled an internal invariant");
         assert.equal(result.program === undefined && result.plan === undefined && result.artifacts.length === 0, true,

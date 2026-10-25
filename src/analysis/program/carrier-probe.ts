@@ -2,6 +2,7 @@ import { createRustProgramRecordBuilder } from "./records/create.js";
 import type { RustFactWalk } from "./walk.js";
 import { createRustSourceCallableAbiResolver } from "../callables/source-callable-abi.js";
 import { finalizeRustCallableParameterAbis } from "../callables/signature-query.js";
+import { resolveRustCallableOwnershipCarrier } from "../callables/ownership-carriers.js";
 
 export function createRustCarrierProbe(walk: RustFactWalk): RustFactWalk {
   walk.context.records.assertOpen();
@@ -30,6 +31,8 @@ export function createRustCarrierProbe(walk: RustFactWalk): RustFactWalk {
       sourceCallableAbi,
       callableSignatureCarrier: declaration => probe.callableSignatureCarrierFor(probe, declaration),
       callableParameterCarriers: declaration => finalizeRustCallableParameterAbis(probe, declaration)?.map(parameter => parameter.parameterCarrier),
+      callableStorageCarrier: (subject, logicalCarrier, environmentFor, classFrameFor) =>
+        resolveRustCallableOwnershipCarrier(probe, subject, logicalCarrier, environmentFor, classFrameFor),
     },
   };
   return probe;

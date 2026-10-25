@@ -10,11 +10,15 @@ import type { RustSourceTypeFamilyImplementation } from "../../../../target-mode
 import type { RustTargetGenericBindings } from "../../../../target-model/types/carriers/generic-inference.js";
 
 export interface RustClassFrameInstantiation {
+  readonly kind: "selected";
   readonly instance: TargetTypeRef;
   readonly parameters: readonly TargetTypeRef[];
   readonly result: TargetTypeRef;
   readonly bindings: RustTargetGenericBindings;
 }
+
+export type RustClassFrameInstantiationSelection = RustClassFrameInstantiation |
+  { readonly kind: "rejected"; readonly reason: string };
 
 export interface RustTargetTypeResolutionOptions {
   readonly jsEnabled: boolean;
@@ -29,7 +33,7 @@ export interface RustTargetTypeResolutionOptions {
     subject: SourceStorageSubject,
     logicalCarrier: TargetTypeRef,
     environmentFor: (declaration: Node, excludedCaptures: ReadonlySet<Node>) => readonly TargetTypeRef[] | undefined,
-    classFrameFor: (declaration: Node) => RustClassFrameInstantiation | undefined,
+    classFrameFor: (declaration: Node) => RustClassFrameInstantiationSelection | undefined,
   ) => TargetTypeRef | undefined;
   readonly projectCarrierSupportsObjectIdentity: (carrier: TargetTypeRef) => boolean;
   readonly projectFieldProjection: (property: TypePropertyInfo, owner: TargetTypeRef, ownerType: Type) => {

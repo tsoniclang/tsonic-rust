@@ -104,7 +104,17 @@ export function resolveRustCallableStorageCarrier(
           if (checked.kind === "unresolved") return undefined;
           const carrier = resolveRustTargetType(checked.type, { ...context,
             currentSemantics: context.semanticsFor(actual.node), sourceStorageSubject: actual }, options, resolving);
-          if (carrier === undefined || instance !== undefined && !rustTargetTypeRefEquals(instance, carrier)) return undefined;
+          if (carrier === undefined) return undefined;
+          if (instance !== undefined && !rustTargetTypeRefEquals(instance, carrier)) {
+            const instanceReferences = rustTargetGenericReferences(instance);
+            const carrierReferences = rustTargetGenericReferences(carrier);
+            if ([instanceReferences, carrierReferences].some(references =>
+              references.typeIdentities.length !== 0 || references.constIdentities.length !== 0 ||
+              references.lifetimeIdentities.length !== 0 || references.callScopedElisions.length !== 0 ||
+              references.elisionInputs.length !== 0 || references.hasUnnameableLifetime)) return undefined;
+            return Object.freeze({ kind: "rejected",
+              reason: "Class callback storage receives different actual native receiver instantiations." });
+          }
           instance = carrier;
         }
       }
@@ -115,7 +125,7 @@ export function resolveRustCallableStorageCarrier(
       });
       if (bindings === undefined || !rustTargetTypeRefEquals(substituteRustTargetGenerics(template,
         bindings.types, bindings.lifetimes, bindings.consts), instance)) return undefined;
-      return Object.freeze({ instance: template, parameters: selectedProtocol.parameters, result: selectedProtocol.result, bindings });
+      return Object.freeze({ kind: "selected", instance: template, parameters: selectedProtocol.parameters, result: selectedProtocol.result, bindings });
     });
 }
 

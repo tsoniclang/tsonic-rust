@@ -7,13 +7,38 @@ import { rustGenericCallableProtocol, rustGenericCallableValue } from "../../tar
 import { rustFrameCallableTargetType, rustFrameCallableValue } from "../../target-model/types/carriers/frame-callables.js";
 import type { RustCallableOwnershipPlan } from "./ownership-plan.js";
 import type { RustCallableActivation } from "../../target-model/records/callable-ownership.js";
-import type { RustClassFrameInstantiation } from "../source-evidence/types/resolution/model.js";
+import type { RustClassFrameInstantiationSelection, RustTargetTypeResolutionOptions } from "../source-evidence/types/resolution/model.js";
 import { substituteRustTargetGenerics } from "../../target-model/types/carriers/substitution.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
+import { appendRustDiagnostic, type RustFactWalk } from "../program/walk.js";
 
 export type RustCallableOwnershipCarrierSelection =
   | { readonly kind: "selected"; readonly carrier: TargetTypeRef }
+  | { readonly kind: "rejected"; readonly reason: string }
   | { readonly kind: "unresolved"; readonly reason: string };
+
+export function resolveRustCallableOwnershipCarrier(
+  walk: RustFactWalk,
+  subject: SourceStorageSubject,
+  logicalCarrier: TargetTypeRef,
+  environmentFor: Parameters<RustTargetTypeResolutionOptions["callableStorageCarrier"]>[2],
+  classFrameFor: Parameters<RustTargetTypeResolutionOptions["callableStorageCarrier"]>[3],
+): TargetTypeRef | undefined {
+  const selected = selectRustCallableOwnershipCarrier({
+    ast: walk.context.ast, ownership: walk.context.callableOwnership,
+    subject, logicalCarrier, classFrameFor,
+    environmentFor(component) {
+      const excluded = new Set([...component.slotDeclarations, component.ownerDeclaration]);
+      const environments = component.callableDeclarations.map(declaration => environmentFor(declaration, excluded));
+      return environments.some(environment => environment === undefined) ? undefined
+        : Object.freeze(environments.flatMap(environment => environment!));
+    },
+  });
+  if (selected.kind === "rejected")
+    appendRustDiagnostic(walk, "RUST_CALLABLE_FRAME_RECEIVER_NOT_PROVEN", selected.reason, subject.node,
+      ["target.capability=rust.callable-value.exact-receiver-instantiation"]);
+  return selected.kind === "selected" ? selected.carrier : undefined;
+}
 
 export function selectRustCallableOwnershipCarrier(input: {
   readonly ast: AstReader;
@@ -21,7 +46,7 @@ export function selectRustCallableOwnershipCarrier(input: {
   readonly subject: SourceStorageSubject;
   readonly logicalCarrier: TargetTypeRef;
   readonly environmentFor: (activation: RustCallableActivation) => readonly TargetTypeRef[] | undefined;
-  readonly classFrameFor: (declaration: RustCallableActivation["ownerDeclaration"]) => RustClassFrameInstantiation | undefined;
+  readonly classFrameFor: (declaration: RustCallableActivation["ownerDeclaration"]) => RustClassFrameInstantiationSelection | undefined;
 }): RustCallableOwnershipCarrierSelection {
   const generic = rustGenericCallableValue(input.logicalCarrier);
   const protocol = rustCallableProtocol(input.logicalCarrier) ?? rustNativeCallableProtocol(input.logicalCarrier) ??
@@ -42,6 +67,7 @@ export function selectRustCallableOwnershipCarrier(input: {
     return Object.freeze({ kind: "unresolved", reason: "A callable cannot silently change its physical activation owner." });
   const environment = input.environmentFor(selection.activation);
   const classFrame = selection.activation.kind === "class" ? input.classFrameFor(selection.activation.ownerDeclaration) : undefined;
+  if (classFrame?.kind === "rejected") return classFrame;
   const owner = selection.activation.kind === "lexical" ? { kind: "lexical" as const, origin }
     : classFrame === undefined ? undefined : { kind: "class" as const, origin, instance: classFrame.instance };
   const template = environment === undefined || owner === undefined ? undefined
