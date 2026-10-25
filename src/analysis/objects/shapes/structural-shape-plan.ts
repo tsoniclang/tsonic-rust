@@ -605,11 +605,35 @@ function createRustStructuralShapeConstruction(
         if (definition.fields.some(field => field.methodPlan?.kind === "fixed") && template === undefined)
           failTargetAnalysisInvariant("tsonic-rust", "A fixed structural method requires its completed physical template before publication.");
         const carrier = template === undefined ? definition.carrier : rustStructuralGenericCarrier(template.carrier, "fields").carrier;
+        const physicalShape = rustStructuralObjectCarrierValue(carrier);
+        if (physicalShape === undefined) failTargetAnalysisInvariant("tsonic-rust",
+          "An admitted structural definition requires its completed native field layout.");
         for (const [index] of fields ?? []) {
           if (definition.fields[index]?.method !== true)
             throw new Error("Structural method storage can replace only an admitted method slot.");
         }
         const selectedFields = Object.freeze(definition.fields.map((field, index): RustStructuralShapeField => {
+            const nativeField = physicalShape.fields[index];
+            if (nativeField === undefined || nativeField.sourceName !== field.sourceName ||
+              (nativeField.method === true) !== (field.method === true))
+              failTargetAnalysisInvariant("tsonic-rust", "A completed structural field requires its exact original native member correspondence.");
+            if (field.method !== true) {
+              if (field.methodPlan !== undefined) failTargetAnalysisInvariant("tsonic-rust",
+                "A completed structural data field cannot carry a method storage plan.");
+              let boundStorage = field.boundStorage;
+              if (boundStorage !== undefined) {
+                const bound = boundStorage.carrier;
+                const error = bound.kind === "target-named" && bound.id === "rust.runtime.RecordField"
+                  ? bound.genericArguments?.[1] : undefined;
+                if (error?.kind !== "type") failTargetAnalysisInvariant("tsonic-rust",
+                  "A completed bound structural field requires its original native error carrier.");
+                boundStorage = Object.freeze({ ...boundStorage,
+                  carrier: rustRuntimeRecordFieldTargetType(nativeField.type, error.type) });
+              }
+              return Object.freeze({ ...field, carrier: nativeField.type, methodPlan: undefined,
+                ...(boundStorage === undefined ? {} : { boundStorage }),
+              });
+            }
             const selection = fields?.get(index);
             if (selection === undefined) {
               const methodPlan = field.methodPlan;
@@ -757,15 +781,15 @@ function createRustStructuralShapeConstruction(
       for (const [key, selected] of byKey) {
         const origin = originsByKey.get(key);
         const replacement = origin === undefined ? undefined : replacements.get(origin);
-        const completed = origin === undefined ? undefined : completedCarriers.get(origin)?.get(key);
+        const completed = origin === undefined ? undefined : [...(completedCarriers.get(origin)?.values() ?? [])]
+          .find(value => closedMetadataKey(value.source) === key || closedMetadataKey(value.carrier) === key);
         const sourceReferences = origin === undefined ? undefined : rustTargetGenericReferences(origin.carrier);
         const sourceBindings = origin === undefined || sourceReferences === undefined ? undefined
           : inferRustTargetGenericBindings(origin.carrier, selected.carrier, {
             typeIdentities: new Set(sourceReferences.typeIdentities), lifetimeIdentities: new Set(sourceReferences.lifetimeIdentities),
             constIdentities: new Set(sourceReferences.constIdentities),
           });
-        const instanceCarrier = completed !== undefined ? completed.carrier : rustStructuralObjectCarrierValue(selected.carrier)?.implementation?.kind === "physical"
-          ? selected.carrier : replacement === undefined || sourceBindings === undefined
+        const instanceCarrier = completed !== undefined ? completed.carrier : replacement === undefined || sourceBindings === undefined
           ? undefined : substituteRustTargetGenerics(replacement.carrier, sourceBindings.types, sourceBindings.lifetimes, sourceBindings.consts);
         const instance = replacement === undefined || instanceCarrier === undefined ? undefined : instantiatePhysical(replacement, instanceCarrier);
         if (instance === undefined) throw new Error("Structural physical storage lost its exact template-to-instance correspondence.");

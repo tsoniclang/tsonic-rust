@@ -44,6 +44,16 @@ for (const surfaces of [[], ["js"]]) {
     assert.match(emitted, /binding_0\s*\.get\(\)[\s\S]*?\.replace\(field_value\)/u,
       "rebinding updates that same live frame slot");
     assert.doesNotMatch(emitted, /Location::uninitialized\(/u, "no second live-binding representation");
+    const { ast } = program.source;
+    const declarations = program.sourceFiles.flatMap(file => ast.statements(file));
+    const calls = ["fixedSelf", "liveBinding"].map(name => {
+      const declaration = declarations.find(node => ast.is.IsFunctionDeclaration(node) && ast.text(ast.name(node)) === name);
+      assert.equal(declaration !== undefined, true, `${name}: the native harness selects the original checked function`);
+      const selected = program.records.callableDeclaration.get(declaration);
+      assert.equal(selected !== undefined, true, `${name}: the native harness consumes its published callable ABI`);
+      assert.equal(typeof selected.resultWrapped, "boolean", `${name}: the physical error result is selected before publication`);
+      return `${name}()${selected.resultWrapped ? ".unwrap()" : ""}`;
+    });
     validateGeneratedProject(`lexical-self-binding-${profile}`, result.artifacts, { run: true });
     const directory = writeGeneratedProject(`lexical-self-binding-drop-${profile}`, result.artifacts);
     appendFileSync(join(directory, "src/index.rs"), `
@@ -55,7 +65,7 @@ mod lexical_owner_drop {
     #[test]
     fn fixed_self_and_replaced_live_binding_release_all_native_owners() {
         for _ in 0..32 {
-            let (result, cost) = measure(|| (fixedSelf().unwrap(), liveBinding().unwrap()));
+            let (result, cost) = measure(|| (${calls.join(", ")}));
             assert_eq!(result, (true, true));
             assert!(cost.allocations > 0);
             assert_eq!(cost.allocations, cost.deallocations);
@@ -65,7 +75,8 @@ mod lexical_owner_drop {
     }
 }
 `);
-    const executed = runCargo(directory, ["test", "--release", "--", "--test-threads=1"]);
+    runCargo(directory, ["generate-lockfile", "--offline"]);
+    const executed = runCargo(directory, ["test", "--release", "--locked", "--offline", "--", "--test-threads=1"]);
     assert.equal(executed.status, 0, executed.stdout.slice(-4096) + executed.stderr.slice(-4096));
   });
 }
