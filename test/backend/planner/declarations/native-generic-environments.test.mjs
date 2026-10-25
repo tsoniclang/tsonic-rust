@@ -99,7 +99,15 @@ for (const [position, body, name] of [
 
 test("native generic bounds do not invent obligations for unused inputs", () => {
   const current = fixture("export function unused(first: () => int32): int32 { return 1; }", "unused");
-  assert.equal(generics(current, seal(current)).parameters[0].bounds.length, 0);
+  const sealed = seal(current);
+  const [input] = current.program.callableValues.native.inputsFor(current.declaration);
+  const selected = generics(current, sealed);
+  assert.equal(selected.parameters.length, 1, "the original declared callable remains one native implementation");
+  assert.equal(sealed.selected.inputs[0].implementation.identity, input.implementation.identity);
+  assert.deepEqual(selected.parameters[0].bounds.map(bound => bound.kind === "trait-type"
+    ? bound.reference.trait.path : bound.kind), [`crate::index::${input.trait.path}`],
+  "only the exact declared callable protocol is required; unused inputs gain no Clone, Copy, Future or lifetime bound");
+  assert.equal(selected.wherePredicates.length, 0, "an unused callable creates no extra associated obligations");
 });
 
 const futureFirst = { implementation: { kind: "type-parameter", identity: "future:first", name: "Future0" } };
