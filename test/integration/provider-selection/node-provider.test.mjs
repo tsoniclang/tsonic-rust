@@ -495,7 +495,7 @@ export function register(
   assert.deepEqual(arguments_[1].genericArguments[0].type, nativeType("()"));
   const register = nativeFunction(result, "register");
   assert.equal(register.visibility, "public");
-  assert.deepEqual(register.params.map(parameter => parameter.type), [{ kind: "named", path: "RegisterHandler" }]);
+  assert.deepEqual(register.params.map(parameter => parameter.type), [{ kind: "named", path: "RegisterHandler", genericArguments: [] }]);
   const servers = nativeCalls(register.body, "tsonic_rust_node::http::create_server_optional");
   assert.equal(servers.length, 1);
   assert.equal(servers[0].args.length, 3);
