@@ -3,6 +3,7 @@ import type { SourceStorageBindings, SourceStorageSubject } from "@tsonic/target
 import { sourceEnclosingCallable, sourceNodeIdentity } from "@tsonic/target-api/source";
 
 import type { TargetTypeRef } from "../../target-model/types/model.js";
+import { rustTargetGenericReferences } from "../../target-model/types/carriers/generic-references.js";
 
 import { instantiateRustSourceUnionPayloads } from "../../target-model/types/source-union-definitions.js";
 import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
@@ -50,6 +51,7 @@ import { callableValueCarrier } from "./native-storage-values.js";
 import { createRustNativeStorageJoins } from "./native-storage-joins.js";
 import { rustNativeStorageAbsentOrigin, rustNativeStorageErasedUnionCallablePayload, rustNativeStorageFrameFieldCarrier, rustNativeStorageErasedClosureParameter, rustNativeStorageErasedFieldCallable, rustNativeStorageInstanceTypeBindings, rustNativeStorageFrameInstanceBindings } from "./native-storage-carriers.js";
 import type { createRustNativeStorageQueries } from "./native-storage.js";
+import type { RustSourceErrorEffectSelection } from "../errors/source-error-effects.js";
 
 export function createRustNativeStorageSelection(
   input: Parameters<typeof createRustNativeStorageQueries>[0],
@@ -63,6 +65,8 @@ export function createRustNativeStorageSelection(
     readonly ownerFor: (node: Node) => Node | undefined;
     readonly valueOwnerFor: (node: Node) => Node | undefined;
     readonly logicalCarrierFor: (subject: SourceStorageSubject, bindings: SourceStorageBindings) => TargetTypeRef | undefined;
+    readonly completeNativeOrigin: (node: Node, declaration: Node, carrier: TargetTypeRef,
+      activation: NonNullable<Parameters<RustSourceErrorEffectSelection["bindingsFor"]>[3]>) => TargetTypeRef | undefined;
   },
 ): (subject: SourceStorageSubject, carrier: TargetTypeRef, bindings: SourceStorageBindings | undefined,
   position?: "value" | "input") => RustNativeStorageSelection {
@@ -74,6 +78,7 @@ export function createRustNativeStorageSelection(
     bindings: SourceStorageBindings | undefined, position: "value" | "input" = "value"): RustNativeStorageSelection => {
     if (bindings === undefined) return unresolved("Native callable storage has no exact declaration-local bindings.");
     const owner = ownerFor(subject.node);
+    const availableNativeInputs = owner === undefined ? [] : [...input.native.inputsFor(owner), ...input.native.capturesFor(owner)];
     const environment = owner === undefined ? undefined : futures.forDeclaration(owner);
     if (environment?.kind === "unresolved") return environment;
     const checked = input.storage.typeFor(subject);
@@ -365,7 +370,8 @@ export function createRustNativeStorageSelection(
                 physical = candidatePhysical;
                 continue;
               }
-              const generics = genericsFor(sourceEnclosingCallable(input.ast.parent(origin.node), input.ast), frontier.bindings, depth + 1);
+              const originOwner = sourceEnclosingCallable(input.ast.parent(origin.node), input.ast);
+              const generics = genericsFor(originOwner, frontier.bindings, depth + 1);
               if (generics.kind === "unresolved") return fail(generics.reason);
               const { types, lifetimes, consts } = generics.bindings;
               const ownerBound = originCarrier === undefined ? undefined
@@ -388,6 +394,28 @@ export function createRustNativeStorageSelection(
               const instantiated = classBound === undefined || readInstance === undefined ? classBound
                 : substituteRustTargetGenerics(classBound, readInstance, new Map(), new Map());
               candidatePhysical = instantiated === undefined ? undefined : substituteRustTargetGenerics(instantiated, types, lifetimes, consts);
+              if (candidatePhysical !== undefined && rustTargetGenericReferences(candidatePhysical).typeIdentities.some(identity =>
+                input.native.inputs.some(selected => selected.implementation.identity === identity) &&
+                !availableNativeInputs.some(selected => selected.implementation.identity === identity))) {
+                const activations = generics.sourceActivations;
+                if (activations.kind === "unresolved") return fail(activations.reason);
+                let completed: TargetTypeRef | undefined;
+                for (const row of activations.rows) {
+                  if (!step(depth)) return undefined;
+                  if (originOwner === undefined || row.activation.kind !== "invocation")
+                    return fail("A returned native callable requires its exact selected invocation and original input bindings.");
+                  const selected = prepared.completeNativeOrigin(row.activation.invocation, originOwner, candidatePhysical,
+                    { storageBindings: row.activation.bindings, genericBindings: row.targetBindings });
+                  if (selected === undefined)
+                    return fail("A returned native callable requires its completed physical input and native error correspondence.");
+                  if (completed !== undefined && !rustTargetTypeRefEquals(completed, selected))
+                    return fail("Native callable storage has distinct physical input alternatives requiring a sealed join.");
+                  completed = selected;
+                }
+                if (completed === undefined)
+                  return fail("A returned native callable requires its original checked source activation.");
+                candidatePhysical = completed;
+              }
             }
             if (candidatePhysical === undefined)
               return fail("Native callable storage has a producer without a sealed physical implementation.");

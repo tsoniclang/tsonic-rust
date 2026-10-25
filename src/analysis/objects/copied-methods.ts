@@ -1,4 +1,6 @@
 import type { Node, SourceFile } from "@tsonic/tsts";
+import { asSourceNode, sourceCallableUsesLexicalThis } from "@tsonic/target-api/source";
+import type { SourceStorageBindings, SourceStorageSubject } from "@tsonic/target-api/analysis";
 import type { RustFactWalk } from "../program/walk.js";
 
 import { structuralStorageKey } from "../../policy/types/objects/structural-storage.js";
@@ -7,49 +9,100 @@ import type { TargetTypeRef } from "../../target-model/types/model.js";
 
 import { rustCopiedMethodReceiverIsPreserved } from "../../policy/ownership/copied-methods.js";
 
+export type RustCopiedMethodDecision =
+  | { readonly kind: "proven"; readonly subject: Node }
+  | { readonly kind: "rejected"; readonly subject: Node; readonly reason: string };
+
 export function selectRustCopiedMethods(
   walk: RustFactWalk, files: readonly SourceFile[], componentForFile: (fileName: string) => string,
 ): {
-  readonly proven: ReadonlySet<string>;
-  readonly demands: ReadonlyMap<string, Node>;
+  readonly decisions: ReadonlyMap<string, RustCopiedMethodDecision>;
   readonly implementations: ReadonlyMap<string, readonly { readonly node: Node; readonly carrier: TargetTypeRef }[]>;
 } {
   const demands = new Map<string, Node>();
   const implementations = new Map<string, { readonly node: Node; readonly carrier: TargetTypeRef }[]>();
   const incoming = new Map<string, Set<string>>();
+  const independent = new Map<string, { readonly kind: "proven" } |
+    { readonly kind: "rejected"; readonly reason: string }>();
+  const originalSlots = new Map<Node, Set<string>>();
+  const requests = new Map<string, { readonly subject: SourceStorageSubject; readonly bindings: SourceStorageBindings }[]>();
+  const { ast, sourceStorage: storage, records } = walk.context;
   const key = (carrier: TargetTypeRef, index: number): string => `${structuralStorageKey(carrier, componentForFile)}#${index}`;
+  const request = (identity: string, node: Node, subject: SourceStorageSubject): void => {
+    demands.set(identity, node);
+    const bindings = storage.bindingsForLexicalOwner(node);
+    if (bindings.kind === "unresolved") {
+      independent.set(identity, { kind: "rejected", reason: bindings.reason });
+      return;
+    }
+    const selected = requests.get(identity) ?? [];
+    selected.push({ subject, bindings: bindings.bindings });
+    requests.set(identity, selected);
+  };
+  const requestMember = (identity: string, node: Node, receiver: Node,
+    carrier: TargetTypeRef, index: number): void => {
+    demands.set(identity, node);
+    const subject = storage.subjectFor(receiver);
+    if (subject.kind === "unresolved") {
+      independent.set(identity, { kind: "rejected", reason: subject.reason });
+      return;
+    }
+    const typed = storage.typeFor(subject.subject);
+    if (typed.kind === "unresolved") {
+      independent.set(identity, { kind: "rejected", reason: typed.reason });
+      return;
+    }
+    const sourceType = storage.source.semantics.forFile(typed.sourceFile).types.nonNullableType(typed.type);
+    const shape = sourceType === undefined ? undefined : walk.sourceTypes.structuralObjectForType(sourceType, carrier);
+    const field = shape?.fields[index];
+    if (sourceType === undefined || shape === undefined || field?.method !== true || field.storageIndex !== index ||
+      field.declarations.length === 0) {
+      independent.set(identity, { kind: "rejected", reason: sourceType === undefined
+        ? "The copied method receiver has no exact checked present source type."
+        : shape === undefined ? "The copied method receiver has no registered source shape for its exact selected carrier."
+          : `The copied method receiver has no exact checked method declaration at storage index ${index}.` });
+      return;
+    }
+    for (const declaration of field.declarations) {
+      const selected = storage.subject(subject.subject.node, subject.subject.kind,
+        [...subject.subject.projection, { kind: "method-value", declaration }]);
+      if (selected.kind === "unresolved") independent.set(identity, { kind: "rejected", reason: selected.reason });
+      else request(identity, node, selected.subject);
+    }
+  };
   const visit = (node: Node): void => {
     if (!walk.context.isNativeNode(node)) return;
-    const binding = walk.context.records.bindingProjection.get(node);
+    const binding = records.bindingProjection.get(node);
     if (binding !== undefined && "bindingCarrier" in binding && binding.projection.kind === "object-rest") {
       const shape = rustStructuralObjectCarrierValue(binding.sourceCarrier);
       for (const field of binding.projection.fields) {
         if (shape?.fields[field.sourceStorageIndex]?.method === true) {
-          const source = key(binding.sourceCarrier, field.sourceStorageIndex);
           const target = key(binding.bindingCarrier, field.targetStorageIndex);
-          demands.set(source, node);
-          demands.set(target, node);
-          const sources = incoming.get(target) ?? new Set<string>();
-          sources.add(source);
-          incoming.set(target, sources);
+          requestMember(target, node, node, binding.bindingCarrier, field.targetStorageIndex);
         }
       }
     }
-    const view = walk.context.records.objectReferenceView.get(node);
+    const view = records.objectReferenceView.get(node);
     if (view?.kind === "structural") {
       const shape = rustStructuralObjectCarrierValue(view.targetCarrier);
       for (const field of view.fields) {
         if (shape?.fields[field.destinationIndex]?.method !== true) continue;
         const target = key(view.targetCarrier, field.destinationIndex);
-        const sources = incoming.get(target) ?? new Set<string>();
-        sources.add(key(view.sourceCarrier, field.source.storageIndex));
-        incoming.set(target, sources);
-        demands.set(target, node);
+        requestMember(target, node, node, view.sourceCarrier, field.source.storageIndex);
       }
     }
-    const operation = walk.context.records.targetOperation.get(node);
+    const operation = records.targetOperation.get(node);
     if (operation?.kind === "source-field" && operation.storage === "structural-object" && operation.valueSemantics.kind === "method") {
-      demands.set(key(operation.receiverCarrier, operation.storageIndex), node);
+      const identity = key(operation.receiverCarrier, operation.storageIndex);
+      demands.set(identity, node);
+      const provenance = records.selectedOperation.get(node)?.provenance;
+      const receiver = asSourceNode(provenance?.sourceReceiver, ast);
+      const declaration = asSourceNode(provenance?.sourceSelectedDeclaration, ast);
+      const subject = receiver === undefined || declaration === undefined ? undefined
+        : storage.storageSubjectFor(receiver, [{ kind: "method-value", declaration }]);
+      if (subject?.kind !== "resolved") independent.set(identity, { kind: "rejected", reason: subject?.reason ??
+        "The selected method read has no original checked receiver and member provenance." });
+      else request(identity, node, subject.subject);
     }
     if (operation?.kind === "record-literal" && operation.storage === "structural-object") {
       const fields = new Map(operation.fields.map(field => [field.storageIndex, field]));
@@ -61,16 +114,17 @@ export function selectRustCopiedMethods(
           const selected = implementations.get(identity) ?? [];
           selected.push({ node: contribution.expression, carrier: field.carrier });
           implementations.set(identity, selected);
+          const slots = originalSlots.get(contribution.expression) ?? new Set<string>();
+          slots.add(identity);
+          originalSlots.set(contribution.expression, slots);
         } else if (contribution.kind === "spread" && contribution.sourceStorage === "structural-object") {
           for (const field of contribution.fields) {
             const identity = key(operation.resultCarrier, field.targetStorageIndex);
             if (field.method === true && !rustCopiedMethodReceiverIsPreserved(contribution.sourceValueCarrier,
               field.sourceStorageIndex, operation.resultCarrier, field.targetStorageIndex)) {
-              demands.set(identity, contribution.property);
+              requestMember(identity, contribution.property, contribution.expression,
+                contribution.sourceValueCarrier, field.sourceStorageIndex);
             }
-            const sources = incoming.get(identity) ?? new Set<string>();
-            sources.add(key(contribution.sourceValueCarrier, field.sourceStorageIndex));
-            incoming.set(identity, sources);
           }
         }
       }
@@ -78,21 +132,32 @@ export function selectRustCopiedMethods(
     walk.context.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
   };
   for (const file of files) visit(file);
-  // An instantiated structural shape stores the method values its template's constructions created: each method slot
-  // of an instance takes a constructed template slot as a source. A template slot with no construction (an authored
-  // type) contributes no values.
-  for (const { template, instance } of walk.sourceTypes.structuralInstantiations()) {
-    const templateFields = rustStructuralObjectCarrierValue(template)?.fields;
-    const instanceFields = rustStructuralObjectCarrierValue(instance)?.fields;
-    if (templateFields === undefined || instanceFields === undefined || templateFields.length !== instanceFields.length) continue;
-    for (const [index, field] of instanceFields.entries()) {
-      if (field.method !== true || templateFields[index]?.method !== true) continue;
-      const target = key(instance, index);
-      const source = key(template, index);
-      if (target === source || !implementations.has(source)) continue;
-      const sources = incoming.get(target) ?? new Set<string>();
-      sources.add(source);
-      incoming.set(target, sources);
+  const receiverUsage = new Map<Node, boolean>();
+  for (const [identity, selected] of requests) {
+    const sources = incoming.get(identity) ?? new Set<string>();
+    incoming.set(identity, sources);
+    for (const requested of selected) {
+      const producers = storage.storageProducersFor(requested.subject, requested.bindings);
+      if (producers.kind !== "complete") {
+        independent.set(identity, { kind: "rejected", reason: producers.kind === "unresolved" ? producers.reason
+          : `The original method implementation domain remains open (${[...new Set(producers.boundaries.map(boundary => boundary.kind))].join(", ")}).` });
+        continue;
+      }
+      if (producers.producers.length === 0) {
+        independent.set(identity, { kind: "rejected", reason: "The checked method producer domain contains no original callable implementation." });
+        continue;
+      }
+      for (const producer of producers.producers) {
+        const original = producer.subject;
+        const slots = original.kind === "value" && original.projection.length === 0
+          ? originalSlots.get(original.node) : undefined;
+        if (slots === undefined || slots.size === 0) {
+          independent.set(identity, { kind: "rejected", reason:
+            `The checked method producer has no admitted original literal construction (${original.kind}; ${ast.kindName(original.node)}; projection depth ${original.projection.length}).` });
+          continue;
+        }
+        for (const slot of slots) sources.add(slot);
+      }
     }
   }
   const pending = [...demands.keys()];
@@ -105,38 +170,30 @@ export function selectRustCopiedMethods(
       }
     }
   }
-  const receiverUsage = new Map<Node, boolean>();
-  const independent = new Map<string, boolean>();
   for (const identity of demands.keys()) {
     const methods = implementations.get(identity) ?? [];
-    if (methods.length === 0) continue;
-    independent.set(identity, methods.every(method => {
+    if (methods.length === 0 || independent.get(identity)?.kind === "rejected") continue;
+    const receiverIndependent = methods.every(method => {
       let used = receiverUsage.get(method.node);
       if (used === undefined) {
-        used = usesReceiver(method.node);
+        used = sourceCallableUsesLexicalThis(walk.context.ast, method.node);
         receiverUsage.set(method.node, used);
       }
       return !used;
-    }));
+    });
+    independent.set(identity, receiverIndependent ? { kind: "proven" }
+      : { kind: "rejected", reason: "An original method implementation uses the original receiver." });
   }
-  const proven = proveRustCopiedMethodFlow([...demands.keys()], incoming, independent);
-  return { proven, demands, implementations };
-
-  function usesReceiver(root: Node): boolean {
-    let used = false;
-    const scan = (node: Node): void => {
-      const kind = walk.context.ast.kindName(node);
-      if (kind === "KindThisExpression" || kind === "KindThisKeyword" || kind === "KindSuperKeyword" || kind === "KindSuperExpression") {
-        used = true;
-        return;
-      }
-      if (node !== root && ["KindFunctionDeclaration", "KindFunctionExpression", "KindMethodDeclaration",
-        "KindClassDeclaration", "KindClassExpression", "KindGetAccessor", "KindSetAccessor"].includes(kind)) return;
-      if (!used) walk.context.ast.forEachChild(node, child => { if (child !== undefined) scan(child); });
-    };
-    scan(root);
-    return used;
+  const proven = proveRustCopiedMethodFlow([...demands.keys()], incoming,
+    new Map([...independent].map(([identity, decision]) => [identity, decision.kind === "proven"])));
+  const decisions = new Map<string, RustCopiedMethodDecision>();
+  for (const [identity, subject] of demands) {
+    const selected = independent.get(identity);
+    decisions.set(identity, proven.has(identity) ? { kind: "proven", subject }
+      : { kind: "rejected", subject, reason: selected?.kind === "rejected" ? selected.reason
+        : "A reaching copied-method source has no grounded receiver-independent implementation." });
   }
+  return { decisions, implementations };
 }
 
 export function proveRustCopiedMethodFlow(

@@ -34,7 +34,7 @@ test("fresh numeric spread allocates only its destination, matching handwritten 
   mkdirSync(join(root, "tests"), { recursive: true });
   writeFileSync(join(root, "tests/cost.rs"), nativeOwnershipCostSupport(root) + `
 use fresh_spread_cost::index;
-fn handwritten(values: &mut [u8]) -> Vec<f64> {
+fn handwritten(values: &[u8]) -> Vec<f64> {
     let mut result = Vec::new();
     result.extend(values.iter().copied().map(f64::from));
     result
@@ -42,16 +42,16 @@ fn handwritten(values: &mut [u8]) -> Vec<f64> {
 #[test]
 fn native_spread_cost() {
     for length in [1, 2, 10, 128] {
-        let mut input = vec![7u8; length];
+        let input = vec![7u8; length];
         for _ in 0..10000 {
-            let (generated, cost) = measure(|| index::widen(&mut input));
-            let (expected, expected_cost) = measure(|| handwritten(&mut input));
+            let (generated, cost) = measure(|| index::widen(&input));
+            let (expected, expected_cost) = measure(|| handwritten(&input));
             assert_eq!(generated, expected);
             assert_eq!(cost, expected_cost);
             assert_eq!(cost.allocations, 1);
             assert_eq!(cost.reallocations, 0);
         }
-        let mut copied = index::copy(&mut input);
+        let mut copied = index::copy(&input);
         copied[0] = 9;
         assert_eq!(copied.len(), length);
         assert_eq!(input[0], 7);

@@ -44,6 +44,7 @@ import type { RustAssignmentValueSelection } from "../../target-model/records/op
 import { selectRustAssignmentValue } from "../../policy/operations/operators/assignment-value.js";
 import type { RustOwnershipRecords } from "../../target-model/records/ownership.js";
 import type { RustProjectTypePolicy } from "../../target-model/types/project-types.js";
+import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 
 export interface RustStatementCompletionInput {
   readonly structuralShapes: Parameters<typeof analyzeRustOptionalChainBodyFallibility>[0]["structural"];
@@ -273,7 +274,8 @@ export function analyzeRustStatementCompletions(input: RustStatementCompletionIn
     const clauses = selected?.CaseBlock === undefined ? undefined : ast.as.AsCaseBlock(selected.CaseBlock)?.Clauses?.Nodes;
     const operation = records.targetOperation.get(node);
     if (selected?.Expression === undefined || clauses === undefined || operation?.kind !== "switch" ||
-      operation.operationId !== "tsonic.rust.control.switch.strict-equality" || clauses.length !== operation.clauses.length ||
+      operation.operationId !== "tsonic.rust.control.switch.strict-equality" || !isDenseDataArray(operation.clauses) ||
+      clauses.length !== operation.clauses.length ||
       !rustTargetTypeRefEquals(rustEffectiveValueCarrier(records, selected.Expression), operation.discriminantCarrier)) {
       reject(node, "RUST_SWITCH_SELECTION_NOT_PROVEN", "Switch requires one exact finalized discriminant and dense clause selection.");
       return;

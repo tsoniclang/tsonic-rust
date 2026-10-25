@@ -383,7 +383,7 @@ export function applySelectedProjectSourceCall(
       // type (an unannotated async callback would otherwise read its parameters as number).
       const expected = carriers.length !== 0 && carriers.every(carrier => rustTargetTypeRefEquals(carrier, carriers[0]))
         ? rustRetainedCallResult(carriers[0]!, new Map([[identity, rustPlaceholderLifetime]])) : undefined;
-      if (resolveExpressionCarrier(walk, argument, sourceFile, expected) === undefined) return undefined;
+      if (resolveExpressionCarrier(walk, argument, sourceFile, expected, "operation") === undefined) return undefined;
     }
   }
   const retainedLifetimes = rustRetainedCallLifetimes(walk, expression, selectedDeclaration,

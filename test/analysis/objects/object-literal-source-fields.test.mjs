@@ -4,6 +4,7 @@ import { compileRust } from "../../helpers/rust-session.mjs";
 import { analyzeRustAnalysisProgram } from "../../../dist/analysis/program/target-program.js";
 import { analyzeRustObjectLiteralEmission } from "../../../dist/analysis/objects/object-literal-emission.js";
 import { createRustObjectLiteralEmissionProducer } from "../../../dist/analysis/program/records/object-literal-emission.js";
+import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 
 function analyze(body) {
   let program;
@@ -43,7 +44,7 @@ function analyze(body) {
 }
 
 test("nested literal values keep their own insertion order and exact source occurrence", () => {
-  const current = analyze("export function encode(): string { return JSON.stringify({ b: { a: 1, b: 2 }, a: 0 }); }");
+  const current = analyze("export function encode(): string | undefined { return JSON.stringify({ b: { a: 1, b: 2 }, a: 0 }); }");
   const outer = current.literal("{ b: { a: 1, b: 2 }, a: 0 }");
   const inner = current.literal("{ a: 1, b: 2 }");
   const outerFields = current.fields(outer);
@@ -53,7 +54,7 @@ test("nested literal values keep their own insertion order and exact source occu
 });
 
 test("literal spreads retain the first position and the latest overriding value", () => {
-  const current = analyze(`export function encode(): string {
+  const current = analyze(`export function encode(): string | undefined {
   return JSON.stringify({ ...{ b: { a: 1, b: 2 }, a: 0 }, b: { b: 3, a: 4 }, c: 1 });
 }`);
   const outer = current.literal("{ ...{ b: { a: 1, b: 2 }, a: 0 }, b: { b: 3, a: 4 }, c: 1 }");
@@ -65,7 +66,7 @@ test("literal spreads retain the first position and the latest overriding value"
 });
 
 test("a nonliteral spread never claims a forged nested value origin", () => {
-  const current = analyze(`export function encode(source: { b: { b: number; a: number }; a: number }): string {
+  const current = analyze(`export function encode(source: { b: { b: number; a: number }; a: number }): string | undefined {
   return JSON.stringify({ ...source, c: 1 });
 }`);
   const fields = current.fields(current.literal("{ ...source, c: 1 }"));
@@ -80,7 +81,10 @@ test("project object literal records carry the same physical field correspondenc
 export function create(): Data { return { b: 1, a: 2 }; }`);
   const node = current.literal("{ b: 1, a: 2 }");
   const selected = current.program.records.objectLiteralEmission.get(node);
-  assert.equal(selected?.kind, "project", "a source interface literal exercises the project implementation form");
+  assert.equal(selected !== undefined, true, "the original source interface literal publishes its exact physical evidence");
+  assert.equal(rustTargetTypeRefEquals(selected.carrier, current.program.records.targetOperation.get(node).resultCarrier), true,
+    "direct construction retains the original selected native carrier");
+  assert.equal(selected.implementation === undefined, true, "data-only native construction does not invent a dispatch implementation");
   assert.equal(current.fields(node).map(field => field.name).join(","), "b,a",
     "project and structural forms use the same source order and exact physical field indexes");
 });
