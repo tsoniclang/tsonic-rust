@@ -12,6 +12,7 @@ import { analyzeRust } from "../../helpers/rust-session.mjs";
 import { finalizeRustProviderOperationAbi } from "../../../dist/policy/operations/members/abi/finalize.js";
 import { rustBigIntTargetType } from "../../../dist/target-model/types/carriers/native.js";
 import { rustNativeStorageRoot, rustNativeStorageProjections } from "../../../dist/analysis/storage/native-paths.js";
+import { analyzeRustReadUses } from "../../../dist/analysis/ownership/uses.js";
 
 function readBorrowEffectsInput(source, program, nodes, records) {
   const nativeNodes = new Set(nodes);
@@ -49,12 +50,13 @@ for (const projection of [false, true]) test(`owned native getter results remain
         kind: "void-expression", operationId: "ownership-read.discard", resultCarrier: rustUnitTargetType(),
       });
       const records = builder.seal([]);
-      const selected = analyzeRustReadOwnership({ storage, nativeNodes: storage.nodes, records,
+      const uses = analyzeRustReadUses(ast, storage.nodes, records, emptyRustTypeDefinitions, () => false, program.structuralShapes);
+      const selected = analyzeRustReadOwnership({ storage, nativeNodes: storage.nodes, records, uses,
         flow: { movingReads: new Set(owned ? [element] : []), captureTransfers: new Map() },
         borrowEffects: { pureValues: new Set(), fieldWrites: new Map(), stableBindings: new Set(), nativeWrites: new Map() },
         borrowEffectsInput: readBorrowEffectsInput(source, program, storage.nodes, records), definitions: emptyRustTypeDefinitions,
         genericRequirements: { supportsClone: () => true }, genericCallables: { definitionFor: () => undefined },
-        capturesFor: () => undefined, invocationTransfersCapture: () => false, ownsExternalArgument: () => false,
+        capturesFor: () => undefined, invocationTransfersCapture: () => false,
       });
       assert.equal(selected.kind, "resolved", `${label}: the complete checked read inventory closes`);
       const read = selected.ownership.reads.get(element);
@@ -80,7 +82,7 @@ for (const [name, body, moves] of [
     const parameter = storage.nodes.find(node => ast.is.IsParameterDeclaration(node));
     const references = storage.nodes.filter(node => ast.is.IsIdentifier(node) &&
       ast.parent(node) !== parameter && source.navigation.sourceReferenceFor(node)?.declaration === parameter);
-    const selected = analyzeRustOwnershipFlow({ source, storage, nativeNodes: storage.nodes, sourceCallableFor: () => undefined,
+    const selected = analyzeRustOwnershipFlow({ source, storage, nativeNodes: storage.nodes, uses: new Map(), sourceCallableFor: () => undefined,
       capturesFor: () => undefined, isOnceCallable: () => false, canMoveStoredField: () => false,
       isOwnedOperationResult: () => false });
     assert.equal(selected.kind, "resolved", "the actual checked source graph closes before read publication");
@@ -107,7 +109,7 @@ for (const captureStorage of ["value", "cell", "borrow-cell", "location"]) {
     const terminal = storage.nodes.find(node => ast.is.IsIdentifier(node) && ast.is.IsReturnStatement(ast.parent(node)));
     assert.equal(declaration !== undefined && closure !== undefined && reference !== undefined && terminal !== undefined, true,
       "the original checked closure and final outer read are both present");
-    const selected = analyzeRustOwnershipFlow({ source, storage, nativeNodes: storage.nodes, sourceCallableFor: () => undefined,
+    const selected = analyzeRustOwnershipFlow({ source, storage, nativeNodes: storage.nodes, uses: new Map(), sourceCallableFor: () => undefined,
       capturesFor: owner => owner !== closure ? undefined : { receivers: [], receiverFields: [], captures: [{
         declaration, reference, carrier: captureStorage === "cell" ? rustSourcePrimitiveTargetType("float64") : rustStringTargetType(),
         storage: captureStorage,
@@ -216,6 +218,7 @@ async function fixture() {
     storage,
     nativeNodes: storage.nodes,
     records,
+    uses: analyzeRustReadUses(source.ast, storage.nodes, records, emptyRustTypeDefinitions, () => false, program.structuralShapes),
     flow: { movingReads: new Set(), captureTransfers: new Map() },
     borrowEffects: { pureValues: new Set(), fieldWrites: new Map(), stableBindings: new Set(), nativeWrites: new Map() },
     borrowEffectsInput: readBorrowEffectsInput(source, program, storage.nodes, records),
@@ -224,7 +227,6 @@ async function fixture() {
     genericCallables: { definitionFor: () => undefined },
     capturesFor: () => undefined,
     invocationTransfersCapture: () => false,
-    ownsExternalArgument: () => false,
   };
   return { input, selected };
 }
@@ -300,15 +302,16 @@ for (const projection of [false, true]) {
         });
       }
       const records = builder.seal([]);
+      const uses = analyzeRustReadUses(ast, storage.nodes, records, emptyRustTypeDefinitions, () => false, program.structuralShapes);
       const selected = analyzeRustReadOwnership({
-        storage, nativeNodes: storage.nodes, records,
+        storage, nativeNodes: storage.nodes, records, uses,
         flow: { movingReads: new Set(), captureTransfers: new Map() },
         borrowEffects: { pureValues: new Set(), fieldWrites: new Map(), stableBindings: new Set(), nativeWrites: new Map() },
         borrowEffectsInput: readBorrowEffectsInput(source, program, storage.nodes, records),
         definitions: emptyRustTypeDefinitions,
         genericRequirements: { supportsClone: () => true },
         genericCallables: { definitionFor: () => undefined },
-        capturesFor: () => undefined, invocationTransfersCapture: () => false, ownsExternalArgument: () => false,
+        capturesFor: () => undefined, invocationTransfersCapture: () => false,
       });
       assert.equal(selected.kind, "resolved", "the complete checked inventory admits the reads");
       const owned = selected.ownership.reads.get(temporary);

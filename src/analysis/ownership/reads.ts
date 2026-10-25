@@ -2,7 +2,7 @@ import type { Node } from "@tsonic/tsts";
 import { Node_Expression, sourceEnclosingCallable, sourceParameterIsProperty, sourceTransparentExpressionOperand } from "@tsonic/target-api/source";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import { createSourceStorageBudget, defaultSourceStorageLimits, type SourceStorageLimits, type SourceStorageQueries } from "@tsonic/target-api/analysis";
-import type { RustCaptureReadOwnership, RustOwnershipRecords, RustReadOwnershipFact } from "../../target-model/records/ownership.js";
+import type { RustCaptureReadOwnership, RustOwnershipRecords, RustReadOwnershipFact, RustReadUse } from "../../target-model/records/ownership.js";
 import type { RustAnalysisRecords } from "../../target-model/records/analysis.js";
 import type { RustClosureCaptureFact } from "../../target-model/records/operation-selections.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
@@ -16,13 +16,13 @@ import { type RustBorrowEffects } from "../../target-model/records/ownership-eff
 import { selectRustValueReadOwnership } from "../../policy/ownership/value-read.js";
 import { rustBorrowedOperationArguments } from "../storage/provider-borrows.js";
 import { BinaryExpression_Left, BinaryExpression_Right } from "@tsonic/target-api/source";
-import { analyzeRustReadUses } from "./uses.js";
 import { rustContextualRuntimeConversionContract } from "../../policy/conversions/contextual.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 
 export function analyzeRustReadOwnership(input: {
   readonly storage: SourceStorageQueries;
   readonly nativeNodes: readonly Node[];
+  readonly uses: ReadonlyMap<Node, RustReadUse>;
   readonly records: RustAnalysisRecords;
   readonly flow: RustOwnershipFlow;
   readonly borrowEffects: RustBorrowEffects;
@@ -32,11 +32,10 @@ export function analyzeRustReadOwnership(input: {
   readonly genericCallables: RustGenericCallablePlan;
   readonly capturesFor: (owner: Node) => RustClosureCaptureFact | undefined;
   readonly invocationTransfersCapture: (owner: Node) => boolean;
-  readonly ownsExternalArgument: (argument: Node) => boolean;
   readonly limits?: Partial<SourceStorageLimits>;
 }): { readonly kind: "resolved"; readonly ownership: RustOwnershipRecords }
   | { readonly kind: "rejected"; readonly diagnostics: readonly TargetDiagnostic[] } {
-  const { storage, records, flow, borrowEffects } = input;
+  const { storage, records, flow, borrowEffects, uses } = input;
   const { ast } = storage.source;
   const budget = createSourceStorageBudget({ ...defaultSourceStorageLimits, ...input.limits });
   const rejectedBudget = () => ({ kind: "rejected" as const, diagnostics: [{
@@ -67,8 +66,6 @@ export function analyzeRustReadOwnership(input: {
       ast.kindName(node) === "KindThisExpression" || ast.kindName(node) === "KindThisKeyword" ||
       referenceLoad || operation?.kind === "source-field" && operation.valueSemantics.kind === "stored"));
   }
-  const uses = analyzeRustReadUses(ast, input.nativeNodes, records, input.definitions, input.ownsExternalArgument,
-    input.borrowEffectsInput.structuralShapes);
   const reads = new Map<Node, RustReadOwnershipFact>();
   const captures = new Map<Node, readonly RustCaptureReadOwnership[]>();
   const writes = new Map<Node, import("../../target-model/records/ownership.js").RustBorrowedFieldWrite>();
