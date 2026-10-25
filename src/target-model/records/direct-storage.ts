@@ -31,6 +31,12 @@ export interface RustUpdateProjectionArgument {
   readonly targetInput: RustFinalizedSourceInput | undefined;
 }
 
+export interface RustUpdateProjectionPlan {
+  readonly arguments: readonly RustUpdateProjectionArgument[];
+  readonly fieldOffsets: ReadonlyMap<Node, number>;
+  readonly complete: boolean;
+}
+
 export type RustUpdateMember =
   | { readonly kind: "accessor"; readonly expression: Node; readonly fact: Extract<RustTargetOperationFact, { readonly kind: "source-accessor" }> }
   | { readonly kind: "static"; readonly expression: Node; readonly fact: Extract<RustTargetOperationFact, { readonly kind: "source-static-field" }> }

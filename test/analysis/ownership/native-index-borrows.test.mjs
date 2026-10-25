@@ -82,10 +82,11 @@ export function compare(values: string[], left: number, right: number): boolean 
 
 test("a pure native index contract does not erase its actual index-expression effects", () => {
   const { program } = analyzeRust({ files: { "index.ts": `
-function append(values: string[]): number { values.push("tail"); return 1; }
-export function compare(values: string[]): boolean { return values[append(values)]! === "tail"; }
+function mutateIndex(values: string[]): number { values[1] = "tail"; return 1; }
+export function compare(values: string[]): boolean { return values[mutateIndex(values)]! === "tail"; }
 ` } });
-  const elements = expressions(program, node => program.source.ast.is.IsElementAccessExpression(node));
+  const elements = expressions(program, node => program.source.ast.is.IsElementAccessExpression(node) &&
+    program.source.ast.is.IsCallExpression(ElementAccessExpression_ArgumentExpression(program.source.ast, node)));
   assert.equal(elements.length, 1, "the source contains the one genuine effectful index expression");
   const operation = program.records.targetOperation.get(elements[0]);
   assert.equal(operation?.kind, "provider-operation", "native indexing retains its exact selected provider fact");
@@ -98,9 +99,15 @@ export function compare(values: string[]): boolean { return values[append(values
 
 test("String-consuming RHS calls retain their actual first-value snapshots", () => {
   const { program } = analyzeRust({ files: { "index.ts": `
-function consume(value: string): string { return value; }
+function consume(value: string): string { let output = value; output += "!"; return output; }
 export function compare(value: string): boolean { return value === consume(value); }
 ` } });
+  const ownedParameters = expressions(program, node => program.source.ast.is.IsParameterDeclaration(node) &&
+    program.source.ast.is.IsFunctionDeclaration(program.source.ast.parent(node)) &&
+    program.source.ast.text(program.source.ast.name(program.source.ast.parent(node))) === "consume");
+  assert.equal(ownedParameters.length, 1, "the actual mutating native callee has one exact source parameter");
+  assert.equal(program.records.sourceParameterAbi.get(ownedParameters[0])?.mode, "value",
+    "the snapshot inverse proves a genuinely owned native argument, not an inferred borrowed-return identity");
   const comparisons = expressions(program, node => program.records.binaryEmission.get(node)?.operator === "==");
   assert.equal(comparisons.length, 1, "the exact owned String consumer remains in the checked program");
   const left = BinaryExpression_Left(program.source.ast, comparisons[0]);
@@ -108,6 +115,29 @@ export function compare(value: string): boolean { return value === consume(value
     "observing a String before its consuming RHS still requires the original value");
   assert.equal(program.records.binaryEmission.get(comparisons[0]).leftShared, false,
     "native indexed borrowing never overrides an unrelated owned-call interval");
+});
+
+test("replacing a native inner array remains an effectful index computation", () => {
+  const { program } = analyzeRust({ files: { "index.ts": `
+function replaceArray(values: string[][], calls: number[]): number {
+  calls[0] = calls[0]! + 1;
+  values[0] = ["after", "tail"];
+  return 0;
+}
+export function compare(values: string[][], calls: number[]): boolean {
+  return values[0]![replaceArray(values, calls)]! === "before";
+}
+` } });
+  const elements = expressions(program, node => program.source.ast.is.IsElementAccessExpression(node) &&
+    program.source.ast.is.IsCallExpression(ElementAccessExpression_ArgumentExpression(program.source.ast, node)));
+  assert.equal(elements.length, 1, "the real native array replacement occurs in one selected index expression");
+  const operation = program.records.targetOperation.get(elements[0]);
+  assert.equal(operation?.kind, "provider-operation", "the outer native element retains its actual index contract");
+  assert.equal(operation.abi.effects.evaluation, "pure", "purity belongs to indexing, not the preceding replacement");
+  const index = ElementAccessExpression_ArgumentExpression(program.source.ast, elements[0]);
+  const effects = program.sourceNavigation.expressionEffects(index);
+  assert.equal(effects.invokes || effects.mutates, true,
+    "the selected index expression cannot erase replacement of its receiver's owned array");
 });
 
 test("missing, non-place, observable and unsafe index facts never manufacture native storage", () => {

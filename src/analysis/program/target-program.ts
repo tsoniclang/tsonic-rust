@@ -55,7 +55,7 @@ import { analyzeRustStatementCompletions } from "../control-flow/statement-compl
 import { analyzeRustStatementExits } from "../control-flow/statement-exits.js";
 import { eraseRustCompileTimeVariableStatements } from "../control-flow/compile-time-statements.js";
 import { analyzeRustResourceScopes } from "../control-flow/resource-scopes.js";
-import { rustCarrierReferentMutationRequiresMutableBinding } from "../../policy/types/storage/referent-mutation.js";
+import { rustReferentWriteRequiresMutableBinding } from "../ownership/source-writes.js";
 
 /** Seals the analysis program into the data-only program the backend plans from. */
 export function analyzeRustTargetProgram(
@@ -151,19 +151,18 @@ export function analyzeRustAnalysisProgram(
     message: issue.message, evidence: issue.evidence,
   })));
   const objectRepresentations = context.objectRepresentations.seal();
-  context.records.mutatedReferents.finalizeBindings(declaration => {
+  context.records.mutatedReferents.finalizeBindings((declaration, writes) => {
     // Only local variables and parameters own a Rust binding whose mutability a referent write decides; an import
     // binding of a provider module object has no Rust binding.
     if (!context.ast.is.IsVariableDeclaration(declaration) && !context.ast.is.IsParameterDeclaration(declaration) &&
       !context.ast.is.IsBindingElement(declaration)) return false;
     // A variable declared by a provider or profile declaration file (`declare var process`) is not a Rust binding either.
     if (context.ast.getSourceFile(declaration)?.IsDeclarationFile === true) return false;
-    const carrier = context.records.runtimeCarrier.get(declaration)?.carrier;
-    if (carrier === undefined) failTargetAnalysisInvariant("tsonic-rust", "A mutated referent requires its finalized declaration carrier.", declaration);
-    return rustCarrierReferentMutationRequiresMutableBinding(carrier, selected => {
+    const isSharedObject = (selected: import("../../target-model/types/model.js").TargetTypeRef): boolean => {
       const representation = objectRepresentations.representationFor(context.projectTypes.definitionForCarrier(selected));
       return representation !== undefined && (representation.kind !== "value" || !representation.mutable);
-    });
+    };
+    return writes.map(write => rustReferentWriteRequiresMutableBinding(context.records, write, isSharedObject)).some(Boolean);
   });
   const foundation = analyzeRustFoundation({
     selected: configuration.foundation,

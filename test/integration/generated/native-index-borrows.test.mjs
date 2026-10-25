@@ -18,8 +18,18 @@ function replace(values: string[], index: number): string { values[index] = "aft
 export function snapshot(values: string[], left: number, right: number): boolean {
   return values[left]! === replace(values, right);
 }
-function append(values: string[]): number { values.push("tail"); return 1; }
-export function effectful(values: string[]): boolean { return values[append(values)]! === "tail"; }
+function mutateIndex(values: string[]): number { values[1] = "tail"; return 1; }
+export function effectful(values: string[]): boolean { return values[mutateIndex(values)]! === "tail"; }
+function replaceArray(values: string[][], calls: number[]): number {
+  calls[0] = calls[0]! + 1;
+  values[0] = ["after", "tail"];
+  return 0;
+}
+export function reallocated(values: string[][], calls: number[]): boolean {
+  return values[0]![replaceArray(values, calls)]! === "before";
+}
+function consumeOwned(value: string): string { let output = value; output += "!"; return output; }
+export function consuming(value: string): boolean { return value === consumeOwned(value); }
 function callbackIndex(values: readonly string[], select: () => number): boolean { return values[select()]! === "tail"; }
 export function verify_callback(): boolean {
   const values = ["head", "tail"];
@@ -63,20 +73,57 @@ fn actual_aliasing_indices_compare_the_value_before_rhs_mutation() {
 }
 
 #[test]
-fn index_computation_can_reallocate_before_the_final_element_borrow() {
-    let mut generated_values = Vec::with_capacity(1);
-    generated_values.push(String::from("head"));
-    let mut native_values = Vec::with_capacity(1);
-    native_values.push(String::from("head"));
+fn index_computation_mutates_before_the_final_element_borrow() {
+    let mut generated_values = vec![String::from("head"), String::from("before")];
+    let mut native_values = vec![String::from("head"), String::from("before")];
     let (generated, generated_cost) = measure(|| index::effectful(&mut generated_values).unwrap());
     let (native, native_cost) = measure(|| {
-        native_values.push(String::from("tail"));
+        native_values[1] = String::from("tail");
         native_values[1].as_str() == "tail"
     });
     assert!(generated);
     assert_eq!(generated, native);
     assert_eq!(generated_values, native_values);
     assert_eq!(generated_values.len(), 2);
+    assert_eq!(generated_cost, native_cost);
+}
+
+#[test]
+fn replacing_the_inner_allocation_preserves_receiver_evaluation_and_first_value() {
+    let mut generated_values = vec![vec![String::from("before")]];
+    let mut native_values = vec![vec![String::from("before")]];
+    let mut generated_calls = vec![0.0];
+    let mut native_calls = vec![0.0];
+    let (generated, generated_cost) =
+        measure(|| index::reallocated(&mut generated_values, &mut generated_calls).unwrap());
+    let (native, native_cost) = measure(|| {
+        let receiver = native_values[0].clone();
+        native_calls[0] += 1.0;
+        native_values[0] = vec![String::from("after"), String::from("tail")];
+        receiver[0].as_str() == "before"
+    });
+    assert!(generated);
+    assert_eq!(generated, native);
+    assert_eq!(generated_values, native_values);
+    assert_eq!(generated_values[0], ["after", "tail"]);
+    assert_eq!(generated_calls, native_calls);
+    assert_eq!(generated_calls, [1.0]);
+    assert_eq!(generated_cost, native_cost);
+}
+
+#[test]
+fn a_real_owning_call_preserves_its_first_value_and_native_snapshot_cost() {
+    let generated_value = String::from("before");
+    let native_value = String::from("before");
+    let (generated, generated_cost) = measure(|| index::consuming(generated_value).unwrap());
+    let (native, native_cost) = measure(|| {
+        let before = native_value.clone();
+        let mut output = native_value;
+        output.push_str("!");
+        before == output
+    });
+    assert!(!generated);
+    assert_eq!(generated, native);
     assert_eq!(generated_cost, native_cost);
 }
 

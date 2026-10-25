@@ -56,6 +56,9 @@ export function rustDeclarationEmissionCarriers(program: Omit<RustAnalysisProgra
   for (const selected of program.classValues.instanceViewImplementations)
     collect(program.records.structuralViewImplementations.get(selected.declaration, selected.ownerFileName));
   for (const node of nodes) {
+    const operation = program.records.targetOperation.get(node);
+    if (operation?.kind === "provider-record-literal" || operation?.kind === "source-conversion") collect(operation);
+    collect(program.records.contextualValueConversion.get(node));
     collect(program.records.nativeDeclaration.get(node));
     collect(program.records.nativeClass.get(node));
     collect(program.records.lexicalFunction.get(node));

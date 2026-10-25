@@ -1,5 +1,4 @@
 import type { Node } from "@tsonic/tsts";
-import { ElementAccessExpression_ArgumentExpression, Node_Expression } from "@tsonic/target-api/source";
 
 import type { RustPlanContext } from "../program/plan-context.js";
 import type { RustAssignmentOperationPlan } from "../../../target-model/records/operator-selection.js";
@@ -8,7 +7,7 @@ import { planExpression } from "../expressions/entry.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { planRustCompoundAssignmentValue } from "./assignments.js";
 import { planRuntimeSetStatement } from "./statement-loops.js";
-import { planRustRuntimeIndexInputs } from "../expressions/runtime-index-inputs.js";
+import { planRustRuntimeWriteInputs } from "../expressions/runtime-index-inputs.js";
 import { failRustPlannerInvariant } from "../diagnostics.js";
 
 export function planRustCompoundRuntimeWrite(
@@ -16,16 +15,13 @@ export function planRustCompoundRuntimeWrite(
   context: RustPlanContext,
 ): readonly RustStmt[] {
   const write = context.input.program.records.compoundWrite.get(expression);
-  const receiverNode = Node_Expression(context.input.program.source.ast, left);
-  const indexNode = ElementAccessExpression_ArgumentExpression(context.input.program.source.ast, left);
-  if (write === undefined || receiverNode === undefined || indexNode === undefined || context.syntheticNames === undefined) {
-    failRustPlannerInvariant("An admitted compound index write lost its native setter, checked operands or name scope.", expression);
+  if (write === undefined || context.syntheticNames === undefined) {
+    failRustPlannerInvariant("An admitted compound write lost its native setter or name scope.", expression);
   }
-  const inputs = planRustRuntimeIndexInputs(receiverNode, indexNode, write, expression, "write", context);
-  if (inputs === undefined) failRustPlannerInvariant("An admitted compound write lost its native indexed input plan.", expression);
+  const inputs = planRustRuntimeWriteInputs(write, expression, "write", context);
   const selected = inputs.context;
   const overrides = new Map(selected.expressionOverrides);
-  const statements: RustStmt[] = inputs.bindings.map(binding => ({ kind: "let", name: binding.name, mutable: false, init: binding.value }));
+  const statements: RustStmt[] = inputs.bindings.map(binding => ({ kind: "let", name: binding.name, mutable: binding.mutable ?? false, init: binding.value }));
   const current = planExpression(left, selected);
   const value = planExpression(right, context);
   if (current === undefined || value === undefined) {
