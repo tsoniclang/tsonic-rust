@@ -8,6 +8,8 @@ import { selectRustOperationReadUses } from "../../../dist/policy/ownership/read
 import { finalizeRustProviderOperationAbi } from "../../../dist/policy/operations/members/abi/finalize.js";
 import { rustStringTargetType } from "../../../dist/target-model/types/index.js";
 import { createRustRecordFixture } from "../../helpers/records.mjs";
+import { rustNativeIndexStorageProjection, rustNativeStoragePathsDisjoint, rustNativeStorageProjections,
+  rustNativeStorageRoot } from "../../../dist/analysis/storage/native-paths.js";
 
 test("a native compound receiver keeps its complete getter-index and RHS interval through transparent wrappers", async () => {
   const source = createTargetSourceProgram(await checkedSource("ownership-compound-receiver-interval", {
@@ -117,6 +119,15 @@ export function fixed(values: FixedArray<string, 2>): boolean { return ((values)
         assert.equal(read?.source.kind, "borrow", "a selected projection observer never clones its tuple or fixed-array owner");
         assert.equal(read.source.mutable, false, "a read-only native projection remains a shared native place");
         assert.equal(read.value.kind, "borrow", "the same admitted native demand reaches the value read without a transfer override");
+        const result = program.records.readOwnership.get(node);
+        assert.equal(result?.source.kind, "borrow", "the selected native field keeps its exact storage lease across the pure later operand");
+        assert.equal(result.value.kind, "borrow", "a tuple or fixed-array field observation does not copy its String result");
+        const input = { ast, records: program.records, navigation: program.sourceNavigation };
+        const root = rustNativeStorageRoot(node, input);
+        assert.equal(root !== undefined, true, "the actual checked formal supplies its physical native storage root");
+        const path = rustNativeStorageProjections(node, root, input);
+        assert.deepEqual(path, [operation.kind === "tuple-index" ? operation.index : rustNativeIndexStorageProjection],
+          "tuple fields use their exact native ordinal while array indices remain conservative");
         receivers += 1;
       }
       ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
@@ -147,6 +158,14 @@ export function fixed(values: FixedArray<string, 2>): string { return ((values))
     assert.equal(receivers, 2, "both actual tuple and fixed-array owned projections remain covered");
   });
 }
+
+test("exact native tuple fields retain disjointness without inventing dynamic-index or prefix independence", () => {
+  assert.equal(rustNativeStoragePathsDisjoint([0], [1]), true, "distinct admitted native tuple fields are distinct physical storage");
+  assert.equal(rustNativeStoragePathsDisjoint([0], [0]), false, "the same native field always aliases itself");
+  assert.equal(rustNativeStoragePathsDisjoint([0], [0, 1]), false, "an owner path overlaps its nested field");
+  assert.equal(rustNativeStoragePathsDisjoint([rustNativeIndexStorageProjection], [0]), false,
+    "a dynamic index never acquires guessed field independence");
+});
 
 test("native runtime and static typeof categories share their actual storage operand without copying union payloads", () => {
   const { program } = analyzeRust({ files: { "index.ts": `
