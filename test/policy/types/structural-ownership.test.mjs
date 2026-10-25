@@ -31,6 +31,15 @@ export function pass(value: ${type}): ${type} { return value; }
             message: "Parameter type has no closed Rust runtime carrier under the selected source-profile and surface policy.",
           },
     ]);
+    if (name !== "nested") {
+      const completion = result.diagnostics[0]?.evidence?.filter(entry =>
+        entry.startsWith("rust.callable.signature-unresolved="));
+      assert.equal(completion?.length, 1, "the precise parameter refusal retains one actual completion reason");
+      assert.match(completion[0], /^rust\.callable\.signature-unresolved=The native callable input stage did not complete;/u,
+        "a whole-callable stage is evidence, not a replacement parameter-type message");
+      assert.equal(completion[0].length <= "rust.callable.signature-unresolved=".length + 512, true,
+        "completion evidence is bounded scalar text");
+    }
     assert.deepEqual(result.artifacts, []);
   });
 }

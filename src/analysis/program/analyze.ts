@@ -612,7 +612,8 @@ export function analyzeRustProgram(context: RustAnalysisContext, outputType: "bi
     context.diagnostics.push(...sourcePackageComponents.diagnostics);
     return;
   }
-  const physicalIssues = context.callableValues.preparePhysicalStorage(sourcePackageComponents.plan, fallibility.effectsFor);
+  const physicalIssues = context.callableValues.preparePhysicalStorage(sourcePackageComponents.plan, fallibility.effectsFor,
+    context.promiseBodies.plan);
   const sourceStorageFailure = context.sourceStorage.failureReason();
   if (sourceStorageFailure !== undefined) {
     appendRustDiagnostic(walk, "RUST_SOURCE_STORAGE_NOT_PROVEN", sourceStorageFailure, undefined,

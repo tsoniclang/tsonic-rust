@@ -40,7 +40,7 @@ import { collectRustErrorDeclarations } from "./error-declarations.js";
 import { mergeRustErrorEffects, rustErrorEffectsAreFallible, rustErrorEffectsEqual, rustLocalErrorEffects, rustPureErrorEffects } from "./error-effects.js";
 
 import type { RustErrorEffectsFact } from "../../target-model/records/error-effects.js";
-import { createRustSourceErrorEffectSelection, type RustSourceErrorEffectSelection } from "./source-error-effects.js";
+import type { RustSourceErrorEffectSelection } from "./source-error-effects.js";
 
 import type { RustSourceErrorEffectEdge } from "../../target-model/records/source-error-effects.js";
 import { createRustEffectsWorkBudget, defaultRustEffectsWorkLimit, type RustEffectsWorkBudget } from "./effects-work-budget.js";
@@ -101,7 +101,7 @@ function collectFallibilityFacts(
     budget.metadata(call.invocationErrorSource);
     budget.metadata(call.awaitErrorSources);
   }
-  const selectSourceErrors = createRustSourceErrorEffectSelection(walk);
+  const selectSourceErrors = walk.context.callableValues.nativeStorage.sourceErrors;
   const declarationEffects = (declaration: Node): RustErrorEffectsFact => {
     budget.step();
     return effectsByDeclaration.get(declaration) ?? rustPureErrorEffects;
