@@ -92,7 +92,7 @@ function construction(text, wrapCaptures = captures => captures, wrapRecords = r
   let physical;
   const input = { source, ast: source.ast, storage, nativeNodes, records, definitions: program.typeDefinitions,
     frames: program.callableValues.frames,
-    structuralShapes: program.structuralShapes, generic: registry.plan, lexicalFunctions: program.lexicalFunctions,
+    structuralShapes: program.structuralShapes, projectTypes: program.projectTypes, generic: registry.plan, lexicalFunctions: program.lexicalFunctions,
     lifetimes: program.sourceLifetimes,
     physicalCarrierFor: (carrier, ownerFileName, subject, bindings, producers) =>
       physical.carrierFor(carrier, ownerFileName, subject, bindings, producers) };

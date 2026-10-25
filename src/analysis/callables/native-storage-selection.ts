@@ -308,9 +308,27 @@ export function createRustNativeStorageSelection(
           } else {
             const candidate = inputs.get(origin);
             if (candidate !== undefined) joinable = false;
-            const concreteParameter = origin.kind === "input" && origin.projection.length === 0 &&
-              input.native.isConcreteCallableParameter(origin.node)
-              ? input.records.sourceParameterAbi.get(origin.node)?.parameterCarrier : undefined;
+            const concreteStorage = origin.kind === "input" || origin.kind === "member"
+              ? input.native.isConcreteCallableStorage(origin) : false;
+            if (concreteStorage === undefined)
+              return fail("Native callable storage requires its exact precomputed storage classification.");
+            if (origin.kind === "member" && concreteStorage) {
+              const declared = input.records.runtimeCarrier.get(origin.node)?.carrier;
+              const contract = declared === undefined ? undefined : callableValueCarrier(declared);
+              const member = contract === undefined || !rustTargetTypeRefEquals(contract, current)
+                ? undefined : rustCallablePhysicalCarrier(contract);
+              if (contract === undefined || member === undefined)
+                return fail("Native callable member storage requires its exact declared physical contract.");
+              joinable = false;
+              if (physical !== undefined && !rustTargetTypeRefEquals(physical, member))
+                return fail("Native callable storage has distinct physical input alternatives requiring a sealed join.");
+              if (contract.kind === "target-named" && contract.id === rustCallableTargetId) erasedPhysicals.add(member);
+              physical = member;
+              alternatives.set(origin, member);
+              continue;
+            }
+            const concreteParameter = origin.kind === "input" && concreteStorage
+              ? logicalCarrierFor(origin, frontier.bindings) : undefined;
             const contract = candidate?.carrier ?? concreteParameter;
             const contractValue = contract === undefined ? undefined : callableValueCarrier(contract);
             const adapted = adaptedReferences.get(origin.node);
@@ -336,17 +354,14 @@ export function createRustNativeStorageSelection(
               // A callable parameter of an owner emitted as a closure value is a concrete runtime callable supplied by
               // the caller; its physical carrier is its declared parameter carrier, with no producer of its own.
               if (concreteParameter !== undefined) {
-                const generics = genericsFor(sourceEnclosingCallable(input.ast.parent(origin.node), input.ast), frontier.bindings, depth + 1);
-                if (generics.kind === "unresolved") return fail(generics.reason);
-                const boundParameter = substituteRustTargetGenerics(concreteParameter,
-                  generics.bindings.types, generics.bindings.lifetimes, generics.bindings.consts);
-                const element = rustOptionElementCarrier(boundParameter) ?? boundParameter;
-                const declared = rustCallablePhysicalCarrier(element);
-                if (declared === undefined || !rustCallableInvocationSignaturesMatch(current, callableValueCarrier(element) ?? element))
+                const element = callableValueCarrier(concreteParameter);
+                const declared = element === undefined ? undefined : rustCallablePhysicalCarrier(element);
+                if (declared === undefined || element === undefined || !rustCallableInvocationSignaturesMatch(current, element))
                   return fail("Native callable storage conflicts with its exact concrete callable parameter.");
                 joinable = false;
                 if (physical !== undefined && !rustTargetTypeRefEquals(physical, declared))
                   return fail("Native callable storage has distinct physical input alternatives requiring a sealed join.");
+                if (element.kind === "target-named" && element.id === rustCallableTargetId) erasedPhysicals.add(declared);
                 physical = declared;
                 alternatives.set(origin, declared);
                 continue;
