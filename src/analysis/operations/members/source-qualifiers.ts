@@ -4,7 +4,8 @@ import type { RustCheckedPropertySelectionInput } from "../../../policy/model/co
 import type { RustOperationsProviderOptions } from "./model.js";
 import type { ExtensionFactSubject } from "@tsonic/tsts";
 import { sourceCallableValueExpression } from "@tsonic/target-api/source";
-import { asNode } from "../../../policy/identities/selected-source.js";
+import { asNode, resolveSelectedProviderDeclaration } from "../../../policy/identities/selected-source.js";
+import { selectRustProviderExport } from "../../../policy/operations/provider-selection.js";
 import { isRustCallableCarrier } from "../../../target-model/types/index.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustProviderSourceReceiver } from "../../../target-model/records/finalized-operation.js";
@@ -29,10 +30,19 @@ export function selectRustProviderSourceReceiver(
     ? context.source.navigation.sourceReferenceFor(sourceCallableValueExpression(ast, expression, { typeAssertions: "transparent" }))
     : undefined;
   const declaration = selectedReceiver === undefined ? reference?.declaration : selectedReceiver.valueDeclaration;
+  const provider = declaration === undefined || !ast.is.IsVariableDeclaration(declaration) ? undefined
+    : resolveSelectedProviderDeclaration(context, declaration, [
+      { subject: selectedReceiver?.valueSymbol ?? reference?.symbol, precision: "exact" },
+    ]);
+  if (provider?.kind === "conflict") return undefined;
+  const exported = provider?.kind === "selected" && provider.identity.memberId === undefined &&
+    provider.identity.signatureId === undefined ? selectRustProviderExport(options.providerExports, provider.identity) : undefined;
+  const namespace = exported?.kind === "selected" && exported.row.declarationKind === "namespace" &&
+    provider?.kind === "selected" && exported.row.moduleSpecifier === provider.identity.moduleSpecifier;
   if (selectedReceiver?.intrinsic === "global-object" || declaration !== undefined && (
     ast.is.IsClassDeclaration(declaration) || ast.is.IsClassExpression(declaration) ||
     ast.is.IsModuleDeclaration(declaration) || ast.is.IsSourceFile(declaration) || ast.is.IsEnumDeclaration(declaration) ||
-    // A source-profile global (JS or native profile) qualifying a provider member is a compile-time qualifier.
+    namespace ||
     ast.is.IsVariableDeclaration(declaration) && options.sourceProfiles.profileForNode(declaration, ast) !== undefined &&
       (carrier === undefined || isRustCallableCarrier(carrier))
   )) return Object.freeze({ kind: "compile-time" });

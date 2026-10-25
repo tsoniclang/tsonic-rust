@@ -35,14 +35,19 @@ import { rustTargetOperationSupportsAssignment } from "../../../policy/operation
 
 import { selectRustProviderSourceReceiver } from "./source-qualifiers.js";
 import type { RustProviderSourceReceiver } from "../../../target-model/records/finalized-operation.js";
+import { assignmentTarget } from "../operator-inputs.js";
+
+type RustMemberWriteInput = Pick<RustCheckedOperatorSelectionInput, "expression" | "left" | "right">;
 
 export function mapSelectedAssignment(
-  request: RustCheckedOperatorSelectionInput,
+  request: RustMemberWriteInput,
   left: TargetTypeRef | undefined,
   right: TargetTypeRef | undefined,
   context: RustOperationAnalysisContext,
   options: RustOperationsProviderOptions,
 ): RustPolicySelection<RustCheckedOperationSelectionResult> | undefined {
+  const target = request.left === undefined ? undefined : assignmentTarget(context.ast, request.left);
+  request = { ...request, left: target };
   const selectedLeftFact = context.records.targetOperation.get(request.left);
   if (selectedLeftFact?.kind === "builtin-error-property" && rustTargetOperationSupportsAssignment(selectedLeftFact, context.typeDefinitions)) return undefined;
   if (selectedLeftFact?.kind === "source-field" ||
@@ -131,8 +136,8 @@ export function mapSelectedAssignment(
     ? undefined
     : context.ast.text(propertyNameNode);
   const assignmentSubjects = operationKind === "index-set"
-    ? indexNode === undefined || request.right === undefined ? undefined : [indexNode, request.right]
-    : request.right === undefined ? undefined : [request.right];
+    ? indexNode === undefined ? undefined : [indexNode, request.right]
+    : [request.right];
   if (assignmentSubjects === undefined) {
     return rejectSelectedOperation(request.expression, context, "RUST_SELECTED_ASSIGNMENT_EVIDENCE_MISSING", "Selected JavaScript assignment has no closed index/value source evidence.");
   }
@@ -140,8 +145,12 @@ export function mapSelectedAssignment(
     operationKind,
     receiverCarrier,
     argumentCarriers: assignmentSubjects.map((subject) =>
-      resolveRustTargetTypeRef(subject, context, options)),
-    argumentMatchScore: selectedArgumentMatchScore(assignmentSubjects, context, options),
+      subject === undefined ? right : resolveRustTargetTypeRef(subject, context, options)),
+    ...(request.right === undefined ? {} : {
+      argumentMatchScore: selectedArgumentMatchScore(assignmentSubjects.filter(
+        (subject): subject is import("@tsonic/tsts").Node => subject !== undefined,
+      ), context, options),
+    }),
     ...(jsIdentity.memberName === "index" && authoredPropertyKey !== undefined
       ? { authoredPropertyKey }
       : {}),
@@ -151,7 +160,8 @@ export function mapSelectedAssignment(
   }
   const valueIndex = operationKind === "index-set" ? 1 : 0;
   const valueCarrier = selection.parameterCarriers?.[valueIndex];
-  const selectedRight = normalizeSelectedOperationInputCarrier(request.right, right, valueCarrier, context, options);
+  const selectedRight = request.right === undefined ? right
+    : normalizeSelectedOperationInputCarrier(request.right, right, valueCarrier, context, options);
   if (valueCarrier === undefined || selectedRight === undefined ||
     !rustTargetTypeRefEquals(valueCarrier, selectedRight)) {
     return rejectSelectedOperation(request.expression, context, "RUST_SELECTED_ASSIGNMENT_VALUE_MISMATCH", "The selected JavaScript setter value does not match its finalized Rust carrier.");
@@ -202,7 +212,7 @@ export function mapSelectedAssignment(
 }
 
 function mapSelectedProviderAssignment(
-  request: RustCheckedOperatorSelectionInput,
+  request: RustMemberWriteInput,
   right: TargetTypeRef | undefined,
   identity: ProviderDeclarationIdentity,
   operationKind: RustRuntimeSetOperationKind,
@@ -230,8 +240,8 @@ function mapSelectedProviderAssignment(
     ? ElementAccessExpression_ArgumentExpression(context.ast, leftNode)
     : undefined;
   const sourceArguments = operationKind === "index-set"
-    ? indexNode === undefined || request.right === undefined ? undefined : [indexNode, request.right]
-    : request.right === undefined ? undefined : [request.right];
+    ? indexNode === undefined ? undefined : [indexNode, request.right]
+    : [request.right];
   if (sourceArguments === undefined) {
     return rejectSelectedOperation(
       request.expression,
@@ -241,7 +251,7 @@ function mapSelectedProviderAssignment(
     );
   }
   const rawArgumentCarriers = sourceArguments.map((argument) =>
-    resolveRustTargetTypeRef(argument, context, options));
+    argument === undefined ? right : resolveRustTargetTypeRef(argument, context, options));
   const instantiation = instantiateProviderOperationTemplate(
     providerOperationTemplate(selection.row, operationKind),
     {
@@ -270,7 +280,7 @@ function mapSelectedProviderAssignment(
   const sourceArgumentCarriers = sourceArguments.map((argument, index) => {
     const actual = rawArgumentCarriers[index];
     const expected = template.parameterCarriers?.[index];
-    const selected = normalizeSelectedOperationInputCarrier(
+    const selected = argument === undefined ? actual : normalizeSelectedOperationInputCarrier(
       argument,
       actual,
       expected,
@@ -278,11 +288,11 @@ function mapSelectedProviderAssignment(
       options,
     );
     if (rustTargetTypeRefEquals(selected, expected)) return selected;
-    const conversion = operationKind !== "property-set" || template.target.form !== "field" ||
+    const conversion = argument === undefined || operationKind !== "property-set" || template.target.form !== "field" ||
       actual === undefined || expected === undefined ? undefined
       : selectRustExactIntegerConversion(actual, rustOptionElementCarrier(actual) === undefined
         ? rustOptionElementCarrier(expected) ?? expected : expected);
-    if (conversion === undefined) return selected;
+    if (conversion === undefined || argument === undefined) return selected;
     recordRustValueCarrierReconciliation(context.records, context.requiredRecords, argument, { kind: "conversion",
       fact: { sourceCarrier: conversion.source, targetCarrier: conversion.target, conversion } });
     return expected;

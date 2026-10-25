@@ -483,10 +483,10 @@ export function probe(text: string, index: int32): boolean {
   assertNoTargetDiagnostics(result.diagnostics);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /pub fn probe\(text: &str, index: i32\)/u);
-  assert.match(text, /js_string::char_at\(core::convert::AsRef::<str>::as_ref\(text\), 0\.0\)\?/u);
+  assert.match(text, /js_string::char_at\(\s*core::convert::AsRef::<str>::as_ref\(text\),\s*0\.0,?\s*\)\?/u);
   assert.match(
     text,
-    /js_string::char_at\(core::convert::AsRef::<str>::as_ref\(text\), index\)\?/u,
+    /js_string::char_at\(\s*core::convert::AsRef::<str>::as_ref\(text\),\s*index,?\s*\)\?/u,
   );
   assert.match(text, /js_abi::JsDate::new\(\)/u);
 });
@@ -516,7 +516,7 @@ export function probe(text: string, values: readonly int32[]): boolean {
   assert.match(text, /values\.slice_to\(1\.0, 3\.0\)/u);
   assert.match(text, /copied\.join\("-"\)/u);
   assert.match(text, /js_string::slice_to\(\s*core::convert::AsRef::<str>::as_ref\(text\),\s*1\.0,\s*-1\.0,?\s*\)\?/u);
-  assert.match(text, /js_string::repeat\(core::convert::AsRef::<str>::as_ref\(text\), 2\.0\)\?/u);
+  assert.match(text, /js_string::repeat\(\s*core::convert::AsRef::<str>::as_ref\(text\),\s*2\.0,?\s*\)\?/u);
   assert.match(
     text,
     /let point: u32 =\s*js_string::code_point_at\(\s*core::convert::AsRef::<str>::as_ref\(text\),\s*0\.0,?\s*\)\s*\.unwrap_or\(0_u32\);/u,

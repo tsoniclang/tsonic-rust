@@ -1,8 +1,10 @@
 import type { AstReader, Node } from "@tsonic/tsts";
-import { Node_Expression } from "@tsonic/target-api/source";
+import { ElementAccessExpression_ArgumentExpression, Node_Expression } from "@tsonic/target-api/source";
 import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
+import { rustFixedArrayCarrierValue } from "../../target-model/types/index.js";
+import { isRustFinalizedSourceInput } from "../../target-model/operations/finalized-inputs.js";
 import { rustBorrowValueIsUnprojected } from "./borrowed-element-purity.js";
 
 export interface RustNativeStoragePathInput {
@@ -11,7 +13,9 @@ export interface RustNativeStoragePathInput {
   readonly navigation: RustAnalysisProgram["sourceNavigation"];
 }
 
-export type RustNativeStorageProjection = Node | string;
+export const rustNativeIndexStorageProjection = Symbol("native-index");
+
+export type RustNativeStorageProjection = Node | string | typeof rustNativeIndexStorageProjection;
 
 export function rustNativeStorageRoot(node: Node, input: RustNativeStoragePathInput): Node | undefined {
   const visited = new Set<Node>();
@@ -39,7 +43,33 @@ export function rustNativeStorageProjections(
       ? Object.freeze(projections) : undefined;
     if (kind === "KindThisExpression" || kind === "KindThisKeyword") return input.ast.getSourceFile(node) === root
       ? Object.freeze(projections) : undefined;
-    if (kind !== "KindParenthesizedExpression") {
+    if (kind === "KindElementAccessExpression") {
+      const receiver = Node_Expression(input.ast, node);
+      const index = ElementAccessExpression_ArgumentExpression(input.ast, node);
+      const operation = input.records.targetOperation.get(node);
+      const carrier = receiver === undefined ? undefined : input.records.runtimeCarrier.get(receiver)?.carrier;
+      const container = carrier?.kind === "reference" ? carrier.referent : carrier;
+      const element = container?.kind === "array" || container?.kind === "slice" ? container.element
+        : rustFixedArrayCarrierValue(container)?.element;
+      if (receiver === undefined || index === undefined || element === undefined ||
+        !rustTargetTypeRefEquals(element, input.records.runtimeCarrier.get(node)?.carrier) ||
+        !rustBorrowValueIsUnprojected(node, input.records)) return undefined;
+      if (operation?.kind === "provider-operation") {
+        const abi = operation.abi;
+        const targetArgument = abi.targetArguments[0];
+        if (abi.operationKind !== "indexer" || abi.target.form !== "index" ||
+          abi.result.kind !== "sync" || abi.result.conversion.kind !== "identity" ||
+          !rustTargetTypeRefEquals(abi.result.carrier, element) ||
+          abi.effects.evaluation !== "pure" || abi.effects.invocation !== "infallible" || abi.effects.safety !== "safe" ||
+          abi.sourceReceiver.kind !== "receiver" || !rustTargetTypeRefEquals(abi.sourceReceiver.carrier, carrier) ||
+          abi.targetReceiver.kind !== "input" || !rustTargetTypeRefEquals(abi.targetReceiver.input.sourceCarrier, carrier) ||
+          abi.targetReceiver.input.source.kind !== "receiver" || abi.targetReceiver.input.conversion.kind !== "identity" ||
+          abi.sourceArguments.length !== 1 || abi.sourceArguments[0]?.sourceIndex !== 0 ||
+          abi.targetArguments.length !== 1 || targetArgument === undefined || !isRustFinalizedSourceInput(targetArgument) ||
+          targetArgument.source.kind !== "argument" || targetArgument.source.sourceIndex !== 0) return undefined;
+      } else if (operation?.kind !== "fixed-index") return undefined;
+      projections.unshift(rustNativeIndexStorageProjection);
+    } else if (kind !== "KindParenthesizedExpression") {
       if (kind !== "KindPropertyAccessExpression") return undefined;
       const operation = input.records.targetOperation.get(node);
       if (operation?.kind !== "source-field" || operation.dispatch !== undefined) return undefined;
@@ -64,7 +94,9 @@ export function rustNativeStoragePathsDisjoint(
 ): boolean {
   const commonLength = Math.min(left.length, right.length);
   for (let index = 0; index < commonLength; index += 1) {
-    if (left[index] !== right[index]) return true;
+    if (left[index] !== right[index]) {
+      return left[index] !== rustNativeIndexStorageProjection && right[index] !== rustNativeIndexStorageProjection;
+    }
   }
   return false;
 }

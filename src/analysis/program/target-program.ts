@@ -50,12 +50,12 @@ import { analyzeRustSourceOutputIdentities } from "../names/source-output-identi
 import { analyzeRustRetainedCallableInputs } from "../callables/retained-inputs.js";
 import { analyzeRustGenericCallableErrors } from "../callables/generic-errors.js";
 
-import { rustNativeArgumentBorrowsRead } from "../ownership/uses.js";
+import { analyzeRustReadUses, rustNativeArgumentBorrowsRead } from "../ownership/uses.js";
 import { analyzeRustStatementCompletions } from "../control-flow/statement-completion.js";
 import { analyzeRustStatementExits } from "../control-flow/statement-exits.js";
 import { eraseRustCompileTimeVariableStatements } from "../control-flow/compile-time-statements.js";
 import { analyzeRustResourceScopes } from "../control-flow/resource-scopes.js";
-import { rustCarrierReferentMutationRequiresMutableBinding } from "../../policy/types/storage/referent-mutation.js";
+import { rustReferentWriteRequiresMutableBinding } from "../ownership/source-writes.js";
 
 /** Seals the analysis program into the data-only program the backend plans from. */
 export function analyzeRustTargetProgram(
@@ -151,19 +151,18 @@ export function analyzeRustAnalysisProgram(
     message: issue.message, evidence: issue.evidence,
   })));
   const objectRepresentations = context.objectRepresentations.seal();
-  context.records.mutatedReferents.finalizeBindings(declaration => {
+  context.records.mutatedReferents.finalizeBindings((declaration, writes) => {
     // Only local variables and parameters own a Rust binding whose mutability a referent write decides; an import
     // binding of a provider module object has no Rust binding.
     if (!context.ast.is.IsVariableDeclaration(declaration) && !context.ast.is.IsParameterDeclaration(declaration) &&
       !context.ast.is.IsBindingElement(declaration)) return false;
     // A variable declared by a provider or profile declaration file (`declare var process`) is not a Rust binding either.
     if (context.ast.getSourceFile(declaration)?.IsDeclarationFile === true) return false;
-    const carrier = context.records.runtimeCarrier.get(declaration)?.carrier;
-    if (carrier === undefined) failTargetAnalysisInvariant("tsonic-rust", "A mutated referent requires its finalized declaration carrier.", declaration);
-    return rustCarrierReferentMutationRequiresMutableBinding(carrier, selected => {
+    const isSharedObject = (selected: import("../../target-model/types/model.js").TargetTypeRef): boolean => {
       const representation = objectRepresentations.representationFor(context.projectTypes.definitionForCarrier(selected));
       return representation !== undefined && (representation.kind !== "value" || !representation.mutable);
-    });
+    };
+    return writes.map(write => rustReferentWriteRequiresMutableBinding(context.records, write, isSharedObject)).some(Boolean);
   });
   const foundation = analyzeRustFoundation({
     selected: configuration.foundation,
@@ -221,10 +220,13 @@ export function analyzeRustAnalysisProgram(
       }
       return { receivers: [], receiverFields: [], captures };
   };
+  const readUses = analyzeRustReadUses(context.ast, context.nativeNodes, records, context.typeDefinitions,
+    projectConstructions.ownsExternalArgument, context.structuralShapes.completed);
   const ownershipFlow = analyzeRustOwnershipFlow({
     source: context.source,
     storage: context.sourceStorage,
     nativeNodes: context.nativeNodes,
+    uses: readUses,
     capturesFor,
     sourceCallableFor: invocation => asSourceNode(records.selectedCall.get(invocation)?.sourceDeclaration, context.ast),
     mayBorrowArgument: (argument, reference) => !projectConstructions.ownsExternalArgument(argument) &&
@@ -327,9 +329,8 @@ export function analyzeRustAnalysisProgram(
   };
   const borrowEffects = analyzeRustBorrowEffects(borrowEffectsInput);
   if (borrowEffects.kind === "rejected") return rejectedTargetStage(borrowEffects.diagnostics);
-  const ownership = analyzeRustReadOwnership({ storage: context.sourceStorage, nativeNodes: context.nativeNodes, records,
+  const ownership = analyzeRustReadOwnership({ storage: context.sourceStorage, nativeNodes: context.nativeNodes, records, uses: readUses,
     flow: ownershipFlow.flow, borrowEffects: borrowEffects.effects, borrowEffectsInput, definitions: context.typeDefinitions,
-    ownsExternalArgument: projectConstructions.ownsExternalArgument,
     genericRequirements: declarationGenericRequirements.index, genericCallables: context.callableValues.generic,
     capturesFor, invocationTransfersCapture: owner => {
       const selected = lexicalFunctions.forDeclaration(owner);
@@ -478,11 +479,12 @@ export function analyzeRustAnalysisProgram(
     borrowedElementReads,
     genericCallableErrors: genericCallableErrors.value,
   };
-  const emission = finalizeRustNativeEmission(program, context, genericCallableErrors.value, ownershipFlow.flow);
+  const emission = finalizeRustNativeEmission(program, context, genericCallableErrors.value, ownershipFlow.flow, sourceStage.operationAttempts);
   if (emission.kind === "rejected") return emission;
   context.callableValues.publish();
   const finalFoundation = finalizeRustFoundation(program.foundation, context.records.minimumFoundation());
   if (finalFoundation.diagnostics.length !== 0) return rejectedTargetStage(finalFoundation.diagnostics);
+  context.sourceStorage.sealFormalMemberWriteDemands();
   context.records.seal(context.requiredRecords);
   return resolvedTargetStage(Object.freeze({
     ...program,

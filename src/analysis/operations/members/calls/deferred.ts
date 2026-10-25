@@ -25,7 +25,7 @@ import { rustJsStringTargetType, rustStringTargetType, rustOptionElementCarrier 
 import { selectRustValueCarrierReconciliation } from "../../../../policy/conversions/value-carrier-reconciliation.js";
 
 import type { RustPreparedDeferredCheckedCall } from "../../../../target-model/records/deferred-callbacks.js";
-import { callbackFallibleTemplate } from "../../../../policy/operations/members/deferred-callbacks.js";
+import { callbackFallibleTemplate, type RustPreparedCallbackEffects } from "../../../../policy/operations/members/deferred-callbacks.js";
 export function prepareRustDeferredCheckedCall(
   request: RustCheckedCallSelectionInput,
   deferred: Extract<
@@ -203,13 +203,12 @@ export function prepareRustDeferredCheckedCall(
 export function resolveRustPreparedCheckedCall(
   request: RustCheckedCallSelectionInput,
   prepared: RustPreparedDeferredCheckedCall,
-  callbackFallible: boolean,
+  callbackEffects: RustPreparedCallbackEffects,
   context: RustOperationAnalysisContext,
   options: RustOperationsProviderOptions,
 ): RustPolicySelection<RustCheckedCallSelectionResult> {
-  let template = callbackFallible
-    ? callbackFallibleTemplate(prepared)
-    : prepared.template;
+  const callbackFallible = callbackEffects.invocationEffects.localErrors || callbackEffects.invocationEffects.nativeErrors.length !== 0;
+  let template = callbackFallibleTemplate(prepared, callbackEffects);
   if (prepared.replacementCallback !== undefined) {
     const target = applyRustRegExpReplacementCallbackConversion(
       template.target,

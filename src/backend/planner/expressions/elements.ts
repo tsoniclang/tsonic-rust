@@ -53,7 +53,8 @@ function planElementAccessInner(node: Node, context: RustPlanContext, access: Ru
     failRustPlannerInvariant("Provider indexer access requires its finalized one-argument ABI.", node);
   if (!requireProviderArgumentPassingFacts(context, fact, [argument]))
     failRustPlannerInvariant("An admitted provider indexer requires its exact native passing records.", node);
-  const value = planProviderOperationExpression(context, fact, Node_Expression(context.input.program.source.ast, node), [argument], node, { resultUse: "value" });
+  const value = planProviderOperationExpression(context, fact, Node_Expression(context.input.program.source.ast, node), [argument], node,
+    { resultUse: access === "shared-place" ? "storage" : "value" });
   if (value === undefined) failRustPlannerInvariant("An admitted provider indexer requires its complete native operation syntax.", node);
   return finishProviderOperationExpression(context, fact, value, node);
 }

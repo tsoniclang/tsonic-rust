@@ -6,11 +6,13 @@ import { Node_Expression, isSourceCallableBodyBoundary, sourceEnclosingCallable,
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustClosureCaptureFact } from "../../target-model/records/operation-selections.js";
 import type { RustLexicalFunctionCapture, RustLexicalFunctionQueries } from "../../target-model/records/lexical-functions.js";
+import type { RustReadUse } from "../../target-model/records/ownership.js";
 
 export interface RustOwnershipFlowInput {
   readonly source: TargetSourceProgram;
   readonly storage: SourceStorageQueries;
   readonly nativeNodes: readonly Node[];
+  readonly uses: ReadonlyMap<Node, RustReadUse>;
   readonly sourceCallableFor: (invocation: Node) => Node | undefined;
   readonly capturesFor: (closure: Node) => RustClosureCaptureFact | undefined;
   readonly isOnceCallable: (closure: Node) => boolean;
@@ -183,7 +185,7 @@ function bindingCanTransfer(binding: Node, callable: Node, input: RustOwnershipF
     const owner = sourceEnclosingCallable(use.reference, ast);
     if (owner !== undefined && owner !== callable) return input.capturesFor(owner)?.captures.some(capture =>
       capture.storage === "value" && sourceNodesEqual(ast, capture.declaration, binding)) === true;
-    if (use.role !== "value" || awaitedReads.has(use.reference)) return true;
+    if (use.role !== "value" || awaitedReads.has(use.reference) || input.uses.has(use.reference)) return true;
     const disposition = sourceExpressionResultDisposition(ast, use.reference);
     return disposition.kind === "consumed" && ast.is.IsThrowStatement(disposition.use);
   }));

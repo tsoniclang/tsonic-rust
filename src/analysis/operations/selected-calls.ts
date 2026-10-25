@@ -12,6 +12,8 @@ import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { closedMetadataEquals } from "../../target-model/metadata/closed-data.js";
 import type { RustOperationAttempt } from "../program/operation-attempts.js";
 import { requireRustRecord } from "../program/records/required-records.js";
+import type { RustPreparedCallbackEffects } from "../../policy/operations/members/deferred-callbacks.js";
+import { mergeRustErrorEffects, rustErrorEffectsEqual } from "../errors/error-effects.js";
 
 export function selectRustCheckedCall(
   request: RustCheckedCallSelectionInput,
@@ -30,7 +32,7 @@ function recordCheckedCallSelection(
   selection: RustPolicySelection<RustCheckedCallSelectionResult>,
   context: RustOperationAnalysisContext,
   options: RustOperationsProviderOptions,
-  prepared?: { readonly value: RustPreparedDeferredCheckedCall; readonly callbackFallible: boolean },
+  prepared?: { readonly value: RustPreparedDeferredCheckedCall; readonly callbackEffects: RustPreparedCallbackEffects },
 ): RustPolicySelection<RustCheckedCallSelectionResult> {
   if (selection.kind !== "accept" || selection.value.kind === "source" || selection.value.kind === "deferred-callback") {
     return admitRustOperationSelection(request.source.call, selection, context);
@@ -69,21 +71,32 @@ function recordCheckedCallSelection(
 export function finalizeRustPreparedCheckedCall(
   request: RustCheckedCallSelectionInput,
   prepared: RustPreparedDeferredCheckedCall,
-  callbackFallible: boolean,
+  callbackEffects: RustPreparedCallbackEffects,
   context: RustOperationAnalysisContext,
   options: RustOperationsProviderOptions,
 ): RustPolicySelection<RustCheckedCallSelectionResult> {
   context.records.assertOpen();
+  if (callbackEffects === null || typeof callbackEffects !== "object" || callbackEffects.invocationOwner === undefined ||
+    callbackEffects.invocationEffects === undefined || callbackEffects.implementationEffects === undefined)
+    failTargetAnalysisInvariant("tsonic-rust", "A prepared callback requires its complete invocation and implementation effect contract.", request.source.call);
+  const invocationEffects = mergeRustErrorEffects([callbackEffects.invocationEffects]);
+  const implementationEffects = mergeRustErrorEffects([callbackEffects.implementationEffects]);
+  if (invocationEffects === undefined || implementationEffects === undefined)
+    failTargetAnalysisInvariant("tsonic-rust", "A prepared callback requires consistent exact native error effects.", request.source.call);
+  const selectedEffects = Object.freeze({ invocationOwner: callbackEffects.invocationOwner, invocationEffects, implementationEffects });
   const completed = completedCall(request, context, options);
   if (completed !== undefined) {
-    if (completed.prepared === undefined || completed.prepared.callbackFallible !== callbackFallible ||
+    if (completed.prepared === undefined ||
+      completed.prepared.callbackEffects.invocationOwner !== callbackEffects.invocationOwner ||
+      !rustErrorEffectsEqual(completed.prepared.callbackEffects.invocationEffects, invocationEffects) ||
+      !rustErrorEffectsEqual(completed.prepared.callbackEffects.implementationEffects, implementationEffects) ||
       !preparedCallsEqual(completed.prepared.value, prepared)) {
       failTargetAnalysisInvariant("tsonic-rust", "Conflicting Rust completed prepared call for one exact source subject.", request.source.call);
     }
     return completed.selection;
   }
-  const selection = resolveRustPreparedCheckedCall(request, prepared, callbackFallible, context, options);
-  return recordCheckedCallSelection(request, selection, context, options, { value: prepared, callbackFallible });
+  const selection = resolveRustPreparedCheckedCall(request, prepared, selectedEffects, context, options);
+  return recordCheckedCallSelection(request, selection, context, options, { value: prepared, callbackEffects: selectedEffects });
 }
 
 function completedCall(request: RustCheckedCallSelectionInput, context: RustOperationAnalysisContext,

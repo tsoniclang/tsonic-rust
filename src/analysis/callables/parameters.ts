@@ -5,7 +5,6 @@ import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustCallableParameterProducer } from "../program/records/parameter-emission.js";
 import { isValidRustIdentifier } from "../../target-model/names/identifiers.js";
-import { rustCarrierReferentMutationRequiresMutableBinding } from "../../policy/types/storage/referent-mutation.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { requireRustRecord, type RustRequiredRecord } from "../program/records/required-records.js";
 import { selectRustOptionalDefaultStorage } from "../../policy/conversions/optional-storage.js";
@@ -118,12 +117,8 @@ export function analyzeRustCallableParameterEmission(input: {
     if (storage !== undefined && !rustTargetTypeRefEquals(abi.valueCarrier, storage.valueCarrier))
       failTargetAnalysisInvariant("tsonic-rust", "An admitted promoted parameter requires its exact finalized value carrier.", parameter);
     const owned = carrier.kind !== "pointer" && carrier.kind !== "reference";
-    const mutableReferent = rustCarrierReferentMutationRequiresMutableBinding(carrier, selected => {
-      const representation = program.objectRepresentations.representationFor(program.projectTypes.definitionForCarrier(selected));
-      return representation !== undefined && representation.kind !== "value";
-    });
     const mutable = pattern === undefined && storage === undefined && (program.records.mutatedBinding.get(parameter) !== undefined ||
-      owned && mutableReferent && program.records.mutatedReferent.get(parameter) !== undefined);
+      owned && program.records.mutatedReferentBinding.get(parameter) !== undefined);
     const initializer = abi.form === "default" ? ast.as.AsParameterDeclaration(parameter)?.Initializer : undefined;
     if (abi.form === "default" && initializer === undefined) failTargetAnalysisInvariant("tsonic-rust", "A native default-parameter ABI requires its exact authored initializer.", parameter);
     input.producer.parameter(parameter, { carrier, name, pattern, sourceCarrier, storage, mutable,
