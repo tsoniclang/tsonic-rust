@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { test } from "node:test";
 
 import {
@@ -221,7 +222,7 @@ export function calculate(left: number, right: number): number { return left ${o
 }
 
 for (const surfaces of [[], ["js"]]) {
-  test(`compound snapshots retain local and indexed stores through failure without copying owners (${surfaces[0] ?? "native"})`, { timeout: 300_000 }, () => {
+  test(`compound snapshots retain local and indexed stores${surfaces.length === 0 ? " through failure" : ""} without copying owners (${surfaces[0] ?? "native"})`, { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces, packages: [acmeTestingPackage()],
       target: { id: "rust", options: { outputType: "bin", crateName: "compound_previous_acquisition" } },
       files: { "index.ts": `
@@ -231,19 +232,19 @@ export function main(): void {
   let scalar = 12n;
   const sum = scalar += 3n;
   check(sum === 15n && scalar === 15n);
-  let failed = false;
+  ${surfaces.length === 0 ? `let failed = false;
   try { const impossible = scalar /= 0n; check(impossible === 0n); }
-  ${surfaces.length === 0 ? "catch { failed = true; }" : "catch (error) { failed = error instanceof RangeError; }"}
-  check(failed && scalar === 15n);
+  catch { failed = true; }
+  check(failed && scalar === 15n);` : ""}
   const values = [7n];
   let indexReads = 0;
   const index = (): number => { indexReads += 1; return 0; };
   const accumulated = values[index()] += values[0];
   check(accumulated === 14n && values[0] === 14n && indexReads === 1);
-  failed = false;
+  ${surfaces.length === 0 ? `failed = false;
   try { const impossible = values[index()] /= 0n; check(impossible === 0n); }
-  ${surfaces.length === 0 ? "catch { failed = true; }" : "catch (error) { failed = error instanceof RangeError; }"}
-  check(failed && values[0] === 14n && indexReads === 2);
+  catch { failed = true; }
+  check(failed && values[0] === 14n && indexReads === 2);` : ""}
   ${surfaces.length === 0 ? "" : "const fresh = make()[0] += 2n;\n  check(fresh === 5n);"}
   let word = "left";
   const concatenated = word += "!";
@@ -260,6 +261,55 @@ main();
     validateGeneratedProject(`compound-previous-acquisition-${surfaces[0] ?? "native"}`, result.artifacts, { run: true });
   });
 }
+
+test("JS catch-contained compound failures pin the local protected-region admission gap", () => {
+  // C697: the existing errorRegions owner restores this positive in its in-Keel root group.
+  const source = `
+import { check } from "@acme/testing";
+function make(): bigint[] { return [3n]; }
+export function main(): void {
+  let scalar = 12n;
+  const sum = scalar += 3n;
+  check(sum === 15n && scalar === 15n);
+  let failed = false;
+  try { const impossible = scalar /= 0n; check(impossible === 0n); }
+  catch (error) { failed = error instanceof RangeError; }
+  check(failed && scalar === 15n);
+  const values = [7n];
+  let indexReads = 0;
+  const index = (): number => { indexReads += 1; return 0; };
+  const accumulated = values[index()] += values[0];
+  check(accumulated === 14n && values[0] === 14n && indexReads === 1);
+  failed = false;
+  try { const impossible = values[index()] /= 0n; check(impossible === 0n); }
+  catch (error) { failed = error instanceof RangeError; }
+  check(failed && values[0] === 14n && indexReads === 2);
+  const fresh = make()[0] += 2n;
+  check(fresh === 5n);
+  let word = "left";
+  const concatenated = word += "!";
+  check(concatenated === "left!" && word === "left!");
+  const words = ["native"];
+  const indexedWord = words[0] += "!";
+  check(indexedWord === "native!" && words[0] === "native!");
+}
+main();`;
+  assert.equal(createHash("sha256").update(source).digest("hex"),
+    "fb7fed857b982a313bb4927bfe380d92545a2ed0c937a84d0c5ba7e7c0f8db18",
+    "the complete stronger-catch source is unchanged from the observed refusal");
+  const { result } = compileRust({ surfaces: ["js"], packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "compound_previous_acquisition" } },
+    files: { "index.ts": source } });
+  assert.equal(result.diagnostics.length, 2, "both local protected compound failures retain their source refusals");
+  for (const [index, issue] of result.diagnostics.entries()) {
+    assert.equal(issue.code, "RUST_UNSUPPORTED_AST", `${index}: local region admission refuses before planning`);
+    assert.equal(issue.message,
+      "Fallible operator calls require a finalized fallible lowering context. Node kind: KindBinaryExpression.",
+      `${index}: the refusal identifies the finalized local region gap`);
+  }
+  assert.equal(result.program === undefined && result.plan === undefined && result.artifacts.length === 0, true,
+    "the protected-region refusal never publishes a program, native plan or partial artifacts");
+});
 
 for (const { name, source, message } of [
   { name: "temporary native element compound assignment", source: `
