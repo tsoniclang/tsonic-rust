@@ -288,22 +288,21 @@ function selectJsSurfaceOperationForDemand(
               ),
             },
       };
+  const carrierRequirements = Object.freeze((row.requirements ?? []).flatMap(requirement => {
+    if (!(demand === "operation" && requirement.capability === "clone" ||
+      requirement.capability === "numeric-parameter" || requirement.capability === "number-parameter")) return [];
+    return [Object.freeze({
+      carrier: resolveCarrierRef(requirement.carrier, bindings)!,
+      requirement: requirement.capability === "clone" ? "clone" as const
+        : requirement.capability === "number-parameter" ? "number-predicate" as const : "source-numeric" as const,
+      source: requirement.source,
+    })];
+  }));
   return {
     fact: {
       kind: "provider-operation",
       operationId,
-      ...((row.requirements ?? []).some(requirement => requirement.capability === "numeric-parameter" ||
-        requirement.capability === "number-parameter" ||
-        demand === "operation" && requirement.capability === "clone")
-        ? { carrierRequirements: Object.freeze((row.requirements ?? [])
-            .filter(requirement => demand === "operation" && requirement.capability === "clone" || requirement.capability === "numeric-parameter" ||
-              requirement.capability === "number-parameter")
-            .map(requirement => Object.freeze({
-              carrier: resolveCarrierRef(requirement.carrier, bindings)!,
-              requirement: requirement.capability === "clone" ? "clone" as const
-                : requirement.capability === "number-parameter" ? "number-predicate" as const : "source-numeric" as const,
-            }))) }
-        : {}),
+      ...(carrierRequirements.length === 0 ? {} : { carrierRequirements }),
       operationKind: row.shape.operationKind,
       target: materializeTarget(target, copyReference),
       ...(numericRestCarrier === undefined ? {} : {

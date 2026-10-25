@@ -1,7 +1,7 @@
 import { createRustRecordFixture } from "../../../helpers/records.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
-import { Node_Expression } from "@tsonic/target-api/source";
+import { Node_Expression, sourceEnclosingCallable } from "@tsonic/target-api/source";
 import { analyzeRust } from "../../../helpers/rust-session.mjs";
 
 
@@ -14,6 +14,79 @@ import { selectRustProviderSourceOccurrence } from "../../../../dist/analysis/op
 import { analyzeRustProviderEvaluation } from "../../../../dist/analysis/storage/provider-evaluation.js";
 import { createRustProviderEvaluationProducer } from "../../../../dist/analysis/program/records/provider-evaluation.js";
 import { analyzeRustProviderMutableEmission } from "../../../../dist/analysis/storage/provider-mutable-emission.js";
+
+for (const surfaces of [[], ["js"]]) {
+  test(`${surfaces.length === 0 ? "native" : "js"} provider index evaluation preserves a native slice identity without treating its contents as stable`, () => {
+    const { program } = analyzeRust({ surfaces, files: { "index.ts": `
+function change(values: string[]): number { values[0] = "after"; return 0; }
+export function direct(values: string[]): boolean { return values[change(values)]! === "after"; }
+function replace(values: string[][]): number { values[0] = ["after"]; return 0; }
+export function nested(values: string[][]): boolean { return values[0]![replace(values)]! === "before"; }
+` } });
+    const { ast } = program.source;
+    const select = name => {
+      const source = program.physicalEmissionContexts.sourceOccurrences.find(occurrence => {
+        const owner = sourceEnclosingCallable(occurrence.node, ast);
+        return occurrence.operation.abi.operationKind === "indexer" && owner !== undefined &&
+          ast.text(ast.name(owner)) === name && occurrence.slots.some(slot =>
+            slot.source.kind === "argument" && ast.is.IsCallExpression(slot.node));
+      });
+      assert.equal(source !== undefined, true, `${name}: the original effectful native index is selected`);
+      const selected = program.records.providerEvaluation.get(source.node, source.operation);
+      assert.equal(selected !== undefined, true, `${name}: its evaluation is published before sealing`);
+      const receiver = selected.slots.find(row => row.slot.source.kind === "receiver");
+      const argument = selected.slots.find(row => row.slot.source.kind === "argument" && ast.is.IsCallExpression(row.slot.node));
+      assert.equal(receiver !== undefined && argument !== undefined, true, `${name}: original receiver and index identities are retained`);
+      assert.equal(selected.effects.has(argument.slot.key), true, `${name}: the real index mutation remains effectful`);
+      return { source, selected, receiver, argument };
+    };
+    const direct = select("direct");
+    const parameter = program.records.sourceParameterAbi.get(direct.receiver.slot.node);
+    assert.equal(parameter !== undefined, true, "the actual parameter contract is published on its use");
+    assert.equal(program.ownership.reads.get(direct.receiver.slot.node)?.stablePlace, false,
+      "mutating slice contents are not mislabeled as immutable value storage");
+    const context = { input: { program }, sourceFile: ast.getSourceFile(direct.source.node), diagnostics: [] };
+    const planned = [];
+    const directScope = planRustProviderEvaluationScope(context, direct.source.operation, direct.source.node,
+      direct.receiver.slot.node, [direct.argument.slot.node], subject => {
+        planned.push(subject);
+        return { kind: "path", path: "prepared_receiver" };
+      },
+      () => undefined);
+    if (surfaces.length === 0) {
+      assert.equal(parameter.mode, "mut-ref", "the native formal is an exclusive reference, not an owned array");
+      assert.equal(parameter.parameterCarrier.kind, "reference", "the formal carries the actual native reference");
+      assert.equal(parameter.parameterCarrier.mutable, true, "the native formal supports its declared content writes");
+      assert.equal(parameter.parameterCarrier.referent.kind, "slice", "the native slice cannot replace its allocation through this formal");
+      assert.equal(parameter.entryConversion, undefined, "no conversion creates a different source owner");
+      assert.equal(direct.receiver.borrowAcross.has(direct.argument.slot.key), false,
+        "the existing native slice identity does not require an owned receiver snapshot");
+      assert.equal(directScope.kind, "none", "native indexing evaluates its index before the final element reborrow");
+      assert.equal(planned.length, 0, "the direct native receiver and index require no owned preparation");
+    } else {
+      assert.equal(parameter.mode, "value", "the explicit JS provider uses its actual native handle, not an invented slice ABI");
+      assert.equal(direct.receiver.borrowAcross.has(direct.argument.slot.key), true,
+        "the native slice exception cannot be inferred for a distinct provider representation");
+      assert.equal(directScope.kind, "selected", "the actual provider retains its source receiver before index effects");
+      assert.equal(planned.length, 1, "the handle is prepared exactly once by its existing source recipe");
+      assert.equal(planned[0] === direct.receiver.slot.node, true, "only the original source receiver is prepared");
+      assert.equal(directScope.overrides.sourceValues.has(direct.receiver.slot.node), true,
+        "the actual provider handle is not silently replaced with a borrowed native slice");
+    }
+    const nested = select("nested");
+    assert.equal(program.records.sourceParameterAbi.get(nested.receiver.slot.node), undefined,
+      "a projected inner allocation is not the outer parameter's native slice identity");
+    assert.equal(nested.receiver.borrowAcross.has(nested.argument.slot.key), true,
+      "replacing the inner allocation still requires its first receiver value");
+    const nestedScope = planRustProviderEvaluationScope({ ...context, sourceFile: ast.getSourceFile(nested.source.node) },
+      nested.source.operation, nested.source.node, nested.receiver.slot.node, [nested.argument.slot.node],
+      () => ({ kind: "path", path: "first_receiver" }), () => undefined);
+    assert.equal(nestedScope.kind, "selected", "the actual inner-allocation replacement retains its native snapshot scope");
+    assert.equal(nestedScope.steps.length, 1, "the first receiver allocation is preserved exactly once");
+    assert.equal(nestedScope.overrides.sourceValues.has(nested.receiver.slot.node), true,
+      "later index effects consume the retained inner owner rather than the replacement allocation");
+  });
+}
 
 test("provider evaluation retains exact existing borrows across readonly representation changes", () => {
   const { program } = analyzeRust({ surfaces: ["js"], files: { "index.ts": `

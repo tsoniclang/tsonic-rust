@@ -18,7 +18,8 @@ export function selectRustRecordObjectOperation(
       { form: "call", path: kind === "has-own" ? "rt::Record::contains_key" : `js_abi::record_${kind}`,
         argModes: parameters.map(() => "ref") },
     parameterCarriers: parameters, resultCarrier: result,
-    ...(kind === "keys" || kind === "has-own" ? {} : { carrierRequirements: [{ carrier: value, requirement: "clone" as const }] }),
+    ...(kind === "keys" || kind === "has-own" ? {} : { carrierRequirements: [{ carrier: value, requirement: "clone" as const,
+      source: { kind: "argument" as const, sourceIndex: kind === "assign" ? 1 : 0, projection: [1] } }] }),
     isAsync: false, isFallible: false, errorBoundary: "none",
   };
 }

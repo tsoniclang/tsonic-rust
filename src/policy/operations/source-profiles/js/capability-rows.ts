@@ -15,7 +15,7 @@ const symbolRows: readonly JsOperationRowData[] = [
 ];
 
 const weakCollectionRows: readonly JsOperationRowData[] = [
-  { owner: "WeakMap", member: "get", operationKind: "call", lane: "weak-map", requirements: [{ carrier: { ref: "weak-value" }, capability: "clone" }, { carrier: { ref: "weak-key" }, capability: "object-identity" }], shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "get", argModes: ["ref"] }, result: { ref: "option-of-weak-value" }, sourceResult: { ref: "weak-value" }, sourceAbsence: "undefined", params: [{ ref: "weak-key" }] } },
+  { owner: "WeakMap", member: "get", operationKind: "call", lane: "weak-map", requirements: [{ carrier: { ref: "weak-value" }, capability: "clone", source: { kind: "receiver", projection: [1] } }, { carrier: { ref: "weak-key" }, capability: "object-identity" }], shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "get", argModes: ["ref"] }, result: { ref: "option-of-weak-value" }, sourceResult: { ref: "weak-value" }, sourceAbsence: "undefined", params: [{ ref: "weak-key" }] } },
   { owner: "WeakMap", member: "has", operationKind: "call", lane: "weak-map", requirements: [{ carrier: { ref: "weak-key" }, capability: "object-identity" }], shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "has", argModes: ["ref"] }, result: { ref: "bool" }, params: [{ ref: "weak-key" }] } },
   { owner: "WeakMap", member: "delete", operationKind: "call", lane: "weak-map", requirements: [{ carrier: { ref: "weak-key" }, capability: "object-identity" }], shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "delete", argModes: ["ref"] }, result: { ref: "bool" }, params: [{ ref: "weak-key" }] } },
   { owner: "WeakMap", member: "set", operationKind: "call", lane: "weak-map", requirements: [{ carrier: { ref: "weak-key" }, capability: "object-identity" }], shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "set" }, result: { ref: "receiver" }, params: [{ ref: "weak-key" }, { ref: "weak-value" }] } },
@@ -272,7 +272,7 @@ const promiseRows: readonly JsOperationRowData[] = [
     member,
     operationKind: "call",
     lane: "promise",
-    requirements: [{ carrier: { ref: "promise-input-output" }, capability: "clone" }],
+    requirements: [{ carrier: { ref: "promise-input-output" }, capability: "clone", source: { kind: "argument", sourceIndex: 0, projection: [0, 0] } }],
     returnedFuture: { awaiting: "fallible", errorBoundary: "js-rejection" },
     shape: {
       op: "operation",
@@ -291,7 +291,7 @@ const promiseRows: readonly JsOperationRowData[] = [
     member: "all",
     operationKind: "call",
     lane: "promise",
-    requirements: [{ carrier: { ref: "promise-input-output" }, capability: "clone" }],
+    requirements: [{ carrier: { ref: "promise-input-output" }, capability: "clone", source: { kind: "argument", sourceIndex: 0, projection: [0, 0] } }],
     returnedFuture: { awaiting: "fallible", errorBoundary: "js-rejection" },
     shape: {
       op: "operation",
@@ -306,7 +306,7 @@ const promiseRows: readonly JsOperationRowData[] = [
     member: "allSettled",
     operationKind: "call",
     lane: "promise",
-    requirements: [{ carrier: { ref: "promise-input-output" }, capability: "clone" }],
+    requirements: [{ carrier: { ref: "promise-input-output" }, capability: "clone", source: { kind: "argument", sourceIndex: 0, projection: [0, 0] } }],
     returnedFuture: { awaiting: "infallible", errorBoundary: "none" },
     shape: {
       op: "operation",
@@ -322,7 +322,7 @@ const promiseRows: readonly JsOperationRowData[] = [
     operationKind: "call",
     lane: "promise",
     variant: "default",
-    requirements: [{ carrier: { ref: "promise-output" }, capability: "clone" }],
+    requirements: [{ carrier: { ref: "promise-output" }, capability: "clone", source: { kind: "receiver", projection: [0] } }],
     returnedFuture: { awaiting: "fallible", errorBoundary: "js-rejection" },
     shape: {
       op: "operation",
@@ -337,7 +337,7 @@ const promiseRows: readonly JsOperationRowData[] = [
     operationKind: "call",
     lane: "promise",
     variant: "callback",
-    requirements: [{ carrier: { ref: "promise-output" }, capability: "clone" }],
+    requirements: [{ carrier: { ref: "promise-output" }, capability: "clone", source: { kind: "receiver", projection: [0] } }],
     callback: {
       shape: "direct",
       sourceArgumentIndex: 0,

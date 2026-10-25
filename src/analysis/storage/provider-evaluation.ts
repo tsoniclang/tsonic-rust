@@ -10,7 +10,8 @@ import { rustProviderInputBorrowMode } from "../../policy/operations/members/inp
 import { rustContextualRuntimeConversionContract } from "../../policy/conversions/contextual.js";
 import { rustValueCarrierBeforeContextualConversion } from "../conversions/value-carrier-queries.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
-import { rustJsErrorTargetType } from "../../target-model/types/index.js";
+import { rustJsErrorTargetType, rustSliceElementCarrier } from "../../target-model/types/index.js";
+import { rustParameterModeForCarriers } from "../../policy/ownership/source-parameter-contracts.js";
 import { rustBorrowPureOperation } from "./borrowed-element-purity.js";
 
 export function analyzeRustProviderEvaluation(program: Omit<RustAnalysisProgram, "reachability">,
@@ -50,7 +51,9 @@ export function analyzeRustProviderEvaluation(program: Omit<RustAnalysisProgram,
       const guarded = guardedBorrow(slot.node);
       const borrowAcross = new Set<string>();
       const mutableAcross = new Set<string>();
-      const hasShared = inputs.some(input => rustProviderInputBorrowMode(input) === "ref" && !existingBorrow(input, slot.node));
+      const hasShared = inputs.some(input => rustProviderInputBorrowMode(input) === "ref" &&
+        !existingBorrow(input, slot.node, source.operation.abi.target.form === "index" &&
+          source.operation.abi.targetReceiver.kind === "input" && source.operation.abi.targetReceiver.input === input));
       const hasMutable = inputs.some(input => rustProviderInputBorrowMode(input) === "mut-ref");
       for (const later of source.slots.slice(index + 1)) {
         if (hasShared && !guarded && ownership?.borrowedAcross.has(later.node) !== true) borrowAcross.add(later.key);
@@ -139,14 +142,15 @@ export function analyzeRustProviderEvaluation(program: Omit<RustAnalysisProgram,
     return false;
   }
 
-  function existingBorrow(input: RustFinalizedSourceInput, node: Node): boolean {
+  function existingBorrow(input: RustFinalizedSourceInput, node: Node, nativeIndex: boolean): boolean {
     if (input.mode === "value" && input.conversion.kind === "identity" && input.sourceCarrier.kind === "reference" && !input.sourceCarrier.mutable &&
       rustTargetTypeRefEquals(program.records.runtimeCarrier.get(node)?.carrier, input.sourceCarrier)) return true;
     if (rustProviderInputBorrowMode(input) === "ref" && program.ownership.reads.get(node)?.stablePlace === true) return true;
     const parameter = program.records.sourceParameterAbi.get(node);
-    if (parameter?.mode === "ref" && rustProviderInputBorrowMode(input) === "ref" && parameter.entryConversion === undefined &&
-      parameter.parameterCarrier.kind === "reference" && !parameter.parameterCarrier.mutable &&
-      rustTargetTypeRefEquals(parameter.valueCarrier, input.sourceCarrier) && rustTargetTypeRefEquals(parameter.parameterCarrier.referent, input.sourceCarrier)) return true;
+    if (parameter !== undefined && rustProviderInputBorrowMode(input) === "ref" && parameter.entryConversion === undefined &&
+      (parameter.mode === "ref" || nativeIndex && parameter.mode === "mut-ref" && rustSliceElementCarrier(parameter.parameterCarrier) !== undefined) &&
+      rustTargetTypeRefEquals(parameter.valueCarrier, input.sourceCarrier) &&
+      rustParameterModeForCarriers(parameter.valueCarrier, parameter.parameterCarrier) === parameter.mode) return true;
     return parameter?.mode === input.mode && rustTargetTypeRefEquals(parameter.parameterCarrier, input.parameterCarrier);
   }
 

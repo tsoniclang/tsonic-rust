@@ -19,7 +19,7 @@ import type {
   RustIterationCompletion, RustRuntimeSetterCompletion, RustStatementCompletionRecords,
 } from "../../target-model/records/statement-completion.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
-import { isRustBoolCarrier, isRustUnitCarrier } from "../../target-model/types/index.js";
+import { isRustBoolCarrier, isRustStringCarrier, isRustUnitCarrier } from "../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustRecordCarrierValue } from "../../target-model/types/carriers/records.js";
 import { isRustAssignmentOperator } from "../../target-model/syntax/tokens.js";
@@ -341,9 +341,12 @@ export function analyzeRustStatementCompletions(input: RustStatementCompletionIn
     const right = ast.is.IsBinaryExpression(node) ? BinaryExpression_Right(ast, node) : undefined;
     if (operation.operator !== "=" && read === undefined)
       failTargetAnalysisInvariant("tsonic-rust", "An admitted compound assignment requires its selected previous-value ownership.", node);
+    const stringBorrow = operation.operator === "+=" && isRustStringCarrier(operation.resultCarrier) &&
+      read?.value.kind === "borrow" && right !== undefined && read.borrowedAcross.has(right);
     const borrowed = operation.kind === "operator-call" && operation.operandModes[0] === "ref" && read?.value.kind === "borrow" &&
       right !== undefined && read.borrowedAcross.has(right);
-    const previous = borrowed ? read!.value : read?.snapshot ?? read?.source ?? { kind: "copy" as const };
+    const previous = stringBorrow ? Object.freeze({ kind: "borrow" as const, mutable: false })
+      : borrowed ? read!.value : read?.snapshot ?? read?.source ?? { kind: "copy" as const };
     const value = selectRustAssignmentValue(operation, previous);
     if (value === undefined) failTargetAnalysisInvariant("tsonic-rust", "An admitted assignment requires its selected native value operation.", node);
     publish(assignmentValues, node, value);

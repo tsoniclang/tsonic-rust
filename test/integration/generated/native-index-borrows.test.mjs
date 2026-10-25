@@ -116,11 +116,11 @@ fn replacing_the_inner_allocation_preserves_receiver_evaluation_and_first_value(
 fn a_real_owning_call_preserves_its_first_value_and_native_snapshot_cost() {
     let generated_value = String::from("before");
     let native_value = String::from("before");
-    let (generated, generated_cost) = measure(|| index::consuming(generated_value).unwrap());
+    let (generated, generated_cost) = measure(|| index::consuming(generated_value));
     let (native, native_cost) = measure(|| {
         let before = native_value.clone();
         let mut output = native_value;
-        output.push_str("!");
+        output.push('!');
         before == output
     });
     assert!(!generated);
