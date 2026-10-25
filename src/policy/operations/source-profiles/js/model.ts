@@ -1,4 +1,4 @@
-import type { RustBorrowedIndexOperation, RustCallbackOperationTemplate, RustProviderOperationForm, RustProviderOperationTemplate, RustRuntimeSetTemplate, RustValueConversion } from "../../../../target-model/operations/model.js";
+import type { RustBorrowedIndexOperation, RustCallbackOperationTemplate, RustOperationCarrierRequirement, RustProviderOperationForm, RustProviderOperationTemplate, RustRuntimeSetTemplate, RustValueConversion } from "../../../../target-model/operations/model.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import type { RustJsTypedArrayName } from "../../../../target-model/types/index.js";
 import { rustProviderOperationFormDeclaresWritableInput } from "../../../../target-model/operations/form-inputs.js";
@@ -207,6 +207,14 @@ export type JsCarrierRef =
 
 type JsCarrierCapability = "numeric" | "integer" | "numeric-parameter" | "number-parameter" | "optional-number" | "clone" | "stringifiable" | "js-equality" | "project-identity-equality" | "object-identity" | "freezable-object" | "empty-object-domain";
 
+type JsCarrierRequirement = { readonly carrier: JsCarrierRef } & (
+  | {
+      readonly capability: "clone" | "numeric-parameter" | "number-parameter";
+      readonly source: RustOperationCarrierRequirement["source"];
+    }
+  | { readonly capability: Exclude<JsCarrierCapability, "clone" | "numeric-parameter" | "number-parameter"> }
+);
+
 export type JsOperationTarget =
   | Exclude<RustProviderOperationForm, { readonly form: "associated-call" }>
   | (Omit<Extract<RustProviderOperationForm, { readonly form: "associated-call" }>, "owner"> & {
@@ -219,10 +227,7 @@ export interface JsOperationRowData {
   readonly operationKind: JsOperationRequest["operationKind"];
   readonly lane: JsLane;
   readonly variant?: string;
-  readonly requirements?: readonly {
-    readonly carrier: JsCarrierRef;
-    readonly capability: JsCarrierCapability;
-  }[];
+  readonly requirements?: readonly JsCarrierRequirement[];
   readonly callback?: RustCallbackOperationTemplate;
   readonly selectedMethodTypeArgumentArity?: number;
   readonly fallible?: boolean;

@@ -12,7 +12,7 @@ import { rustGenericCallableProtocol, rustGenericCallableValue } from "../../tar
 import { rustOptionElementCarrier } from "../../target-model/types/carriers/optional.js";
 import { rustCallableInvocationSignaturesMatch } from "../../policy/conversions/callable-input.js";
 
-import { isRustNeverCarrier } from "../../target-model/types/carriers/js.js";
+import { isRustNeverCarrier, rustJsArrayLikeElementTargetType } from "../../target-model/types/carriers/js.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import { createRustNativeCallableProtocolRegistry } from "./native-protocols.js";
 import type { RustNativeCallableProtocol } from "../../target-model/records/native-protocols.js";
@@ -230,6 +230,24 @@ export function createRustNativeCallableInputPlan(input: {
     return Object.freeze({ kind: "resolved", inputs: Object.freeze([...parameters]),
       implementations: Object.freeze([...implementations]) });
   };
+  const collectInputComponents = (parameter: Node, carrier: TargetTypeRef,
+    projection: SourceStorageSubject["projection"] = []): void => {
+    const selected = rustOptionElementCarrier(carrier) ?? carrier;
+    if (rustGenericCallableValue(selected) !== undefined || rustCallableProtocol(selected) !== undefined) {
+      const subject = input.storage.subject(parameter, "input", projection);
+      if (subject.kind === "resolved") selectInput(subject.subject, carrier);
+      return;
+    }
+    if (selected.kind === "tuple") {
+      for (const [index, element] of selected.elements.entries())
+        collectInputComponents(parameter, element, [...projection, { kind: "tuple-element", index }]);
+      return;
+    }
+    const element = selected.kind === "array" || selected.kind === "slice" ? selected.element
+      : rustJsArrayLikeElementTargetType(selected);
+    if (element !== undefined)
+      collectInputComponents(parameter, element, [...projection, { kind: "array-element" }]);
+  };
   for (const node of input.nativeNodes) {
     if (fields.has(node)) {
       const subject = input.storage.subject(node, "member");
@@ -239,10 +257,7 @@ export function createRustNativeCallableInputPlan(input: {
     const carrier = input.records.sourceParameterAbi.get(node)?.valueCarrier ??
       input.records.runtimeCarrier.get(node)?.carrier;
     if (carrier === undefined) continue;
-    const selected = rustOptionElementCarrier(carrier) ?? carrier;
-    if (rustGenericCallableValue(selected) === undefined && rustCallableProtocol(selected) === undefined) continue;
-    const subject = input.storage.subject(node, "input");
-    if (subject.kind === "resolved") selectInput(subject.subject, carrier);
+    collectInputComponents(node, carrier);
   }
   for (const node of input.nativeNodes) {
     const carrier = input.records.runtimeCarrier.get(node)?.carrier;

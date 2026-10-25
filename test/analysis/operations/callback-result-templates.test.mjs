@@ -153,7 +153,8 @@ test("native callback collection reads retain Clone metadata before physical inp
       receiverCarrier: rustJsArrayTargetType(callback), argumentCarriers: [number] };
     const selected = selectJsSurfaceOperation(request);
     assert.equal(selected !== undefined, true, ownerName);
-    assert.deepEqual(selected.fact.carrierRequirements, [{ carrier: callback, requirement: "clone" }],
+    assert.deepEqual(selected.fact.carrierRequirements, [{ carrier: callback, requirement: "clone",
+      source: { kind: "receiver", projection: [0] } }],
       "logical runtime Callable Clone does not prove a reified physical input's Clone bound");
     const length = selectJsSurfaceOperation({ ...request, memberName: "length", operationKind: "property", argumentCarriers: [] });
     assert.equal(length.fact.carrierRequirements, undefined, "a pure length read does not require copying an element");

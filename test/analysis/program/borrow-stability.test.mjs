@@ -7,7 +7,7 @@ import { analyzeRust } from "../../helpers/rust-session.mjs";
 import { analyzeRustBorrowEffects, selectRustBorrowRelationship } from "../../../dist/analysis/ownership/effects.js";
 
 function analyze(input, maximumNodes) {
-  const selected = analyzeRustBorrowEffects(input, maximumNodes);
+  const selected = analyzeRustBorrowEffects(input, input.readUses, maximumNodes);
   return selected.kind === "resolved" ? { ...selected, input } : selected;
 }
 import { fakeAstReader } from "../../helpers/fake-compile-input.mjs";
@@ -138,9 +138,53 @@ function analysisInput(program, sourceFacts, records = program.records) {
   const nodes = rustNativeFixtureNodes(program);
   const nativeNodes = new Set(nodes);
   return { ast: program.source.ast, nodes, isNativeNode: node => nativeNodes.has(node), sourceFacts, records, navigation: program.sourceNavigation,
+    readUses: program.ownership.uses,
     projectTypes: program.projectTypes, objectRepresentations: program.objectRepresentations,
     structuralShapes: program.structuralShapes, frozenDataWrites: program.frozenDataWrites };
 }
+
+test("source method receiver stability consumes the completed native read use and preserves exposure refusals", () => {
+  const { program, source } = analyzeRust({ surfaces: [], files: { "index.ts": `
+class Counter {
+  constructor(public total: number) {}
+  read(value: number): number { return this.total + value; }
+}
+function next(): number { return 1; }
+export function observed(owner: Counter): number { return owner.read(next()) + owner.total; }
+` } });
+  const input = analysisInput(program, createTargetSourceProgram(source).sourceFacts);
+  const ast = program.source.ast;
+  const call = input.nodes.find(node => ast.is.IsCallExpression(node) &&
+    program.records.targetOperation.get(node)?.kind === "source-call" &&
+    program.records.targetOperation.get(node)?.target.form === "method");
+  assert.equal(call !== undefined, true, "the real checked source method is selected");
+  const receiver = Node_Expression(ast, Node_Expression(ast, call));
+  const argument = ast.arguments(call)[0];
+  const binding = program.records.sourceBinding.get(receiver);
+  assert.equal(receiver !== undefined && argument !== undefined && binding !== undefined, true);
+  assert.equal(input.readUses.get(receiver)?.mode, "shared", "actual selected native self demand");
+  const selected = analyze(input);
+  assert.equal(selected.kind, "resolved");
+  assert.equal(selected.effects.pureValues.has(argument), false, "the source call argument remains observable");
+  assert.equal(selected.effects.stableBindings.has(receiver), true, "the original owner is stable across its argument");
+  assert.equal(program.ownership.reads.get(receiver).borrowedAcross.has(argument), true);
+  for (const mode of [undefined, "mutable", "move"]) {
+    const readUses = new Map(input.readUses);
+    if (mode === undefined) readUses.delete(receiver);
+    else readUses.set(receiver, { ...readUses.get(receiver), mode });
+    const rejected = analyze({ ...input, readUses });
+    assert.equal(rejected.kind, "resolved");
+    assert.equal(rejected.effects.stableBindings.has(receiver), false, "no shared receiver proof: " + mode);
+  }
+  for (const flag of ["captured", "exported", "bindingWritten", "memberWritten", "hasUnclassifiedValueUse"]) {
+    const rejected = analyze({ ...input, navigation: { ...input.navigation, declarationUseSummary(declaration) {
+      const summary = input.navigation.declarationUseSummary(declaration);
+      return declaration === binding.sourceDeclaration ? { ...summary, [flag]: true } : summary;
+    } } });
+    assert.equal(rejected.kind, "resolved");
+    assert.equal(rejected.effects.stableBindings.has(receiver), false, "actual exposure refuses stability: " + flag);
+  }
+});
 
 function functionAssignment(program, name) {
   const ast = program.source.ast;
@@ -164,6 +208,7 @@ function indexedBindingFixture({ uses = 1_100, bindingWritten = false, scope = "
   const reader = fakeAstReader();
   const input = {
     sourceFiles: [root],
+    readUses: new Map(),
     ast: { ...reader, is: { ...reader.is,
       IsIdentifier: node => receivers.includes(node) || useNodes.includes(node),
       IsPostfixUnaryExpression: node => updates.includes(node),
@@ -435,6 +480,7 @@ test("borrow stability budgets are finite, bounded and reject cycles without AST
   const nativeNodes = new Set([root, ...root.children]);
   const input = {
     isNativeNode: node => nativeNodes.has(node),
+    readUses: new Map(),
     nodes: [root, ...root.children], ast: { ...fakeAstReader(), is: { ...fakeAstReader().is,
       IsPrefixUnaryExpression: () => false, IsPostfixUnaryExpression: () => false },
       forEachChild: (node, visit) => node.children.forEach(visit) },

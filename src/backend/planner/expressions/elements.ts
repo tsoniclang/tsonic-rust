@@ -64,12 +64,12 @@ function planIndexedProjection(node: Node, receiverNode: Node, indexNode: Node, 
   const ownership = context.input.program.records.readOwnership.get(receiverNode)?.value;
   const inPlace = context.expressionOverrides?.has(receiverNode) !== true &&
     (ownership?.kind === "clone" || ownership?.kind === "borrow");
-  const receiver = (inPlace ? planExpression(receiverNode, context, "value", "shared-place") : planExpression(receiverNode, context))
+  const receiver = (inPlace ? planExpression(receiverNode, context, "value", "shared-receiver") : planExpression(receiverNode, context))
     ?? failRustPlannerInvariant("An admitted fixed projection requires its rendered source receiver.", receiverNode);
   const borrowed = inPlace || expressionCarrier(receiverNode, context)?.kind === "reference" ||
     context.expressionOverrides?.get(receiverNode)?.valueForm === "shared-reference";
   const read = (owner: RustExpr): RustExpr => !borrowed ? project(owner, false)
-    : access === "shared-place" ? project(owner, true) : planRustValueRead(node, project(owner, true), context);
+    : access === "shared-place" || access === "shared-receiver" ? project(owner, true) : planRustValueRead(node, project(owner, true), context);
   if (!evaluateIndex) return read(receiver);
   const effect = planExpression(indexNode, context)
     ?? failRustPlannerInvariant("An admitted fixed projection requires its source index effect.", indexNode);

@@ -7,6 +7,7 @@ import {
   rustJsMapTargetType,
   rustJsSetTargetType,
   rustJsArrayTargetType,
+  rustVecTargetType,
   rustSourcePrimitiveTargetType,
   rustStringTargetType,
 } from "../../../dist/target-model/types/index.js";
@@ -70,7 +71,8 @@ test("generic collection clone obligations require an explicit source declaratio
   assert.equal(selectJsSurfaceOperation(request), undefined);
   assert.equal(selectJsSurfaceOperation({ ...request, canRequireClone: () => false }), undefined);
   const selected = selectJsSurfaceOperation({ ...request, canRequireClone: carrier => carrier === parameter });
-  assert.deepEqual(selected.fact.carrierRequirements, [{ carrier: parameter, requirement: "clone" }]);
+  assert.deepEqual(selected.fact.carrierRequirements, [{ carrier: parameter, requirement: "clone",
+    source: { kind: "receiver", projection: [0] } }]);
   assert.deepEqual(selected.resultCarrier, { kind: "array", element: parameter });
 });
 
@@ -85,7 +87,8 @@ test("owned array reads retain their exact native Clone obligation", () => {
       assert.equal(selectJsSurfaceOperation(request), undefined);
       assert.equal(selectJsSurfaceOperation({ ...request, canRequireClone: () => false }), undefined);
       const selected = selectJsSurfaceOperation({ ...request, canRequireClone: carrier => carrier === parameter });
-      assert.deepEqual(selected?.fact.carrierRequirements, [{ carrier: parameter, requirement: "clone" }]);
+      assert.deepEqual(selected?.fact.carrierRequirements, [{ carrier: parameter, requirement: "clone",
+        source: { kind: "receiver", projection: [0] } }]);
       assert.deepEqual(selected?.fact.sourceResultCarrier, parameter);
     }
     const length = selectJsSurfaceOperation({ ownerName, memberName: "length", operationKind: "property",
@@ -93,6 +96,37 @@ test("owned array reads retain their exact native Clone obligation", () => {
     });
     assert.ok(length);
     assert.equal(length.fact.carrierRequirements, undefined);
+  }
+});
+
+test("equal logical collection elements retain their original native requirement coordinates", () => {
+  const parameter = { kind: "type-parameter", identity: "Element", name: "Element" };
+  for (const [memberName, projections] of [["keys", [[0]]], ["values", [[1]]], ["entries", [[0], [1]]]]) {
+    const selected = selectJsSurfaceOperation({
+      ownerName: "ReadonlyMap", memberName, operationKind: "call",
+      receiverCarrier: rustJsMapTargetType(parameter, parameter), argumentCarriers: [],
+      canRequireClone: carrier => carrier === parameter,
+    });
+    assert.equal(selected !== undefined, true, `${memberName}: the original generic collection operation is selected`);
+    assert.deepEqual(selected.fact.carrierRequirements, projections.map(projection => ({
+      carrier: parameter, requirement: "clone", source: { kind: "receiver", projection },
+    })), `${memberName}: equal logical types never replace exact key/value correspondence`);
+  }
+});
+
+test("selected Array.from generic obligations retain the original array argument component", () => {
+  const parameter = { kind: "type-parameter", identity: "Element", name: "Element" };
+  for (const array of [rustVecTargetType(parameter), rustJsArrayTargetType(parameter)]) {
+    const selected = selectJsSurfaceOperation({
+      ownerName: "ArrayConstructor", memberName: "from", operationKind: "call",
+      selectedMethodTypeArgumentCarriers: [parameter], argumentCarriers: [array],
+      canRequireClone: carrier => carrier === parameter,
+    });
+    assert.equal(selected !== undefined, true, `${array.kind}: the checked generic array input is selected`);
+    assert.deepEqual(selected.fact.carrierRequirements, [{
+      carrier: parameter, requirement: "clone",
+      source: { kind: "argument", sourceIndex: 0, projection: [0] },
+    }], `${array.kind}: the selected generic bound names its actual original argument component`);
   }
 });
 
