@@ -18,10 +18,24 @@ import { rustNativeCallableOperand } from "../callables/native-conversions.js";
 import { rustValueCarrierBeforeContextualConversion } from "../conversions/value-carrier-queries.js";
 import { rustNativeErrorJoinTargetType } from "../../target-model/types/native-error-joins.js";
 import { rustProgramErrorTargetType } from "../../target-model/types/carriers/js.js";
+import type { RustFinalizedOperationAbi } from "../../target-model/records/finalized-operation.js";
 
-export function analyzeRustProviderForms(program: Omit<RustAnalysisProgram, "reachability">, nodes: readonly Node[],
-  producer: RustProviderFormProducer, attempts: Pick<WeakMap<Node, RustOperationAttempt>, "get">): readonly TargetDiagnostic[] {
+export interface RustProviderReadSelection {
+  readonly node: Node;
+  readonly abi: RustFinalizedOperationAbi;
+  readonly bodies: readonly {
+    readonly body: true | undefined;
+    readonly read: RustProviderFormEmission["read"];
+  }[];
+}
+
+export function selectRustProviderReads(program: Omit<RustAnalysisProgram, "reachability">, nodes: readonly Node[]): {
+  readonly reads: readonly RustProviderReadSelection[];
+  readonly diagnostics: readonly TargetDiagnostic[];
+} {
   const issues: TargetDiagnostic[] = [];
+  const reads: RustProviderReadSelection[] = [];
+  const selected = new WeakMap<Node, Set<RustFinalizedOperationAbi>>();
   const { ast } = program.source;
   // A provider disposer is planned at its resource declaration, outside the source operation occurrences.
   const disposals = nodes.flatMap(node => {
@@ -31,11 +45,45 @@ export function analyzeRustProviderForms(program: Omit<RustAnalysisProgram, "rea
   const occurrences = program.physicalEmissionContexts.sourceOccurrences.map(occurrence =>
     ({ node: occurrence.node, abi: occurrence.operation.abi, runtimeSet: occurrence.operation.kind === "runtime-set" }));
   for (const { node, abi, runtimeSet } of [...occurrences, ...disposals]) {
+    const previous = selected.get(node) ?? new Set<RustFinalizedOperationAbi>();
+    if (previous.has(abi)) continue;
+    previous.add(abi);
+    selected.set(node, previous);
     const form = abi.target;
     const owner = sourceEnclosingCallable(node, ast);
     const native = owner === undefined ? undefined : program.records.callableDeclaration.get(owner)?.nativeBody;
     const bodies: (true | undefined)[] = native === undefined ? [undefined]
       : program.promiseBodies.objects.has(owner!) ? [undefined, true] : [true];
+    const contexts: RustProviderReadSelection["bodies"][number][] = [];
+    for (const body of bodies) {
+      let read: RustProviderFormEmission["read"] = "storage";
+      if (!runtimeSet && (form.form === "field" || form.form === "index")) {
+        const carrier = abi.result.kind === "async" ? abi.result.futureCarrier : abi.result.carrier;
+        const physical = program.records.carrierRead.get(carrier);
+        if (physical === undefined) failTargetAnalysisInvariant("tsonic-rust", "An admitted provider read requires its exact native carrier guarantees.", node);
+        const clone = owner === undefined ? physical.clone : program.records.carrierClone.get(carrier, owner, body);
+        if (physical.copy) read = "copy";
+        else if (clone === true) read = "clone";
+        else if (program.ownership.reads.get(node)?.source.kind !== "borrow") {
+          issues.push({ code: "RUST_UNSUPPORTED_AST", source: "tsonic-rust", category: "error", sourceNode: node,
+            message: `A provider ${form.form} read requires an exact Copy or Clone result-carrier contract. Node kind: ${ast.kindName(node)}.`,
+            evidence: [`target.capability=rust.backend.provider-${form.form}-read-ownership`] });
+          continue;
+        }
+      }
+      contexts.push(Object.freeze({ body, read }));
+    }
+    reads.push(Object.freeze({ node, abi, bodies: Object.freeze(contexts) }));
+  }
+  return Object.freeze({ reads: Object.freeze(reads), diagnostics: Object.freeze(issues) });
+}
+
+export function analyzeRustProviderForms(program: Omit<RustAnalysisProgram, "reachability">, reads: readonly RustProviderReadSelection[],
+  producer: RustProviderFormProducer, attempts: Pick<WeakMap<Node, RustOperationAttempt>, "get">): readonly TargetDiagnostic[] {
+  const issues: TargetDiagnostic[] = [];
+  const { ast } = program.source;
+  for (const { node, abi, bodies } of reads) {
+    const form = abi.target;
     let worker: RustProviderFormEmission["worker"];
     let nativeResult: RustProviderFormEmission["nativeResult"];
     const operation = program.records.targetOperation.get(node);
@@ -114,23 +162,7 @@ export function analyzeRustProviderForms(program: Omit<RustAnalysisProgram, "rea
         failTargetAnalysisInvariant("tsonic-rust", "An admitted source-module constructor requires its worker identity and immutable source argument.", node);
       worker = Object.freeze({ fileName, argumentIndex, mode: input.mode });
     }
-    for (const body of bodies) {
-      if (producer.records.providerForm.get(node, abi, body) !== undefined) continue;
-      let read: RustProviderFormEmission["read"] = "storage";
-      if (!runtimeSet && (form.form === "field" || form.form === "index")) {
-        const carrier = abi.result.kind === "async" ? abi.result.futureCarrier : abi.result.carrier;
-        const physical = program.records.carrierRead.get(carrier);
-        if (physical === undefined) failTargetAnalysisInvariant("tsonic-rust", "An admitted provider read requires its exact native carrier guarantees.", node);
-        const clone = owner === undefined ? physical.clone : program.records.carrierClone.get(carrier, owner, body);
-        if (physical.copy) read = "copy";
-        else if (clone === true) read = "clone";
-        else if (program.ownership.reads.get(node)?.source.kind !== "borrow") {
-          issues.push({ code: "RUST_UNSUPPORTED_AST", source: "tsonic-rust", category: "error", sourceNode: node,
-            message: `A provider ${form.form} read requires an exact Copy or Clone result-carrier contract. Node kind: ${ast.kindName(node)}.`,
-            evidence: [`target.capability=rust.backend.provider-${form.form}-read-ownership`] });
-          continue;
-        }
-      }
+    for (const { body, read } of bodies) {
       producer.publish(node, abi, body, { read, worker, nativeResult });
     }
   }
