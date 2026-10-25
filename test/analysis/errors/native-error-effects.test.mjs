@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRust } from "../../helpers/rust-session.mjs";
 import { analyzeRustErrorEffects } from "../../helpers/rust-error-analysis.mjs";
+import { nativeClosureProducerFixture, nativeClosureProducerFailurePackage } from "../../helpers/native-closure-producers.mjs";
+import { rustNamedTargetType } from "../../../dist/target-model/types/carriers/native.js";
 
 
 
@@ -57,6 +59,38 @@ function assertChannels(actual, expected, localErrors = false) {
     assert.equal(source !== undefined, true, "exact native channel identity");
     assert.equal(rustTargetTypeRefEquals(source.errorType, selected.errorType), true, "exact native channel carrier");
   }
+}
+
+for (const surfaces of [[], ["js"]]) {
+  test(`native provider invocation preserves its selected error channel (${surfaces[0] ?? "native"})`, () => {
+    const errorType = rustNamedTargetType("fixture:ProducerFailure", "ProducerFailure");
+    const current = nativeClosureProducerFixture({ surfaces,
+      packages: [nativeClosureProducerFailurePackage(errorType)],
+      source: `import { fail } from "test:producer";
+import type { int32 } from "@tsonic/core/types.js";
+export function create(): () => int32 { return (): int32 => fail(); }`,
+    });
+    const selected = [];
+    const visit = node => {
+      const operation = current.program.records.targetOperation.get(node);
+      if (operation?.kind === "provider-operation" && operation.abi.effects.errorBoundary === "provider-native")
+        selected.push({ node, operation });
+      current.program.source.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+    };
+    current.program.sourceFiles.forEach(visit);
+    assert.equal(selected.length, 1, "the original checked native provider invocation is selected once");
+    const { node, operation } = selected[0];
+    assert.equal(operation.abi.effects.invocation, "fallible");
+    assert.equal(operation.abi.effects.errorCarrier !== undefined, true, "selected native error evidence is required");
+    for (const subject of [node, current.node]) {
+      const effects = current.program.records.errorEffects.get(subject);
+      assert.equal(effects !== undefined, true, "the invocation and its producer both publish completed effects");
+      assert.equal(effects.localErrors, false, "native provider failure never becomes a package-local error");
+      assert.equal(effects.nativeErrors.length, 1, "one original native error channel remains");
+      assert.equal(rustTargetTypeRefEquals(effects.nativeErrors[0].errorType, operation.abi.effects.errorCarrier), true,
+        "the physical producer carries the exact selected provider error");
+    }
+  });
 }
 
 for (const surfaces of [[], ["js"]]) {
