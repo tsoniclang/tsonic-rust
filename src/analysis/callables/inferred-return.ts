@@ -1,4 +1,4 @@
-import { BinaryExpression_Left, BinaryExpression_Right, Node_Expression, Node_Initializer, Node_Operand, Node_Type, sourceCallableValueParameters } from "@tsonic/target-api/source";
+import { BinaryExpression_Left, BinaryExpression_Right, Node_Expression, Node_Initializer, Node_Operand, Node_Type, sourceCallableValueParameters, sourceReceiverOwner } from "@tsonic/target-api/source";
 import type { Node } from "@tsonic/tsts";
 import { createRustCarrierProbe } from "../program/carrier-probe.js";
 
@@ -22,6 +22,7 @@ import { finalizeRustCallableSignature } from "./signature-query.js";
 import { setCarrierFact } from "../operations/project-calls.js";
 import type { RustSourceParameterAbiFact } from "../../target-model/records/callables-and-resources.js";
 import type { RustProgramRecordBuilder } from "../program/records/model.js";
+import { rustClassCallableMemberOwner, rustClassReceiverCarriers } from "../declarations/classes/receivers.js";
 
 export type RustInferredReturnSelection =
   | { readonly kind: "complete"; readonly carrier: TargetTypeRef }
@@ -76,6 +77,12 @@ function selectReturn(
   const parameterAbis: RustSourceParameterAbiFact[] = [];
   const parameters = sourceCallableValueParameters(ast, declaration, walk.context.semanticsFor(declaration));
   if (parameters === undefined) return { kind: "pending", hint: baseline };
+  const lexicalOwner = ast.is.IsArrowFunction(declaration) ? sourceReceiverOwner(declaration, ast, "storage") : undefined;
+  const classOwner = lexicalOwner === undefined ? undefined : rustClassCallableMemberOwner(walk, lexicalOwner);
+  const receivers = classOwner === undefined ? undefined : rustClassReceiverCarriers(walk, classOwner);
+  if (classOwner !== undefined && receivers === undefined) return { kind: "pending", hint: baseline };
+  const receiver = classOwner === undefined ? walk.currentThisCarrier : receivers?.thisCarrier;
+  const superReceiver = classOwner === undefined ? walk.currentSuperCarrier : receivers?.superCarrier;
   for (const parameter of parameters) {
     const selected = walk.context.records.sourceParameterAbi.get(parameter);
     if (selected === undefined) return { kind: "pending", hint: baseline };
@@ -84,13 +91,14 @@ function selectReturn(
   const memo = walk.inferredReturns.get(walk.context.records);
   const completed = memo?.get(declaration)?.find(entry => entry.role === role && rustTargetTypeRefEquals(entry.baseline, baseline) &&
     entry.parameterAbis.length === parameterAbis.length && entry.parameterAbis.every((abi, index) => abi === parameterAbis[index]) &&
-    entry.callable === walk.currentCallableDeclaration && rustTargetTypeRefEquals(entry.receiver, walk.currentThisCarrier) &&
-    rustTargetTypeRefEquals(entry.superReceiver, walk.currentSuperCarrier));
+    entry.callable === walk.currentCallableDeclaration && rustTargetTypeRefEquals(entry.receiver, receiver) &&
+    rustTargetTypeRefEquals(entry.superReceiver, superReceiver));
   if (completed !== undefined) return { kind: "complete", carrier: completed.carrier };
   if (walk.resolvingReturns.has(declaration)) return { kind: "pending", hint: baseline };
   walk.resolvingReturns.add(declaration);
   try {
-    const probe = createRustCarrierProbe({ ...walk, currentCallableDeclaration: declaration });
+    const probe = createRustCarrierProbe({ ...walk, currentCallableDeclaration: declaration,
+      currentThisCarrier: receiver, currentSuperCarrier: superReceiver });
     const records = probe.context.records;
     const expressions = directReturns(walk, declaration);
     const active = new Set<Node>();
@@ -131,7 +139,7 @@ function selectReturn(
     if (local === undefined) walk.inferredReturns.set(walk.context.records, local = new WeakMap());
     local.set(declaration, Object.freeze([...(local.get(declaration) ?? []), Object.freeze({ role, baseline,
       parameterAbis: Object.freeze(parameterAbis), callable: walk.currentCallableDeclaration,
-      receiver: walk.currentThisCarrier, superReceiver: walk.currentSuperCarrier, carrier: result,
+      receiver, superReceiver, carrier: result,
     })]));
     return { kind: "complete", carrier: result };
 
