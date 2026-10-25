@@ -46,7 +46,7 @@ test("operation contexts carry checked scope without leaking their result's phys
   assert.equal(context.extensionId, "tsonic.rust.policy");
   assert.equal(context.sourceStorageResolution.kind, "resolved", "the exact original scope is retained");
   assert.equal(context.sourceStorageResolution.bindings === input.scope.bindings, true);
-  assert.equal(context.sourceStorageResolution.subject, undefined, "each selected operand owns its physical storage");
+  assert.equal(context.sourceStorageResolution.subject === undefined, true, "each selected operand owns its physical storage");
   assert.equal(Object.hasOwn(context, "sourceStorageSubject"), false, "the removed unbound API is not published");
   assert.deepEqual(input.selected, [], "scope selection must not launch a result storage query");
 });

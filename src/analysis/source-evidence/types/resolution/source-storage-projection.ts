@@ -13,10 +13,10 @@ export function rustSourceStorageScope(
     : { kind: "resolved", subject: undefined, bindings: selected.bindings };
 }
 
-export function rustSourceStorageSubjectContext(
-  context: RustTargetTypeResolutionContext,
+export function rustSourceStorageSubjectContext<Context extends RustTargetTypeResolutionContext>(
+  context: Context,
   selection: SourceStorageSubjectSelection | undefined,
-): RustTargetTypeResolutionContext {
+): Context {
   const current = context.sourceStorageResolution;
   if (selection === undefined) return { ...context, callableRepresentation: "signature", sourceStorageResolution: current?.kind === "resolved"
     ? { ...current, subject: undefined } : current };
