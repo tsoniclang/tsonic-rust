@@ -1,5 +1,6 @@
 import { createRustNativeStorageSelection } from "./native-storage-selection.js";
 import type { RustNativeCaptureSelection } from "../../target-model/records/native-captures.js";
+import { createRustSourceErrorEffectSelection, type RustSourceErrorEffectSelection } from "../errors/source-error-effects.js";
 import type { RustStructuralShapePlanRegistry } from "../objects/shapes/structural-shape-plan.js";
 import type { AstReader, Node } from "@tsonic/tsts";
 import type { SourceStorageBindings, SourceStorageBindingsSelection, SourceStorageQueries, SourceStorageSubject, SourceStorageSubjectsSelection, SourceStorageProducersSelection } from "@tsonic/target-api/analysis";
@@ -70,6 +71,7 @@ export interface RustNativeStoragePlan {
 }
 
 export interface RustNativeStorageConstruction extends RustNativeStoragePlan {
+  readonly sourceErrors: RustSourceErrorEffectSelection;
   prepareReturn(declaration: Node): RustNativeStorageSelection;
 }
 
@@ -162,7 +164,11 @@ export function createRustNativeStorageQueries(input: {
   };
   const recordMembers = createRustRecordMemberProducers({ ...input, bindingsFor });
   const select = createRustNativeStorageSelection(input, { inputs, futures, conversions, recordMembers,
-    genericInvocationBindingsFor, joinWrites, ownerFor, valueOwnerFor, logicalCarrierFor });
+    genericInvocationBindingsFor, joinWrites, ownerFor, valueOwnerFor, logicalCarrierFor,
+    completeNativeOrigin: (node, declaration, carrier, activation): TargetTypeRef | undefined => {
+      const bindings = sourceErrors.bindingsFor(node, declaration, [carrier], activation);
+      return bindings?.complete(carrier, queries);
+    } });
   const selectReturn = (declaration: Node): RustNativeStorageSelection => {
     const result = input.records.sourceCallableReturn.get(declaration);
     const parameter = result?.borrowedParameter;
@@ -196,7 +202,8 @@ export function createRustNativeStorageQueries(input: {
   const { absenceWitnesses, argumentWitnesses } = witnesses;
   const invocationArgumentWitnessFor = (invocation: Node, argument: Node): TargetTypeRef | undefined =>
     argumentWitnesses.get(invocation)?.get(argument);
-  return Object.freeze({
+  const queries: RustNativeStorageQueries = {
+    get sourceErrors() { return sourceErrors; },
     logicalCarrierFor,
     issues: witnesses.issues,
     invocationCallableFor: (node: Node) => invocationCallableFor(node, bindingsFor(ownerFor(node))),
@@ -278,7 +285,12 @@ export function createRustNativeStorageQueries(input: {
       return ownedInputs.has(selected) ? input.storage.storageProducersFor(selected.subject, input.storage.emptyBindings)
         : unresolved("Native implementation enumeration requires its exact owned input identity.");
     },
-  });
+  };
+  const sourceErrors: RustSourceErrorEffectSelection = createRustSourceErrorEffectSelection({ context: {
+    ast: input.ast, records: input.records, sourceStorage: input.storage, typeDefinitions: input.definitions,
+    callableValues: { native: input.native, nativeProducers: input.producers, nativeStorage: queries },
+  } });
+  return Object.freeze(queries);
 }
 
 import type { RustNativeStorageSelection } from "../../target-model/records/native-storage.js";
