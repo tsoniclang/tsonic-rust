@@ -7,6 +7,9 @@ import { rustCarrierSatisfiesTraitRef } from "../../../dist/policy/constraints/n
 import { rustMutableJsErrorTargetType, rustRetainedErrorTargetType, rustSourceErrorTargetType, rustWritableRetainedErrorTargetType, rustWritableSourceErrorTargetType } from "../../../dist/target-model/types/carriers/source-error.js";
 import { emptyRustTypeDefinitions } from "../../../dist/target-model/types/source-union-definitions.js";
 import { rustNamedTargetType } from "../../../dist/target-model/types/carriers/native.js";
+import { analyzeRust } from "../../helpers/rust-session.mjs";
+import { rustSourceFilePlanContext } from "../../helpers/plan-context.mjs";
+import { planRustCallableGenerics } from "../../../dist/backend/planner/declarations/callables/generics.js";
 
 const retained = rustRetainedErrorTargetType();
 const obligation = { kind: "trait-ref", id: "core::convert::Into", path: "core::convert::Into",
@@ -70,4 +73,28 @@ test("generic JS rejection obligations stay on their exact type and associated b
     (carrier, requirement) => carrier === associated && requirement === "js-rejection", emptyRustTypeDefinitions, undefined).kind === "supported", true);
   assert.equal(classifyCarrierRequirements(associated, ["js-rejection"], new Set(), new Map(),
     () => false, emptyRustTypeDefinitions, undefined).kind === "supported", false);
+});
+
+test("native-only generic inputs retain their selected Promise object error bounds", () => {
+  const { program } = analyzeRust({ surfaces: ["js"], files: { "index.ts": `
+export async function invoke(callback: () => Promise<number>): Promise<number> {
+  return await callback();
+}` } });
+  const { ast } = program.source;
+  const declaration = program.sourceFiles.flatMap(file => ast.statements(file)).find(node =>
+    ast.is.IsFunctionDeclaration(node) && program.records.sourceName.get(node) === "invoke");
+  assert.equal(declaration !== undefined, true, "the original checked async declaration");
+  assert.equal(ast.typeParameters(declaration).length, 0, "no authored generic parameter supplies this bound");
+  const selected = program.records.nativeGenerics.get(declaration);
+  assert.equal(selected?.inputs.length, 1, "the native callable input owns its exact implementation parameter");
+  assert.equal(selected.sourceRequirements?.associatedTypes.some(requirement =>
+    requirement.requirements.includes("js-rejection")), true, "analysis already selected the exact rejection obligation");
+  const context = rustSourceFilePlanContext(program, declaration);
+  const object = planRustCallableGenerics(declaration, context, new Set()).finalizeGenerics();
+  const intoRetained = bound => bound.kind === "trait" && bound.path === "Into<tsonic_rust_runtime::RetainedError>";
+  assert.equal(object.wherePredicates.some(predicate => predicate.kind === "type" && predicate.bounds.some(intoRetained)),
+    true, "the object wrapper renders its selected associated-error bound without an authored generic");
+  const body = planRustCallableGenerics(declaration, { ...context, promiseBody: true }, new Set()).finalizeGenerics();
+  assert.equal(body.wherePredicates.some(predicate => predicate.kind === "type" && predicate.bounds.some(intoRetained)),
+    false, "the native body does not inherit an unrelated JS object conversion obligation");
 });

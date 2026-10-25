@@ -10,7 +10,6 @@ import { failRustPlannerInvariant } from "../../diagnostics.js";
 import { isValidRustIdentifier } from "../../../../target-model/names/identifiers.js";
 import { rustLifetimeToAst } from "../../types/lifetime-syntax.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
-import { rustAssociatedPredicates } from "../../types/associated-bounds.js";
 import { rustProjectProjectionPredicates } from "../../types/project-projection-bounds.js";
 import { rustOptionalStorageParameters } from "../../types/type-projections.js";
 import { allocateRustGeneratedName } from "../../../../target-model/names/generated.js";
@@ -202,8 +201,7 @@ function planRustSourceCallableGenerics(
     ...(specialization === undefined ? rustOptionalStorageParameters(requirementContract.optionalStorage, context) : []),
   ];
   const generics: RustGenerics = rustGenericsWithAssociatedBounds(orderedParameters,
-    [...rustAssociatedPredicates(requirementContract.associatedTypes, { ...context, typeParameterSubstitutions: substitutions }),
-      ...rustProjectProjectionPredicates(requirementContract.projectProjections, { ...context, typeParameterSubstitutions: substitutions })],
+    rustProjectProjectionPredicates(requirementContract.projectProjections, { ...context, typeParameterSubstitutions: substitutions }),
   );
   return {
     context: {
