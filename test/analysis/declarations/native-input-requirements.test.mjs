@@ -218,6 +218,59 @@ export function array(callbacks: Callback[]): Callback[] {
     }
   });
 
+  test(`provider Clone retains the original same-signature array input in ${surface}`, () => {
+    const current = checked(`interface Callback { (): number; }
+export function select(used: Callback[], untouched: Callback[]): Callback[] {
+  const item = used[0]; return untouched;
+}`, surfaces);
+    const owner = current.declaration("select");
+    const inputs = current.program.callableValues.native.inputsFor(owner);
+    assert.equal(inputs.length, surfaces.length === 0 ? 0 : 2,
+      "both array formals keep their selected concrete or generic native representation");
+    for (const [index, input] of inputs.entries()) {
+      assert.equal(input.subject.node === current.ast.parameters(owner)[index] &&
+        input.subject.projection.length === 1 && input.subject.projection[0].kind === "array-element", true,
+      `${index}: the native implementation belongs to its original array and element projection`);
+      for (const [contract, requirements] of nativeRequirementSets(current, owner, input).entries()) {
+        assert.equal(requirements.includes("clone"), index === 0,
+          `${contract}: only the actually read array component requires Clone, not its equal-signature peer`);
+      }
+    }
+  });
+
+  test(`moving an array input adds no element Clone requirement in ${surface}`, () => {
+    const current = checked(`interface Callback { (): number; }
+export function move(callbacks: Callback[]): Callback[] { return callbacks; }`, surfaces);
+    const owner = current.declaration("move");
+    const inputs = current.program.callableValues.native.inputsFor(owner);
+    assert.equal(inputs.length, surfaces.length === 0 ? 0 : 1,
+      "an unread array retains its complete native element input inventory");
+    for (const input of inputs) {
+      for (const [contract, requirements] of nativeRequirementSets(current, owner, input).entries()) {
+        assert.equal(requirements.includes("clone"), false,
+          `${contract}: moving the original array never invents a Clone demand on its element`);
+      }
+    }
+  });
+
+  test(`borrowing an indexed callable adds no array element Clone requirement in ${surface}`, () => {
+    const current = checked(`interface Callback { (): number; }
+export function invoke(callbacks: Callback[]): number { return callbacks[0](); }`, surfaces);
+    const owner = current.declaration("invoke");
+    const inputs = current.program.callableValues.native.inputsFor(owner);
+    assert.equal(inputs.length, surfaces.length === 0 ? 0 : 1,
+      "the indexed native invocation retains its original selected array representation");
+    for (const input of inputs) {
+      assert.equal(input.subject.node === current.ast.parameters(owner)[0] &&
+        input.subject.projection.length === 1 && input.subject.projection[0].kind === "array-element", true,
+      "the borrowed invocation retains its exact original array component");
+      for (const [contract, requirements] of nativeRequirementSets(current, owner, input).entries()) {
+        assert.equal(requirements.includes("clone"), false,
+          `${contract}: borrowing an indexed callable never requires an owned element copy`);
+      }
+    }
+  });
+
   for (const [name, body, resultType] of [
     ["borrowed invocation", "return callbacks[0]() + callbacks[1]();", "number"],
     ["whole tuple move", "return callbacks;", "[Callback, Callback]"],

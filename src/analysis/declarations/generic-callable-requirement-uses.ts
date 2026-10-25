@@ -398,10 +398,7 @@ export function createRustCallableRequirementVisitor(input: RustCallableRequirem
             ? ElementAccessExpression_ArgumentExpression(ast, node) : undefined;
         if (expression === undefined || !ast.is.IsIdentifier(expression) ||
           input.ownershipFlow.movingReads.has(expression)) continue;
-        const carrier = records.runtimeCarrier.get(expression)?.carrier;
-        if (carrier === undefined) return "A provider argument lost its exact source storage carrier.";
-        if (isRustCopyCarrier(carrier)) continue;
-        const error = addUse(expression, carrier, ["clone"]);
+        const error = addPhysicalCloneUse(expression);
         if (error !== undefined) return error;
       }
       for (const requirement of providerOperation.carrierRequirements ?? []) {
