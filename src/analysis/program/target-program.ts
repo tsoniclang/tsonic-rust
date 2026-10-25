@@ -391,7 +391,7 @@ export function analyzeRustAnalysisProgram(
       initializationErrors.value.workers.some(worker => worker.initializer.asynchronous) });
   if (binaryExecution.kind === "rejected") return binaryExecution;
   analyzeRustExpressionExits({ source: context.source, records }, context.nativeNodes, context.records.expressionExitPlans);
-  analyzeRustStatementExits({ ast: context.ast, nodes: context.nativeNodes, sourceFiles: context.sourceFiles, records,
+  analyzeRustStatementExits({ source: context.source, nodes: context.nativeNodes, sourceFiles: context.sourceFiles, records,
     producer: context.records.statementExits, required: context.requiredRecords });
   eraseRustCompileTimeVariableStatements({ ast: context.ast, nodes: context.nativeNodes, records,
     producer: context.records.compileTimeSources, required: context.requiredRecords });

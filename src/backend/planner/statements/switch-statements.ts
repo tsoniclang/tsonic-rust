@@ -81,7 +81,9 @@ export function planSwitchStatement(
   const switchExits = context.input.program.records.statementExit.get(node) === true;
   const defaultIndex = sections.findIndex((section) => section.condition === undefined);
   let selection: RustBlock = defaultIndex < 0
-    ? { statements: [] }
+    ? { statements: switchExits ? [{ kind: "expr", expr: {
+      kind: "unreachable", message: "Checked switch cases cover every discriminant value",
+    } }] : [] }
     : fallthroughBody(defaultIndex);
   for (let index = sections.length - 1; index >= 0; index -= 1) {
     const section = sections[index]!;

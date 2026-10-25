@@ -60,3 +60,37 @@ export function conditional(failed: boolean): void { failed && fail(); }
   assert.equal(terminalStatements >= 2, true, "both synchronous and awaited terminal operands use the real producer");
   assert.equal(conditionalStatements, 1, "the actual conditional inverse is checked");
 });
+
+test("switch completion requires exact checked coverage and no exiting break", () => {
+  const { program } = analyzeRust({ files: { "index.ts": `
+export function finite(value: "left" | "right"): void {
+  switch (value) { case "left": return; case "right": return; }
+}
+export function missing(value: "left" | "right"): void {
+  switch (value) { case "left": return; }
+}
+export function open(value: string): void {
+  switch (value) { case "left": return; case "right": return; }
+}
+export function breaks(value: "left" | "right"): void {
+  switch (value) { case "left": break; case "right": return; }
+}
+export function defaulted(value: string): void {
+  switch (value) { case "left": return; default: return; }
+}
+` } });
+  const { ast } = program.source;
+  const expected = new Map([["finite", true], ["missing", false], ["open", false], ["breaks", false], ["defaulted", true]]);
+  let observed = 0;
+  for (const file of program.sourceFiles) {
+    for (const declaration of ast.statements(file)) {
+      if (declaration === undefined || !ast.is.IsFunctionDeclaration(declaration)) continue;
+      const name = ast.text(ast.name(declaration));
+      const body = ast.as.AsFunctionDeclaration(declaration).Body;
+      assert.equal(program.records.statementExit.get(ast.statements(body)[0]), expected.get(name), name);
+      assert.equal(program.records.statementExit.get(body), expected.get(name), name + ": exact body completion");
+      observed++;
+    }
+  }
+  assert.equal(observed, expected.size, "all finite, incomplete, open, break and default cases are checked");
+});
