@@ -75,6 +75,7 @@ mod lexical_owner_drop {
     }
 }
 `);
+    runCargo(directory, ["generate-lockfile", "--offline"]);
     const executed = runCargo(directory, ["test", "--release", "--locked", "--offline", "--", "--test-threads=1"]);
     assert.equal(executed.status, 0, executed.stdout.slice(-4096) + executed.stderr.slice(-4096));
   });
