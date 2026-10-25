@@ -228,18 +228,18 @@ function resolveSelectedFlowReadCarrier(
     (semantics.types.isNullish(type) || semantics.types.isVoidLike(type)));
   const presentReadType = access?.optionalChain === true && includesAbsence
     ? semantics.types.nonNullableType(selectedType) : undefined;
+  const sourceOptionalElement = rustSourceOptionalElementCarrier(sourceCarrier);
+  const declaredPresentType = sourceOptionalElement === undefined || declaredReadType === undefined || includesAbsence
+    ? undefined : semantics.types.nonNullableType(declaredReadType);
+  if (sourceOptionalElement !== undefined && declaredPresentType !== undefined &&
+    semantics.types.isIdentical(declaredPresentType, selectedType)) {
+    return sourceOptionalElement;
+  }
   if (declaredReadType !== undefined &&
     (semantics.types.isIdentical(declaredReadType, selectedType) ||
       presentReadType !== undefined && rustSourceOptionalElementCarrier(sourceCarrier) !== undefined &&
       semantics.types.isIdentical(declaredReadType, presentReadType))) {
     return sourceCarrier;
-  }
-  const sourceOptionalElement = rustSourceOptionalElementCarrier(sourceCarrier);
-  const declaredPresentType = sourceOptionalElement === undefined || declaredReadType === undefined
-    ? undefined : semantics.types.nonNullableType(declaredReadType);
-  if (sourceOptionalElement !== undefined && declaredPresentType !== undefined &&
-    semantics.types.isIdentical(declaredPresentType, selectedType)) {
-    return sourceOptionalElement;
   }
   const dispatchCarrier = rustOptionElementCarrier(sourceCarrier) ?? sourceCarrier;
   const resolution = rustResolutionContext(walk, expression);

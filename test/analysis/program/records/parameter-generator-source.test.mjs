@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { Node_Expression, sourceEnclosingCallable } from "@tsonic/target-api/source";
 import { analyzeRust } from "../../../helpers/rust-session.mjs";
-import { getRustGeneratorProtocol, rustGeneratorTargetType, rustAsyncGeneratorTargetType } from "../../../../dist/target-model/types/index.js";
+import { getRustGeneratorProtocol, rustGeneratorTargetType, rustAsyncGeneratorTargetType, rustOptionElementCarrier } from "../../../../dist/target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../../dist/target-model/types/equality.js";
 
 const integer = 'import type { int32 } from "@tsonic/core/types.js";';
@@ -103,6 +103,31 @@ for (const surfaces of [[], ["js"]]) {
     const leaves = nodes.filter(node => ast.kindName(node) === "KindBindingElement");
     assert.equal(leaves.length, 2);
     for (const leaf of leaves) assertRustRecordRequirement(requiredRecords, "bindingProjection", leaf);
+    const right = nodes.find(node => ast.is.IsIdentifier(node) && ast.text(node) === "right" &&
+      ast.kindName(ast.parent(node)) === "KindBinaryExpression");
+    assert.equal(right !== undefined, true, "the original destructured arithmetic operand is retained");
+    const raw = records.runtimeCarrier.get(right)?.carrier;
+    const projection = records.flowReadProjection.get(right);
+    if (surface === "js") {
+      assert.equal(rustOptionElementCarrier(raw)?.name, "int32", "the physical source binding retains its optional native payload");
+      assert.equal(raw.sourceAbsence, true, "the native Option represents source absence, not an unrelated native type");
+      assert.equal(projection?.kind, "option-value", "the checked non-null read selects the existing native payload projection");
+      assert.equal(rustTargetTypeRefEquals(projection.sourceCarrier, raw), true, "the projection keeps the actual binding's storage carrier");
+      assert.equal(rustTargetTypeRefEquals(projection.selectedCarrier, rustOptionElementCarrier(raw)), true,
+        "the arithmetic read uses the admitted payload rather than reconstructing a logical replacement");
+    } else {
+      assert.equal(raw?.name, "int32", "the native binding already stores its exact native integer");
+      assert.equal(projection === undefined, true, "an already-exact native read needs no optional projection");
+    }
+    const optional = declarations.find(declaration => ast.text(ast.name(declaration)) === "optional");
+    const optionalParameter = ast.parameters(optional)[0];
+    const optionalRead = nodes.find(node => ast.is.IsIdentifier(node) &&
+      records.sourceBinding.get(node)?.sourceDeclaration === optionalParameter);
+    assert.equal(optionalRead !== undefined, true, "the original genuinely optional source read is retained");
+    assert.equal(rustOptionElementCarrier(records.runtimeCarrier.get(optionalRead)?.carrier)?.name, "int32",
+      "a source read that still admits absence retains the native Option");
+    assert.equal(records.flowReadProjection.get(optionalRead) === undefined, true,
+      "the optional coalescing operand is not unconditionally unwrapped");
     assert.equal(records.sourceParameterAbi.get({}) === undefined, true);
   });
 
