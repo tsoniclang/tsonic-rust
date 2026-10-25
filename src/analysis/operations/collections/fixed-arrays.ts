@@ -4,7 +4,6 @@ import { elementProvenance } from "../../program/records/selected-operation-valu
 
 import { finalizeProviderOperationFromSubjects } from "../members/conversions.js";
 
-import { isRustCopyCarrier } from "../../../policy/constraints/native-traits.js";
 import { rustFixedArrayCarrierValue, rustSourcePrimitiveTargetType, rustTargetConstInteger } from "../../../target-model/types/index.js";
 import { selectRustNativeIndex } from "../../../policy/operations/collections/native-indices.js";
 import { selectRustFixedArrayElementPlan, selectRustFixedArrayPropertyPlan } from "../../../policy/operations/collections/fixed-arrays.js";
@@ -132,14 +131,6 @@ export function selectRustFixedArrayElementAccess(
     }
     return acceptRustMemberOperation(request, "indexer", selectRustFixedArrayElementPlan(fixedArray.element, index),
       context, options, elementProvenance(request), fixedArray.element);
-  }
-  if (!isRustCopyCarrier(fixedArray.element)) {
-    return rejectSelectedOperation(
-      request.expression,
-      context,
-      "RUST_FIXED_ARRAY_DYNAMIC_INDEX_REQUIRES_COPY",
-      "Dynamic fixed-array element access requires an exact Copy element carrier so a borrowed Rust index result can preserve source value semantics.",
-    );
   }
   const dynamicIndexCarrier = selectedValueCarrier(
     request.argument,
