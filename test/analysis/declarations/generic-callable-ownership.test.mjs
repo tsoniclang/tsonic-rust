@@ -23,6 +23,7 @@ import { createRustStructuralShapePlanRegistry } from "../../../dist/analysis/ob
 import { createRustRetainedEnvironmentQueries } from "../../../dist/analysis/callables/retained-environment-shapes.js";
 import { compileRust } from "../../helpers/rust-session.mjs";
 import { analyzeRustCheckedContext } from "../../helpers/rust-session-analysis-context.mjs";
+import { analyzeRustAnalysisProgram } from "../../../dist/analysis/program/target-program.js";
 
 
 
@@ -52,6 +53,7 @@ function input() {
       IsConstructSignatureDeclaration: node => node.kindName === "KindConstructSignature",
       IsPropertySignatureDeclaration: node => node.kindName === "KindPropertySignature",
       IsVariableDeclarationList: node => node.kindName === "KindVariableDeclarationList",
+      IsEnumMember: node => node.kindName === "KindEnumMember",
     },
     typeParameters: node => node.typeParameters ?? [],
     forEachChild: (node, visit) => { for (const child of node.nodes ?? []) visit(child); },
@@ -143,7 +145,12 @@ closureCapture: { get: (node) => {
     files.map(file => ({ fileName: file.name })),
   ), records, names, navigation: currentSource.navigation, lifetimes: emptyRustLifetimeIndex,
     classValueAdapters: [], closedSourceFiles: new Set(),
-    ownership: { components: [], activations: [], failureReason: () => undefined } };
+    ownership: { components: [], activations: [], failureReason: () => undefined,
+      instanceReceiverOwner(node) {
+        assert.equal(files.some(file => file === node || file.nodes.includes(node)), true,
+          "the virtual callable fixture has only file-owned declarations, never instance receivers");
+        return undefined;
+      } } };
   const materialize = () => {
     const sourceStorage = createSourceStorageQuery(currentSource, files);
     const builder = createRustProgramRecordBuilder();
@@ -212,6 +219,7 @@ function physicalLifecycleInputs({ beforeInitialize, afterInitialize }) {
   let components;
   let preparationIssues;
   let selectionIssues;
+  let sealInput;
   const { result } = compileRust({ files: { "index.ts": "export function value(value: number): number { return value; }" },
     compileTarget(request) {
       const context = analyzeRustCheckedContext(request, current => {
@@ -237,6 +245,31 @@ function physicalLifecycleInputs({ beforeInitialize, afterInitialize }) {
         });
         return { ...current, callableValues };
       });
+      if (context.diagnostics.length === 0) {
+        const completed = analyzeRustAnalysisProgram(request);
+        assert.equal(completed.kind, "resolved",
+          "the canonical complete analysis produces every required late sealing fact");
+        const program = completed.value;
+        assert.equal(program.source.ast === context.ast, true,
+          "the complete native facts use the identical checked source reader");
+        assert.equal(program.sourceFiles.length === context.sourceFiles.length &&
+          program.sourceFiles.every((sourceFile, index) => sourceFile === context.sourceFiles[index]), true,
+          "the late native facts retain every original checked SourceFile identity");
+        assert.equal(context.projectTypes.definitions.length === 0 && program.projectTypes.definitions.length === 0, true,
+          "the lifecycle fixture contains no foreign native class or constructor identities");
+        sealInput = Object.freeze({ nativeGenerics: context.records.nativeGenericPlans,
+          retainedCallableInputs: program.retainedCallableInputs,
+          declarationGenericRequirements: program.declarationGenericRequirements,
+          genericErrors: program.genericCallableErrors,
+          errorRegions: program.errorRegions,
+          initialization: program.errorRegions.initialization,
+          constructions: program.projectTypes.definitions.map(definition => {
+            const selected = program.projectConstructions.forDefinition(definition);
+            assert.equal(selected !== undefined, true,
+              "every completed native construction comes from its canonical producer");
+            return selected;
+          }) });
+      }
       return context.diagnostics.length === 0 ? { kind: "resolved", value: { artifacts: [] }, diagnostics: [] }
         : { kind: "rejected", diagnostics: context.diagnostics };
     },
@@ -247,11 +280,12 @@ function physicalLifecycleInputs({ beforeInitialize, afterInitialize }) {
   assert.equal(preparationIssues?.length, 0, "all actual physical storage is prepared without issues");
   assert.equal(selectionIssues?.kind, "resolved", "source-selected families reach their complete admission result");
   assert.equal(selectionIssues.value.length, 0, "source-selected families finalize without issues");
-  return { registry, input, construction, components };
+  assert.equal(sealInput !== undefined, true, "the lifecycle uses actual completed native sealing inputs");
+  return { registry, input, construction, components, sealInput };
 }
 
 test("callable value plans seal only after adapter classification and cannot be replaced", () => {
-  const { registry, input: planInput, construction, components } = physicalLifecycleInputs({
+  const { registry, input: planInput, construction, components, sealInput } = physicalLifecycleInputs({
     beforeInitialize(current) {
       assert.throws(() => current.generic, /finalized after their selected adapters/u);
       assert.throws(() => current.issues, /finalized after their selected adapters/u);
@@ -263,8 +297,14 @@ test("callable value plans seal only after adapter classification and cannot be 
       assert.equal(current.generic === selectedConstruction.generic, true, "construction has one identical generic family owner");
       assert.equal(current.issues.length, 0, "the actual complete construction has no issues");
       assert.equal(Object.isFrozen(selectedConstruction), true);
-      assert.equal("suspended" in selectedConstruction || "frames" in selectedConstruction || "initializePhysical" in selectedConstruction.generic, false,
-        "construction exposes neither retained inventories nor the physical initializer");
+      assert.equal(current.frames === selectedConstruction.frames, true,
+        "construction exposes the same raw frame inventory before effect analysis");
+      assert.equal(Object.isFrozen(selectedConstruction.frames), true,
+        "the raw frame plan has one frozen canonical identity");
+      assert.equal(Object.isFrozen(selectedConstruction.frames.definitions), true,
+        "raw frame definitions are immutable before physical error selection");
+      assert.equal("suspended" in selectedConstruction || "initializePhysical" in selectedConstruction.generic, false,
+        "construction exposes neither suspended inventories nor the private physical initializer");
       assert.throws(() => current.seal(), /Physical callable publication requires completed source-selected families and effects/u);
       assert.throws(() => current.publish(), /selected physical families after effect analysis/u);
       assert.throws(() => current.finalizeSelected(), /Physical callable families require their completed constructor and field storage selection/u);
@@ -275,11 +315,19 @@ test("callable value plans seal only after adapter classification and cannot be 
   registry.initializeCompletions({ ast: planInput.ast, sourceLifetimes: planInput.lifetimes,
     records: planInput.records, physical: registry.generic.physical, producers: registry.nativeProducers,
     definitions: planInput.typeDefinitions, components });
-  const plan = registry.seal();
+  const sealed = registry.seal(sealInput);
+  assert.equal(sealed.kind, "resolved", "the original callable lifecycle seals using complete native facts");
+  const plan = sealed.value;
   registry.publish();
   assert.equal(registry.selected === selected, true, "the finalized analysis selection cannot be replaced by publication");
   assert.equal(plan !== selected, true, "publication exposes the sealed data plan, not the private analysis selection");
   assert.equal(plan.generic === construction.generic, true, "sealed data retains the original family owner");
+  assert.equal(plan.frames.definitions === construction.frames.definitions, true,
+    "physical publication retains the original raw frame inventory instead of rebuilding it");
+  assert.equal(plan.frames.entryErrors === construction.frames.entryErrors, true,
+    "physical publication retains the one selected frame error owner");
+  assert.equal("sealCounters" in plan.frames || "completeErrors" in plan.frames, false,
+    "the published frame plan exposes no private construction authority");
   assert.equal(plan.frames.definitions.length, 0);
   assert.equal(Object.isFrozen(plan), true);
   assert.throws(() => registry.finalizeSelected(), /exactly once/u);
