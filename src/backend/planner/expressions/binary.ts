@@ -132,10 +132,7 @@ export function planBinaryExpression(node: Node, context: RustPlanContext, resul
   const comparison = context.input.program.records.nativeComparison.get(node);
   if (comparison?.kind === "range") return planRustRangeContainment(node, context);
   if (comparison?.kind === "integer-constant") return { kind: "bool-literal", value: comparison.value };
-  if (fact.kind === "operator-token") {
-    const scoped = planRustScopedStringComparison(node, context);
-    if (scoped !== undefined) return scoped;
-  }
+  if (comparison?.kind === "scoped-string") return planRustScopedStringComparison(node, context);
   if (fact.kind === "string-concat") {
     const nodes = selected.concatParts ?? failRustPlannerInvariant("An admitted concatenation requires its ordered source operands.", node);
     const parts: RustStringConcatPart[] = [];
