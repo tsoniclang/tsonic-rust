@@ -54,6 +54,12 @@ export interface RustAnalyzedErrorRegions extends Pick<RustErrorRegionRecords, "
   complete(initialization: RustInitializationErrorRecords): RustErrorRegionRecords;
 }
 
+export function rustErrorRegionCarrier(selected: RustErrorRegionSelection): TargetTypeRef | undefined {
+  return selected.jsRejection === undefined ? rustNativeErrorJoinTargetType(selected.fileName,
+    [...(selected.localOwner === undefined ? [] : [rustProgramErrorTargetType(selected.localOwner)]),
+      ...selected.sources.map(source => source.errorType)]) : rustJsValueTargetType();
+}
+
 export function selectRustErrorRegion(
   node: Node,
   effects: RustErrorEffectsFact,
@@ -128,9 +134,7 @@ export function selectRustFrameEntryErrors(
   const region = selectRustErrorRegion(definition.activation.ownerDeclaration, merged, input, false);
   if (region.kind === "rejected") return region;
   const carrierFor = (selected: RustErrorRegionSelection): TargetTypeRef => {
-    const carrier = rustNativeErrorJoinTargetType(selected.fileName,
-      [...(selected.localOwner === undefined ? [] : [rustProgramErrorTargetType(selected.localOwner)]),
-        ...selected.sources.map(source => source.errorType)]);
+    const carrier = rustErrorRegionCarrier(selected);
     if (carrier === undefined) failTargetAnalysisInvariant("tsonic-rust",
       "A completed native frame error region requires its exact closed native carrier.", definition.activation.ownerDeclaration);
     return carrier;

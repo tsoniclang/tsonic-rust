@@ -5,6 +5,7 @@ import { localProtectedAsyncSource, localProtectedErrorRegionSource, localProtec
   localProtectedModuleSource } from "../../../../tsonic/test/fixtures/local-protected-error-regions.mjs";
 import { compileRust, artifactText } from "../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
+import { nativeFunction, nativeNodes } from "../../helpers/native-ast.mjs";
 import { rustJsErrorTargetType } from "../../../dist/target-model/types/carriers/js.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 
@@ -28,6 +29,11 @@ ${asynchronous ? "await " : ""}main();
       assert.equal(result.program !== undefined && result.plan !== undefined, true,
         "the original local error contexts reach complete publication and planning");
       const output = artifactText(result, "src/index.rs");
+      if (name === "synchronous") {
+        const pure = nativeFunction(result, "pureBoundCatch");
+        assert.equal(nativeNodes(pure, node => node.kind === "try" && node.catchClause !== undefined).length, 0,
+          "a genuinely infallible bound try body deliberately elides its unreachable catch and unused binding");
+      }
       assert.doesNotMatch(output, /Box::pin|dyn (?:Future|std::error::Error)|catch_unwind/u,
         "local protection uses the existing native completion transport, not boxed or panic emulation");
       validateGeneratedProject(`local-protected-${name}-${surface}`, result.artifacts, { run: true });
