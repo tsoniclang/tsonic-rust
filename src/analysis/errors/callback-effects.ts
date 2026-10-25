@@ -5,12 +5,14 @@ import type { RustPreparedDeferredCheckedCall } from "../../target-model/records
 import type { RustErrorEffectsFact } from "../../target-model/records/error-effects.js";
 import type { RustEffectsWorkBudget } from "./effects-work-budget.js";
 import { rustCallbackProtocol } from "../../policy/operations/members/callbacks.js";
-import { mergeRustErrorEffects, rustErrorEffectsAreFallible, rustLocalErrorEffects, rustPureErrorEffects } from "./error-effects.js";
+import { mergeRustErrorEffects, rustCallableInvocationErrorEffects, rustErrorEffectsAreFallible, rustLocalErrorEffects, rustPureErrorEffects } from "./error-effects.js";
+import { rustCallableProtocol } from "../../target-model/types/carriers/callables.js";
 
 interface CallbackValueAnalysis {
   readonly fallible: boolean;
   readonly implementationFallible: boolean;
   readonly implementationEffects: RustErrorEffectsFact;
+  readonly invocationEffects: RustErrorEffectsFact;
   readonly subjects: readonly Node[];
 }
 
@@ -49,6 +51,9 @@ export function createRustCallbackEffectAnalysis(input: {
     try {
       const carrier = walk.context.records.runtimeCarrier.get(value)?.carrier;
       const invocationFallible = rustCallbackProtocol(carrier)?.fallible === true;
+      const invocationError = rustCallableProtocol(carrier)?.error;
+      const invocationEffects = invocationError === undefined ? rustPureErrorEffects : rustCallableInvocationErrorEffects(invocationError);
+      budget.metadata(invocationEffects);
       const body = ast.body(value);
       if (body !== undefined) {
         const implementationEffects = expressionRegionEffects(body);
@@ -58,6 +63,7 @@ export function createRustCallbackEffectAnalysis(input: {
           fallible: invocationFallible || implementationFallible,
           implementationFallible,
           implementationEffects,
+          invocationEffects,
           subjects: [value],
         };
       }
@@ -66,7 +72,7 @@ export function createRustCallbackEffectAnalysis(input: {
         return undefined;
       }
       if (isFallible(declaration)) {
-        return { fallible: true, implementationFallible: true, implementationEffects: declarationEffects(declaration), subjects: [value, declaration] };
+        return { fallible: true, implementationFallible: true, implementationEffects: declarationEffects(declaration), invocationEffects, subjects: [value, declaration] };
       }
       const declarationBody = ast.body(declaration);
       if (declarationBody !== undefined) {
@@ -77,6 +83,7 @@ export function createRustCallbackEffectAnalysis(input: {
           fallible: invocationFallible || implementationFallible,
           implementationFallible,
           implementationEffects,
+          invocationEffects,
           subjects: [value, declaration],
         };
       }
@@ -87,6 +94,7 @@ export function createRustCallbackEffectAnalysis(input: {
             fallible: invocationFallible || initialized.fallible,
             implementationFallible: initialized.implementationFallible,
             implementationEffects: initialized.implementationEffects,
+            invocationEffects,
             subjects: [value, declaration, ...initialized.subjects],
           };
     } finally {
@@ -99,6 +107,7 @@ export function createRustCallbackEffectAnalysis(input: {
     const callback = callbackValueAnalysis(callbackExpression(pending), new Set());
     return callback === undefined ? undefined : mergeRustErrorEffects([
       pending.prepared.template.isFallible ? rustLocalErrorEffects : rustPureErrorEffects,
+      callback.invocationEffects,
       callback.implementationEffects,
     ]);
   };

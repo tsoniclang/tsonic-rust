@@ -194,6 +194,8 @@ export function createRustNativeStorageQueries(input: {
   };
   const witnesses = collectRustNativeAbsenceWitnesses(input, invocationBindingsFor);
   const { absenceWitnesses, argumentWitnesses } = witnesses;
+  const invocationArgumentWitnessFor = (invocation: Node, argument: Node): TargetTypeRef | undefined =>
+    argumentWitnesses.get(invocation)?.get(argument);
   return Object.freeze({
     logicalCarrierFor,
     issues: witnesses.issues,
@@ -214,6 +216,10 @@ export function createRustNativeStorageQueries(input: {
     },
     valueFor(node: Node): RustNativeStorageSelection {
       if (!nodes.has(node)) return unresolved("Native callable value requires an owned source node.");
+      const invocation = input.ast.parent(node);
+      const witness = invocation === undefined ? undefined : invocationArgumentWitnessFor(invocation, node);
+      if (witness !== undefined) return Object.freeze({ kind: "selected", carrier: witness,
+        inputs: Object.freeze([]), sources: Object.freeze([]) });
       const carrier = rustEffectiveValueCarrier(input.records, node);
       if (carrier === undefined) return unresolved("Native callable value has no finalized logical carrier.");
       const subject = input.storage.subjectFor(node);
@@ -260,7 +266,7 @@ export function createRustNativeStorageQueries(input: {
           generics.lifetimes, generics.consts), bindings.bindings);
     },
     invocationWitnessFor: (selected: RustNativeCallableInput, invocation: Node) => absenceWitnesses.get(invocation)?.get(selected),
-    invocationArgumentWitnessFor: (invocation: Node, argument: Node) => argumentWitnesses.get(invocation)?.get(argument),
+    invocationArgumentWitnessFor,
     joinWriteFor: (node: Node) => joinWrites.get(node),
     extendRecordMemberProducers: (selection: SourceStorageProducersSelection) => recordMembers.extend(selection),
     invocationOriginsFor(selected: RustNativeCallableInput, invocation: Node, owner?: Node): SourceStorageSubjectsSelection {

@@ -394,7 +394,8 @@ export function resolveRustTargetTypeSyntax(
       }
     }
     const semanticMembers = members.filter((child) => ast.kindName(child) !== "KindBarToken");
-    const selectedCarriers = semanticMembers.map(member => resolveRustAuthoredTargetType(member, context, options, resolving));
+    const typeContext = { ...context, sourceStorageSubject: undefined };
+    const selectedCarriers = semanticMembers.map(member => resolveRustAuthoredTargetType(member, typeContext, options, resolving));
     if (selectedCarriers.every(carrier => carrier !== undefined)) {
       const selected = resolveRustSourceUnionCarrier(selectedCarriers as TargetTypeRef[], values => resolveRustUnionValueCarrier(values, options, () => {
         const isValue = (carrier: TargetTypeRef | undefined): boolean =>

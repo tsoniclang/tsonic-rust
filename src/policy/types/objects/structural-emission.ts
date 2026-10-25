@@ -56,7 +56,6 @@ export function selectRustStructuralEmission(input: RustStructuralEmissionPolicy
     const template = definition === input.template ? native : structuralDispatchSignature(input.template);
     if (native === undefined || template === undefined) return reject("RUST_STRUCTURAL_CONSTRUCTOR_TYPE_MISSING",
       "A constructor interface requires exact native dispatch signatures and property storage.", "rust.class-value.constructor");
-    const lifetimes = definition.genericParameters.flatMap(parameter => parameter.kind === "lifetime" ? [parameter.lifetime] : []);
     const references = rustTargetGenericReferences({ kind: "tuple", elements: [
       ...template.carriers, ...template.bases,
       ...input.genericRequirements.associatedTypes.flatMap(requirement => [
@@ -66,7 +65,7 @@ export function selectRustStructuralEmission(input: RustStructuralEmissionPolicy
     const genericParameterIndices = Object.freeze(input.template.stateGenericParameters.flatMap((parameter, index) =>
       parameter.kind !== "lifetime" || references.lifetimeIdentities.includes(rustLifetimeKey(parameter.lifetime)) ? [index] : []));
     return { kind: "selected", value: Object.freeze({ dispatch: Object.freeze({ members: native.members,
-      genericParameterIndices, lifetime: lifetimes.length === 1 ? lifetimes[0] : undefined }),
+      genericParameterIndices, lifetime: definition.dispatchLifetime }),
       bases: native.bases, fields: Object.freeze([]), derives: Object.freeze([]) }) };
   }
   const fields: RustStructuralFieldEmission[] = [];
@@ -108,7 +107,7 @@ export function selectRustStructuralEmission(input: RustStructuralEmissionPolicy
   return { kind: "selected", value: Object.freeze({ dispatch: undefined, bases: Object.freeze([]), fields: Object.freeze(fields), derives: Object.freeze(derives) }) };
 }
 
-function structuralDispatchSignature(definition: RustStructuralShapeDefinition): {
+export function structuralDispatchSignature(definition: RustStructuralShapeDefinition): {
   readonly members: RustConstructorShapeEmission["members"];
   readonly bases: readonly TargetTypeRef[];
   readonly carriers: readonly TargetTypeRef[];

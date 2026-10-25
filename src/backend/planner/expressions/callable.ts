@@ -33,6 +33,8 @@ import { planRustGeneratorBody } from "../declarations/callables/generator-body.
 import { wrapRustJsPromiseBody } from "../declarations/callables/async-promise.js";
 import { planRustSuspendedCallableConstruction } from "./suspended-callables.js";
 import { planRustParameterEntryConversion } from "../declarations/callables/parameter-entry-conversion.js";
+import { rustCallableParameterReturnContext } from "../declarations/callables/parameters.js";
+import type { RustCallableParameterInitialization } from "../../../target-model/records/parameter-emission.js";
 import { planRustCallableLeadingParameters } from "../declarations/callables/leading-parameters.js";
 import { applyFinalizedValueConversion } from "./value-conversions.js";
 import { planRustCapturedReceiverFields, planRustCapturedReceivers, rustRecursiveReceiverFieldContext } from "./receiver-captures.js";
@@ -109,6 +111,7 @@ export function planRustCallableExpressionBody(
     readonly form: "required" | "optional" | "default" | "rest";
     readonly byRefCopy: boolean;
     readonly mutable: boolean;
+    readonly initialization: RustCallableParameterInitialization;
   }[] = [];
   const bindingParameters: {
     readonly pattern: Node;
@@ -127,6 +130,8 @@ export function planRustCallableExpressionBody(
     if (!isValidRustIdentifier(parameterName)) {
       failRustPlannerInvariant("An admitted callable parameter requires its sealed native name.", parameter);
     }
+    const initialization = context.input.program.records.callableParameter.get(parameter)?.initialization
+      ?? failRustPlannerInvariant("An admitted closure parameter requires its sealed native initialization plan.", parameter);
     sourceParameterPlans.push({
       parameter,
       name: parameterName,
@@ -136,6 +141,7 @@ export function planRustCallableExpressionBody(
       form: selected.form,
       byRefCopy: selected.byRefCopy,
       mutable: selected.mutable,
+      initialization,
     });
     if (bindingPattern !== undefined) {
       bindingParameters.push({
@@ -258,6 +264,7 @@ export function planRustCallableExpressionBody(
     functionAbsenceReturnCarrier: undefined,
     capturedBindings,
   };
+  let parameterContext = callableClosureContext;
   const bindingStatements: RustStmt[] = [];
   let invocationArgumentsName: string | undefined;
   let closureParams: { name: string; mutable: boolean; byRefCopy?: boolean; type?: RustType; attrs?: readonly RustAttribute[] }[];
@@ -286,8 +293,14 @@ export function planRustCallableExpressionBody(
       if (closureParams.length !== tuple.arity) failRustPlannerInvariant("An admitted method closure requires its selected native tuple arity.", node);
       for (const [index, parameter] of closureParams.entries()) {
         const value: RustExpr = { kind: "field", receiver: { kind: "path", path: tuple.name }, name: String(index) };
+        const initializer: RustExpr = parameter.byRefCopy ? { kind: "dereference", pointer: value } : value;
+        const sourceParameter = sourceParameterPlans[index - leadingParameterPlans.length];
+        if (sourceParameter?.initialization.kind === "return") {
+          parameterContext = rustCallableParameterReturnContext(sourceParameter.initialization, initializer, parameterContext);
+          continue;
+        }
         bindingStatements.push({ kind: "let", name: parameter.name, mutable: parameter.mutable,
-          init: parameter.byRefCopy ? { kind: "dereference", pointer: value } : value, ...(parameter.attrs === undefined ? {} : { attrs: parameter.attrs }) });
+          init: initializer, ...(parameter.attrs === undefined ? {} : { attrs: parameter.attrs }) });
       }
       closureParams = [{ name: tuple.name, mutable: false }];
     }
@@ -331,13 +344,17 @@ export function planRustCallableExpressionBody(
         const defaultNode = Node_Initializer(context.input.program.source.ast, parameter.parameter);
         const defaultValue = defaultNode === undefined
           ? undefined
-          : planExpression(defaultNode, callableClosureContext);
+          : planExpression(defaultNode, parameterContext);
         if (defaultValue === undefined) {
           return undefined;
         }
         const retained = context.input.program.records.callableParameter.get(parameter.parameter)?.default?.retainStorage;
         if (retained === undefined) failRustPlannerInvariant("An admitted callable default requires its selected native optional storage.", parameter.parameter);
-        initializer = rustOptionDefaultValue(initializer, defaultValue, parameter.carrier, callableClosureContext, retained);
+        initializer = rustOptionDefaultValue(initializer, defaultValue, parameter.carrier, parameterContext, retained);
+      }
+      if (parameter.initialization.kind === "return") {
+        parameterContext = rustCallableParameterReturnContext(parameter.initialization, initializer, parameterContext);
+        continue;
       }
       bindingStatements.push({
         kind: "let",
@@ -349,7 +366,7 @@ export function planRustCallableExpressionBody(
     }
   }
   for (const parameter of sourceParameterPlans) {
-    const entry = planRustParameterEntryConversion(parameter.parameter, parameter.name, parameter.mutable, callableClosureContext);
+    const entry = planRustParameterEntryConversion(parameter.parameter, parameter.name, parameter.mutable, parameterContext);
     if (entry === undefined) return undefined;
     bindingStatements.push(...entry);
   }
@@ -358,7 +375,7 @@ export function planRustCallableExpressionBody(
       binding.pattern,
       { kind: "path", path: binding.name },
       binding.sourceCarrier,
-      callableClosureContext,
+      parameterContext,
       planExpression,
     );
     if (planned === undefined) {
@@ -372,7 +389,7 @@ export function planRustCallableExpressionBody(
   }
   const sourceReturn = context.input.program.records.sourceCallableReturn.get(node);
   const bodyContext: RustPlanContext = {
-    ...callableClosureContext,
+    ...parameterContext,
     functionReturnType: resultType,
     returnResult: generatorErrorType === undefined ? undefined : { errorType: generatorErrorType },
     functionAbsenceReturnCarrier: sourceReturn?.undefinedReturn === true ? bodyResultCarrier : undefined,
@@ -399,6 +416,8 @@ export function planRustCallableExpressionBody(
   const loweredBody = generator === undefined ? applyFallibleShape(applyRustTailShape(
     bodyWithBindings,
     !emission.unitBody || bodyIsFallible,
+    new Set([...closureParams.map(parameter => parameter.name),
+      ...captureBindings.flatMap(binding => binding.name === undefined ? [] : [binding.name])]),
   ), bodyIsFallible
     ? {
         fallible: true,

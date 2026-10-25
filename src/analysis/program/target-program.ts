@@ -452,7 +452,7 @@ export function analyzeRustAnalysisProgram(
     declarationGenericRequirements: declarationGenericRequirements.index,
     ownership: ownership.ownership,
     retainedCallableInputs: retainedCallableInputs.value,
-    structuralShapes: context.structuralShapes.seal(),
+    structuralShapes: context.structuralShapes.completed,
     frozenDataWrites: context.frozenDataWrites.seal(),
     classValues,
     runtimeReferences: runtimeReferences.plan,

@@ -63,9 +63,13 @@ export function instantiateStructuralDefinition<MethodPlan extends
     !rustTargetTypeRefEquals(substitute(template), aligned)) {
     return undefined;
   }
+  const dispatchLifetime = definition.dispatchLifetime?.kind === "parameter"
+    ? bindings.lifetimes.get(rustLifetimeKey(definition.dispatchLifetime)) : definition.dispatchLifetime;
+  if (definition.dispatchLifetime !== undefined && dispatchLifetime === undefined) return undefined;
   return Object.freeze({
     ...definition,
     carrier,
+    dispatchLifetime,
     genericArguments: Object.freeze(definition.genericArguments.map(argument)),
     stateGenericArguments: Object.freeze(definition.stateGenericArguments.map(argument)),
     contextMarker: definition.contextMarker === undefined ? undefined : Object.freeze({ ...definition.contextMarker,

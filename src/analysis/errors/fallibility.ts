@@ -221,7 +221,7 @@ function collectFallibilityFacts(
     const selectedImplementation = walk.context.source.navigation.callableImplementation(declaration);
     return selectedImplementation.kind === "resolved" ? selectedImplementation.implementation.declaration : undefined;
   };
-  const operationIsFallible = (node: Node): boolean => {
+  const operationIsFallible = (node: Node, invocationEffectsSelected: boolean): boolean => {
     const operation = walk.context.records.targetOperation.get(node);
     const generatorOperand = operation?.kind === "iteration" && operation.iterationKind !== "for-in"
       ? Node_Expression(ast, node) : undefined;
@@ -248,7 +248,7 @@ function collectFallibilityFacts(
               bindingProjection.sourceCarrier,
               field.sourceStorageIndex,
             )));
-    return !walk.preparedCallbackCalls.has(node) && walk.context.callableValues.native.callFor(node) === undefined &&
+    return !invocationEffectsSelected && !walk.preparedCallbackCalls.has(node) && walk.context.callableValues.native.callFor(node) === undefined &&
       !generatorOperation && rustTargetOperationIsFallible(
       operation,
       walk.context.structuralShapes,
@@ -515,14 +515,15 @@ function collectFallibilityFacts(
     const topology = rustAwaitSelection(walk.context.records.runtimeCarrier.get(spawn.operand)?.carrier, walk.context.typeDefinitions);
     const branches = topology === undefined ? [] : rustAwaitSelectionLeaves(topology).filter(branch =>
       branch.future !== undefined && rustFutureValueForSourceStorage(branch.carrier) === undefined);
-    const edges = selectRustAwaitSourceErrors(walk, spawn.operand, branches.map(branch => branch.carrier),
+    const source = selectRustAwaitSourceErrors(walk, spawn.operand, branches.map(branch => branch.carrier),
       declarationEffects, selectSourceErrors, budget);
-    if (edges === undefined) {
+    if (source.kind === "rejected") {
       appendRustDiagnostic(walk, "RUST_NATIVE_TASK_SOURCE_ERRORS_NOT_EXACT",
-        "A native task requires its exact stored producer activations and existing deferred error correspondence.", spawn.node,
+        `A native task requires its exact stored producer activations and existing deferred error correspondence. ${source.reason}`, spawn.node,
         ["target.capability=rust.native-tasks"]);
       return undefined;
     }
+    const edges = source.branches;
     const selected = Object.freeze(edges.map(({ carrier, edge }) => Object.freeze({ carrier, edge })));
     awaitSourceEdges.set(spawn.node, selected);
     sourceErrorEdges.set(spawn.node, [...new Set(edges.map(source => source.edge))]);

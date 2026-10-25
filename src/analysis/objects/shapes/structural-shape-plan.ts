@@ -394,6 +394,7 @@ function createRustStructuralShapeConstruction(
         ...(!nativeDispatch ? {} : {
           dispatchName: allocatePascalName(usedTypeNames, `${targetName}Dispatch`),
         }),
+        dispatchLifetime: selection.dispatchLifetime,
         genericParameters: Object.freeze([
           ...genericReferences.lifetimes.map((lifetime) => Object.freeze({
             kind: "lifetime" as const,
@@ -469,6 +470,7 @@ function createRustStructuralShapeConstruction(
       .map(source => completed?.get(closedMetadataKey(source))?.template).find(selected => selected !== undefined);
   };
   let completedPlan: RustStructuralShapePlan | undefined;
+  let completeFinalPhysical: ((source: TargetTypeRef, physical: TargetTypeRef) => RustStructuralPhysicalCarrierSelection) | undefined;
   const definitionFor = (carrier: TargetTypeRef | undefined): RustStructuralShapeLayout | undefined => {
     if (completedPlan !== undefined) return completedPlan.definitionForCarrier(carrier);
     if (carrier === undefined || rustStructuralObjectCarrierValue(carrier) === undefined) return undefined;
@@ -551,9 +553,9 @@ function createRustStructuralShapeConstruction(
     completePhysicalCarrier(source: TargetTypeRef, physical: TargetTypeRef) {
       const unresolved = (reason: string): RustStructuralPhysicalCarrierSelection => Object.freeze({ kind: "unresolved", reason });
       if (methodStorageFinalized) {
-        const selected = definitionFor(physical);
-        return selected === undefined ? unresolved("A structural physical carrier requires its exact admitted native implementation template.")
-          : Object.freeze({ kind: "resolved", carrier: physical });
+        if (completeFinalPhysical === undefined)
+          failTargetAnalysisInvariant("tsonic-rust", "Completed structural storage requires its canonical physical registration owner.");
+        return completeFinalPhysical(source, physical);
       }
       const sourceKey = closedMetadataKey(source);
       const selected = definitionFor(source);
@@ -782,6 +784,13 @@ function createRustStructuralShapeConstruction(
         finalInstances = Object.freeze([...physicalInstances.values()]);
         publishedInstances = finalInstances;
         return selected;
+      };
+      completeFinalPhysical = (source, physical) => {
+        const owner = instanceOwners.get(closedMetadataKey(source));
+        const selected = owner === undefined ? undefined : registerFinal(owner, physical);
+        return selected === undefined
+          ? Object.freeze({ kind: "unresolved", reason: "A structural physical carrier requires its exact source owner and native generic correspondence." })
+          : Object.freeze({ kind: "resolved", carrier: physical });
       };
       for (const [original, completed] of completedCarriers) for (const selected of completed.values()) {
         const replacement = canonicalFor(replacements.get(original)!);

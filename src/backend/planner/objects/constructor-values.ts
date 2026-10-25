@@ -14,6 +14,7 @@ import { readRustSourceStaticField, planRustSourceStaticFieldStorage } from "../
 import { createRustSyntheticNameState } from "../names/synthetic.js";
 import { rustProjectImplementationContext, rustProjectImplementationGenerics } from "./polymorphism/implementation-generics.js";
 import { failRustPlannerInvariant } from "../diagnostics.js";
+import { rustStructuralDispatchType } from "./project-structural-types.js";
 
 export function planRustClassValueImplementations(declaration: Node, context: RustPlanContext): readonly RustItem[] | undefined {
   const selected = context.input.program.records.classEnvironment.get(declaration);
@@ -33,9 +34,8 @@ export function planRustClassValueImplementations(declaration: Node, context: Ru
     const generics = rustProjectImplementationGenerics(view.genericCarrier,
       planRustProjectGenerics(definition, [], context, environment.genericParameterIndexes), context);
     if (generics === undefined) failRustPlannerInvariant("An admitted constructor view requires its native implementation generics.", declaration);
-    const wrapper = rustTypeFromCarrierInContext(view.targetCarrier, context);
-    if (wrapper?.kind !== "named") failRustPlannerInvariant("An admitted constructor view requires its named native wrapper.", declaration);
-    const ownerPath = wrapper.path.slice(0, wrapper.path.lastIndexOf("::") + 2);
+    const trait = rustStructuralDispatchType(view.targetCarrier, context);
+    if (trait === undefined) failRustPlannerInvariant("An admitted constructor view requires its selected native dispatch contract.", declaration);
     const functions: RustImplFunction[] = [];
     if (view.construction !== undefined) {
       const construct = planRustClassValueForwarder(view.construction.callable, view.construction.name, context, true);
@@ -71,8 +71,7 @@ export function planRustClassValueImplementations(declaration: Node, context: Ru
               value: { kind: "call", path: "Ok", args: [{ kind: "tuple-literal", elements: [] }] } }) }] } });
       }
     }
-    items.push({ kind: "impl", generics, target,
-      trait: { kind: "named", path: `${ownerPath}${view.dispatchName}`, genericArguments: wrapper.genericArguments }, members: functions });
+    items.push({ kind: "impl", generics, target, trait, members: functions });
   }
   return items;
 }

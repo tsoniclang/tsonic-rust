@@ -350,7 +350,7 @@ test("evaluation-only provider arguments do not require native parameter-passing
   });
   assert.ok(abi);
   const { program } = analyzeRust({ surfaces: ["js"], files: { "index.ts": `
-export function observed(value: unknown, indent: number): string {
+export function observed(value: unknown, indent: number): string | undefined {
   return JSON.stringify(value, undefined, indent);
 }
 ` } });
@@ -433,7 +433,7 @@ test("singleton tuples render with the Rust-required trailing comma", () => {
   const { result } = compileRust({
     files: {
       "index.ts": `
-
+import type { int32 } from "@tsonic/core/types.js";
 export function singleton(value: int32): [int32] {
   return [value];
 }
@@ -529,7 +529,7 @@ test("private class members remain private in generated Rust", () => {
   const { result } = compileRust({
     files: {
       "index.ts": `
-
+import type { int32 } from "@tsonic/core/types.js";
 export class Secret {
   private value: int32;
 

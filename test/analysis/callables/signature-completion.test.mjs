@@ -13,7 +13,50 @@ import { closedMetadataEquals } from "../../../dist/target-model/metadata/closed
 import { recordClassSignatureFacts, recordInterfaceFacts } from "../../../dist/analysis/declarations/project-types.js";
 import { resolveRustCallableEnvironment } from "../../../dist/analysis/source-evidence/types/resolution/callable-environments.js";
 import { rustSourceFunctionValueCarrier } from "../../../dist/analysis/callables/function-values.js";
-import { rustCallableProtocol } from "../../../dist/target-model/types/carriers/callables.js";
+import { rustCallableProtocol, rustCallableInputProtocol, rustCallableInputTargetType } from "../../../dist/target-model/types/carriers/callables.js";
+import { resolveRustCallableInputCarrier } from "../../../dist/analysis/source-evidence/types/resolution/callable-inputs.js";
+import { resolveRustTargetType } from "../../../dist/analysis/source-evidence/types/resolution/target.js";
+
+for (const generic of [true, false]) test(`checked ${generic ? "generic" : "concrete"} callable formals retain their actual native input origin requirement`, () => {
+  const type = generic ? "Value" : "number";
+  const { context, walk } = analyzeRustOperations(`
+export function apply${generic ? "<Value>" : ""}(callback: (value: ${type}) => ${type}, value: ${type}): ${type} {
+  return callback(value);
+}`, { surfaces: [] });
+  const declaration = context.sourceStorage.nodes.find(node => context.ast.is.IsFunctionDeclaration(node) &&
+    context.ast.text(context.ast.name(node)) === "apply");
+  assert.equal(declaration !== undefined, true, "the actual checked function owns the formal");
+  const parameter = sourceCallableValueParameters(context.ast, declaration, context.semanticsFor(declaration))[0];
+  const resolution = rustResolutionContext(walk, parameter);
+  const sourceType = context.semanticsFor(parameter).declarations.declaredValueType(parameter);
+  const carrier = resolveRustTargetType(sourceType, { ...resolution, sourceStorageSubject: undefined,
+    callableRepresentation: "signature" }, walk.operationOptions, new Set());
+  const protocol = rustCallableProtocol(carrier);
+  assert.equal(protocol !== undefined, true, "the original checked callable signature resolves exactly");
+  assert.equal(protocol.parameters[0].kind, generic ? "type-parameter" : "source-primitive",
+    "the selected source binder is not a guessed concrete instantiation");
+  const subject = resolution.sourceStorage.subject(parameter, "input");
+  assert.equal(subject.kind, "resolved", "the same original parameter has an owned input subject");
+  let originQueries = 0;
+  const selected = resolveRustCallableInputCarrier(subject.subject, carrier, { ...resolution,
+    sourceStorage: { ...resolution.sourceStorage, closedOriginsFor(current) {
+      originQueries++;
+      assert.equal(current === subject.subject, true, "origin selection retains the original input identity");
+      assert.equal(generic, false, "an abstract checked generic formal does not require a concrete actual implementation");
+      return { kind: "unresolved", reason: "The concrete original input is not yet bound." };
+    } },
+  }, walk.operationOptions);
+  assert.equal(originQueries, generic ? 0 : 1, "only the concrete input depends on actual closed origins");
+  if (generic) {
+    assert.equal(rustTargetTypeRefEquals(selected, rustCallableInputTargetType(protocol.parameters, protocol.result)), true,
+      "the borrowed native input preserves the exact checked parameter and result binders");
+    const actual = rustCallableInputProtocol(selected);
+    assert.equal(actual?.parameters[0] === protocol.parameters[0] && actual.result === protocol.result, true,
+      "input selection neither substitutes another generic identity nor copies a source implementation");
+  } else {
+    assert.equal(selected === undefined, true, "a genuinely unresolved concrete input remains unavailable");
+  }
+});
 
 test("a named captured function retains its actual native borrow instead of a static environment", () => {
   const { context, walk } = analyzeRustOperations(`

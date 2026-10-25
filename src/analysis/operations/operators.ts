@@ -255,6 +255,7 @@ function inPlaceStringAppendDeclarationFor(
     | "in-place-string-append-parts"
     | "in-place-string-append-value";
 } | undefined {
+  target = assignmentTarget(walk.context.ast, target);
   if (walk.context.ast.kindName(target) !== KindIdentifier) {
     return undefined;
   }

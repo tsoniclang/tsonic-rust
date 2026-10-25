@@ -37,10 +37,11 @@ export function planRustConstructionLayers(
     };
     const label = !plan.earlyReturnLayers.has(layer.definition) ? undefined
       : { id: controlFlow.nextLoopId++, label: allocateRustSyntheticName(syntheticNames, "constructor_layer") };
-    const layerContext = construction.contextForLayer(selectedContext, layer, label);
-    const prelude = planRustCallableParameterPrelude(parameterPlan, layerContext, planExpression);
+    const parameterContext = construction.contextForLayer(selectedContext, layer, label);
+    const prelude = planRustCallableParameterPrelude(parameterPlan, parameterContext, planExpression);
     if (prelude === undefined) failRustPlannerInvariant("An admitted constructor layer requires its exact native body and initialization plan.", layer.definition.declaration);
-    const statements: RustStmt[] = [...prelude];
+    const layerContext = prelude.context;
+    const statements: RustStmt[] = [...prelude.statements];
     if (index > 0) {
       const base = plan.layers[index - 1]!;
       const baseStorage = layers[index - 1]!;

@@ -56,11 +56,11 @@ export function planRustProjectStructuralImplementations(declaration: Node, cont
   const items: RustItem[] = [];
   for (const view of views) {
     const baseContext = context;
-    context = rustStructuralViewImplementationContext(view.sourceCarrier, representation, baseContext);
+    context = rustStructuralViewImplementationContext(view, representation, baseContext);
     const generics = rustStructuralViewImplementationGenerics(view, representation, context);
     const target = rustStructuralViewRootType(view.sourceCarrier, representation, context);
-    const trait = rustStructuralDispatchType(view.targetCarrier, context);
-    const shape = context.input.program.records.structuralShape.get(view.targetCarrier);
+    const trait = rustStructuralDispatchType(view.nativeTargetCarrier, context);
+    const shape = context.input.program.records.structuralShape.get(view.nativeTargetCarrier);
     if (target === undefined || trait === undefined || shape === undefined || generics === undefined)
       failRustPlannerInvariant("A structural implementation requires its sealed native target, trait, fields and generics.", view.declaration);
     const functions: RustImplFunction[] = [];
