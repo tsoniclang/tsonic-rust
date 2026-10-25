@@ -105,8 +105,22 @@ function inspect(body: Body): boolean {
   body[0] = 2;
   return body[0] === 2;
 }
+function dynamicProbe(state: boolean[]): Body {
+  state[0] = !state[0];
+  return [1];
+}
+function staticProbe(state: boolean[]): boolean {
+  state[0] = !state[0];
+  return state[0];
+}
 export function main(): void {
   if (!inspect([1]) || !inspect(true)) throw new Error("native array union storage changed");
+  const dynamicState = [false];
+  const staticState = [false];
+  if (typeof dynamicProbe(dynamicState) !== "object" || !dynamicState[0] ||
+      typeof staticProbe(staticState) !== "boolean" || !staticState[0]) {
+    throw new Error("native runtime and static category operands must execute exactly once");
+  }
 }
 main();
 ` } });
