@@ -315,9 +315,10 @@ function checkedStructuralMethods(source, label) {
     });
     return { kind: "resolved", value: { artifacts: [] }, diagnostics: context.diagnostics };
   } });
-  assert.equal(context !== undefined && sourceTypes !== undefined, true, `${label}: checked physical construction is reached`);
+  assert.equal(context !== undefined, true, `${label}: checked source analysis is reached`);
   assert.equal(context.diagnostics.length, 0, `${label}: ${context.diagnostics.map(issue =>
     `${issue.code}: ${issue.message}`).join("\n").slice(0, 2048)}`);
+  assert.equal(sourceTypes !== undefined, true, `${label}: checked physical construction is reached`);
   const { ast, records, sourceStorage: storage, structuralShapes } = context;
   const selected = context.callableValues.selected;
   assert.equal(selected.issues.length, 0, `${label}: ${selected.issues.map(issue => issue.message).join("\n").slice(0, 2048)}`);
