@@ -66,17 +66,18 @@ export function rustTypeFromCarrierInContext(
       );
   const selectedCarrier = position === "absence" && instantiatedCarrier !== undefined
     ? rustCallableInputAbsenceWitness(instantiatedCarrier) : instantiatedCarrier;
+  const syntaxPosition = position === "inferred-call" || position === "absence" ? "general" : position;
   const resolveStructuralShape = (shapeCarrier: TargetTypeRef): RustType | undefined => {
-    if (rustFrameCallableValue(shapeCarrier) !== undefined) return rustFrameCallableTypes(shapeCarrier, context)?.rootType;
+    if (rustFrameCallableValue(shapeCarrier) !== undefined) return rustFrameCallableTypes(shapeCarrier, context, syntaxPosition)?.rootType;
     const instance = rustClassConstructorInstance(shapeCarrier);
-    if (instance !== undefined) return rustClassEnvironmentHandleType(instance, context);
+    if (instance !== undefined) return rustClassEnvironmentHandleType(instance, context, syntaxPosition);
     const selected = context.input.program.records.typeEmission.get(shapeCarrier);
     if (selected === undefined) failRustPlannerInvariant("An admitted native type requires its sealed physical storage selection.");
     if (selected.generic !== undefined) {
       const generic = selected.generic;
       const module = context.moduleNameByFileName.get(generic.fileName);
       const external = context.externalCrateNameByFileName.get(generic.fileName);
-      const arguments_ = rustGenericArgumentsFromCarrier(generic.arguments, sourceRendering, resolveStructuralShape);
+      const arguments_ = rustGenericArgumentsFromCarrier(generic.arguments, sourceRendering, resolveStructuralShape, syntaxPosition);
       if (module === undefined || arguments_ === undefined) failRustPlannerInvariant("An admitted generic callable requires its native module and storage arguments.");
       return { kind: "named", path: `${external !== undefined && external !== context.crateName ? external : "crate"}::${module}::${generic.name}`,
         genericArguments: arguments_ };
@@ -85,20 +86,21 @@ export function rustTypeFromCarrierInContext(
     if (rustGenericCallableValue(shapeCarrier) !== undefined) return undefined;
     const shape = selected.structural;
     if (shape === undefined) failRustPlannerInvariant("An admitted structural native type requires its exact sealed definition.");
-    const arguments_ = rustGenericArgumentsFromCarrier(shape.arguments, sourceRendering, resolveStructuralShape);
+    const arguments_ = rustGenericArgumentsFromCarrier(shape.arguments, sourceRendering, resolveStructuralShape, syntaxPosition);
     const path = rustStructuralTypePathInContext(shapeCarrier, context);
     if (arguments_ === undefined || path === undefined) failRustPlannerInvariant("An admitted structural native type requires its exact emitted path and arguments.");
     const state: RustType = { kind: "named", path, ...(arguments_.length === 0 ? {} : { genericArguments: arguments_ }) };
     if (!shape.handle) return state;
     if (shape.context === undefined) failRustPlannerInvariant("An admitted structural handle requires its completed native context type.");
-    const nativeContext = rustTypeFromCarrier(shape.context, sourceRendering, resolveStructuralShape);
+    const nativeContext = rustTypeFromCarrier(shape.context, sourceRendering, resolveStructuralShape, syntaxPosition);
     if (nativeContext === undefined) failRustPlannerInvariant("An admitted structural handle requires its renderable completed native context.");
     return { kind: "named", path: "rt::ObjectHandle", genericArguments: typeGenericArguments([state, nativeContext]) };
   };
   const sourceRendering: RustSourceTypeRendering = {
     typeParameterNames: context.typeParameterNames,
     payloadArgumentsFor: carrier => context.input.program.records.typeEmission.get(carrier)?.unionArguments,
-    pathFor: value => rustSourceTypePathInContext(value, context), additionalArgumentsFor: type => rustOptionalStorageTypeArguments(type, context),
+    pathFor: value => rustSourceTypePathInContext(value, context),
+    additionalArgumentsFor: type => rustOptionalStorageTypeArguments(type, context, undefined, syntaxPosition),
     programErrorType: owner => {
       const boundary = context.sourcePackageErrors === undefined ? undefined : owner.kind === "logical"
         ? rustCurrentErrorBoundary(context)
@@ -108,10 +110,10 @@ export function rustTypeFromCarrierInContext(
     producerErrorType: carrier => {
       const selected = context.input.program.records.typeEmission.get(carrier)?.producerError;
       if (selected === undefined) failRustPlannerInvariant("An admitted producer error requires its exact sealed native error carrier.");
-      return rustTypeFromCarrier(selected, sourceRendering, resolveStructuralShape);
+      return rustTypeFromCarrier(selected, sourceRendering, resolveStructuralShape, syntaxPosition);
     },
     nativeErrorJoinType: reference => {
-      const errors = reference.errors.map(carrier => rustTypeFromCarrier(carrier, sourceRendering, resolveStructuralShape));
+      const errors = reference.errors.map(carrier => rustTypeFromCarrier(carrier, sourceRendering, resolveStructuralShape, syntaxPosition));
       if (errors.length === 0 || errors.some(error => error === undefined))
         failRustPlannerInvariant("An admitted native error join requires its exact error type inventory.");
       if (errors.length === 1) return errors[0];
@@ -125,7 +127,7 @@ export function rustTypeFromCarrierInContext(
         genericArguments: typeGenericArguments(errors as readonly RustType[]) };
     },
   };
-  const rendered = rustTypeFromCarrier(selectedCarrier, sourceRendering, resolveStructuralShape);
+  const rendered = rustTypeFromCarrier(selectedCarrier, sourceRendering, resolveStructuralShape, syntaxPosition);
   const nativePosition = selectedCarrier === undefined ? undefined : context.input.program.records.typeEmission.get(selectedCarrier)?.positions;
   if (selectedCarrier !== undefined && nativePosition === undefined) failRustPlannerInvariant("An admitted native type requires its exact sealed position evidence.");
   if (position === "inferred-call" && rendered !== undefined && nativePosition?.opaque === true) {
@@ -176,6 +178,7 @@ export function rustReturnTypeFromCarrierInContext(
 export function rustTargetGenericArgumentToAstInContext(
   argument: RustTargetGenericArgument,
   context: RustTypeRenderingContext,
+  position: "general" | "parameter" | "return" = "general",
 ): RustGenericArgument | undefined {
   switch (argument.kind) {
     case "lifetime":
@@ -189,7 +192,7 @@ export function rustTargetGenericArgumentToAstInContext(
     case "const":
       return { kind: "const", value: rustConstArgumentToAst(argument.value) };
     case "type": {
-      const type = rustTypeFromCarrierInContext(argument.type, context);
+      const type = rustTypeFromCarrierInContext(argument.type, context, position);
       return type === undefined ? undefined : { kind: "type", type };
     }
   }
