@@ -165,7 +165,7 @@ export function finalizeRustNativeEmission(
     producer: context.records.errorEmissionPlans });
   const sourceCallableEmission = analyzeRustSourceCallableEmission(program, context.nativeNodes, context.records.sourceCallableEmissionPlans);
   if (sourceCallableEmission.issues.length !== 0) return rejectedTargetStage(sourceCallableEmission.issues);
-  analyzeRustGenericEmission({ program, sourceFiles: context.sourceFiles, nodes: context.nativeNodes,
+  analyzeRustGenericEmission({ program, source: context.source, sourceFiles: context.sourceFiles, nodes: context.nativeNodes,
     producer: context.records.genericEmissionPlans, sourceValues: sourceCallableEmission.values });
   const nativeDeclarations = analyzeRustNativeDeclarationForms({ ast: context.ast, sourceFiles: context.sourceFiles,
     semanticsFor: context.semanticsFor,
