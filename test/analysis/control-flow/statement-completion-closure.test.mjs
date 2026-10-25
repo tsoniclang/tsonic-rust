@@ -456,10 +456,11 @@ export function update(): void {
   ++store[0];
   (store[1])--;
 }`, { packages: [acmePlatformPackage({ includeSetters: true })] });
-  const setters = nodes.filter(node => program.records.targetOperation.get(node)?.kind === "runtime-set");
+  const setters = nodes.filter(node => (program.records.compoundWrite.get(node) ??
+    program.records.targetOperation.get(node))?.kind === "runtime-set");
   assert.equal(setters.length, 7, "direct, compound, prefix, postfix, property, index and wrapper source cases remain");
   for (const [ordinal, node] of setters.entries()) {
-    const operation = program.records.targetOperation.get(node);
+    const operation = program.records.compoundWrite.get(node) ?? program.records.targetOperation.get(node);
     const early = rustRuntimeSetSourceInputs(ast, node, operation);
     const final = statementIndex(program.records).setterFor(node);
     const label = `native setter ${ordinal}`;
@@ -480,6 +481,64 @@ export function update(): void {
       `${label}: existing ${name} refusal remains at the single source-input owner`);
   }
 });
+
+for (const surfaces of [[], ["js"]]) {
+  const surface = surfaces[0] ?? "native";
+  test(`selected native compound and unary setters preserve values, storage and exact evaluation (${surface})`, { timeout: 300_000 }, () => {
+    const { result } = compileRust({ surfaces, packages: [acmePlatformPackage({ includeSetters: true }), acmeTestingPackage()],
+      target: { id: "rust", options: { outputType: "bin", crateName: `native_setter_updates_${surface}` } },
+      files: { "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+import { Store } from "@acme/platform";
+import { check } from "@acme/testing";
+let indexCalls: int32 = 0;
+let receiverCalls: int32 = 0;
+function index(): int32 { indexCalls += 1; return 1; }
+function fresh(): Store { receiverCalls += 1; return new Store("seed"); }
+export function main(): void {
+  const store = new Store("seed");
+  store.count = 1;
+  (store.count) += 2;
+  check(store.count === 3);
+  const previous = store.count++;
+  check(previous === 3 && store.count === 4);
+  const next = ++store.count;
+  check(next === 5 && store.count === 5);
+  const previousIndex = store[0]++;
+  check(previousIndex === 4 && store[0] === 5);
+  const nextIndex = ++store[1];
+  check(nextIndex === 7 && store[0] === 6);
+  (store[1])--;
+  check(store[0] === 5);
+  store[index()] += 3;
+  check(indexCalls === 1 && store[0] === 8);
+  const temporaryNext = ++fresh()[index()];
+  check(temporaryNext === 6 && receiverCalls === 1 && indexCalls === 2);
+}
+main();
+` } });
+    assert.equal(result.diagnostics.length, 0,
+      result.diagnostics.map(diagnostic => `${diagnostic.code}: ${diagnostic.message}`).join("\n").slice(0, 2048));
+    const generated = artifactText(result, "src/index.rs");
+    assert.match(generated, /\.set_count\(/u, "the selected property setter is not replaced by a direct field write");
+    assert.match(generated, /\.set\(/u, "the selected index setter is retained");
+    assert.doesNotMatch(generated, /\.clone\(|Box::new|unsafe\s*\{/u,
+      "native update locations do not add copies, boxing or unsafe address reconstruction");
+    validateGeneratedProject(`native-setter-updates-${surface}`, result.artifacts, { run: true });
+  });
+
+  test(`a native method index getter without a setter never becomes writable storage (${surface})`, () => {
+    const { result } = compileRust({ surfaces, packages: [acmePlatformPackage()], files: { "index.ts": `
+import { Store } from "@acme/platform";
+export function update(): void { const store = new Store("seed"); ++store[0]; }
+` } });
+    assert.equal(result.diagnostics.some(diagnostic => diagnostic.code === "RUST_UNSUPPORTED_AST" &&
+      diagnostic.message.startsWith("Increment/decrement requires a finalized writable Rust location.")), true,
+    "a native method read supplies no fabricated index assignment address");
+    assert.equal(result.program === undefined && result.plan === undefined && result.artifacts.length === 0, true,
+      "missing native write evidence is rejected before publication or partial emission");
+  });
+}
 
 test("the canonical setter renderer preserves receiver and value effects for a selected native macro", () => {
   const carrier = { kind: "target-named", id: "r05.Flag" };
