@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import { rustProgramNodeIsOutsideNativeCode } from "../control-flow/compile-time-statements.js";
-import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
+import { failTargetAnalysisInvariant, type TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustValueReadProducer } from "../program/records/value-read.js";
 import type { RustValueProjectionProducer } from "../program/records/value-projection.js";
@@ -19,21 +19,22 @@ import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
 import { rustCallableAdapterValues } from "../../policy/conversions/callable-values.js";
 import type { RustCallableValueAdapter } from "../../target-model/records/callable-adapters.js";
 import { BinaryExpression_Left, BinaryExpression_Right, Node_Expression, Node_Operand } from "@tsonic/target-api/source";
+import { rustUnparenthesizedExpression } from "../../target-model/syntax/expressions.js";
 import { rustUnionEntryTransferIssue } from "../../policy/conversions/union-injection.js";
 import type { RustValueReadOwnership } from "../../target-model/records/ownership.js";
+import type { RustProviderReadSelection } from "../operations/provider-forms.js";
 
 export function analyzeRustValueReads(program: Omit<RustAnalysisProgram, "reachability">, nodes: readonly Node[],
-  producer: RustValueReadProducer, projections: RustValueProjectionProducer, conversions: RustConversionEmissionProducer): readonly TargetDiagnostic[] {
+  providerReads: readonly RustProviderReadSelection[], producer: RustValueReadProducer,
+  projections: RustValueProjectionProducer, conversions: RustConversionEmissionProducer): readonly TargetDiagnostic[] {
   const issues: TargetDiagnostic[] = [];
   const refuse = (node: Node, capability: string, message: string): void => {
     issues.push({ code: "RUST_MISSING_TARGET_FACT", category: "error", source: "tsonic-rust", sourceNode: node,
       message: `${message} Node kind: ${program.source.ast.kindName(node)}.`, evidence: [`target.capability=${capability}`] });
   };
   const rejectedEntries = new Set<Node>();
-  const providerClones = new Set(program.physicalEmissionContexts.sourceOccurrences.filter(occurrence =>
-    [program.records.providerForm.get(occurrence.node, occurrence.operation.abi),
-      program.records.providerForm.get(occurrence.node, occurrence.operation.abi, true)].some(form => form?.read === "clone"))
-    .map(occurrence => occurrence.node));
+  const providerClones = new Set(providerReads.filter(selection => selection.bodies.some(context => context.read === "clone"))
+    .map(selection => selection.node));
   const entry = (node: Node, source: TargetTypeRef, target: TargetTypeRef,
     read: RustValueReadOwnership["kind"] | undefined): void => {
     if (rejectedEntries.has(node)) return;
@@ -153,13 +154,34 @@ export function analyzeRustValueReads(program: Omit<RustAnalysisProgram, "reacha
     const fused = flow?.kind === "union-map" && contextual?.conversion.kind === "project-union-map" && rustTargetTypeRefEquals(flow.selectedCarrier, contextual.sourceCarrier) &&
       cast === undefined && downcast === undefined && lifetime === undefined && object === undefined ? flow : undefined;
     const ownership = program.records.readOwnership.get(node);
+    const operation = program.records.targetOperation.get(node);
+    let resultNode = rustUnparenthesizedExpression(program.source.ast, node);
+    let resultOperation = program.records.targetOperation.get(resultNode);
+    let forwardsRead = resultNode !== node;
+    while (resultOperation?.kind === "identity-expression" || resultOperation?.kind === "non-null-expression" &&
+      rustTargetTypeRefEquals(resultOperation.sourceCarrier, resultOperation.resultCarrier) ||
+      resultOperation?.kind === "source-conversion" && resultOperation.conversion === undefined &&
+      program.records.projectUpcast.get(resultNode) === undefined && program.records.projectDowncast.get(resultNode) === undefined) {
+      forwardsRead = true;
+      const operand = program.source.ast.is.IsPrefixUnaryExpression(resultNode)
+        ? Node_Operand(program.source.ast, resultNode) : Node_Expression(program.source.ast, resultNode);
+      if (operand === undefined)
+        failTargetAnalysisInvariant("tsonic-rust", "An admitted identity result requires its exact source operand.", resultNode);
+      resultNode = rustUnparenthesizedExpression(program.source.ast, operand);
+      resultOperation = program.records.targetOperation.get(resultNode);
+    }
+    const sourceConversion = resultOperation?.kind === "source-conversion" ? resultOperation : undefined;
+    forwardsRead ||= sourceConversion !== undefined;
+    const resultContract = sourceConversion?.conversion === undefined ? undefined
+      : admitRustConversionEmission(conversions, sourceConversion.conversion, program.typeDefinitions);
+    const ownsResult = resultContract?.sourceMode === "value" && resultContract.lowering !== "identity";
     const entrySource = contextual?.sourceCarrier ?? contextualInput;
-    const entryRead = providerClones.has(node) && ownership !== undefined && ownership.source.kind !== "borrow"
+    const entryRead = ownsResult ? "move" : providerClones.has(node) && ownership !== undefined && ownership.source.kind !== "borrow"
       ? "clone" : ownership?.source.kind;
     if (entrySource !== undefined && value !== undefined &&
-      (runtime?.sourceMode === "value" && runtime.lowering !== "identity" || optional?.kind === "some" || entryRead === "clone"))
+      (runtime?.sourceMode === "value" && runtime.lowering !== "identity" || optional?.kind === "some" ||
+        entryRead === "clone" && !forwardsRead))
       entry(node, entrySource, value, entryRead);
-    const operation = program.records.targetOperation.get(node);
     if (operation?.kind === "source-conversion") {
       convertedEntry(Node_Expression(program.source.ast, node) ?? Node_Operand(program.source.ast, node), operation.conversion);
     } else if (operation?.kind === "operator-call" || operation?.kind === "operator-token") {

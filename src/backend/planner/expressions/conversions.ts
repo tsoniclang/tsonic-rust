@@ -45,7 +45,12 @@ function providerConstantExpression(argument: RustProviderConstantArgument, cont
 export function planProviderOperationExpression(context: RustPlanContext,
   fact: Extract<RustTargetOperationFact, { readonly kind: "provider-operation" | "runtime-set" }>,
   receiverNode: Node | undefined, argumentNodes: readonly (Node | undefined)[], operationNode: Node,
-  options: { readonly resultUse: "value" | "storage"; readonly overrides?: RustFinalizedInputPlanOverrides }): RustExpr | undefined {
+  options: { readonly overrides?: RustFinalizedInputPlanOverrides } &
+    ({ readonly resultUse: "value" | "storage" }
+      | { readonly resultUse: "scoped"; readonly consume: (expression: RustExpr) => RustExpr | undefined })): RustExpr | undefined {
+  const form = context.input.program.records.providerForm.get(operationNode, fact.abi, context.promiseBody)
+    ?? failRustPlannerInvariant("An admitted provider operation requires its sealed emission form.", operationNode);
+  context = { ...context, providerCallbackBody: form.callbackBody };
   const evaluation = planRustProviderEvaluationScope(context, fact, operationNode, receiverNode, argumentNodes,
     planExpression, planProviderOperationExpression, options.overrides?.inputs,
     input => planFinalizedSourceInput(context, input, receiverNode, argumentNodes, operationNode, "target-argument", options.overrides));
@@ -63,9 +68,11 @@ export function planProviderOperationExpression(context: RustPlanContext,
     args.push(value);
   }
   const expression = planRustFinalizedOperationForm(context, fact.abi, receiver, args, operationNode,
-    { resultUse: options.resultUse, assignment: fact.kind === "runtime-set" });
+    { resultUse: options.resultUse === "scoped" ? "storage" : options.resultUse, assignment: fact.kind === "runtime-set" });
   if (expression === undefined) return undefined;
-  const value = dispatch.apply(expression);
+  const dispatched = dispatch.apply(expression);
+  const value = options.resultUse === "scoped" ? options.consume(dispatched) : dispatched;
+  if (value === undefined) return undefined;
   return evaluation.kind === "selected" ? applyRustProviderEvaluationScope(value, evaluation) : value;
 }
 

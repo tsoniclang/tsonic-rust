@@ -11,6 +11,7 @@ import { rustValueCarrierBeforeContextualConversion } from "../conversions/value
 import type { RustNativeCallableProducerPlan } from "../../target-model/records/native-producers.js";
 import type { RustNativeStoragePlan } from "./native-storage.js";
 import type { RustFrameCallablePlan } from "../../target-model/records/frame-callables.js";
+import { rustInfallibleTargetId } from "../../target-model/types/carriers/source-types.js";
 
 export function rustNativeCallableOperand(
   source: TargetTypeRef,
@@ -30,6 +31,14 @@ export function rustNativeCallableOperand(
       : rustNativeCallablePhysicalSource(source, { kind: "identity", carrier }, input.frames);
   }
   if (!rustTargetTypeRefEquals(rustValueCarrierBeforeContextualConversion(input.records, node), source)) return undefined;
+  const lambda = input.records.lambdaBody.get(node);
+  if (lambda?.construction === "native" && lambda.nativeClosure !== undefined) {
+    if (!rustTargetTypeRefEquals(lambda.constructionCarrier, source)) return undefined;
+    const error = lambda.resultFallible ? lambda.invocationError
+      : Object.freeze({ kind: "target-named" as const, id: rustInfallibleTargetId });
+    return error === undefined ? undefined : Object.freeze({ carrier: lambda.constructionCarrier,
+      signature: Object.freeze({ parameters: lambda.nativeClosure.parameters, result: lambda.resultCarrier, error }) });
+  }
   return rustNativeCallablePhysicalSource(source, input.storage.operandFor(node), input.frames);
 }
 

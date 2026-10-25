@@ -45,6 +45,7 @@ export interface RustCaptureReadOwnership {
 }
 
 export interface RustOwnershipRecords {
+  readonly uses: ReadonlyMap<Node, RustReadUse>;
   readonly reads: ReadonlyMap<Node, RustReadOwnershipFact>;
   readonly captures: ReadonlyMap<Node, readonly RustCaptureReadOwnership[]>;
   readonly writes: ReadonlyMap<Node, RustBorrowedFieldWrite>;

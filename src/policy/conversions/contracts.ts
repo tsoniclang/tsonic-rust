@@ -370,7 +370,7 @@ export function rustValueConversionContract(
           target: value.target,
           lane: value.lane,
           projections: value.projections,
-          sourceFallible: value.sourceFallible,
+          targetResultFallible: target.fallible,
           invocation: rustCallableProtocol(value.source) === undefined ? "invoke" : "call",
           fallible: false,
         };

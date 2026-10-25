@@ -15,7 +15,7 @@ export interface RustNativeStoragePathInput {
 
 export const rustNativeIndexStorageProjection = Symbol("native-index");
 
-export type RustNativeStorageProjection = Node | string | typeof rustNativeIndexStorageProjection;
+export type RustNativeStorageProjection = Node | string | number | typeof rustNativeIndexStorageProjection;
 
 export function rustNativeStorageRoot(node: Node, input: RustNativeStoragePathInput): Node | undefined {
   const visited = new Set<Node>();
@@ -50,7 +50,9 @@ export function rustNativeStorageProjections(
       const carrier = receiver === undefined ? undefined : input.records.runtimeCarrier.get(receiver)?.carrier;
       const container = carrier?.kind === "reference" ? carrier.referent : carrier;
       const element = container?.kind === "array" || container?.kind === "slice" ? container.element
-        : rustFixedArrayCarrierValue(container)?.element;
+        : container?.kind === "tuple" && operation?.kind === "tuple-index" &&
+          Number.isSafeInteger(operation.index) && operation.index >= 0 ? container.elements[operation.index]
+          : rustFixedArrayCarrierValue(container)?.element;
       if (receiver === undefined || index === undefined || element === undefined ||
         !rustTargetTypeRefEquals(element, input.records.runtimeCarrier.get(node)?.carrier) ||
         !rustBorrowValueIsUnprojected(node, input.records)) return undefined;
@@ -67,8 +69,10 @@ export function rustNativeStorageProjections(
           abi.sourceArguments.length !== 1 || abi.sourceArguments[0]?.sourceIndex !== 0 ||
           abi.targetArguments.length !== 1 || targetArgument === undefined || !isRustFinalizedSourceInput(targetArgument) ||
           targetArgument.source.kind !== "argument" || targetArgument.source.sourceIndex !== 0) return undefined;
+      } else if (operation?.kind === "tuple-index") {
+        if (container?.kind !== "tuple" || !rustTargetTypeRefEquals(operation.resultCarrier, element)) return undefined;
       } else if (operation?.kind !== "fixed-index") return undefined;
-      projections.unshift(rustNativeIndexStorageProjection);
+      projections.unshift(operation.kind === "tuple-index" ? operation.index : rustNativeIndexStorageProjection);
     } else if (kind !== "KindParenthesizedExpression") {
       if (kind !== "KindPropertyAccessExpression") return undefined;
       const operation = input.records.targetOperation.get(node);

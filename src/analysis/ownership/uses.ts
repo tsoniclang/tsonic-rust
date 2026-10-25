@@ -127,8 +127,13 @@ export function analyzeRustReadUses(ast: AstReader, nodes: readonly Node[], reco
     const operand = sourceTransparentExpressionOperand(ast, node);
     if (operand !== undefined) uses.set(operand, use);
     const operation = records.targetOperation.get(node);
+    const nativeIndex = operation?.kind === "provider-operation" && operation.abi.target.form === "index" &&
+      operation.abi.targetReceiver.kind === "input" && operation.abi.targetReceiver.input.source.kind === "receiver" &&
+      operation.abi.targetReceiver.input.conversion.kind === "identity" &&
+      rustProviderInputBorrowMode(operation.abi.targetReceiver.input) !== undefined &&
+      operation.abi.result.kind === "sync" && operation.abi.result.conversion.kind === "identity";
     if ((use.mode === "shared" || use.mode === "mutable") &&
-      (operation?.kind === "tuple-index" || operation?.kind === "fixed-index")) {
+      (operation?.kind === "tuple-index" || operation?.kind === "fixed-index" || nativeIndex)) {
       const receiver = Node_Expression(ast, node);
       const index = ElementAccessExpression_ArgumentExpression(ast, node);
       if (receiver !== undefined) uses.set(receiver, Object.freeze({ ...use,

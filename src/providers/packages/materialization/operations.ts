@@ -101,6 +101,10 @@ export function materializeProviderOperationRow(
       : {
           immediateCallback: {
             ...row.immediateCallback,
+            resultError: row.immediateCallback.resultError.kind === "callback"
+              ? row.immediateCallback.resultError
+              : { kind: "native" as const, carrier: materializeProviderCarrier(
+                row.immediateCallback.resultError.carrier, carrierPaths, carrierTraits, typeDeclarations) },
             fallibleTarget: materializeProviderOperationForm(
               row.immediateCallback.fallibleTarget,
               aliases,

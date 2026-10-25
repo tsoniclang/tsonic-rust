@@ -205,3 +205,61 @@ main();
   assert.match(artifactText(result, "src/index.rs"), /\.flatten\(\)/u);
   validateGeneratedProject("dense-optional-coalescing", result.artifacts, { run: true });
 });
+
+test("pure exact-string callback helpers retain their infallible native body contracts", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    surfaces: ["js"], packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "exact_string_callback_body" } },
+    files: { "index.ts": `
+import { check } from "@acme/testing";
+import { jsstr } from "@tsonic/js/lang.js";
+import type { JsString } from "@tsonic/js/types.js";
+function replaceExact(value: JsString, search: JsString): JsString {
+  return value.replace(search, (whole: JsString): JsString => whole);
+}
+export function main(): void {
+  const value: JsString = jsstr("a1b1");
+  const search: JsString = jsstr("1");
+  const single: JsString = replaceExact(value, search);
+  check(single.length === 4 && single.charCodeAt(1) === 49);
+  const all: JsString = value.replaceAll(search, (whole: JsString): JsString => whole);
+  check(all.length === 4 && all.charCodeAt(3) === 49);
+}
+main();
+` },
+  });
+  assert.equal(result.diagnostics.length === 0, true, "pure typed exact-string helpers retain their admitted body and callback contracts");
+  const output = artifactText(result, "src/index.rs");
+  assert.match(output, /js_exact_string::replace_with/u);
+  assert.match(output, /js_exact_string::replace_all_with/u);
+  assert.doesNotMatch(output, /js_exact_string::try_replace/u);
+  assert.equal(validateGeneratedProject("exact-string-callback-body", result.artifacts, { run: true }).status, 0);
+});
+
+test("RegExp callback helper Result stays independent of the enclosing error join and eager arguments", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    surfaces: ["js"],
+    packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin" } },
+    files: { "index.ts": `
+import { check } from "@acme/testing";
+import { jsstr } from "@tsonic/js/lang.js";
+let evaluations = 0;
+function input(): string { evaluations += 1; return "a1b2"; }
+export function main(): void {
+  const replaced = input().replaceAll(/\\d/g, (whole, _offset, _input) => "[" + whole + "]");
+  check(replaced === "a[1]b[2]");
+  check(evaluations === 1);
+  const exact = jsstr("a1").replace(/\\d/g, (whole, _offset, _input) => whole);
+  check(exact.length === 2);
+}
+main();
+` },
+  });
+  assert.equal(result.diagnostics.length === 0, true, "the complete native callback contract is admitted");
+  const source = artifactText(result, "src/index.rs");
+  assert.match(source, /Ok::<_, js_abi::JsError>/u);
+  assert.match(source, /string_try_replace_all_regexp_native_with/u);
+  assert.match(source, /string_replace_regexp_with/u);
+  assert.equal(validateGeneratedProject("regexp-callback-physical-error", result.artifacts, { run: true }).status, 0);
+});

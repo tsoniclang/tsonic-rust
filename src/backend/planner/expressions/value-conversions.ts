@@ -4,8 +4,10 @@ import {
 } from "../../../target-model/types/index.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../names/synthetic.js";
 import { applyRustLocalErrorBoundary, rustTargetRuntimeErrorType } from "../types/error-boundary.js";
-import { rustPropagateLocalError } from "../program/fallible-boundaries.js";
-import { registerAliasFromPath, rustActiveErrorType, rustCurrentErrorBoundary } from "../program/plan-context.js";
+import { rustPropagateNativeError } from "../program/fallible-boundaries.js";
+import { registerAliasFromPath, rustCurrentErrorBoundary } from "../program/plan-context.js";
+import { planRustSelectedErrorRegion } from "../program/error-regions.js";
+import { planRustSelectedSourceErrorPropagation } from "./calls/source-errors.js";
 import { failRustPlannerInvariant } from "../diagnostics.js";
 import { applyRustArgumentMode, type RustArgumentValue } from "./input-shaping.js";
 import {
@@ -155,12 +157,13 @@ export function lowerRustValueConversion(
         node,
       );
     case "js-argument-vector-callback": {
-      const activeErrorType = contract.lane === "native"
-        ? rustActiveErrorType(context)
-        : undefined;
-      if (contract.lane === "native" && activeErrorType === undefined) {
-        return failRustPlannerInvariant("An admitted native RegExp callback projection requires its exact error context.", node ?? context.sourceFile);
-      }
+      const selected = context.providerCallbackBody;
+      if (selected === undefined || node !== selected.argument ||
+        selected.targetResultFallible !== contract.targetResultFallible)
+        return failRustPlannerInvariant("An admitted callback projection requires its sealed helper-body contract.", node ?? context.sourceFile);
+      const region = planRustSelectedErrorRegion(selected.region, context, node)
+        ?? failRustPlannerInvariant("An admitted callback projection requires its selected helper error region.", node);
+      const callbackContext = { ...context, fallibleBoundary: region.boundary };
       const names = context.syntheticNames ?? createRustSyntheticNameState(
         context.input.program.source.ast,
         node ?? context.sourceFile,
@@ -191,8 +194,10 @@ export function lowerRustValueConversion(
           callbackArguments.push(projected);
           continue;
         }
-        const propagated = context.fallibleBoundary === undefined ? undefined
-          : rustPropagateLocalError(context.fallibleBoundary, rustTargetRuntimeErrorType, projected);
+        const projectionError = selected.projection;
+        const errorType = projectionError === undefined ? undefined : rustTypeFromCarrierInContext(projectionError.errorType, callbackContext);
+        const propagated = region.boundary === undefined || projectionError === undefined || errorType === undefined ? undefined
+          : rustPropagateNativeError(region.boundary, { identity: projectionError.identity, errorType }, projected);
         if (propagated === undefined) return undefined;
         callbackArguments.push(propagated);
       }
@@ -205,16 +210,21 @@ export function lowerRustValueConversion(
             method: "call",
             args: [{ kind: "tuple-literal", elements: callbackArguments }],
           };
-      const body = contract.sourceFallible || contract.lane === "exact"
-        ? invocation
-        : {
+      const value = selected.sourceResultFallible
+        ? selected.invocation === undefined ? failRustPlannerInvariant("A Result-returning callback requires its sealed invocation transport.", node)
+          : planRustSelectedSourceErrorPropagation(node, selected.invocation, invocation, callbackContext)
+        : invocation;
+      if (value === undefined) return undefined;
+      const errorType = selected.targetResultFallible ? region.boundary?.errorType
+        ?? failRustPlannerInvariant("A Result-returning helper callback requires its selected error carrier.", node) : undefined;
+      const body = errorType === undefined ? value : {
             kind: "call" as const,
             path: "Ok",
             genericArguments: [
               { kind: "type" as const, type: { kind: "infer" as const } },
-              { kind: "type" as const, type: activeErrorType! },
+              { kind: "type" as const, type: errorType },
             ],
-            args: [invocation],
+            args: [value],
           };
       return rustValueBlock([{ name: callbackName, value: source }], {
           kind: "closure",

@@ -73,7 +73,7 @@ export type RustValueConversionContract = RustValueConversionContractBase & Rust
         | "value"
         | "rest-values"
       )[];
-      readonly sourceFallible: boolean;
+      readonly targetResultFallible: boolean;
       readonly invocation: "invoke" | "call";
     }
   | {
