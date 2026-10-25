@@ -288,7 +288,12 @@ export function prepareRustPhysicalCallableEmissionRequests(
       } else if (target.form === "method" || target.form === "union-method" || target.form === "structural-method") {
         const receiver = checked?.sourceReceiver?.expression ?? checked?.sourceCalleeAccess?.receiver.expression;
         if (receiver === undefined) diagnostics.push(emissionDiagnostic(node, "An emitted source method requires its original checked receiver."));
-        else visitUse(receiver, owner, "receiver", node);
+        else {
+          visitUse(receiver, owner, "receiver", node);
+          if (target.form === "structural-method" &&
+            input.structuralShapes.field(target.receiverCarrier, target.storageIndex)?.methodPlan?.kind === "fixed")
+            request(owner, receiver, "receiver", { kind: "operand" }, node);
+        }
       } else if (target.classReceiver !== undefined) visitUse(target.classReceiver, owner, "receiver", node);
       if (checked === undefined) diagnostics.push(emissionDiagnostic(node, "An emitted source call requires its original checked argument occurrences."));
       else {
