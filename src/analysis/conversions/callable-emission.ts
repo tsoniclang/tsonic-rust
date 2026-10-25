@@ -30,7 +30,7 @@ export function analyzeRustCallableEmission(program: Omit<RustAnalysisProgram, "
     const previous = producer.records.callableOperand.get(node, source);
     if (previous !== undefined) return previous;
     const physical = rustNativeCallableOperand(source, node, { records: program.records,
-      storage: program.callableValues.nativeStorage, producers: program.callableValues.nativeProducers });
+      storage: program.callableValues.nativeStorage, producers: program.callableValues.nativeProducers, frames: program.callableValues.frames });
     if (physical === undefined) return undefined;
     const reference = program.records.directCallableReference.get(node);
     const named = reference === undefined ? undefined : program.records.sourceCallableEmission.get(reference.sourceDeclaration, reference.carrier);
@@ -118,7 +118,7 @@ export function analyzeRustCallableEmission(program: Omit<RustAnalysisProgram, "
     if (adapter.kind === "option-some" || adapter.kind === "option-map") structuralAdapter(node, adapter.element);
     else if (adapter.kind === "conversion" && adapter.conversion.kind === "callable-adapter") {
       const physical = rustNativeCallablePhysicalSource(adapter.sourceCarrier,
-        { kind: "selected", carrier: adapter.sourceCarrier, inputs: [], erased: true });
+        { kind: "selected", carrier: adapter.sourceCarrier, inputs: [], erased: true }, program.callableValues.frames);
       if (physical === undefined)
         failTargetAnalysisInvariant("tsonic-rust", "An admitted structural callable adapter requires its exact physical source.", node);
       if (producer.records.callableOperand.get(node, adapter.conversion.source) === undefined)

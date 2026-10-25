@@ -30,7 +30,8 @@ function fixture({ effects, spawnedError } = {}) {
       sourceCallableReturn: empty, sourceErrorEffects: empty, awaitSourceErrorEffects: empty,
       contextualValueConversion: empty, projectCallableAdapters: empty, targetOperation: empty },
     names: { nameForDeclaration: () => undefined, functionNameForDeclaration: () => undefined, callableValueNameForDeclaration: () => undefined },
-    callables: { native: { inputs: [] }, nativeGenericProducers: { errorAritiesFor: () => [] } }, producers: { producers: [] },
+    callables: { native: { inputs: [] }, nativeGenericProducers: { errorAritiesFor: () => [] },
+      frames: { definitions: Object.freeze([]) } }, producers: { producers: [] },
     definitions: emptyRustTypeDefinitions,
     components: { rootComponentId: "root", componentForFile: () => component, forComponent: () => component },
   });

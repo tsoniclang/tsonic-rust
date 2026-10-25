@@ -5,6 +5,17 @@ import type { RustClosureCaptureFact } from "./operation-selections.js";
 import type { RustCallableActivation } from "./callable-ownership.js";
 import type { RustSourceCallableSpecializationIssue } from "./callable-issues.js";
 import type { RustFrameInputAdmission } from "./frame-emission.js";
+import type { RustErrorRegionSelection, RustSourceErrorRegionSelection } from "./error-regions.js";
+
+export type RustFrameImplementationErrorSelection =
+  | { readonly kind: "infallible" | "identity" }
+  | { readonly kind: "mapped"; readonly transport: RustSourceErrorRegionSelection };
+
+export interface RustFrameEntryErrorSelection {
+  readonly carrier: TargetTypeRef;
+  readonly region: RustErrorRegionSelection;
+  readonly implementations: ReadonlyMap<RustFrameCallableImplementation, RustFrameImplementationErrorSelection>;
+}
 
 export interface RustFrameCallablePlan {
   readonly activationInputs: ReadonlyMap<Node, ReadonlyMap<RustFrameCallableDefinition, RustFrameInputAdmission>>;
@@ -14,6 +25,8 @@ export interface RustFrameCallablePlan {
   definitionFor(carrier: TargetTypeRef): RustFrameCallableDefinition | undefined;
   definitionForOwner(declaration: Node): RustFrameCallableDefinition | undefined;
   entryFor(carrier: TargetTypeRef): RustFrameCallableEntryDefinition | undefined;
+  entryErrors(entry: RustFrameCallableEntryDefinition): RustFrameEntryErrorSelection;
+  errorFor(carrier: TargetTypeRef): TargetTypeRef | undefined;
   implementationFor(declaration: Node): RustFrameCallableImplementation | undefined;
   bindingFor(declaration: Node): RustFrameCallableBinding | undefined;
   isSameActivationInput(expression: Node, definition: RustFrameCallableDefinition, receiver?: Node): boolean;
@@ -21,6 +34,8 @@ export interface RustFrameCallablePlan {
 }
 
 export interface RustFrameCallableRecordInput {
+  readonly entryErrors: (entry: RustFrameCallableEntryDefinition) => RustFrameEntryErrorSelection;
+  readonly errorFor: (carrier: TargetTypeRef) => TargetTypeRef | undefined;
   readonly definitions: readonly RustFrameCallableDefinition[];
   readonly issues: readonly RustSourceCallableSpecializationIssue[];
   readonly activationInputs: ReadonlyMap<Node, ReadonlyMap<RustFrameCallableDefinition, RustFrameInputAdmission>>;

@@ -1,7 +1,10 @@
 import type { Node } from "@tsonic/tsts";
 import { rustProducerErrorReference } from "../../target-model/types/carriers/producer-errors.js";
+import { rustFrameCallableValue } from "../../target-model/types/carriers/frame-callables.js";
+import { selectRustFrameInvocationErrors } from "../errors/regions.js";
 import { Node_Expression, sourceEnclosingCallable } from "@tsonic/target-api/source";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
+import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustSourceCallProducer } from "../program/records/source-calls.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
@@ -127,7 +130,7 @@ export function analyzeRustSourceCalls(program: Omit<RustAnalysisProgram, "reach
     const physical = callee === undefined || inputCarrier === undefined ? undefined
       : program.records.callableOperand.get(callee, inputCarrier)?.physical ?? (fact.target.form === "callable" && native === undefined
         ? rustNativeCallableOperand(inputCarrier, callee, { records: program.records, storage: program.callableValues.nativeStorage,
-          producers: program.callableValues.nativeProducers }) : undefined);
+          producers: program.callableValues.nativeProducers, frames: program.callableValues.frames }) : undefined);
     // A producer-owned error channel is decided by its closed producer error (an infallible closure yields Infallible).
     const declaredError = physical?.signature.error;
     const producerError = declaredError === undefined ? undefined : rustProducerErrorReference(declaredError);
@@ -139,6 +142,15 @@ export function analyzeRustSourceCalls(program: Omit<RustAnalysisProgram, "reach
       : slot.presence === "optional" ? rustOptionElementCarrier(slot.methodPlan?.carrier) : slot.methodPlan?.carrier;
     const slotError = slotStorage === undefined ? undefined : rustCallableProtocol(slotStorage)?.error;
     const error = slotError ?? (producerError === undefined ? declaredError : program.errorRegions.producerError(producerError));
+    const frameCarrier = physical?.carrier;
+    const frameError = frameCarrier === undefined || rustFrameCallableValue(frameCarrier) === undefined ? undefined
+      : selectRustFrameInvocationErrors(frameCarrier, program.callableValues.frames,
+        program.records.errorEffects.get(node) ?? failTargetAnalysisInvariant("tsonic-rust",
+          "A selected frame invocation requires its completed effects.", node),
+        program.records.sourceErrorEffects.get(node)?.edges ?? [], program.errorRegions);
+    if (frameCarrier !== undefined && rustFrameCallableValue(frameCarrier) !== undefined && frameError === undefined) {
+      refuse(node, "rust.backend.frame-call-error-correspondence", "The selected frame invocation has no exact completed native error correspondence."); continue;
+    }
     const eliminateInfallible = method?.kind !== "fixed" && error?.kind === "target-named" && error.id === rustInfallibleTargetId;
     const edges = program.records.sourceErrorEffects.get(node)?.edges.filter(edge => edge.kind === "invoke" && edge.declaration === declaration);
     const directError = effects!.invocation === "fallible" && native === undefined && generic === undefined && declaration !== undefined &&
@@ -161,6 +173,10 @@ export function analyzeRustSourceCalls(program: Omit<RustAnalysisProgram, "reach
         ? { physicalCallableError: error } : {}),
       never: isRustNeverCarrier(fact.resultCarrier),
       errorEdge: directError ? edges![0] : undefined,
+      frameError: frameError === undefined ? undefined : Object.freeze({ ...frameError,
+        channels: new Map(frameError.channels.map(channel => [channel.sourceIdentity, {
+          targetIdentity: channel.targetIdentity, uninhabited: channel.uninhabited, jsRejection: false,
+        }])) }),
       pinnedBodies: new Set([...(pinned ?? [])].filter(([, calls]) => fact.asyncBody?.maySuspend === true && calls.has(node)).map(([name]) => name)),
     }, specializations);
   }
