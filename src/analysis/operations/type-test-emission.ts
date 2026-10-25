@@ -1,6 +1,5 @@
 import type { Node } from "@tsonic/tsts";
-import { BinaryExpression_Left, sourceEnclosingCallable, sourceTransparentExpressionOperand,
-  TryStatement_TryBlock } from "@tsonic/target-api/source";
+import { BinaryExpression_Left } from "@tsonic/target-api/source";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustClosedTypeTestProducer } from "../program/records/type-tests.js";
@@ -11,8 +10,6 @@ import { rustClosedTypeTestConstant } from "../../target-model/operations/type-t
 import { rustClosedTypeTestMatches } from "./type-tests.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustProgramNodeIsOutsideNativeCode } from "../control-flow/compile-time-statements.js";
-import { rustErrorRegionCarrier } from "../errors/regions.js";
-import { selectRustClosedTypeTestPlan } from "../../policy/operations/operators/type-tests.js";
 
 export function analyzeRustClosedTypeTests(program: Omit<RustAnalysisProgram, "reachability">, nodes: readonly Node[], producer: RustClosedTypeTestProducer): void {
   const select = (carrier: TargetTypeRef, test: RustClosedTypeTestPlan, predicate: RustClosedTypePredicate, node: Node): RustClosedTypeTestEmission => {
@@ -50,33 +47,6 @@ export function analyzeRustClosedTypeTests(program: Omit<RustAnalysisProgram, "r
       !rustClosedTypeTestMatches(fact, program.projectTypes, program.typeDefinitions) ||
       !rustTargetTypeRefEquals(program.records.valueRead.get(operand)?.value, fact.sourceCarrier))
       failTargetAnalysisInvariant("tsonic-rust", "Type predicate requires its exact selected operation, carrier and retained test plan.", node);
-    let carrier = fact.sourceCarrier;
-    let test = fact.test;
-    if (fact.predicate.kind === "error") {
-      let reference = operand;
-      for (let inner = sourceTransparentExpressionOperand(ast, reference); inner !== undefined;
-        inner = sourceTransparentExpressionOperand(ast, reference)) reference = inner;
-      const declaration = program.records.sourceBinding.get(reference)?.sourceDeclaration;
-      const parent = declaration === undefined ? undefined : ast.parent(declaration);
-      if (parent !== undefined && ast.is.IsCatchClause(parent) &&
-        ast.as.AsCatchClause(parent)?.VariableDeclaration === declaration &&
-        sourceEnclosingCallable(reference, ast) === sourceEnclosingCallable(parent, ast)) {
-        const statement = ast.parent(parent);
-        const body = statement === undefined ? undefined : TryStatement_TryBlock(ast, statement);
-        const region = body === undefined ? undefined : program.errorRegions.get(body);
-        if (region === undefined) failTargetAnalysisInvariant("tsonic-rust",
-          "A checked catch type predicate requires its completed protected error region.", node);
-        if (region.kind !== "infallible") {
-          const physical = rustErrorRegionCarrier(region);
-          const physicalTest = physical === undefined ? undefined
-            : selectRustClosedTypeTestPlan(physical, fact.predicate, program.projectTypes, program.typeDefinitions);
-          if (physical === undefined || physicalTest === undefined) failTargetAnalysisInvariant("tsonic-rust",
-            "A checked catch type predicate requires its exact physical error observation contract.", node);
-          carrier = physical;
-          test = physicalTest;
-        }
-      }
-    }
-    producer.publish(node, { operand, test: select(carrier, test, fact.predicate, node) });
+    producer.publish(node, { operand, test: select(fact.sourceCarrier, fact.test, fact.predicate, node) });
   }
 }
