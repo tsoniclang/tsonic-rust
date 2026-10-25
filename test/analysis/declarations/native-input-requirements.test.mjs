@@ -253,20 +253,31 @@ export function move(callbacks: Callback[]): Callback[] { return callbacks; }`, 
     }
   });
 
-  test(`borrowing an indexed callable adds no array element Clone requirement in ${surface}`, () => {
+  test(`indexed callable bounds retain native borrowing and JS owned reads in ${surface}`, () => {
     const current = checked(`interface Callback { (): number; }
 export function invoke(callbacks: Callback[]): number { return callbacks[0](); }`, surfaces);
     const owner = current.declaration("invoke");
     const inputs = current.program.callableValues.native.inputsFor(owner);
-    assert.equal(inputs.length, surfaces.length === 0 ? 0 : 1,
-      "the indexed native invocation retains its original selected array representation");
+    assert.equal(inputs.length, 1,
+      "the actual invocation retains its original generic callable array component on both surfaces");
+    const element = current.nodes.find(node => current.ast.is.IsElementAccessExpression(node) &&
+      sourceEnclosingCallable(node, current.ast) === owner);
+    assert.equal(element !== undefined, true, "the exact original indexed callable remains present");
+    const invocation = current.ast.parent(element);
+    assert.equal(current.program.callableValues.native.callFor(invocation)?.input === inputs[0], true,
+      "the actual native invocation retains precisely its original projected input");
+    const operation = current.program.records.targetOperation.get(element);
+    assert.equal(operation?.kind === "provider-operation" &&
+      (surfaces.length === 0 ? operation.abi.target.form === "index"
+        : operation.abi.target.form === "receiver-method" && operation.abi.target.name === "get_number"), true,
+    "native Index borrows its output while the selected JS array API returns an owned element");
     for (const input of inputs) {
       assert.equal(input.subject.node === current.ast.parameters(owner)[0] &&
         input.subject.projection.length === 1 && input.subject.projection[0].kind === "array-element", true,
       "the borrowed invocation retains its exact original array component");
       for (const [contract, requirements] of nativeRequirementSets(current, owner, input).entries()) {
-        assert.equal(requirements.includes("clone"), false,
-          `${contract}: borrowing an indexed callable never requires an owned element copy`);
+        assert.equal(requirements.includes("clone"), surfaces.length !== 0,
+          `${contract}: only the selected owned JS element read requires Clone; native borrowing does not`);
       }
     }
   });

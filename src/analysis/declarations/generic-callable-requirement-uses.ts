@@ -439,6 +439,10 @@ export function createRustCallableRequirementVisitor(input: RustCallableRequirem
         if (logicalComponent === undefined || physicalComponent === undefined ||
           !rustTargetTypeRefEquals(logicalComponent, requirement.carrier))
           return "A provider carrier requirement conflicts with its selected source and physical component identity.";
+        if (requirement.requirement === "clone" && source.kind === "receiver" &&
+          providerOperation.abi.target.form === "index" && providerOperation.abi.result.kind === "sync" &&
+          rustTargetTypeRefEquals(requirement.carrier, providerOperation.abi.result.rawCarrier) &&
+          isRustBorrowedValueRead(node, ast, records)) continue;
         const error = addUse(node, physicalComponent, [requirement.requirement]);
         if (error !== undefined) return error;
       }
