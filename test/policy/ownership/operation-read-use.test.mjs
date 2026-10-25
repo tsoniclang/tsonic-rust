@@ -11,6 +11,34 @@ import { createRustRecordFixture } from "../../helpers/records.mjs";
 import { getRustTypeofRuntimeKind } from "../../../dist/policy/operations/syntax/runtime-kind.js";
 import { rustNativeIndexStorageProjection, rustNativeStoragePathsDisjoint, rustNativeStorageProjections,
   rustNativeStorageRoot } from "../../../dist/analysis/storage/native-paths.js";
+import { interfaceRepresentationAliasNativeValueFiles, interfaceRepresentationAliasJsProofSource, interfaceRepresentationAliasSource } from "../../../../tsonic/test/fixtures/interface-representation-aliases.mjs";
+
+test("borrowed converted comparisons retain the actual owning source demand", () => {
+  for (const [expected, options] of [
+    [3, { files: interfaceRepresentationAliasNativeValueFiles }],
+    [1, { surfaces: ["js"], files: { "index.ts": interfaceRepresentationAliasSource + interfaceRepresentationAliasJsProofSource } }],
+  ]) {
+    const { program } = analyzeRust(options);
+    const { ast } = program.source;
+    let observations = 0;
+    const visit = node => {
+      if (ast.is.IsIdentifier(node) && ["token", "replacement"].includes(ast.text(node)) &&
+        ["KindEqualsEqualsEqualsToken", "KindExclamationEqualsEqualsToken"].includes(ast.operatorKindName(ast.parent(node))) &&
+        program.records.valueProjection.get(node)?.contextualConsumesSource === true) {
+        observations++;
+        const use = program.ownership.uses.get(node);
+        const read = program.records.readOwnership.get(node);
+        assert.equal(use?.mode, "value", "borrowing the converted target does not borrow the consumed original source");
+        assert.equal(read?.source.kind === "clone" || read?.source.kind === "move", true,
+          "the existing native ownership owner selects the exact retained snapshot or final transfer");
+        assert.equal(read?.source.kind, read?.value.kind, "a native by-value conversion has one source acquisition contract");
+      }
+      ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+    };
+    program.sourceFiles.forEach(visit);
+    assert.equal(observations, expected, "the actual checked original fixtures retain every converted comparison occurrence");
+  }
+});
 
 test("a native compound receiver keeps its complete getter-index and RHS interval through transparent wrappers", async () => {
   const source = createTargetSourceProgram(await checkedSource("ownership-compound-receiver-interval", {
@@ -777,7 +805,13 @@ function use(value: Value, selected: "value", holder: Key, argument: string): nu
       const receiverBefore = before.get(element.Expression);
       const receiverAfter = selected.get(element.Expression);
       assert.equal(receiverAfter?.mode, receiverBefore?.mode, "native receiver mode is not reclassified by key evaluation");
-      assert.equal(receiverAfter?.later.length, receiverBefore?.later.length, "held receiver evaluation order is unchanged");
+      const originalLater = receiverBefore?.later.slice(receiverBefore.laterStart);
+      const addedKey = !literal && originalLater !== undefined && !originalLater.includes(element.ArgumentExpression);
+      const expectedLater = addedKey ? [element.ArgumentExpression, ...originalLater] : receiverBefore?.later;
+      assert.equal(receiverAfter?.later.length, expectedLater?.length, "the original receiver interval includes the actual computed key exactly once");
+      for (const [index, later] of (expectedLater ?? []).entries())
+        assert.equal(receiverAfter.later[index] === later, true, `receiver evaluation ${index}: the exact key and remaining native inputs retain source order`);
+      assert.equal(receiverAfter?.laterStart, addedKey ? 0 : receiverBefore?.laterStart, "previously completed native inputs are not re-evaluated");
       assert.equal(receiverAfter?.stableAcrossEffects, receiverBefore?.stableAcrossEffects, "no receiver/effect proof is invented");
       assert.equal(selected.has(consumed), false, "a value-consumed native argument does not become a borrowed argument");
       const keyUse = selected.get(element.ArgumentExpression);
