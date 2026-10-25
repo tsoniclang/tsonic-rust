@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRust } from "../../helpers/rust-session.mjs";
 import { receiverFieldStorageCases } from "../../../../tsonic/test/fixtures/receiver-field-storage-cases.mjs";
+import { genericCallableOwnershipCases } from "../../../../tsonic/test/fixtures/generic-callable-ownership.mjs";
 import { generalizeRustProjectStructuralView } from "../../../dist/analysis/objects/project-structural-views-generics.js";
 import { selectRustProjectStructuralViewFields, selectRustProjectStructuralViewSources } from "../../../dist/analysis/objects/project-structural-views-members.js";
 import { rustProjectViewMatches } from "../../../dist/policy/types/objects/project-view-bindings.js";
@@ -12,7 +13,7 @@ import { rustTargetGenericReferences } from "../../../dist/target-model/types/ca
 import { rustStringTargetType } from "../../../dist/target-model/types/carriers/native.js";
 import { rustSourceOptionalTargetType } from "../../../dist/target-model/types/projections.js";
 import { rustCallableProtocol, rustCallableTargetType } from "../../../dist/target-model/types/carriers/callables.js";
-import { substituteRustTargetTypeParameters } from "../../../dist/target-model/types/carriers/substitution.js";
+import { substituteRustTargetGenerics, substituteRustTargetTypeParameters } from "../../../dist/target-model/types/carriers/substitution.js";
 import { emptyRustTypeDefinitions } from "../../../dist/target-model/types/source-union-definitions.js";
 import { selectRustCallableValueAdapter } from "../../../dist/policy/conversions/callable-adapters.js";
 import { selectRustStructuralDispatchArguments } from "../../../dist/policy/types/objects/structural-generics.js";
@@ -47,6 +48,36 @@ export function run(): number { return view(new Box(7)).identity(3); }
   assert.equal(checked > 0, true, "the original checked class and structural view exercise actual native method slots");
 });
 const otherParameter = { kind: "type-parameter", identity: "destination:Value", name: "Value" };
+for (const name of ["supported-nested-payload", "captured-native-constraint", "transitive-native-constraint"]) {
+  test(`native generic header structural applications close before publication: ${name}`, () => {
+    const original = genericCallableOwnershipCases.find(example => example.name === name);
+    assert.notEqual(original, undefined);
+    const { program } = analyzeRust({ surfaces: [], files: { "index.ts": original.source + "\nmain();\n" } });
+    let checked = 0;
+    const admitted = carrier => {
+      if (rustStructuralObjectCarrierValue(carrier) === undefined) return;
+      assert.equal(program.structuralShapes.definitionForCarrier(carrier) !== undefined, true,
+        "the exact native binder application is in the sealed structural publication");
+      assert.equal(program.records.typeEmission.get(carrier)?.structural !== undefined, true,
+        "TYPE consumes the already admitted native header application without reopening shapes");
+      checked++;
+    };
+    for (const definition of program.callableValues.generic.physical.definitions()) {
+      const emission = program.records.genericDefinition.get(definition);
+      if (emission?.invoked === true) {
+        for (const carrier of [...emission.parameters, emission.result]) admitted(carrier);
+      }
+      for (const member of definition.members) {
+        const implementation = program.records.genericImplementation.get(member.implementation);
+        const returned = program.records.sourceCallableReturn.get(member.implementation.declaration);
+        assert.equal(implementation !== undefined && returned !== undefined, true, "the real checked native helper is admitted");
+        const substitutions = implementation.environment.substitutions;
+        admitted(substituteRustTargetGenerics(returned.returnCarrier, substitutions.types, substitutions.lifetimes, substitutions.consts));
+      }
+    }
+    assert.equal(checked > 0, true, "the original program exercises real structural native header applications");
+  });
+}
 const text = { kind: "target-named", id: "rust.std.String" };
 const number = { kind: "source-primitive", name: "float64" };
 const source = (type, name = "Box") => rustSourceTypeCarrier("/model.ts", name, "object", [{ kind: "type", type }]);
