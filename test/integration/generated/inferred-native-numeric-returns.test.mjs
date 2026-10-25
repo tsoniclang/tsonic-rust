@@ -141,10 +141,12 @@ main();
   assert.match(output, /let kept: String = pair\.1\.clone\(\);/u);
   assert.match(output, /let moved: String = single\.1;/u);
   assert.match(output, /let first: String = retainedArray\[0\]\.clone\(\);/u);
-  assert.equal([...output.matchAll(/retainedArray\.into_iter\(\)/gu)].length, 1,
-    "only the proven final retained-array observation may consume its native owner");
+  assert.equal([...output.matchAll(/retainedArray\.into_iter\(\)/gu)].length, 0,
+    "every selected shared retained-array observation keeps its native owner in place");
   assert.match(output, /ownedArray\.into_iter\(\)\.nth\(1\)\.unwrap\(\)/u);
-  assert.match(output, /ownedFirst\.into_iter\(\)\.next\(\)\.unwrap\(\)/u);
+  assert.match(output, /ownedFirst\[0\]/u);
+  assert.doesNotMatch(output, /ownedFirst\.into_iter\(\)/u,
+    "a final shared comparison does not become an owning array consumption");
   assert.doesNotMatch(output, /(?:pair|nested|single|retainedArray|ownedArray|ownedFirst)\.clone\(\)|nested\.1\.clone\(\)|create\([^)]*\)\.clone\(\)/u);
   validateGeneratedProject("native-tuple-projection", result.artifacts, { run: true });
 });

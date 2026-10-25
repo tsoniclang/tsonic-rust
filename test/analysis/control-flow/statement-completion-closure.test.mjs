@@ -320,6 +320,50 @@ test("admitted conditions and assignment identities are pure stable lookups", ()
   assert.equal(index.admitted(foreign), false, "foreign statements are not admitted");
 });
 
+for (const surfaces of [[], ["js"]]) {
+  test(`compound previous values distinguish consuming snapshots from proven native observations (${surfaces[0] ?? "native"})`, () => {
+    const { program, nodes, ast } = checked(`
+export function bigintValue(values: bigint[]): bigint {
+  const result = values[0] += values[0];
+  return result;
+}
+export function scalarValue(): number { let value = 1; return value += 2; }
+export function observedString(value: string): string { const result = value += "!"; return result; }
+function replace(value: { text: string }): string { value.text = "changed"; return "!"; }
+export function snapshotString(value: { text: string }): string {
+  const result = value.text += replace(value);
+  return result;
+}
+`, { surfaces });
+    const selected = new Map();
+    for (const node of nodes) {
+      const evaluation = program.records.assignmentEvaluation.get(node);
+      if (evaluation?.kind !== "compound") continue;
+      let owner = ast.parent(node);
+      while (owner !== undefined && !ast.is.IsFunctionDeclaration(owner)) owner = ast.parent(owner);
+      const name = owner === undefined ? undefined : ast.name(owner);
+      if (name !== undefined) selected.set(ast.text(name), { node, evaluation,
+        value: program.records.assignmentValue.get(node), read: program.records.readOwnership.get(evaluation.left) });
+    }
+    assert.equal(selected.size, 4, "all actual compound classes retain their one finalized previous-value selection");
+    const bigint = selected.get("bigintValue");
+    assert.equal(bigint.value.previous.kind, "clone", "a consuming BigInt operation snapshots its retained previous value");
+    assert.equal(bigint.value.previous === bigint.read.snapshot, true, "the native snapshot is the existing ownership owner's exact record");
+    const scalar = selected.get("scalarValue");
+    assert.equal(scalar.value.previous.kind, "copy", "native Copy values do not acquire a clone or reference");
+    const observed = selected.get("observedString");
+    assert.equal(observed.read.borrowedAcross.has(observed.evaluation.right), true,
+      "the existing source interval proves that the exact String RHS cannot invalidate the previous value");
+    assert.equal(observed.value.previous.kind === "borrow" && !observed.value.previous.mutable, true,
+      "String concatenation observes the previous value without an avoidable owned snapshot");
+    const snapshot = selected.get("snapshotString");
+    assert.equal(snapshot.read.borrowedAcross.has(snapshot.evaluation.right), false,
+      "the real mutating RHS cannot retain a borrowed previous String");
+    assert.equal(snapshot.value.previous === snapshot.read.snapshot && snapshot.value.previous.kind === "clone", true,
+      "the actual effectful RHS preserves its existing snapshot before it runs");
+  });
+}
+
 test("statement admission never visits a canonically erased callable subtree", () => {
   const { program, nodes, ast } = checked(`export function run(): number {
     function unused(key: string): number { const value = { [key]: 7 }; return 1; }

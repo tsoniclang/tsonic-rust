@@ -90,6 +90,10 @@ export function owned(): boolean {
   const values: FixedArray<string, 2> = ["first", "second"];
   return values[0] === "first";
 }
+export function consumed(): string {
+  const values: FixedArray<string, 2> = ["first", "second"];
+  return values[0];
+}
 export function aliased(): boolean {
   const values: FixedArray<string, 2> = ["first", "second"];
   const alias = values;
@@ -126,8 +130,8 @@ export function mutable(values: string[]): boolean { values[0] = "changed"; retu
   };
   program.sourceFiles.forEach(visit);
   for (const [name, expected] of [
-    ["retained", ["clone", "borrow", "borrow", "borrow", "move"]],
-    ["owned", ["move"]], ["aliased", ["borrow"]], ["captured", ["borrow"]],
+    ["retained", ["clone", "borrow", "borrow", "borrow", "borrow"]],
+    ["owned", ["borrow"]], ["consumed", ["move"]], ["aliased", ["borrow"]], ["captured", ["borrow"]],
     ["shared", ["borrow"]], ["mutable", ["borrow", "borrow"]],
   ]) assert.deepEqual(observed.get(name), expected, `${name}: native final-move evidence preserves retained, alias, capture and borrowed inverses`);
 });

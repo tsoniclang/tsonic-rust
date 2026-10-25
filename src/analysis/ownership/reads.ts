@@ -18,7 +18,6 @@ import { rustBorrowedOperationArguments } from "../storage/provider-borrows.js";
 import { BinaryExpression_Left, BinaryExpression_Right } from "@tsonic/target-api/source";
 import { rustContextualRuntimeConversionContract } from "../../policy/conversions/contextual.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
-import type { TargetTypeRef } from "../../target-model/types/model.js";
 
 export function analyzeRustReadOwnership(input: {
   readonly storage: SourceStorageQueries;
@@ -124,25 +123,6 @@ export function analyzeRustReadOwnership(input: {
     }
     borrowRelationships.set(node, selected);
   }
-  const canTransferProjectionOwner = (node: Node, parent: Node | undefined, carrier: TargetTypeRef): boolean => {
-    if (!flow.movingReads.has(node) || parent === undefined || carrier.kind === "reference" || Node_Expression(ast, parent) !== node) return false;
-    const operation = records.targetOperation.get(parent);
-    if (operation?.kind !== "tuple-index" && operation?.kind !== "fixed-index") return false;
-    let subject = node;
-    for (let operand = sourceTransparentExpressionOperand(ast, subject); operand !== undefined; operand = sourceTransparentExpressionOperand(ast, subject))
-      subject = operand;
-    const binding = records.sourceBinding.get(subject);
-    if (binding?.scope !== "lexical" || records.bindingStorage.get(binding.sourceDeclaration) !== undefined) return false;
-    const parameter = records.sourceParameterAbi.get(subject);
-    if (ast.is.IsParameterDeclaration(binding.sourceDeclaration) && (parameter === undefined || parameter.mode !== "value" ||
-      parameter.entryConversion !== undefined || !rustTargetTypeRefEquals(parameter.valueCarrier, carrier) ||
-      !rustTargetTypeRefEquals(parameter.parameterCarrier, carrier))) return false;
-    const summary = storage.source.navigation.declarationUseSummary(binding.sourceDeclaration);
-    if (!summary.captured && !summary.aliasedOrStored) return true;
-    const callable = sourceEnclosingCallable(node, ast);
-    return callable !== undefined && input.invocationTransfersCapture(callable) &&
-      input.capturesFor(callable)?.captures.some(capture => capture.declaration === binding.sourceDeclaration && capture.storage === "value") === true;
-  };
   for (const node of input.nativeNodes) {
     if (!budget.step()) return rejectedBudget();
     const parent = ast.parent(node);
@@ -157,8 +137,7 @@ export function analyzeRustReadOwnership(input: {
         input.genericRequirements.supportsClone(declaration, valueCarrier);
       const use = uses.get(node);
       const storageRead = storageReads.get(node)!;
-      const transferProjectionOwner = !copy && use?.mode === "shared" && canTransferProjectionOwner(node, parent, carrier);
-      const borrowed = !storageRead || transferProjectionOwner ? undefined : use?.mode === "mutable" ? "mutable" : use?.mode === "shared" &&
+      const borrowed = !storageRead ? undefined : use?.mode === "mutable" ? "mutable" : use?.mode === "shared" &&
         use.later.every((later, index) => index < use.laterStart || borrowRelationships.get(node)?.has(later)) ? "shared" : undefined;
       const value = selectRustValueReadOwnership({ copy, clone, borrowed,
         transfer: use?.mode === "move" || flow.movingReads.has(node) || !storageRead });
