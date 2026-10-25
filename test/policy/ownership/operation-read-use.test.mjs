@@ -124,6 +124,28 @@ export function fixed(values: FixedArray<string, 2>): boolean { return ((values)
     program.sourceFiles.forEach(visit);
     assert.equal(receivers, 2, "both actual tuple and fixed-array projection receivers remain covered");
   });
+  test(`owned native projections retain exact final receiver transfer on ${surfaces[0] ?? "native"}`, () => {
+    const { program } = analyzeRust({ surfaces, files: { "index.ts": `
+import type { FixedArray } from "@tsonic/core/types.js";
+export function tuple(values: [string, string]): string { return ((values))[0]; }
+export function fixed(values: FixedArray<string, 2>): string { return ((values))[0]; }
+` } });
+    const { ast } = program.source;
+    let receivers = 0;
+    const visit = node => {
+      const operation = program.records.targetOperation.get(node);
+      if (operation?.kind === "tuple-index" || operation?.kind === "fixed-index") {
+        const receiver = Node_Expression(ast, node);
+        const read = program.records.readOwnership.get(receiver);
+        assert.equal(read?.source.kind, "move", "an owned final projection transfers its owner without cloning it");
+        assert.equal(read.value.kind, "move", "the selected owned field does not acquire a shared-observer override");
+        receivers += 1;
+      }
+      ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+    };
+    program.sourceFiles.forEach(visit);
+    assert.equal(receivers, 2, "both actual tuple and fixed-array owned projections remain covered");
+  });
 }
 
 test("native runtime and static typeof categories share their actual storage operand without copying union payloads", () => {
