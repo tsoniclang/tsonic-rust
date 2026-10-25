@@ -7,6 +7,7 @@ import type { RustPlanContext } from "../program/plan-context.js";
 import { rustSourceBindingPath } from "../program/plan-context.js";
 import { failRustPlannerInvariant } from "../diagnostics.js";
 import { rustCapturedBinding, type RustExpressionPlanner } from "./typed-locations.js";
+import { planRustUnionProjection } from "./union-mappings.js";
 
 export type RustProviderOperationExpressionPlanner = (context: RustPlanContext,
   fact: Extract<RustTargetOperationFact, { readonly kind: "provider-operation" }>, receiverNode: Node | undefined,
@@ -44,11 +45,14 @@ export function planRustDirectStorageCore(operand: Node, context: RustPlanContex
     if (selected.receiverInput !== undefined) {
       const receiver = selected.receiver ?? failRustPlannerInvariant("An admitted provider place requires its native receiver.", operand);
       const explicit = context.expressionOverrides?.get(receiver);
-      const storage = explicit?.valueForm === "storage" ? explicit.expression
+      let storage = explicit?.valueForm === "storage" ? explicit.expression
         : planRustDirectStorageCore(receiver, context, inputOverrides, planExpression, planProviderOperation);
       if (storage === undefined) return undefined;
       if (!directStorageRemainsSelected(receiver, selected.index === undefined ? [] : [selected.index], explicit?.valueForm === "storage", context))
         failRustPlannerInvariant("An admitted provider place requires stable selected receiver storage.", operand);
+      if (selected.receiverProjection !== undefined) storage = { kind: "dereference", pointer: planRustUnionProjection(receiver,
+        storage, selected.receiverProjection.selection,
+        selected.receiverProjection.mutable ? "mutable-reference" : "shared-reference", context) };
       inputs.set(selected.receiverInput, storage);
     }
     return planProviderOperation(context, selected.operation, selected.receiver,

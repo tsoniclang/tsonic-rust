@@ -8,6 +8,7 @@ import { analyzeRustOptionEquality } from "../../../../dist/analysis/operations/
 import { createRustOptionEqualityProducer } from "../../../../dist/analysis/program/records/option-equality.js";
 import { createRustSyntheticNameState } from "../../../../dist/backend/planner/names/synthetic.js";
 import { rustOptionTargetType, rustStringTargetType, rustSourcePrimitiveTargetType } from "../../../../dist/target-model/types/index.js";
+import { optionalArrayComparisonSource } from "../../../../../tsonic/test/fixtures/optional-array-comparisons.mjs";
 
 test("optional equality rejects forged native carriers, borrowed views, presence depths and operators", () => {
   const { program } = analyzeRust({ files: { "index.ts": `
@@ -54,6 +55,42 @@ targetOperation: { get: (subject) => subject === node
         Object.keys(mutation).join(","));
     }
   }
+});
+
+test("optional comparison acquisition preserves actual snapshots, moves and stable borrows", () => {
+  const { program } = analyzeRust({ surfaces: ["js"], files: { "index.ts": optionalArrayComparisonSource } });
+  const { ast } = program.source;
+  const selected = new Map();
+  const visit = node => {
+    const equality = program.records.optionEquality.get(node);
+    if (equality !== undefined && ast.is.IsIdentifier(equality.left)) {
+      const name = ast.text(equality.left);
+      if (["optional", "inline", "text", "stable"].includes(name) && !selected.has(name)) selected.set(name, { node, equality });
+    }
+    ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+  };
+  program.sourceFiles.forEach(visit);
+  assert.equal(selected.size, 4, "all actual effectful and disjoint source comparisons are retained");
+  for (const [name, kind] of [["optional", "clone"], ["inline", "move"], ["text", "move"], ["stable", undefined]]) {
+    const { equality } = selected.get(name);
+    const read = program.records.readOwnership.get(equality.left);
+    assert.equal(equality.precedingAcquisition?.kind, kind, name + ": the completed native read owns acquisition");
+    assert.equal(kind === undefined || Object.isFrozen(equality.precedingAcquisition), true,
+      name + ": the acquisition is immutable sealed data");
+    if (kind !== undefined) assert.equal(equality.precedingAcquisition === (read.source.kind === "borrow" ? read.snapshot : read.source), true,
+      name + ": no renderer or comparison owner recomputes move or Clone");
+  }
+  const { node, equality } = selected.get("optional");
+  const producer = createRustOptionEqualityProducer(() => undefined);
+  const records = { ...program.records, readOwnership: { get: subject => {
+    const read = program.records.readOwnership.get(subject);
+    return subject === equality.left ? { ...read, snapshot: undefined } : read;
+  } } };
+  const issues = analyzeRustOptionEquality({ ...program, records }, [node], producer);
+  assert.deepEqual(issues.map(issue => issue.code), ["RUST_OPTION_EQUALITY_ACQUISITION_NOT_PROVEN"],
+    "a missing native snapshot refuses the comparison rather than borrowing across mutation");
+  assert.equal(issues[0].sourceNode === equality.left, true, "the refusal retains the actual first native read");
+  assert.equal(producer.records.optionEquality.get(node) === undefined, true, "a refused comparison publishes no emission recipe");
 });
 
 // Nested optional payload views (Option<Option<Option<T>>>) are not produced by any compiled program: optional

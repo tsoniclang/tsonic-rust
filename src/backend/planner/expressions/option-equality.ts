@@ -9,6 +9,9 @@ import { planExpressionBeforeOptionProjection, planExpressionBeforeValueProjecti
 import { planRustSharedReceiver } from "./typed-locations.js";
 import { planRustStringComparisonView } from "./string-comparison-views.js";
 import { planRustOptionPayloadView } from "./option-payload-views.js";
+import { cloneRustExpression } from "../../target-ast/syntax/expressions.js";
+import { rustValueBlock } from "../../target-ast/syntax/value-block.js";
+import { allocateRustSyntheticName } from "../names/synthetic.js";
 
 function operand(node: Node, later: Node | undefined, carrier: TargetTypeRef, view: RustOptionEqualityView,
   liftDepth: number, rawOption: boolean, option: boolean, context: RustPlanContext): RustExpr {
@@ -27,7 +30,21 @@ export function planRustOptionEquality(node: Node,
   const selected = context.input.program.records.optionEquality.get(node)
     ?? failRustPlannerInvariant("An admitted optional equality requires its selected native operands and borrowed views.", node);
   const fact = selected.fact;
+  const compare = (left: RustExpr): RustExpr => {
+    const right = operand(selected.right, undefined, fact.rightCarrier, fact.view, fact.rightLiftDepth, selected.rightRawOption, selected.rightOption, context);
+    return { kind: "binary", operator: fact.negated ? "!=" : "==", left, right };
+  };
+  if (selected.precedingAcquisition !== undefined) {
+    const source = planExpressionBeforeValueProjections(selected.left, context, "value", "shared-place")
+      ?? failRustPlannerInvariant("An admitted optional comparison requires its selected native acquisition.", selected.left);
+    if (context.syntheticNames === undefined || fact.view === "value")
+      failRustPlannerInvariant("An admitted optional acquisition requires its borrowed view and native scope.", node);
+    const name = allocateRustSyntheticName(context.syntheticNames, "option_snapshot");
+    const value = selected.precedingAcquisition.kind === "clone" ? cloneRustExpression(source) : source;
+    let left = planRustOptionPayloadView({ kind: "path", path: name }, fact.leftCarrier, fact.view, context);
+    for (let depth = 0; depth < fact.leftLiftDepth; depth++) left = { kind: "call", path: "Some", args: [left] };
+    return rustValueBlock([{ name, value }], compare(left));
+  }
   const left = operand(selected.left, selected.right, fact.leftCarrier, fact.view, fact.leftLiftDepth, selected.leftRawOption, selected.leftOption, context);
-  const right = operand(selected.right, undefined, fact.rightCarrier, fact.view, fact.rightLiftDepth, selected.rightRawOption, selected.rightOption, context);
-  return { kind: "binary", operator: fact.negated ? "!=" : "==", left, right };
+  return compare(left);
 }
