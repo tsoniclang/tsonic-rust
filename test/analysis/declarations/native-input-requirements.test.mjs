@@ -238,4 +238,49 @@ export function retain(callbacks: [Callback, Callback]): ${resultType} { ${body}
       }
     });
   }
+
+  for (const [name, source, projections] of [
+    ["nested optional tuple move", `export function preserve(callbacks: [Callback, [Callback | undefined]]): [Callback, [Callback | undefined]] {
+  return callbacks;
+}`, [[0], [1, 0]]],
+    ["unused tuple formal", "export function preserve(callbacks: [Callback, Callback]): number { return 1; }", [[0], [1]]],
+  ]) {
+    test(`aggregate native inputs are complete before ${name} in ${surface}`, () => {
+      const current = checked(`interface Callback { (): number; } ${source}`, surfaces);
+      const owner = current.declaration("preserve");
+      const parameter = current.ast.parameters(owner)[0];
+      const inputs = current.program.callableValues.native.inputsFor(owner);
+      assert.equal(inputs.length, projections.length, "the full authored aggregate has its exact native component inventory");
+      for (const [index, input] of inputs.entries()) {
+        assert.equal(input.subject.node === parameter, true, `${index}: the original formal owns its component`);
+        assert.equal(JSON.stringify(input.subject.projection.map(component =>
+          component.kind === "tuple-element" ? component.index : component.kind)), JSON.stringify(projections[index]),
+        `${index}: original checked component order and nested projections are retained`);
+        for (const [contract, requirements] of nativeRequirementSets(current, owner, input).entries()) {
+          assert.equal(requirements.includes("clone"), false,
+            `${contract}: discovering component ${index} does not manufacture a Clone obligation`);
+        }
+      }
+      assert.equal(new Set(inputs.map(input => input.implementation.identity)).size, inputs.length,
+        "equal logical signatures never collapse distinct physical component identities");
+    });
+  }
+
+  test(`aggregate Clone requirements retain unused component inverses in ${surface}`, () => {
+    const current = checked(`interface Callback { (): number; }
+export function preserve(callbacks: [Callback, Callback]): [Callback, Callback] {
+  const first = callbacks[0]; const repeated = callbacks[0]; return callbacks;
+}`, surfaces);
+    const owner = current.declaration("preserve");
+    const inputs = current.program.callableValues.native.inputsFor(owner);
+    assert.equal(inputs.length, 2, "both components are published even when only one component is read");
+    for (const input of inputs) {
+      const projection = input.subject.projection[0];
+      assert.equal(projection?.kind, "tuple-element", "the exact native input has its original tuple projection");
+      for (const [contract, requirements] of nativeRequirementSets(current, owner, input).entries()) {
+        assert.equal(requirements.includes("clone"), projection.index === 0,
+          `${contract}: only the component actually cloned by the body requires Clone`);
+      }
+    }
+  });
 }
