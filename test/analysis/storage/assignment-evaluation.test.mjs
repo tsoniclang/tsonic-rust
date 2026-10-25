@@ -133,8 +133,7 @@ export function scalar(): number { let value = 1; return value += 2; }
 export function local(): bigint { let value = 3n; return value += 2n; }
 export function getter(value: Counter): bigint { return value.amount += 2n; }
 export function staticValue(): bigint { return Counter.shared += 2n; }
-function make(): bigint[] { return [3n]; }
-export function fresh(): bigint { return make()[0] += 2n; }
+${surfaces.length === 0 ? "" : "function make(): bigint[] { return [3n]; }\nexport function fresh(): bigint { return make()[0] += 2n; }"}
 export function nullable(value: number | undefined): number { return value ??= 2; }
 ` } });
     const ast = program.source.ast;
@@ -148,8 +147,9 @@ export function nullable(value: number | undefined): number { return value ??= 2
       ast.forEachChild(node, child => { if (child !== undefined) visit(child, current); });
     };
     program.sourceFiles.forEach(file => visit(file, undefined));
-    assert.equal(selected.size, 6, "all actual direct, owning and temporary acquisition classes are retained");
-    for (const name of ["indexed", "fresh", "scalar", "local", "getter", "staticValue"]) {
+    const names = ["indexed", "scalar", "local", "getter", "staticValue", ...(surfaces.length === 0 ? [] : ["fresh"])];
+    assert.equal(selected.size, names.length, "all retained direct places and real owning getter acquisition classes are present");
+    for (const name of names) {
       const { node, plan } = selected.get(name);
       const direct = name === "scalar" || name === "local" || surfaces.length === 0 && (name === "indexed" || name === "fresh");
       assert.equal(plan.current.kind, direct ? "direct" : "value", `${name}: native places are distinct from real owning getter results`);

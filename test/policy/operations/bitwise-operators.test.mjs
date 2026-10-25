@@ -244,14 +244,11 @@ export function main(): void {
   try { const impossible = values[index()] /= 0n; check(impossible === 0n); }
   ${surfaces.length === 0 ? "catch { failed = true; }" : "catch (error) { failed = error instanceof RangeError; }"}
   check(failed && values[0] === 14n && indexReads === 2);
-  const fresh = make()[0] += 2n;
-  check(fresh === 5n);
+  ${surfaces.length === 0 ? "" : "const fresh = make()[0] += 2n;\n  check(fresh === 5n);"}
   let word = "left";
   const concatenated = word += "!";
   check(concatenated === "left!" && word === "left!");
-  const words = ["native"];
-  const indexedWord = words[0] += "!";
-  check(indexedWord === "native!" && words[0] === "native!");
+  ${surfaces.length === 0 ? "" : 'const words = ["native"];\n  const indexedWord = words[0] += "!";\n  check(indexedWord === "native!" && words[0] === "native!");'}
 }
 main();
 ` } });
@@ -261,5 +258,24 @@ main();
     if (surfaces.length === 0) assert.doesNotMatch(source, /\b(?:values|words)\.(?:clone|to_vec)\(\)/u,
       "previous-value snapshots never duplicate their native collection owners");
     validateGeneratedProject(`compound-previous-acquisition-${surfaces[0] ?? "native"}`, result.artifacts, { run: true });
+  });
+}
+
+for (const { name, source, message } of [
+  { name: "temporary native element compound assignment", source: `
+function make(): bigint[] { return [3n]; }
+export function update(): bigint { return make()[0] += 2n; }
+`, message: "Assignments require an exact direct, promoted or module storage owner. (KindBinaryExpression)" },
+  { name: "native String element compound assignment", source: `
+export function update(words: string[]): string { return words[0] += "!"; }
+`, message: "String compound assignment requires a binding or finalized Rust location plan. (KindBinaryExpression)" },
+]) {
+  test(`${name} retains its precise admission refusal`, () => {
+    const { result } = compileRust({ files: { "index.ts": source } });
+    assert.equal(result.diagnostics.length, 1, "the unretained pattern has one exact source refusal");
+    assert.equal(result.diagnostics[0].code, "RUST_UNSUPPORTED_AST", "the unretained pattern is refused before native planning");
+    assert.equal(result.diagnostics[0].message, message, "the source refusal retains its exact native place requirement");
+    assert.equal(result.program === undefined && result.plan === undefined && result.artifacts.length === 0, true,
+      "a refused pattern never publishes a program, native plan or partial artifacts");
   });
 }
