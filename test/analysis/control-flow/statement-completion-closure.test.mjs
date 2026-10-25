@@ -221,6 +221,47 @@ function checked(text = source, options = {}) {
   return { program, nodes, ast: program.source.ast };
 }
 
+test("native writable projection identities retain their full checked receiver chain", () => {
+  const { program, nodes, ast } = checked(`
+export function inspect(holder: { nested: { value: number } }, replacement: { nested: { value: number } }, unrelated: number): number {
+  const direct = holder.nested.value;
+  const parenthesized = (holder.nested).value;
+  holder.nested = replacement.nested;
+  holder = replacement;
+  unrelated = direct;
+  return direct + parenthesized + holder.nested.value + unrelated;
+}
+`);
+  const rebound = nodes.find(node => ast.is.IsBinaryExpression(node) &&
+    ast.operatorKindName(node) === "KindEqualsToken" &&
+    ast.is.IsIdentifier(ast.as.AsBinaryExpression(node).Left) &&
+    ast.text(ast.as.AsBinaryExpression(node).Left) === "holder");
+  assert.equal(rebound !== undefined, true, "the checked program retains its real root-binding replacement");
+  const nestedRebound = nodes.find(node => ast.is.IsBinaryExpression(node) &&
+    ast.operatorKindName(node) === "KindEqualsToken" &&
+    ast.is.IsPropertyAccessExpression(ast.as.AsBinaryExpression(node).Left) &&
+    ast.text(ast.name(ast.as.AsBinaryExpression(node).Left)) === "nested");
+  const unrelatedWrite = nodes.find(node => ast.is.IsBinaryExpression(node) &&
+    ast.operatorKindName(node) === "KindEqualsToken" &&
+    ast.is.IsIdentifier(ast.as.AsBinaryExpression(node).Left) &&
+    ast.text(ast.as.AsBinaryExpression(node).Left) === "unrelated");
+  assert.equal(nestedRebound !== undefined && unrelatedWrite !== undefined, true,
+    "the actual checked source contains both a selected-path replacement and an unrelated write");
+  const selected = nodes.filter(node => ast.is.IsPropertyAccessExpression(node) &&
+    ast.text(ast.name(node)) === "value");
+  assert.equal(selected.length, 3, "direct, parenthesized and rebound paths retain the same checked nested field");
+  for (const [index, node] of selected.entries()) {
+    const identity = program.records.directStorageIdentity.get(node);
+    assert.equal(identity?.resolved, true, `${index}: the existing native place owner resolves the actual receiver chain`);
+    assert.equal(identity.invalidatedRoots.has(rebound), true,
+      `${index}: replacing the root binding invalidates its selected nested writable path`);
+    assert.equal(identity.invalidatedRoots.has(nestedRebound), true,
+      `${index}: replacing an intermediate field invalidates the same selected writable path`);
+    assert.equal(identity.invalidatedRoots.has(unrelatedWrite), false,
+      `${index}: an unrelated lexical write never invalidates the selected receiver chain`);
+  }
+});
+
 function select(program, records = program.records) {
   const nativeNodes = rustNativeFixtureNodes(program);
   const native = new Set(nativeNodes);

@@ -32,29 +32,39 @@ export function analyzeRustDirectStorage(program: Omit<RustAnalysisProgram, "rea
     const previous = identities.get(node);
     if (previous !== undefined) return previous;
     let current: Node | undefined = node;
-    let symbol: Symbol | undefined;
+    const symbols = new Set<Symbol>();
     const visited = new Set<Node>();
     while (current !== undefined && !visited.has(current)) {
       visited.add(current);
       const reference = program.sourceNavigation.sourceReferenceFor(current);
-      if (reference !== undefined) { symbol = reference.symbol; break; }
+      if (reference?.symbol !== undefined) symbols.add(reference.symbol);
       if (!ast.is.IsPropertyAccessExpression(current) && !ast.is.IsElementAccessExpression(current) && !ast.is.IsParenthesizedExpression(current)) break;
       current = Node_Expression(ast, current);
     }
-    let invalidatedRoots = symbol === undefined ? undefined : roots.get(symbol);
-    if (symbol !== undefined && invalidatedRoots === undefined) {
-      const selected = new Set<Node>();
-      for (const file of program.sourceFiles) for (const write of program.sourceNavigation.bindingWritesWithin(symbol, file)) {
-        let ancestor: Node | undefined = write.reference;
-        while (ancestor !== undefined && !selected.has(ancestor)) {
-          selected.add(ancestor);
-          ancestor = ast.parent(ancestor);
+    let invalidatedRoots: ReadonlySet<Node> | undefined;
+    let combinedRoots: Set<Node> | undefined;
+    for (const symbol of symbols) {
+      let invalidated = roots.get(symbol);
+      if (invalidated === undefined) {
+        const selected = new Set<Node>();
+        for (const file of program.sourceFiles) for (const write of program.sourceNavigation.bindingWritesWithin(symbol, file)) {
+          let ancestor: Node | undefined = write.reference;
+          while (ancestor !== undefined && !selected.has(ancestor)) {
+            selected.add(ancestor);
+            ancestor = ast.parent(ancestor);
+          }
         }
+        invalidated = selected;
+        roots.set(symbol, selected);
       }
-      invalidatedRoots = selected;
-      roots.set(symbol, selected);
+      if (invalidatedRoots === undefined || invalidatedRoots.size === 0) invalidatedRoots = invalidated;
+      else if (invalidated.size !== 0 && invalidated !== invalidatedRoots) {
+        combinedRoots ??= new Set(invalidatedRoots);
+        for (const root of invalidated) combinedRoots.add(root);
+        invalidatedRoots = combinedRoots;
+      }
     }
-    const selected = Object.freeze({ resolved: symbol !== undefined, invalidatedRoots: invalidatedRoots ?? new Set<Node>() });
+    const selected = Object.freeze({ resolved: symbols.size !== 0, invalidatedRoots: invalidatedRoots ?? new Set<Node>() });
     identities.set(node, selected);
     producer.identity(node, selected);
     return selected;
