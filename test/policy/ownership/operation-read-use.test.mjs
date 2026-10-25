@@ -68,6 +68,72 @@ function select(ast, node, operation) {
     arguments: undefined, address: undefined, location: undefined, guard: undefined, callableMode: undefined, structuralReceiverMode: "shared" });
 }
 
+test("native runtime and static typeof categories share their actual storage operand without copying union payloads", () => {
+  const { program } = analyzeRust({ files: { "index.ts": `
+type Body = boolean | unknown[];
+export function inspect(body: Body): string {
+  if (typeof body === "boolean") return typeof ((body));
+  return typeof body;
+}
+` } });
+  assert.equal(program !== undefined, true, "a native category probe is not an aliased array entry");
+  const { ast } = program.source;
+  const probes = [];
+  const visit = node => {
+    if (ast.is.IsTypeOfExpression(node)) probes.push(node);
+    ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+  };
+  program.sourceFiles.forEach(visit);
+  assert.equal(probes.length, 3, "the runtime union, wrapped boolean and narrowed array probes all remain admitted");
+  let runtime = 0;
+  let staticResult = 0;
+  for (const probe of probes) {
+    const fact = program.records.targetOperation.get(probe);
+    assert.equal(fact?.kind, "typeof", "the actual category producer owns the selected operation");
+    if (typeof fact.result === "string") staticResult += 1;
+    else runtime += 1;
+    const operand = Node_Expression(ast, probe);
+    const use = select(ast, probe, fact).get(operand);
+    assert.equal(use?.mode, "shared", "category selection never consumes or clones its payload storage");
+    assert.equal(use.later.length, 0, "the probe does not extend a borrow into a later operand");
+    let subject = operand;
+    while (ast.is.IsParenthesizedExpression(subject)) subject = Node_Expression(ast, subject);
+    const ownership = program.records.readOwnership.get(subject);
+    assert.equal(ownership?.source.kind, "borrow", "the complete ownership producer publishes the native source borrow");
+    assert.equal(ownership.source.mutable, false, "a category probe never needs a mutable native borrow");
+    assert.equal(select(ast, subject, undefined).has(subject), false, "ordinary non-probe reads do not acquire a blanket borrow policy");
+  }
+  assert.equal(runtime, 1, "the full native union retains its real runtime category selection");
+  assert.equal(staticResult, 2, "both checked narrowed categories retain their native static outcomes");
+});
+
+test("a checked shared field probe remains borrowed across its actual effect-free later operand", () => {
+  const { program } = analyzeRust({ files: { "index.ts": `
+interface Options { extensions?: string[] | false; }
+export function enabled(options?: Options): boolean {
+  return options?.extensions !== false && options?.extensions !== undefined;
+}
+` } });
+  assert.equal(program !== undefined, true, "a readonly field guard is not an aliased array entry");
+  const { ast } = program.source;
+  const comparisons = [];
+  const visit = node => {
+    if (program.records.targetOperation.get(node)?.kind === "union-equality") comparisons.push(node);
+    ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+  };
+  program.sourceFiles.forEach(visit);
+  assert.equal(comparisons.length, 1, "the real field-versus-false guard is the only native union comparison");
+  const comparison = ast.as.AsBinaryExpression(comparisons[0]);
+  assert.equal(ast.kindName(comparison.Right), "KindFalseKeyword", "the later operand is the checked effect-free literal, not an unknown call");
+  const selected = select(ast, comparisons[0], program.records.targetOperation.get(comparisons[0]));
+  assert.equal(selected.get(comparison.Left)?.mode, "shared", "the native comparison requires a real shared field input");
+  const read = program.records.readOwnership.get(comparison.Left);
+  assert.equal(read?.source.kind, "borrow", "the preseal producer retains the actual field storage view");
+  assert.equal(read.source.mutable, false, "a readonly native comparison does not need an exclusive borrow");
+  assert.equal(read.value.kind, "borrow", "no hidden union or Vec clone is selected for the comparison");
+  assert.equal(read.borrowedAcross.has(comparison.Right), true, "the published interval includes this exact later operand");
+});
+
 test("native reference loads and stores select only their actual operand's nonconsuming place use", async () => {
   const source = createTargetSourceProgram(await checkedSource("ownership-native-reference-operands", {
     "src/index.ts": `

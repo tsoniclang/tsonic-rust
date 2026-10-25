@@ -90,6 +90,8 @@ export function analyzeRustLocationStorage(program: Omit<RustAnalysisProgram, "r
     else if (value.kind === "member" || value.kind === "index") admit(value.receiver);
   };
   const admitPromoted = (node: Node): void => {
+    const member = program.records.updateMember.get(node);
+    if (member !== undefined && member !== null) return;
     if (program.records.locationStorageRoot.get(node) != null) admit(node);
   };
   for (const node of nodes) {
