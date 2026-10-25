@@ -219,3 +219,45 @@ export function calculate(left: number, right: number): number { return left ${o
     assert.equal(result.artifacts.length, 0);
   });
 }
+
+for (const surfaces of [[], ["js"]]) {
+  test(`compound snapshots retain local and indexed stores through failure without copying owners (${surfaces[0] ?? "native"})`, { timeout: 300_000 }, () => {
+    const { result } = compileRust({ surfaces, packages: [acmeTestingPackage()],
+      target: { id: "rust", options: { outputType: "bin", crateName: "compound_previous_acquisition" } },
+      files: { "index.ts": `
+import { check } from "@acme/testing";
+function make(): bigint[] { return [3n]; }
+export function main(): void {
+  let scalar = 12n;
+  const sum = scalar += 3n;
+  check(sum === 15n && scalar === 15n);
+  let failed = false;
+  try { const impossible = scalar /= 0n; check(impossible === 0n); } catch { failed = true; }
+  check(failed && scalar === 15n);
+  const values = [7n];
+  let indexReads = 0;
+  const index = (): number => { indexReads += 1; return 0; };
+  const accumulated = values[index()] += values[0];
+  check(accumulated === 14n && values[0] === 14n && indexReads === 1);
+  failed = false;
+  try { const impossible = values[index()] /= 0n; check(impossible === 0n); } catch { failed = true; }
+  check(failed && values[0] === 14n && indexReads === 2);
+  const fresh = make()[0] += 2n;
+  check(fresh === 5n);
+  let word = "left";
+  const concatenated = word += "!";
+  check(concatenated === "left!" && word === "left!");
+  const words = ["native"];
+  const indexedWord = words[0] += "!";
+  check(indexedWord === "native!" && words[0] === "native!");
+}
+main();
+` } });
+    assert.equal(result.diagnostics.length, 0,
+      result.diagnostics.slice(0, 4).map(issue => `${issue.code}: ${issue.message}`).join("; "));
+    const source = artifactText(result, "src/index.rs");
+    if (surfaces.length === 0) assert.doesNotMatch(source, /\b(?:values|words)\.(?:clone|to_vec)\(\)/u,
+      "previous-value snapshots never duplicate their native collection owners");
+    validateGeneratedProject(`compound-previous-acquisition-${surfaces[0] ?? "native"}`, result.artifacts, { run: true });
+  });
+}

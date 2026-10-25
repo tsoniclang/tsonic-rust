@@ -52,9 +52,10 @@ export function planCompoundAssignmentExpression(node: Node, context: RustPlanCo
     const reference = storage !== undefined || operand.storage === "shared-reference";
     const bound: RustExpr = { kind: "path", path: name };
     bindings.push({ name, value, ...(directReceiver && !reference ? { mutable: true } : {}) });
-    overrides.set(operand.node, { expression: directReceiver && reference ? { kind: "dereference", pointer: bound } : bound,
-      carrier: operand.carrier, valueForm: directReceiver ? "storage" : reference ? "shared-reference" : "value",
-      ...(directReceiver ? { storageForm: "plain" as const } : {}) });
+    if (directReceiver) overrides.set(operand.node, { expression: reference ? { kind: "dereference", pointer: bound } : bound,
+      carrier: operand.carrier, valueForm: "storage", storageForm: "plain" });
+    else overrides.set(operand.node, { expression: bound, carrier: operand.carrier,
+      valueForm: reference ? "shared-reference" : "value" });
   }
   let current: RustExpr | undefined;
   if (selected.current.kind === "field") current = location!.read;

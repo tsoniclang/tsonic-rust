@@ -12,7 +12,7 @@ export type RustAssignmentEvaluation = {
     readonly storage: "value" | "shared-reference" | "direct" | "direct-identifier" }[];
 } & (
   | { readonly kind: "compound"; readonly fact: RustAssignmentOperationFact;
-      readonly current: { readonly kind: "field" | "value" }
+      readonly current: { readonly kind: "field" } | { readonly kind: "value" }
         | { readonly kind: "direct"; readonly ownership: RustValueReadOwnership } }
   | { readonly kind: "nullish"; readonly fact: Extract<RustTargetOperationFact, { readonly kind: "nullish-assignment" }>;
       readonly valueField: boolean;
