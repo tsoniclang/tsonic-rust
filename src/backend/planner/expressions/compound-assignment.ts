@@ -3,6 +3,7 @@ import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { failRustPlannerInvariant } from "../diagnostics.js";
 import { rustValueBlock } from "../../target-ast/syntax/value-block.js";
+import { cloneRustExpression } from "../../target-ast/syntax/expressions.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { planRustValueFieldLocation } from "../objects/value-fields.js";
 import { planRustCompoundAssignmentValue } from "../statements/assignments.js";
@@ -26,11 +27,11 @@ export function planCompoundAssignmentExpression(node: Node, context: RustPlanCo
   }
   if (!copy && !requireRustCarrierRequirements(fact.resultCarrier, ["clone"], node, context)) return undefined;
   const names = context.syntheticNames;
-  const bindings: { readonly name: string; readonly value: RustExpr }[] = [];
+  const bindings: { readonly name: string; readonly value: RustExpr; readonly mutable?: boolean }[] = [];
   const overrides = new Map(context.expressionOverrides ?? []);
   const scoped = { ...context, expressionOverrides: overrides };
-  const location = selected.valueField ? planRustValueFieldLocation(left, context, "write") : undefined;
-  if (selected.valueField && location === undefined) failRustPlannerInvariant("An admitted compound field write requires its native location.", left);
+  const location = selected.current.kind === "field" ? planRustValueFieldLocation(left, context, "write") : undefined;
+  if (selected.current.kind === "field" && location === undefined) failRustPlannerInvariant("An admitted compound field write requires its native location.", left);
   if (location !== undefined) bindings.push(...location.bindings);
   else for (const operand of selected.operands) {
     if (context.expressionOverrides?.has(operand.node)) continue;
@@ -47,18 +48,32 @@ export function planCompoundAssignmentExpression(node: Node, context: RustPlanCo
       : { kind: "reference" as const, expr: storage };
     if (value === undefined) return undefined;
     const name = allocateRustSyntheticName(names, operand.role === "receiver" ? "assignment_receiver" : "assignment_index");
-    bindings.push({ name, value });
-    overrides.set(operand.node, { expression: { kind: "path", path: name }, carrier: operand.carrier,
-      valueForm: storage !== undefined || operand.storage === "shared-reference" ? "shared-reference" : "value" });
+    const directReceiver = selected.current.kind === "direct" && operand.role === "receiver";
+    const reference = storage !== undefined || operand.storage === "shared-reference";
+    const bound: RustExpr = { kind: "path", path: name };
+    bindings.push({ name, value, ...(directReceiver && !reference ? { mutable: true } : {}) });
+    overrides.set(operand.node, { expression: directReceiver && reference ? { kind: "dereference", pointer: bound } : bound,
+      carrier: operand.carrier, valueForm: directReceiver ? "storage" : reference ? "shared-reference" : "value",
+      ...(directReceiver ? { storageForm: "plain" as const } : {}) });
   }
-  const current = location?.read ?? planExpression(left, scoped);
+  let current: RustExpr | undefined;
+  if (selected.current.kind === "field") current = location!.read;
+  else if (selected.current.kind === "value") current = planExpression(left, scoped);
+  else {
+    const place = planRustDirectStorage(left, scoped)
+      ?? failRustPlannerInvariant("An admitted compound assignment requires its selected previous-value place.", left);
+    const ownership = selected.current.ownership;
+    current = ownership.kind === "clone" ? cloneRustExpression(place)
+      : ownership.kind === "borrow" ? { kind: "reference", mutable: ownership.mutable, expr: place } : place;
+  }
   const value = planExpression(right, context);
   if (current === undefined || value === undefined) return undefined;
   const currentName = allocateRustSyntheticName(names, "assignment_current");
   const valueName = allocateRustSyntheticName(names, "assignment_operand");
   const resultName = allocateRustSyntheticName(names, "assignment_result");
   const result: RustExpr = { kind: "path", path: resultName };
-  const next = planRustCompoundAssignmentValue(fact, { kind: "path", path: currentName }, { kind: "path", path: valueName }, node, context);
+  const next = planRustCompoundAssignmentValue(fact, { kind: "path", path: currentName }, { kind: "path", path: valueName }, node, context,
+    selected.current.kind === "direct" && selected.current.ownership.kind === "borrow" ? "shared-reference" : "value");
   if (next === undefined) return undefined;
   bindings.push({ name: currentName, value: current }, { name: valueName, value }, { name: resultName, value: next });
   const stored: RustExpr = copy ? result : { kind: "method-call", receiver: result, method: "clone", args: [] };
