@@ -52,6 +52,7 @@ function input() {
       IsConstructSignatureDeclaration: node => node.kindName === "KindConstructSignature",
       IsPropertySignatureDeclaration: node => node.kindName === "KindPropertySignature",
       IsVariableDeclarationList: node => node.kindName === "KindVariableDeclarationList",
+      IsEnumMember: node => node.kindName === "KindEnumMember",
     },
     typeParameters: node => node.typeParameters ?? [],
     forEachChild: (node, visit) => { for (const child of node.nodes ?? []) visit(child); },
@@ -268,8 +269,14 @@ test("callable value plans seal only after adapter classification and cannot be 
       assert.equal(current.generic === selectedConstruction.generic, true, "construction has one identical generic family owner");
       assert.equal(current.issues.length, 0, "the actual complete construction has no issues");
       assert.equal(Object.isFrozen(selectedConstruction), true);
-      assert.equal("suspended" in selectedConstruction || "frames" in selectedConstruction || "initializePhysical" in selectedConstruction.generic, false,
-        "construction exposes neither retained inventories nor the physical initializer");
+      assert.equal(current.frames === selectedConstruction.frames, true,
+        "construction exposes the same raw frame inventory before effect analysis");
+      assert.equal(Object.isFrozen(selectedConstruction.frames), true,
+        "the raw frame plan has one frozen canonical identity");
+      assert.equal(Object.isFrozen(selectedConstruction.frames.definitions), true,
+        "raw frame definitions are immutable before physical error selection");
+      assert.equal("suspended" in selectedConstruction || "initializePhysical" in selectedConstruction.generic, false,
+        "construction exposes neither suspended inventories nor the private physical initializer");
       assert.throws(() => current.seal(), /Physical callable publication requires completed source-selected families and effects/u);
       assert.throws(() => current.publish(), /selected physical families after effect analysis/u);
       assert.throws(() => current.finalizeSelected(), /Physical callable families require their completed constructor and field storage selection/u);
@@ -285,6 +292,8 @@ test("callable value plans seal only after adapter classification and cannot be 
   assert.equal(registry.selected === selected, true, "the finalized analysis selection cannot be replaced by publication");
   assert.equal(plan !== selected, true, "publication exposes the sealed data plan, not the private analysis selection");
   assert.equal(plan.generic === construction.generic, true, "sealed data retains the original family owner");
+  assert.equal(plan.frames === construction.frames, true,
+    "physical publication retains the original raw frame inventory instead of rebuilding it");
   assert.equal(plan.frames.definitions.length, 0);
   assert.equal(Object.isFrozen(plan), true);
   assert.throws(() => registry.finalizeSelected(), /exactly once/u);
