@@ -14,7 +14,7 @@ import { analyzeRustNativeParticipation } from "../../../dist/analysis/callables
 import { createRustProgramRecordBuilder } from "../../../dist/analysis/program/records/create.js";
 import { analyzeRustLifetimes } from "../../../dist/analysis/declarations/lifetimes.js";
 import { rustProjectGenericParameters } from "../../../dist/policy/types/project/project-generic-contract.js";
-import { createRustCallableOwnershipRegistry, selectRustCallableStorageOwnership } from "../../../dist/analysis/callables/ownership-plan.js";
+import { createRustCallableOwnershipRegistry, selectRustCallableOwnership } from "../../../dist/analysis/callables/ownership-plan.js";
 import { selectRustCallableOwnershipCarrier } from "../../../dist/analysis/callables/ownership-carriers.js";
 import { rustCallableTargetType, rustCallableProtocol } from "../../../dist/target-model/types/carriers/callables.js";
 import { rustFrameCallableValue } from "../../../dist/target-model/types/carriers/frame-callables.js";
@@ -47,14 +47,14 @@ function storageOwnership(current, registry, subject, declaration) {
     : current.storage.bindingsForDeclaration(declaration);
   const producers = scope.kind === "unresolved" ? scope
     : current.storage.storageProducersFor(subject, scope.bindings);
-  return selectRustCallableStorageOwnership(registry, subject, producers);
+  return selectRustCallableOwnership(registry, subject, { kind: "storage", producers });
 }
 
 function physicalInput(current, registry, subject, logicalCarrier) {
   const scope = current.storage.bindingsForLexicalOwner(subject.node);
   assert.equal(scope.kind, "resolved", "physical selection retains its actual original source binding");
   return { ast: current.source.ast, ownership: registry, source: { subject, bindings: scope.bindings },
-    producers: current.storage.storageProducersFor(subject, scope.bindings), logicalCarrier };
+    selection: { kind: "storage", producers: current.storage.storageProducersFor(subject, scope.bindings) }, logicalCarrier };
 }
 
 function ordinaryFormalSelection(text) {

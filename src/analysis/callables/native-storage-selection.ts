@@ -255,6 +255,12 @@ export function createRustNativeStorageSelection(
       }
       if (rustCallableProtocol(current) !== undefined) {
         if (boundaryFailure !== undefined) return fail(boundaryFailure);
+        if (rustFrameCallableValue(current) !== undefined && selectedSubject.kind === "member" &&
+          selectedSubject.projection.length === 0) {
+          const stored = input.frames.bindingFor(selectedSubject.node)?.carrier;
+          return stored !== undefined && rustTargetTypeRefEquals(stored, current) ? stored
+            : fail("A native frame field requires its exact completed physical binding.");
+        }
         const selectedGetter = (origin: SourceStorageSubject, sourceBindings: SourceStorageBindings, readPosition: "value" | "input"):
           | { readonly kind: "not-getter" }
           | { readonly kind: "selected"; readonly carrier: TargetTypeRef }
@@ -278,12 +284,13 @@ export function createRustNativeStorageSelection(
           const carrier = callableValueCarrier(substituteRustTargetGenerics(operation.resultCarrier,
             generics.bindings.types, generics.bindings.lifetimes, generics.bindings.consts));
           const physical = carrier === undefined || !rustCallableInvocationSignaturesMatch(current, carrier)
-            ? undefined : rustCallablePhysicalCarrier(carrier);
+            ? undefined : rustFrameCallableValue(carrier) !== undefined && rustTargetTypeRefEquals(carrier, current)
+              ? carrier : rustCallablePhysicalCarrier(carrier);
           if (physical === undefined) {
             fail("A structural callable property requires its exact selected getter storage.");
             return { kind: "unresolved" };
           }
-          erasedPhysicals.add(physical);
+          if (rustFrameCallableValue(physical) === undefined) erasedPhysicals.add(physical);
           return { kind: "selected", carrier: physical };
         };
         const directGetter = selectedGetter(selectedSubject, bindings, position);

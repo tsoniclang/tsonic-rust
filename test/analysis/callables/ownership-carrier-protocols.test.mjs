@@ -32,7 +32,7 @@ function input(carrier, selection) {
   return {
     ast: {}, logicalCarrier: carrier,
     source: { subject: subject.subject, bindings: scope.bindings },
-    producers: storage.storageProducersFor(subject.subject, scope.bindings),
+    selection: { kind: "storage", producers: storage.storageProducersFor(subject.subject, scope.bindings) },
     ownership: { failureReason: () => selection.kind === "unresolved" ? selection.reason : undefined,
       activationForCallable: () => selection.kind === "frame" ? selection.activation : undefined,
       isCyclicCallable: () => false, isCyclicSlot: () => false },

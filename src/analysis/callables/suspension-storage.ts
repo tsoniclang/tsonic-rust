@@ -15,7 +15,7 @@ import type { RustRetainedEnvironment } from "../../target-model/records/retaine
 import { rustCallableInputLifetimeParameters } from "./source-input-lifetimes.js";
 import { resolveExpressionCarrier } from "../source-evidence/types/resolution/expression-carriers.js";
 import { rustRetainedEnvironment, rustSuspendedCapturedParameters } from "./retained-values.js";
-import { selectRustCallableStorageOwnership } from "./ownership-plan.js";
+import { selectRustCallableOwnership } from "./ownership-plan.js";
 import { rustSourceStorageScope } from "../source-evidence/types/resolution/source-storage-projection.js";
 
 export type RustSuspendedCallableStorageResolution =
@@ -108,7 +108,7 @@ export function resolveRustSuspendedCallableStorage(
   const scope = rustSourceStorageScope(walk.context, declaration, walk.currentCallableDeclaration);
   if (scope.kind === "unresolved") return { kind: "rejected", reason: scope.reason };
   const producers = walk.context.sourceStorage.storageProducersFor(subject.subject, scope.bindings);
-  const ownership = selectRustCallableStorageOwnership(walk.context.callableOwnership, subject.subject, producers);
+  const ownership = selectRustCallableOwnership(walk.context.callableOwnership, subject.subject, { kind: "storage", producers });
   if (ownership.kind === "unresolved") return { kind: "rejected", reason: ownership.reason };
   if (ownership.kind === "frame" && ownership.activation.kind === "class") {
     const definition = walk.context.projectTypes.definitionForDeclaration(ownership.activation.ownerDeclaration);

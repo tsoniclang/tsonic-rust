@@ -3,11 +3,16 @@ import test from "node:test";
 import { createCompilerSessionFromFiles, sourcePrimitiveFactKey } from "@tsonic/tsts";
 import { createTargetSourceProgram } from "@tsonic/target-api/source";
 import { createSourceStorageQuery } from "@tsonic/target-api/analysis";
-import { resolveRustCallableEvidence } from "../../../dist/analysis/source-evidence/types/resolution/source-evidence.js";
+import { resolveRustCallableEvidence, resolveRustCallableStorageCarrier } from "../../../dist/analysis/source-evidence/types/resolution/source-evidence.js";
 import { rustCallableProtocol } from "../../../dist/target-model/types/carriers/callables.js";
 import { resolveRustConstructSignature } from "../../../dist/analysis/source-evidence/types/resolution/constructors.js";
 import { analyzeRust } from "../../helpers/rust-session.mjs";
 import { rustCallableInputProtocol } from "../../../dist/target-model/types/carriers/callables.js";
+import { rustCallableTargetType } from "../../../dist/target-model/types/carriers/callables.js";
+import { rustSourceClosureValueCarrier } from "../../../dist/analysis/callables/function-values.js";
+import { rustResolutionContext } from "../../../dist/analysis/program/walk.js";
+import { analyzeRustOperations } from "../../helpers/rust-operation-analysis.mjs";
+import { selectRustCallableOwnership } from "../../../dist/analysis/callables/ownership-plan.js";
 
 
 for (const surfaces of [[], ["js"]]) {
@@ -63,10 +68,11 @@ function fixture(purpose) {
   const options = {
     jsEnabled: true,
     sourceTypes: { structuralObjectForType: () => undefined },
-    callableStorageCarrier(selected, producers, logical) {
+    callableStorageCarrier(selected, selection, logical) {
       storageQueries++;
       assert.equal(selected.subject === subject && selected.bindings === scope.bindings, true);
-      assert.equal(producers.kind, "complete", "physical ownership consumes the one completed selection");
+      assert.equal(selection.kind, "storage", "physical storage retains its explicit selection purpose");
+      assert.equal(selection.producers.kind, "complete", "physical ownership consumes the one completed selection");
       assert.equal(rustCallableProtocol(logical)?.result.name, "float64");
       throw new Error("physical ownership remains unsealed");
     },
@@ -87,6 +93,87 @@ test("storage purpose retains the physical ownership guard", () => {
   assert.throws(() => resolveRustCallableEvidence(selected.callable, selected.context, selected.options, new Set()),
     /physical ownership remains unsealed/u);
   assert.equal(selected.queries(), 1);
+});
+
+function originalConstruction() {
+  const current = analyzeRustOperations(`
+export function make(value: number) { return { async read(): Promise<number> { return value; } }; }
+export async function read(): Promise<number> { return await make(7).read(); }
+`, { surfaces: ["js"] });
+  const declaration = current.context.sourceStorage.nodes.find(node => current.context.ast.is.IsMethodDeclaration(node));
+  assert.equal(declaration !== undefined, true, "the original method body is actual checked source");
+  assert.equal(current.context.records.sourceCallableReturn.get(declaration) !== undefined, true,
+    "the existing native return producer completes before constructing its callable value");
+  const recorded = current.context.records.targetOperation.get(declaration);
+  assert.equal(recorded?.kind, "closure", "actual source analysis constructs the original native body");
+  const carrier = recorded.resultCarrier;
+  assert.equal(rustCallableProtocol(carrier) !== undefined, true, "the completed original has its native invocation contract");
+  return { ...current, declaration, carrier };
+}
+
+test("original callable construction never closes its future externally written method storage", () => {
+  const { walk, context, declaration, carrier } = originalConstruction();
+  const selected = rustResolutionContext(walk, declaration, "value");
+  const source = selected.sourceStorageResolution;
+  assert.equal(source.kind, "resolved");
+  const producers = context.sourceStorage.storageProducersFor(source.subject, source.bindings);
+  assert.equal(producers.kind, "open", "future external method-slot writes remain an open storage domain");
+  assert.equal(producers.boundaries.some(boundary => boundary.kind === "external-write" &&
+    boundary.subject.node === declaration), true, "the actual future boundary belongs to this original method");
+  let constructions = 0;
+  const originalSelector = walk.operationOptions.callableStorageCarrier;
+  const constructorWalk = { ...walk, operationOptions: { ...walk.operationOptions,
+    callableStorageCarrier(actual, selection, ...remaining) {
+      constructions += 1;
+      assert.equal(selection.kind, "construction");
+      assert.equal(selection.declaration === declaration && actual.subject === source.subject &&
+        actual.bindings === source.bindings, true, "original construction preserves its exact body and invocation binding");
+      return originalSelector(actual, selection, ...remaining);
+    },
+  } };
+  assert.equal(rustSourceClosureValueCarrier(constructorWalk, declaration, carrier) !== undefined, true,
+    "the actual native constructor retains its completed original body and captures");
+  assert.equal(constructions, 1, "one selector receives the explicit original-construction input");
+  assert.equal(resolveRustCallableStorageCarrier(carrier, selected, walk.operationOptions, new Set()) === undefined, true,
+    "the same callable's future storage cannot borrow the constructor's closed-body proof");
+});
+
+test("native construction requires its completed original body, captures and ownership proof", () => {
+  const { walk, context, declaration, carrier } = originalConstruction();
+  const lexical = context.retainedEnvironments.lexicalFor(declaration);
+  assert.equal(lexical.kind, "resolved");
+  const captured = lexical.captures[0]?.declaration;
+  assert.equal(captured !== undefined, true, "the native constructor retains the actual scalar capture");
+  const failures = [
+    ["missing native return record", { ...context, records: { ...context.records,
+      sourceCallableReturn: { ...context.records.sourceCallableReturn,
+        get: node => node === declaration ? undefined : context.records.sourceCallableReturn.get(node) } } }],
+    ["missing original body", { ...context, ast: { ...context.ast,
+      body: node => node === declaration ? undefined : context.ast.body(node) } }],
+    ["unresolved capture environment", { ...context, retainedEnvironments: { ...context.retainedEnvironments,
+      lexicalFor: node => node === declaration ? { kind: "unresolved", reason: "actual capture unavailable" }
+        : context.retainedEnvironments.lexicalFor(node) } }],
+    ["unresolved captured native input", { ...context, records: { ...context.records,
+      sourceParameterAbi: { ...context.records.sourceParameterAbi,
+        get: node => node === captured ? undefined : context.records.sourceParameterAbi.get(node) } } }],
+    ["finite ownership failure", { ...context, callableOwnership: { ...context.callableOwnership,
+      failureReason: () => "actual ownership budget exhausted" } }],
+  ];
+  for (const [label, changed] of failures) {
+    assert.equal(rustSourceClosureValueCarrier({ ...walk, context: changed }, declaration, carrier) === undefined, true, label);
+  }
+  const selected = rustResolutionContext(walk, declaration, "value");
+  const original = selected.sourceStorageResolution;
+  const ownershipIssue = selectRustCallableOwnership({ ...context.callableOwnership,
+    issues: [...context.callableOwnership.issues, { node: declaration, reason: "actual construction ownership unavailable" }],
+  }, original.subject, { kind: "construction", declaration });
+  assert.equal(ownershipIssue.kind, "unresolved", "an original construction issue is refused by its owning selector");
+  assert.equal(ownershipIssue.reason, "actual construction ownership unavailable");
+  for (const subject of [{ ...original.subject }, { ...original.subject, projection: [{ kind: "array-element" }] }]) {
+    assert.equal(resolveRustCallableStorageCarrier(carrier, { ...selected, callableRepresentation: "construction",
+      sourceStorageResolution: { ...original, subject } }, walk.operationOptions, new Set()) === undefined, true,
+    "a forged or projected storage subject cannot stand in for original construction");
+  }
 });
 
 test("constructor contracts remain logical even when their enclosing value has physical storage", () => {

@@ -3,11 +3,12 @@ import type { RustSourcePolicyContext } from "../../../../policy/model/context.j
 import type { RustSourceProfileRegistry } from "../../../../policy/types/model/source-profile.js";
 import type { RustSourceTypeRegistry } from "../../../project-types/source-type-model.js";
 import type { SourceFileSemantics } from "@tsonic/target-api/source";
-import type { SourceStorageBindings, SourceStorageProducer, SourceStorageProducersSelection, SourceStorageSubject, SourceStorageUnresolved } from "@tsonic/target-api/analysis";
+import type { SourceStorageBindings, SourceStorageProducer, SourceStorageSubject, SourceStorageUnresolved } from "@tsonic/target-api/analysis";
 import type { Node, SourceFile, Type, TypePropertyInfo } from "@tsonic/tsts";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import type { RustSourceTypeFamilyImplementation } from "../../../../target-model/types/type-families.js";
 import type { RustTargetGenericBindings } from "../../../../target-model/types/carriers/generic-inference.js";
+import type { RustCallableOwnershipInput } from "../../../callables/ownership-plan.js";
 
 export interface RustClassFrameInstantiation {
   readonly instance: TargetTypeRef;
@@ -33,7 +34,7 @@ export interface RustTargetTypeResolutionOptions {
   readonly callableParameterCarriers: (declaration: Node) => readonly TargetTypeRef[] | undefined;
   readonly callableStorageCarrier: (
     source: Pick<SourceStorageProducer, "subject" | "bindings">,
-    producers: SourceStorageProducersSelection,
+    selection: RustCallableOwnershipInput,
     logicalCarrier: TargetTypeRef,
     environmentFor: (declaration: Node, excludedCaptures: ReadonlySet<Node>) => readonly TargetTypeRef[] | undefined,
     classFrameFor: (declaration: Node) => RustClassFrameInstantiation | undefined,

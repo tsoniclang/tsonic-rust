@@ -48,7 +48,11 @@ selectedCall: { get: () => undefined }});
     sourceProfiles: createRustSourceProfileRegistry(source, false),
     resolveProjectUnionCarrier: () => undefined,
     callableSignatureCarrier: () => assert.fail("a declaration cannot be specialized from recursive actual arguments"),
-    callableStorageCarrier() { selections += 1; return undefined; } };
+    callableStorageCarrier(selected, selection) {
+      assert.equal(selection.kind, "storage", "a formal callable arm is storage, not original body construction");
+      selections += 1;
+      return undefined;
+    } };
   return { parameter, context, options, selections: () => selections };
 }
 

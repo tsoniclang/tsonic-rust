@@ -1,11 +1,11 @@
 import type { AstReader } from "@tsonic/tsts";
-import type { SourceStorageProducer, SourceStorageProducersSelection } from "@tsonic/target-api/analysis";
+import type { SourceStorageProducer } from "@tsonic/target-api/analysis";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustCallableOrigin } from "../../policy/types/callables/callable-origins.js";
 import { rustCallableProtocol, rustNativeCallableProtocol } from "../../target-model/types/carriers/callables.js";
 import { rustGenericCallableProtocol, rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
 import { rustFrameCallableTargetType, rustFrameCallableValue } from "../../target-model/types/carriers/frame-callables.js";
-import { selectRustCallableStorageOwnership, type RustCallableOwnershipPlan } from "./ownership-plan.js";
+import { selectRustCallableOwnership, type RustCallableOwnershipInput, type RustCallableOwnershipPlan } from "./ownership-plan.js";
 import type { RustCallableActivation } from "../../target-model/records/callable-ownership.js";
 import type { RustClassFrameInstantiation } from "../source-evidence/types/resolution/model.js";
 import { substituteRustTargetGenerics } from "../../target-model/types/carriers/substitution.js";
@@ -19,7 +19,7 @@ export function selectRustCallableOwnershipCarrier(input: {
   readonly ast: AstReader;
   readonly ownership: RustCallableOwnershipPlan;
   readonly source: Pick<SourceStorageProducer, "subject" | "bindings">;
-  readonly producers: SourceStorageProducersSelection;
+  readonly selection: RustCallableOwnershipInput;
   readonly logicalCarrier: TargetTypeRef;
   readonly environmentFor: (activation: RustCallableActivation) => readonly TargetTypeRef[] | undefined;
   readonly classFrameFor: (declaration: RustCallableActivation["ownerDeclaration"]) => RustClassFrameInstantiation | undefined;
@@ -29,7 +29,7 @@ export function selectRustCallableOwnershipCarrier(input: {
     rustGenericCallableProtocol(input.logicalCarrier, generic?.signature.typeParameters);
   if (protocol === undefined)
     return Object.freeze({ kind: "unresolved", reason: "Callable ownership requires a valid native callable signature." });
-  const selection = selectRustCallableStorageOwnership(input.ownership, input.source.subject, input.producers);
+  const selection = selectRustCallableOwnership(input.ownership, input.source.subject, input.selection);
   if (selection.kind === "unresolved") return selection;
   if (selection.kind === "ordinary") return Object.freeze({ kind: "selected", carrier: input.logicalCarrier });
   if (generic !== undefined && generic.signature.typeParameters.length !== 0)

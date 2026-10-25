@@ -64,11 +64,12 @@ for (const expression of ["callback", "holder.callback", "callbacks[0]", '(() =>
       projectTypes: {}, jsEnabled: false, providerTypes: [],
       sourceProfiles: { profileForNode: () => undefined },
       sourceTypes: { structuralObjectForType: () => undefined, carrierForDeclaration: () => undefined },
-      callableStorageCarrier(selected, producers) {
+      callableStorageCarrier(selected, selection) {
         selections += 1;
         assert.equal(selected.subject === expected.subject, true, "checked type and stored operand share the exact value owner");
         assert.equal(selected.bindings === scope.bindings, true, "the operand retains its original use's exact binding");
-        assert.equal(producers.kind, "complete", "the same canonical preseal producer query is passed to ownership");
+        assert.equal(selection.kind, "storage", "a stored operand retains its actual selection purpose");
+        assert.equal(selection.producers.kind, "complete", "the same canonical preseal producer query is passed to ownership");
         return carrier;
       },
     };

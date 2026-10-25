@@ -125,9 +125,9 @@ export function analyzeRustProgram(context: RustAnalysisContext, outputType: "bi
     callableParameterCarriers(declaration) {
       return finalizeRustCallableParameterAbis(walk, declaration)?.map(parameter => parameter.parameterCarrier);
     },
-    callableStorageCarrier(source, producers, logicalCarrier, environmentFor, classFrameFor) {
+    callableStorageCarrier(source, selection, logicalCarrier, environmentFor, classFrameFor) {
       const selected = selectRustCallableOwnershipCarrier({ ast, ownership: context.callableOwnership,
-        source, producers, logicalCarrier, classFrameFor, environmentFor(component) {
+        source, selection, logicalCarrier, classFrameFor, environmentFor(component) {
           const excluded = new Set([...component.slotDeclarations, component.ownerDeclaration]);
           const environments = component.callableDeclarations.map(declaration => environmentFor(declaration, excluded));
           return environments.some(environment => environment === undefined) ? undefined
