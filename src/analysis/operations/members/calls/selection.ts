@@ -101,7 +101,9 @@ export function resolveRustCheckedCall(
   }
   if (providerEvidence.kind === "selected" && selectedSourceMember === undefined) {
     const provider = providerEvidence.identity;
-    const domain = selectedCallProviderDomain(request, provider, context);
+    const operationKind = checkedCallIsConstruction(request, context) ? "constructor" : "method";
+    const selection = selectRustProviderOperation(options.providerRows, provider, operationKind);
+    const domain = selectedCallProviderDomain(request, provider, selection, context);
     if (domain === undefined) return rejectSelectedOperation(request.source.call, context,
       "RUST_SELECTED_PROVIDER_EVIDENCE_CONFLICT", "The selected provider invocation requires its exact retained callable signature and declaration owner.");
     if (domain === "value") return acceptRuntimeCallableCall(request, context, options) ?? rejectSelectedOperation(
@@ -113,8 +115,6 @@ export function resolveRustCheckedCall(
     if (sourceMarker !== undefined) {
       return mapRustSourceMarkerCall(request, provider, sourceMarker, context, options);
     }
-    const operationKind = checkedCallIsConstruction(request, context) ? "constructor" : "method";
-    const selection = selectRustProviderOperation(options.providerRows, provider, operationKind);
     if (selection.kind === "missing") {
       return rejectSelectedOperation(request.source.call, context, "RUST_PROVIDER_OPERATION_NOT_MAPPED", `No Rust operation row matches selected provider declaration '${providerIdentityText(provider)}' as ${operationKind}.`);
     }
