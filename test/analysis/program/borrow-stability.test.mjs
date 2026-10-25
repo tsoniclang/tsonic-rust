@@ -5,7 +5,6 @@ import test from "node:test";
 import { BinaryExpression_Left, BinaryExpression_Right, Node_Expression } from "@tsonic/target-api/source";
 import { analyzeRust } from "../../helpers/rust-session.mjs";
 import { analyzeRustBorrowEffects, selectRustBorrowRelationship } from "../../../dist/analysis/ownership/effects.js";
-import { analyzeRustReadUses } from "../../../dist/analysis/ownership/uses.js";
 
 function analyze(input, maximumNodes) {
   const selected = analyzeRustBorrowEffects(input, input.readUses, maximumNodes);
@@ -139,8 +138,7 @@ function analysisInput(program, sourceFacts, records = program.records) {
   const nodes = rustNativeFixtureNodes(program);
   const nativeNodes = new Set(nodes);
   return { ast: program.source.ast, nodes, isNativeNode: node => nativeNodes.has(node), sourceFacts, records, navigation: program.sourceNavigation,
-    readUses: analyzeRustReadUses(program.source.ast, nodes, records, program.typeDefinitions,
-      program.projectConstructions.ownsExternalArgument, program.structuralShapes),
+    readUses: program.ownership.uses,
     projectTypes: program.projectTypes, objectRepresentations: program.objectRepresentations,
     structuralShapes: program.structuralShapes, frozenDataWrites: program.frozenDataWrites };
 }
