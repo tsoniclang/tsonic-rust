@@ -59,6 +59,12 @@ export function createRustCallableRequirementVisitor(input: RustCallableRequirem
   const copiedCapture = (capture: { readonly storage: string; readonly carrier: TargetTypeRef }): boolean =>
     isRustCopyCarrier(capture.storage === "location" ? rustLocationTargetType(capture.carrier) : capture.carrier,
       selected => input.genericCallables.definitionFor(selected)?.copy === true);
+  const addPhysicalCloneUse = (node: Node): string | undefined => {
+    const selected = input.nativeStorage.operandFor(node);
+    if (selected.kind === "unresolved") return selected.reason;
+    return isRustCopyCarrier(selected.carrier, carrier => input.genericCallables.definitionFor(carrier)?.copy === true)
+      ? undefined : addUse(node, selected.carrier, ["clone"]);
+  };
   const visit = (node: Node): string | undefined => {
     if (node !== declaration && (isRustIndependentCallable(ast, node) || isRustGenericTypeDeclaration(ast, node))) {
       const nestedId = input.idByDeclaration.get(node);
@@ -225,10 +231,11 @@ export function createRustCallableRequirementVisitor(input: RustCallableRequirem
       }
     }
     const indexedField = records.targetOperation.get(node);
-    if (indexedField?.kind === "source-field" && indexedField.valueSemantics.kind === "stored" &&
+    if ((indexedField?.kind === "tuple-index" ||
+      indexedField?.kind === "source-field" && indexedField.valueSemantics.kind === "stored") &&
       input.readsValue(node) && !input.ownershipFlow.movingReads.has(node) &&
       !isRustBorrowedValueRead(node, ast, records)) {
-      const fieldError = addUse(node, indexedField.resultCarrier, ["clone"]);
+      const fieldError = addPhysicalCloneUse(node);
       if (fieldError !== undefined) return fieldError;
     }
     if (indexedField?.kind === "source-indexed-field" && !associated.requireField(indexedField.projection,
@@ -322,7 +329,7 @@ export function createRustCallableRequirementVisitor(input: RustCallableRequirem
       const fields = operation.kind === "source-field" ? [operation]
         : operation.selectedVariantIndexes.map(index => operation.variants[index]?.field);
       if (fields.some(field => field?.storage === "structural-object" && field.valueSemantics.kind === "stored")) {
-        const error = addUse(node, operation.resultCarrier, ["clone"]);
+        const error = addPhysicalCloneUse(node);
         if (error !== undefined) return error;
       }
     }
