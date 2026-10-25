@@ -32,9 +32,10 @@ function checkedGuardNodes(program) {
 function diagnosticSourceLabel(diagnostic, source) {
   const node = diagnostic.sourceNode;
   if (node === undefined) return "";
-  const name = source.ast.is.IsIdentifier(node) ? node : source.ast.name(node);
+  const declaredName = source.ast.is.IsIdentifier(node) ? node : source.ast.name(node);
+  const name = declaredName !== undefined && source.ast.is.IsIdentifier(declaredName) ? source.ast.text(declaredName) : undefined;
   const parent = source.ast.parent(node);
-  return ` at ${source.ast.kindName(node)}${name === undefined ? "" : ` ${source.ast.text(name).slice(0, 192)}`}` +
+  return ` at ${source.ast.kindName(node)}${name === undefined ? "" : ` ${name.slice(0, 192)}`}` +
     `${parent === undefined ? "" : ` parent=${source.ast.kindName(parent)}`}`;
 }
 
@@ -165,7 +166,7 @@ export function run(flag: boolean, key: string): number {
 
   for (const condition of ["false", "true"]) {
     test(`finalized ${condition} guard preserves native computed-field admission (${surface})`, () => {
-      const { result } = compileRust({ surfaces, files: { "index.ts": `
+      const { result, source } = compileRust({ surfaces, files: { "index.ts": `
 export function run(key: string): number {
   if (${condition}) { const value = { [key]: 1 }; }
   return 1;
@@ -177,7 +178,9 @@ export function run(key: string): number {
         assert.equal(result.program === undefined && result.plan === undefined && result.artifacts.length === 0, true,
           "a selected unsupported native field never reaches publication");
       } else {
-        assert.equal(result.diagnostics.length, 0, "an actual unreachable field imposes no native key obligation");
+        assert.equal(result.diagnostics.length, 0,
+          `an actual unreachable field imposes no native key obligation: ${result.diagnostics.map(diagnostic =>
+            `${diagnostic.code}: ${diagnostic.message}${diagnosticSourceLabel(diagnostic, source)}`).join("; ").slice(0, 2048)}`);
         assert.equal(result.program !== undefined && result.plan !== undefined && result.artifacts.length > 0, true,
           "the selected valid native path still publishes");
       }
