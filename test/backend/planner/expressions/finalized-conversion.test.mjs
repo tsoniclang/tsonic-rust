@@ -53,12 +53,6 @@ test("finalized fallible conversions retain their exact operand error type", () 
   const node = fakeStatement({ kindName: "Identifier", pos: 0, end: 5 });
   const sourceFile = fakeSourceFile({ fileName: "/src/index.ts", text: "value", statements: [node] });
   const conversions = createRustConversionEmissionProducer(() => {});
-  const program = rustProgramWithTypeEmissions([rustJsErrorTargetType()], { surfaces: ["js"] });
-  const context = { ...rustProgramPlanContext(program), input: { program: { ...program,
-    records: createRustRecordFixture({ ...conversions.records }, program.records),
-  } }, sourceFile, diagnostics: [], usedAliases: new Set(),
-    fallibleBoundary: rustPackageFallibleBoundary({ componentId: "test", errorDomain: "project",
-      errorTypePath: "crate::CurrentError", errorTypeIdentity: "test:CurrentError" }) };
   const array = rustJsArrayTargetType(rustStringTargetType());
   const recovery = selectRustSourceValueConversion(rustJsValueTargetType(), array);
   const cases = [
@@ -67,9 +61,17 @@ test("finalized fallible conversions retain their exact operand error type", () 
     [{ kind: "option-some", source: recovery.source, element: array, elementConversion: recovery }, "rt::JsError"],
     [{ kind: "exact-integer", source: { kind: "source-primitive", name: "float64" },
       target: { kind: "source-primitive", name: "uint64" } }, rustTargetRuntimeErrorType.path],
-  ];
-  for (const [conversion, errorPath] of cases) {
-    const finalized = finalizeValueConversion(conversion);
+  ].map(([conversion, errorPath]) => ({ conversion, errorPath, finalized: finalizeValueConversion(conversion) }));
+  const program = rustProgramWithTypeEmissions([rustJsErrorTargetType(),
+    ...cases.flatMap(({ finalized }) => [finalized.sourceCarrier, finalized.targetCarrier])], { surfaces: ["js"] });
+  const context = { ...rustProgramPlanContext(program), input: { program: { ...program,
+    records: createRustRecordFixture({ ...conversions.records }, program.records),
+  } }, sourceFile, diagnostics: [], usedAliases: new Set(),
+    fallibleBoundary: rustPackageFallibleBoundary({ componentId: "test", errorDomain: "project",
+      errorTypePath: "crate::CurrentError", errorTypeIdentity: "test:CurrentError" }) };
+  for (const [index, { conversion, errorPath, finalized }] of cases.entries()) {
+    assert.equal(program.records.typeEmission.get(finalized.targetCarrier)?.positions.general, true,
+      `${index}: the real native type owner admits this exact constructed result before rendering`);
     admitRustConversionEmission(conversions, conversion, program.typeDefinitions);
     const lowered = applyFinalizedValueConversion(context, { stage: "finalized", expression: { kind: "path", path: "value" } }, finalized, node, true);
     assert.equal(lowered?.kind, "try");
