@@ -26,14 +26,14 @@ import { rustTargetTypeRefEquals } from "../../../../dist/target-model/types/equ
 test("native runtime type applications preserve exact Rust value/error identities and native AST", () => {
   const value = { kind: "source-primitive", name: "int64" };
   const error = { kind: "source-primitive", name: "uint32" };
-  for (const [path, carrier, payloads] of [
-    ["rt::RecordField", rustRuntimeRecordFieldTargetType(value, error), [value, error]],
-    ["rt::raw_memory::NativeLayout", rustRuntimeNativeLayoutTargetType(value), [value]],
-    ["rt::raw_memory::NativeArray", rustRuntimeNativeArrayTargetType(value), [value]],
+  for (const [path, identity, carrier, payloads] of [
+    ["rt::RecordField", "rust.runtime.RecordField", rustRuntimeRecordFieldTargetType(value, error), [value, error]],
+    ["rt::raw_memory::NativeLayout", "rust.runtime.NativeLayout", rustRuntimeNativeLayoutTargetType(value), [value]],
+    ["rt::raw_memory::NativeArray", "rust.runtime.NativeArray", rustRuntimeNativeArrayTargetType(value), [value]],
   ]) {
     const model = rustNamedTypeCarrierValue(carrier);
     for (const [index, payload] of payloads.entries()) assert.equal(model.genericArguments[index].type === payload, true, path);
-    assert.deepEqual(rustTypeFromCarrier(carrier), { kind: "named", path,
+    assert.deepEqual(rustTypeFromCarrier(carrier), { kind: "named", path, identity,
       genericArguments: payloads.map(type => ({ kind: "type", type: { kind: "primitive", name: type === value ? "i64" : "u32" } })),
     }, path);
   }
@@ -59,7 +59,7 @@ test("native method storage preserves parameter/result/error/lifetime identities
   const renderedReference = { kind: "reference", referent: { kind: "primitive", name: "i64" }, mutable: true,
     lifetime: { kind: "named", name: "scope" } };
   assert.deepEqual(rustTypeFromCarrier(carrier), { kind: "function-pointer", parameters: [renderedReference], result: {
-    kind: "named", path: "Result", genericArguments: [
+    kind: "named", path: "Result", identity: "rust.core.Result", genericArguments: [
       { kind: "type", type: renderedReference }, { kind: "type", type: { kind: "primitive", name: "u32" } },
     ],
   } });
@@ -106,7 +106,7 @@ test("native memory free-function qualification emits the exact existing Rust ca
       kind: "call", path: `rt::raw_memory::${method}`, genericArguments: [
         { kind: "type", type: { kind: "primitive", name: "u32" } },
         { kind: "type", type: method === "location_to_raw" ? { kind: "infer" } : { kind: "primitive", name: "i64" } },
-      ], args: [value, { kind: "associated-call", owner: { kind: "named", path: "rt::raw_memory::NativeLayout",
+      ], args: [value, { kind: "associated-call", owner: { kind: "named", path: "rt::raw_memory::NativeLayout", identity: "rust.runtime.NativeLayout",
         genericArguments: [{ kind: "type", type: { kind: "primitive", name: "u32" } }] }, method: "scalar", args: [
         { kind: "int-literal", text: "4usize" }, { kind: "int-literal", text: "4usize" },
         { kind: "int-literal", text: "64u32" }, { kind: "bool-literal", value: true },
@@ -120,9 +120,9 @@ test("structural storage renders combined native method and bound-field carriers
   const callable = rustCallableTargetType([scalar], scalar);
   const errorType = { kind: "named", path: "rt::TsonicError", identity: "tsonic-rust-runtime:TsonicError" };
   const valueType = { kind: "primitive", name: "i64" };
-  const methodType = { kind: "function-pointer", parameters: [valueType], result: { kind: "named", path: "Result",
+  const methodType = { kind: "function-pointer", parameters: [valueType], result: { kind: "named", path: "Result", identity: "rust.core.Result",
     genericArguments: [{ kind: "type", type: valueType }, { kind: "type", type: errorType }] } };
-  const bound = type => ({ kind: "named", path: "rt::RecordField", genericArguments: [
+  const bound = type => ({ kind: "named", path: "rt::RecordField", identity: "rust.runtime.RecordField", genericArguments: [
     { kind: "type", type }, { kind: "type", type: errorType },
   ] });
   const base = rustProgramWithTypeEmissions([scalar, callable]);

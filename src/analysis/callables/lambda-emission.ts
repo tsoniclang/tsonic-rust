@@ -20,6 +20,9 @@ import { rustProgramErrorTargetType } from "../../target-model/types/carriers/js
 import { rustJsArrayLikeElementTargetType } from "../../target-model/types/carriers/js.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustFixedStructuralMethodDeclarations } from "./generic-values.js";
+import { rustProgramErrorOwner } from "../../target-model/types/carriers/program-errors.js";
+import { rustRuntimeErrorTargetType } from "../../target-model/types/carriers/runtime-carriers.js";
+import { mapRustTargetTypes } from "../../target-model/types/carriers/substitution.js";
 
 export function analyzeRustLambdaEmission(program: Omit<RustAnalysisProgram, "reachability">,
   nodes: readonly Node[], producer: RustLambdaEmissionProducer): readonly TargetDiagnostic[] {
@@ -130,6 +133,10 @@ export function analyzeRustLambdaEmission(program: Omit<RustAnalysisProgram, "re
     const producedError = producedReference === undefined ? invocationError : program.errorRegions.producerError(producedReference);
     if (nativeClosure !== undefined && resultFallible && producedError === undefined)
       failTargetAnalysisInvariant("tsonic-rust", "An admitted native closure requires its completed physical invocation error.", node);
+    const nativeInvocationError = producedError === undefined ? undefined : mapRustTargetTypes(producedError, carrier => {
+      const owner = rustProgramErrorOwner(carrier);
+      return owner?.kind === "physical" && owner.domain === "runtime" ? rustRuntimeErrorTargetType() : carrier;
+    });
     const familyError = frame?.independent === true ? protocol?.error : fixedErasedSlotError(program, node);
     const independentWrite = physicalCarrier === undefined || familyError === undefined || producedError === undefined ||
       !rustUninhabitedError(producedError) || rustUninhabitedError(familyError) ? undefined
@@ -139,7 +146,7 @@ export function analyzeRustLambdaEmission(program: Omit<RustAnalysisProgram, "re
       failTargetAnalysisInvariant("tsonic-rust", "A closure written into a fixed callable slot requires the slot's exact callable error.", node);
     producer.lambda(node, { construction, constructionCarrier, protocol, nativeClosure, borrowedInput, parameters: Object.freeze(selected),
       resultCarrier, bodyCarrier, unitBody: isRustUnitCarrier(bodyCarrier), physicalCarrier,
-      invocationError: nativeClosure === undefined ? invocationError : producedError,
+      invocationError: nativeClosure === undefined ? invocationError : nativeInvocationError,
       resultFallible, bodyFallible: suspended ? fallible : resultFallible,
       staticStorage: protocol?.lifetime?.kind === "static", mutableCapture: closure.resultCarrier.kind === "closure" &&
         (closure.resultCarrier.callTrait === "FnMut" || closure.resultCarrier.callTrait === "FnOnce"),
