@@ -8,6 +8,7 @@ import { selectRustOperationReadUses } from "../../../dist/policy/ownership/read
 import { finalizeRustProviderOperationAbi } from "../../../dist/policy/operations/members/abi/finalize.js";
 import { rustStringTargetType } from "../../../dist/target-model/types/index.js";
 import { createRustRecordFixture } from "../../helpers/records.mjs";
+import { getRustTypeofRuntimeKind } from "../../../dist/policy/operations/syntax/runtime-kind.js";
 import { rustNativeIndexStorageProjection, rustNativeStoragePathsDisjoint, rustNativeStorageProjections,
   rustNativeStorageRoot } from "../../../dist/analysis/storage/native-paths.js";
 
@@ -174,6 +175,8 @@ export function inspect(body: Body): string {
   if (typeof body === "boolean") return typeof ((body));
   return typeof body;
 }
+export function booleanCategory(value: boolean): string { return typeof ((value)); }
+export function arrayCategory(value: unknown[]): string { return typeof value; }
 ` } });
   assert.equal(program !== undefined, true, "a native category probe is not an aliased array entry");
   const { ast } = program.source;
@@ -183,27 +186,40 @@ export function inspect(body: Body): string {
     ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
   };
   program.sourceFiles.forEach(visit);
-  assert.equal(probes.length, 3, "the runtime union, wrapped boolean and narrowed array probes all remain admitted");
+  assert.equal(probes.length, 5, "all three original guarded probes and both genuine static-carrier probes remain admitted");
   let runtime = 0;
   let staticResult = 0;
+  const staticCategories = [];
   for (const probe of probes) {
     const fact = program.records.targetOperation.get(probe);
     assert.equal(fact?.kind, "typeof", "the actual category producer owns the selected operation");
-    if (typeof fact.result === "string") staticResult += 1;
-    else runtime += 1;
+    if (typeof fact.result === "string") {
+      staticResult += 1;
+      staticCategories.push(fact.result);
+    } else {
+      runtime += 1;
+      assert.equal(fact.result.kind, "source-union", "the category plan observes the actual physical union");
+      assert.deepEqual(fact.result.variants.map(variant => variant.result).sort(), ["boolean", "object"],
+        "the complete physical union preserves both exact native categories");
+    }
     const operand = Node_Expression(ast, probe);
     const use = select(ast, probe, fact).get(operand);
     assert.equal(use?.mode, "shared", "category selection never consumes or clones its payload storage");
     assert.equal(use.later.length, 0, "the probe does not extend a borrow into a later operand");
     let subject = operand;
     while (ast.is.IsParenthesizedExpression(subject)) subject = Node_Expression(ast, subject);
+    const physicalCarrier = program.records.runtimeCarrier.get(subject)?.carrier;
+    assert.equal(physicalCarrier !== undefined, true, "the real native source carrier is published");
+    assert.deepEqual(fact.result, getRustTypeofRuntimeKind(physicalCarrier, program.typeDefinitions),
+      "guarded logical refinements never replace the physical category input");
     const ownership = program.records.readOwnership.get(subject);
     assert.equal(ownership?.source.kind, "borrow", "the complete ownership producer publishes the native source borrow");
     assert.equal(ownership.source.mutable, false, "a category probe never needs a mutable native borrow");
     assert.equal(select(ast, subject, undefined).has(subject), false, "ordinary non-probe reads do not acquire a blanket borrow policy");
   }
-  assert.equal(runtime, 1, "the full native union retains its real runtime category selection");
-  assert.equal(staticResult, 2, "both checked narrowed categories retain their native static outcomes");
+  assert.equal(runtime, 3, "all three original observations retain the real native union storage");
+  assert.equal(staticResult, 2, "the actual boolean and array carriers retain their native static outcomes");
+  assert.deepEqual(staticCategories.sort(), ["boolean", "object"]);
 });
 
 test("a checked shared field probe remains borrowed across its actual effect-free later operand", () => {
