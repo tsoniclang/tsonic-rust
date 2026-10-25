@@ -5,11 +5,16 @@ import type { RustProviderOperationForm, RustValueConversion } from "../../../ta
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
 import type { RustRegExpReplacementCallbackEvidence, RustRegExpReplacementCallbackContract } from "../../../target-model/records/regexp-callbacks.js";
+import { rustCallbackProtocol } from "./callbacks.js";
 export function finalizeRustRegExpReplacementCallbackContract(
   evidence: RustRegExpReplacementCallbackEvidence,
   sourceCarrier: TargetTypeRef,
 ): RustRegExpReplacementCallbackContract | undefined {
-  if (!rustTargetTypeRefEquals(evidence.sourceCarrier, sourceCarrier)) {
+  const expected = rustCallbackProtocol(evidence.sourceCarrier);
+  const selected = rustCallbackProtocol(sourceCarrier);
+  if (expected === undefined || selected === undefined || expected.parameters.length !== selected.parameters.length ||
+    !rustTargetTypeRefEquals(expected.result, selected.result) ||
+    !expected.parameters.every((parameter, index) => rustTargetTypeRefEquals(parameter, selected.parameters[index]))) {
     return undefined;
   }
   return Object.freeze({

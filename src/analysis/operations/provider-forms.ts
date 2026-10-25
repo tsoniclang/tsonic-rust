@@ -19,6 +19,7 @@ import { rustValueCarrierBeforeContextualConversion } from "../conversions/value
 import { rustNativeErrorJoinTargetType } from "../../target-model/types/native-error-joins.js";
 import { rustProgramErrorTargetType } from "../../target-model/types/carriers/js.js";
 import type { RustFinalizedOperationAbi } from "../../target-model/records/finalized-operation.js";
+import { rustRuntimeErrorTargetType } from "../../target-model/types/carriers/runtime-carriers.js";
 
 export interface RustProviderReadSelection {
   readonly node: Node;
@@ -137,9 +138,11 @@ export function analyzeRustProviderForms(program: Omit<RustAnalysisProgram, "rea
         operand.sources.length !== effects.nativeErrors.length || operand.sources.some(source =>
           !effects.nativeErrors.some(error => error.identity === source.identity && rustTargetTypeRefEquals(error.errorType, source.errorType))))
         failTargetAnalysisInvariant("tsonic-rust", "An admitted provider callback requires its exact selected physical error correspondence.", node);
+      const local = operand.localOwner === undefined ? undefined
+        : operand.localOwner.kind === "physical" && operand.localOwner.domain === "runtime"
+          ? rustRuntimeErrorTargetType() : rustProgramErrorTargetType(operand.localOwner);
       const expected = helperError ?? rustNativeErrorJoinTargetType(
-        operand.fileName, [...(operand.localOwner === undefined ? [] : [rustProgramErrorTargetType(operand.localOwner)]),
-          ...operand.sources.map(source => source.errorType)]);
+        operand.fileName, [...(local === undefined ? [] : [local]), ...operand.sources.map(source => source.errorType)]);
       if (expected === undefined || callbackFallible && !rustTargetTypeRefEquals(signature.error, expected) &&
         !(helperError !== undefined && rustUninhabitedError(signature.error)))
         failTargetAnalysisInvariant("tsonic-rust", "An admitted provider Result requires its exact selected callback adapter error contract.", node);

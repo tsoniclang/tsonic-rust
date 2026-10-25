@@ -12,11 +12,32 @@ import { callbackFallibleTemplate } from "../../../dist/policy/operations/member
 import { rustPreparedCallbackResultEffects } from "../../../dist/analysis/errors/callback-effects.js";
 import { rustRuntimeErrorTargetType } from "../../../dist/target-model/types/carriers/runtime-carriers.js";
 import { selectJsSurfaceOperation } from "../../../dist/policy/operations/source-profiles/js/selection.js";
+import { finalizeRustRegExpReplacementCallbackContract } from "../../../dist/policy/operations/members/regexp-callbacks.js";
 
 const inferred = { kind: "opaque", id: "tsonic.rust.infer" };
 const integer = rustSourcePrimitiveTargetType("uint64");
 const number = rustSourcePrimitiveTargetType("float64");
 const promise = output => rustJsPromiseTargetType(output);
+
+test("RegExp argument projection retains the admitted callable carrier and validates every checked native slot", () => {
+  const string = rustStringTargetType();
+  const value = rustJsValueTargetType();
+  const evidence = { lane: "native", sourceCarrier: { kind: "closure", args: [string, value], result: string },
+    projections: ["native-string", "value"] };
+  const sources = [evidence.sourceCarrier, { ...evidence.sourceCarrier, fallible: true },
+    rustCallableTargetType([string, value], string, { kind: "static" })];
+  for (const source of sources) {
+    const selected = finalizeRustRegExpReplacementCallbackContract(evidence, source);
+    assert.equal(selected !== undefined, true, "the checked parameter/result geometry has an admitted projection");
+    assert.equal(selected.sourceCarrier === source, true, "the actual source carrier, effects and lifetime are not replaced by a synthetic closure");
+    assert.equal(selected.projections === evidence.projections, true, "every checked argument projection is retained");
+  }
+  for (const source of [number, { ...evidence.sourceCarrier, args: [string] },
+    { ...evidence.sourceCarrier, args: [value, value] }, { ...evidence.sourceCarrier, result: number }]) {
+    assert.equal(finalizeRustRegExpReplacementCallbackContract(evidence, source) === undefined, true,
+      "missing, mismatching or noncallable source evidence cannot supply the projection");
+  }
+});
 
 function selection(result, parameters, projection) {
   return {

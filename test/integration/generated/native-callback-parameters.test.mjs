@@ -10,7 +10,7 @@ for (const surfaces of [[], ["js"]]) {
     const { result } = compileRust({ surfaces,
       target: { id: "rust", options: { outputType: "bin", crateName: "native_callback_parameters" } },
       files: { "index.ts": (nativeCallbackParametersSource + "\nmain();\n") } });
-    assert.deepEqual(result.diagnostics, []);
+    assertNoTargetDiagnostics(result.diagnostics);
     const output = artifactText(result, "src/index.rs");
     assert.match(output, /let mut value: f64 = /u);
     assert.doesNotMatch(output, /Box::new\([^)]*value|u8_to_f64\(.*u8_to_f64/u);
@@ -110,7 +110,7 @@ export function main(): void {
 }
 main();
 ` } });
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const output = artifactText(result, "src/index.rs");
   assert.match(output, /fn new\(values: Vec<i32>\)/u);
   assert.match(output, /fn retain\(values: Vec<i32>\) -> Vec<i32>/u);
