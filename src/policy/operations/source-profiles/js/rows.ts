@@ -173,6 +173,7 @@ const arrayPredicateRows = [
 function callbackOperation(
   shape: RustCallbackOperationTemplate["shape"],
   targetName: string,
+  resultError: Extract<RustCallbackOperationTemplate["failure"], { readonly kind: "invocation" }>["resultError"],
   targetOptions: Omit<
     Extract<RustProviderOperationForm, { readonly form: "receiver-method" }>,
     "form" | "name"
@@ -184,6 +185,7 @@ function callbackOperation(
     ...(shape === "reduce" ? { accumulatorArgumentIndex: 1 } : {}),
     failure: {
       kind: "invocation",
+      resultError,
       fallibleTarget: {
         form: "receiver-method",
         name: `try_${targetName}`,
@@ -202,6 +204,7 @@ function staticCallbackOperation(
     sourceArgumentIndex,
     failure: {
       kind: "invocation",
+      resultError: { kind: "callback" },
       fallibleTarget: {
         form: "call",
         path: falliblePath,
@@ -253,7 +256,7 @@ const sharedArrayOperationRows = sharedArrayOwners.flatMap((owner): readonly JsO
       operationKind: "call",
       lane: "js-array",
       variant,
-      callback: callbackOperation("direct", `${predicateRow.targetName}${suffix}`),
+      callback: callbackOperation("direct", `${predicateRow.targetName}${suffix}`, { kind: "callback" }),
       shape: {
         op: "operation",
         operationKind: "method",
@@ -273,7 +276,7 @@ const sharedArrayOperationRows = sharedArrayOwners.flatMap((owner): readonly JsO
     lane: "js-array",
     variant,
     selectedMethodTypeArgumentArity: 1,
-    callback: callbackOperation("map", `map${suffix}`),
+    callback: callbackOperation("map", `map${suffix}`, { kind: "callback" }),
     shape: {
       op: "operation",
       operationKind: "method",
@@ -290,7 +293,7 @@ const sharedArrayOperationRows = sharedArrayOwners.flatMap((owner): readonly JsO
     operationKind: "call",
     lane: "js-array",
     variant,
-    callback: callbackOperation("direct", targetName),
+    callback: callbackOperation("direct", targetName, { kind: "callback" }),
     shape: {
       op: "operation",
       operationKind: "method",
@@ -411,7 +414,7 @@ export const jsOperationRows = defineJsOperationRows([
     lane: "js-array",
     variant,
     callback: {
-      ...callbackOperation("direct", targetName),
+      ...callbackOperation("direct", targetName, { kind: "callback" }),
       ...(arity === 0 ? {} : { borrowedParameters: {
         target: { form: "receiver-method" as const, name: `${targetName}_borrowed` },
         fallibleTarget: { form: "receiver-method" as const, name: `try_${targetName}_borrowed` },
@@ -442,7 +445,7 @@ export const jsOperationRows = defineJsOperationRows([
       variant: `from-first-${variant}`,
       selectedMethodTypeArgumentArity: 0,
       fallible: true,
-      callback: callbackOperation("direct", `reduce_from_first${suffix}`),
+      callback: callbackOperation("direct", `reduce_from_first${suffix}`, { kind: "callback" }),
       shape: {
         op: "operation",
         operationKind: "method",
@@ -458,7 +461,7 @@ export const jsOperationRows = defineJsOperationRows([
       lane: "js-array",
       variant: `element-initial-${variant}`,
       selectedMethodTypeArgumentArity: 0,
-      callback: callbackOperation("reduce", `reduce${suffix}`, { argOrder: [1, 0] }),
+      callback: callbackOperation("reduce", `reduce${suffix}`, { kind: "callback" }, { argOrder: [1, 0] }),
       shape: {
         op: "operation",
         operationKind: "method",
@@ -474,7 +477,7 @@ export const jsOperationRows = defineJsOperationRows([
       lane: "js-array",
       variant: `selected-initial-${variant}`,
       selectedMethodTypeArgumentArity: 1,
-      callback: callbackOperation("reduce", `reduce${suffix}`, { argOrder: [1, 0] }),
+      callback: callbackOperation("reduce", `reduce${suffix}`, { kind: "callback" }, { argOrder: [1, 0] }),
       shape: {
         op: "operation",
         operationKind: "method",
@@ -579,7 +582,7 @@ export const jsOperationRows = defineJsOperationRows([
         { carrier: { ref: "map-key" } as const, capability: "clone" as const },
         { carrier: { ref: "map-value" } as const, capability: "clone" as const },
       ],
-      callback: callbackOperation("direct", targetName),
+      callback: callbackOperation("direct", targetName, { kind: "callback" }),
       shape: { op: "operation" as const, operationKind: "method" as const, target: { form: "receiver-method" as const, name: targetName }, result: { ref: "unit" as const }, params: [{ ref: "cb-map-for-each" as const, arity }] },
     })),
     { owner, member: "size", operationKind: "property", lane: "map", shape: { op: "operation", operationKind: "property", target: { form: "receiver-method", name: "len", emptyTestMethod: "is_empty" }, evaluation: "pure", result: { ref: "native-uint" } } },
@@ -604,7 +607,7 @@ export const jsOperationRows = defineJsOperationRows([
       lane: "set" as const,
       variant,
       requirements: [{ carrier: { ref: "set-value" } as const, capability: "clone" as const }],
-      callback: callbackOperation("direct", targetName),
+      callback: callbackOperation("direct", targetName, { kind: "callback" }),
       shape: { op: "operation" as const, operationKind: "method" as const, target: { form: "receiver-method" as const, name: targetName }, result: { ref: "unit" as const }, params: [{ ref: "cb-set-for-each" as const, arity }] },
     })),
     { owner, member: "size", operationKind: "property", lane: "set", shape: { op: "operation", operationKind: "property", target: { form: "receiver-method", name: "len", emptyTestMethod: "is_empty" }, evaluation: "pure", result: { ref: "native-uint" } } },

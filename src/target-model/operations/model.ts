@@ -521,6 +521,9 @@ export interface RustCallbackOperationTemplate {
     | {
         readonly kind: "invocation";
         readonly fallibleTarget: RustProviderOperationForm;
+        readonly resultError:
+          | { readonly kind: "callback" }
+          | { readonly kind: "native"; readonly carrier: TargetTypeRef };
       }
     | { readonly kind: "returned-future" };
 }

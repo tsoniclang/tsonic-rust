@@ -144,7 +144,7 @@ function rustCallbackCarrierMatchesTemplate(
 export function selectRustBorrowedCallbackOperation(selection: JsOperationSelection, carrier: Extract<TargetTypeRef, { readonly kind: "closure" }>): JsOperationSelection {
   const callback = selection.callback;
   const borrowed = callback?.borrowedParameters;
-  if (callback === undefined || borrowed === undefined || selection.fact.kind !== "provider-operation") return selection;
+  if (callback === undefined || callback.failure.kind !== "invocation" || borrowed === undefined || selection.fact.kind !== "provider-operation") return selection;
   const parameterCarriers = selection.parameterCarriers!.map((parameter, index) =>
     index !== callback.sourceArgumentIndex ? parameter : {
       ...carrier,
@@ -153,6 +153,6 @@ export function selectRustBorrowedCallbackOperation(selection: JsOperationSelect
   return {
     ...selection, parameterCarriers,
     fact: { ...selection.fact, target: borrowed.target, parameterCarriers },
-    callback: { ...callback, failure: { kind: "invocation", fallibleTarget: borrowed.fallibleTarget } },
+    callback: { ...callback, failure: { ...callback.failure, fallibleTarget: borrowed.fallibleTarget } },
   };
 }
