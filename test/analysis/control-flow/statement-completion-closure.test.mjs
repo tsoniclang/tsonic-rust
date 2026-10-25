@@ -533,14 +533,14 @@ export function main(): void {
   check(indexCalls === 1 && store[0] === 8);
   const temporaryNext = ++fresh()[index()];
   check(temporaryNext === 6 && receiverCalls === 1 && indexCalls === 2);
-  const stores: ${collection === "tuple" ? "[Store, Store]" : "FixedArray<Store, 2>"} = [new Store("seed"), new Store("abc")] as [Store, Store];
+  const stores: ${collection === "tuple" ? "[Store, Store]" : "FixedArray<Store, 2>"} = [new Store("seed"), new Store("abc")] as ${collection === "tuple" ? "[Store, Store]" : "const"};
   stores[placeIndex()].count += stores[1].count;
   check(stores[0].count === 4 && stores[1].count === 6 && placeCalls === 1);
   const selectedPrevious = stores[placeIndex()].count++;
   check(selectedPrevious === 6 && stores[1].count === 7 && placeCalls === 2);
   stores[placeIndex()][index()] += stores[1][0];
   check(stores[0][0] === 4 && stores[1][0] === 6 && placeCalls === 3 && indexCalls === 3);
-  const holders: ${collection === "tuple" ? "[Holder, Holder]" : "FixedArray<Holder, 2>"} = [new Holder(new Store("seed")), new Holder(new Store("abc"))] as [Holder, Holder];
+  const holders: ${collection === "tuple" ? "[Holder, Holder]" : "FixedArray<Holder, 2>"} = [new Holder(new Store("seed")), new Holder(new Store("abc"))] as ${collection === "tuple" ? "[Holder, Holder]" : "const"};
   holders[placeIndex()].nested.count += holders[1].nested.count;
   check(holders[0].nested.count === 4 && holders[1].nested.count === 6 && placeCalls === 4);
 }
