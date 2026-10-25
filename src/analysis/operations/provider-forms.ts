@@ -105,8 +105,21 @@ export function analyzeRustProviderForms(program: Omit<RustAnalysisProgram, "rea
     }
     const attempt = attempts.get(node);
     const callback = attempt?.kind === "checked-call" ? attempt.prepared : undefined;
+    const vectorConversions = callback === undefined ? [] : abi.targetArguments.flatMap(input => {
+      if (!isRustFinalizedSourceInput(input) || input.source.kind !== "argument" ||
+        input.source.sourceIndex !== callback.value.callback.sourceArgumentIndex) return [];
+      const conversions = input.conversion.kind === "sequence" ? input.conversion.steps : [input.conversion];
+      return conversions.flatMap(conversion => {
+        if (conversion.kind !== "semantic") return [];
+        const contract = program.records.conversionContract.get(conversion.conversion);
+        return contract?.lowering === "js-argument-vector-callback" ? [contract] : [];
+      });
+    });
+    if (vectorConversions.length > 1)
+      failTargetAnalysisInvariant("tsonic-rust", "A selected callback has one exact argument-vector conversion.", node);
+    const vector = vectorConversions[0];
     if (attempt?.kind === "checked-call" && callback !== undefined && callback.value.callback.failure.kind !== "returned-future" &&
-      abi.effects.invocation === "fallible") {
+      (abi.effects.invocation === "fallible" || vector !== undefined)) {
       const effects = rustPreparedCallbackResultEffects(callback.value, callback.callbackEffects.invocationEffects);
       if (effects === undefined)
         failTargetAnalysisInvariant("tsonic-rust", "An admitted provider callback requires its completed native Result effects.", node);
@@ -150,23 +163,10 @@ export function analyzeRustProviderForms(program: Omit<RustAnalysisProgram, "rea
       if (expected === undefined || callbackFallible && !rustTargetTypeRefEquals(signature.error, expected) &&
         !(helperError !== undefined && rustUninhabitedError(signature.error)))
         failTargetAnalysisInvariant("tsonic-rust", "An admitted provider Result requires its exact selected callback adapter error contract.", node);
-      nativeResult = materializeRustSourceErrorRegion(node, { operand,
+      if (abi.effects.invocation === "fallible") nativeResult = materializeRustSourceErrorRegion(node, { operand,
         local: operand.localOwner === undefined ? undefined : { kind: "local" },
         channels: operand.sources.map(source => ({ sourceIdentity: source.identity, targetIdentity: source.identity,
           uninhabited: rustUninhabitedError(source.errorType) })) });
-      const vectorConversions = abi.targetArguments.flatMap(input => {
-        if (!isRustFinalizedSourceInput(input) || input.source.kind !== "argument" ||
-          input.source.sourceIndex !== callback.value.callback.sourceArgumentIndex) return [];
-        const conversions = input.conversion.kind === "sequence" ? input.conversion.steps : [input.conversion];
-        return conversions.flatMap(conversion => {
-          if (conversion.kind !== "semantic") return [];
-          const contract = program.records.conversionContract.get(conversion.conversion);
-          return contract?.lowering === "js-argument-vector-callback" ? [contract] : [];
-        });
-      });
-      if (vectorConversions.length > 1)
-        failTargetAnalysisInvariant("tsonic-rust", "A selected callback has one exact argument-vector conversion.", node);
-      const vector = vectorConversions[0];
       if (vector !== undefined) {
         const lambda = program.records.lambdaBody.get(argument);
         const sourceProtocol = rustCallbackProtocol(source);
