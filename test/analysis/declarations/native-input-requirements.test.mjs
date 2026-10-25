@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { sourceEnclosingCallable } from "@tsonic/target-api/source";
-import { analyzeRust } from "../../helpers/rust-session.mjs";
+import { analyzeRust, compileRust } from "../../helpers/rust-session.mjs";
+import { runCargo, writeGeneratedProject } from "../../helpers/cargo-projects.mjs";
 import { rustContextualRuntimeConversionContract } from "../../../dist/policy/conversions/contextual.js";
 
 function checked(text, surfaces) {
@@ -52,6 +53,54 @@ const forwarded = [
   ["transitive", "function send<Value>(done: (value: Value) => void, value: Value): void { done(value); } function forward<Value>(done: (value: Value) => void, value: Value): void { send(done, value); }", "forward(done, value)"],
   ["recursive", "function send<Value>(done: (value: Value) => void, value: Value, depth: number): void { if (depth > 0) send(done, value, depth - 1); else done(value); }", "send(done, value, 1)"],
 ];
+
+for (const [label, body, inputCount] of [
+  ["unknown native callback", "export function invoke(callbacks: Callback[], next: () => number): number { return callbacks[0](next()); }", 2],
+  ["selected source call", "function next(): number { return 1; } export function invoke(callbacks: Callback[]): number { return callbacks[0](next()); }", 1],
+]) {
+  test(`indexed callable snapshots retain their original physical Clone requirement across ${label}`, { timeout: 300_000 }, () => {
+    const { result } = compileRust({ files: { "index.ts": `interface Callback { (value: number): number; }\n${body}` } });
+    assert.equal(result.diagnostics.length, 0, "the original checked native program remains admitted");
+    const program = result.program;
+    assert.equal(program !== undefined, true, "the actual native ownership and requirement catalogs are published");
+    const { ast } = program.source;
+    const nodes = [];
+    const visit = node => { nodes.push(node); ast.forEachChild(node, child => { if (child !== undefined) visit(child); }); };
+    program.sourceFiles.filter(file => ast.getFileName(file).endsWith("/index.ts")).forEach(visit);
+    const owner = nodes.find(node => ast.is.IsFunctionDeclaration(node) && ast.text(ast.name(node)) === "invoke");
+    assert.equal(owner !== undefined, true, "the original native invocation owner is retained");
+    const inputs = program.callableValues.native.inputsFor(owner);
+    assert.equal(inputs.length, inputCount, "the complete original native input inventory is unchanged");
+    const input = inputs.find(candidate => candidate.subject.node === ast.parameters(owner)[0] &&
+      candidate.subject.projection[0]?.kind === "array-element");
+    assert.equal(input !== undefined, true, "the exact original array component owns the native implementation");
+    const element = nodes.find(node => ast.is.IsElementAccessExpression(node) && ast.is.IsCallExpression(ast.parent(node)));
+    assert.equal(element !== undefined, true, "the original indexed callee is retained");
+    const invocation = ast.parent(element);
+    const argument = ast.arguments(invocation)[0];
+    assert.equal(program.callableValues.native.callFor(invocation)?.input === input, true,
+      "the invocation names precisely the original projected implementation");
+    const read = program.ownership.reads.get(element);
+    assert.equal(read?.value.kind, "clone", "the canonical ownership owner selects a pre-argument snapshot");
+    assert.equal(read?.source.kind, "clone", "the snapshot retains the original source value");
+    assert.equal(read?.borrowedAcross.has(argument), false, "no safe borrow across the original call is fabricated");
+    for (const [index, requirements] of nativeRequirementSets({ program }, owner, input).entries()) {
+      assert.equal(requirements.includes("clone"), true,
+        `${index}: the actual physical implementation carries its required snapshot bound`);
+    }
+    for (const other of inputs.filter(candidate => candidate !== input)) {
+      for (const [index, requirements] of nativeRequirementSets({ program }, owner, other).entries()) {
+        assert.equal(requirements.includes("clone"), false,
+          `${index}: another same-call input receives no blanket Clone requirement`);
+      }
+    }
+    const project = writeGeneratedProject(`indexed-callable-snapshot-${label.replaceAll(" ", "-")}`, result.artifacts);
+    runCargo(project, ["generate-lockfile", "--offline"]);
+    runCargo(project, ["fmt", "--check"]);
+    runCargo(project, ["check", "--all-targets", "--locked", "--offline"]);
+    runCargo(project, ["clippy", "--all-targets", "--locked", "--offline", "--", "-D", "warnings"]);
+  });
+}
 
 for (const surfaces of [[], ["js"]]) {
   const surface = surfaces[0] ?? "native";
