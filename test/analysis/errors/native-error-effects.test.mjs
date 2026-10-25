@@ -13,7 +13,7 @@ import { createRustSourceErrorEffectSelection } from "../../../dist/analysis/err
 import { rustProducerErrorReference } from "../../../dist/target-model/types/carriers/producer-errors.js";
 import { rustTargetGenericReferences } from "../../../dist/target-model/types/carriers/generic-references.js";
 import { rustJsRejectionErrorIdentity } from "../../../dist/target-model/records/error-effects.js";
-import { rustJsValueTargetType } from "../../../dist/target-model/types/carriers/js.js";
+import { rustJsErrorTargetType, rustJsValueTargetType } from "../../../dist/target-model/types/carriers/js.js";
 import { Node_Expression, Node_Initializer, TryStatement_TryBlock, TryStatement_CatchClause,
   CatchClause_Block, TryStatement_FinallyBlock } from "@tsonic/target-api/source";
 import { sourcePackageCallbackErrorFiles, sourcePackageCallbackErrorGraph }
@@ -294,7 +294,19 @@ test("provider callback references remain pure evaluations without erasing invok
   assert.equal(current.program.records.errorEffects.get(callback) === undefined, true,
     "evaluating a reference does not manufacture its referenced body's errors");
   assertChannels(current.effects(current.initializer("callback")), [], true);
-  assertChannels(current.callable("register"), [], true);
+  const registered = current.callable("register");
+  assert.equal(registered.localErrors, false, "registration does not execute either throwing callback body");
+  assert.equal(registered.nativeErrors.length, 1, "both registrations preserve their one native scheduling error channel");
+  assert.equal(rustTargetTypeRefEquals(registered.nativeErrors[0].errorType, rustJsErrorTargetType()), true,
+    "the native scheduling API returns JsResult, not the callback's package-local error");
+  for (const invocation of current.calls("setTimeout")) {
+    const operation = current.program.records.targetOperation.get(invocation);
+    assert.equal(operation?.kind, "provider-operation");
+    assert.equal(operation.abi.effects.errorBoundary, "provider-native");
+    assert.equal(rustTargetTypeRefEquals(operation.abi.effects.errorCarrier, rustJsErrorTargetType()), true,
+      "the selected provider ABI retains the exact native scheduling error");
+    assertChannels(current.effects(invocation), registered.nativeErrors);
+  }
 });
 
 test("call edges rebind two same-signature formals to physical caller inputs without rebranding the callee trait", () => {
