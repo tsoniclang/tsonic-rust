@@ -220,5 +220,5 @@ export function analyzeRustReadOwnership(input: {
     const write = borrowEffects.fieldWrites.get(node);
     if (write !== undefined) writes.set(node, write);
   }
-  return { kind: "resolved", ownership: Object.freeze({ reads, captures, writes }) };
+  return { kind: "resolved", ownership: Object.freeze({ uses, reads, captures, writes }) };
 }

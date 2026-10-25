@@ -203,6 +203,10 @@ const aliasedEntries = [
   ["assignment", "let body: Body = false; body = values; values[0] = 1; return typeof body === 'boolean' ? 0 : body[0] === 1 ? 1 : 0;"],
   ["return", "const read = (): Body => values; values[0] = 1; const body = read(); values[0] = 2; return typeof body === 'boolean' ? 0 : body[0] === 2 ? 1 : 0;"],
   ["assertion", "const body = values as Body; values[0] = 1; return typeof body === 'boolean' ? 0 : body[0] === 1 ? 1 : 0;"],
+  ["parenthesized assertion", "const body = ((values as Body)); values[0] = 1; return typeof body === 'boolean' ? 0 : body[0] === 1 ? 1 : 0;"],
+  ["nested identity assertion", "const body = (values as Body) as Body; values[0] = 1; return typeof body === 'boolean' ? 0 : body[0] === 1 ? 1 : 0;"],
+  ["satisfies assertion", "const body = (values as Body) satisfies Body; values[0] = 1; return typeof body === 'boolean' ? 0 : body[0] === 1 ? 1 : 0;"],
+  ["identity non-null assertion", "const body = (values as Body)!; values[0] = 1; return typeof body === 'boolean' ? 0 : body[0] === 1 ? 1 : 0;"],
   ["source call", "const count = accept(values); values[0] = 1; return count;"],
   ["provider input", "const bodies: Body[] = [false]; bodies[0] = values; values[0] = 1; return typeof bodies[0] === 'boolean' ? 0 : bodies[0][0] === 1 ? 1 : 0;"],
 ];
@@ -230,6 +234,28 @@ export function enter(): number {
     assert.equal(result.program === undefined, true, `${label}: no sealed program escapes the rejected admission`);
   });
 }
+
+test("native assertion materializes an owned union result once without copying its transferred array", { timeout: 300_000 }, () => {
+  const { result } = compileRust({ target: { id: "rust", options: { outputType: "bin" } }, files: { "index.ts": `
+type Body = boolean | unknown[];
+function create(state: boolean[]): unknown[] {
+  state[0] = !state[0];
+  return [2];
+}
+export function main(): void {
+  const state = [false];
+  const body = (((create(state) as Body) as Body) satisfies Body)!;
+  if (!state[0] || typeof body === "boolean" || body[0] !== 2) {
+    throw new Error("owned union assertion changed evaluation or its transferred payload");
+  }
+}
+main();
+` } });
+  assertNoTargetDiagnostics(result.diagnostics);
+  assert.doesNotMatch(rustSourceText(result), /create\([^;]*\.clone\(\)/su,
+    "a materialized assertion result is not another stored native union read");
+  validateGeneratedProject("union-layout-owned-assertion", result.artifacts, { run: true });
+});
 
 test("an actual aliasable JS array retains identity when entering the type-only union arm", { timeout: 300_000 }, () => {
   const { result } = compileRust({ surfaces: ["js"], target: { id: "rust", options: { outputType: "bin" } }, files: { "index.ts": `

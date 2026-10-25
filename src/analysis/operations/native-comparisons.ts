@@ -1,11 +1,13 @@
 import type { Node } from "@tsonic/tsts";
-import { BinaryExpression_Left, BinaryExpression_Right, Node_Expression } from "@tsonic/target-api/source";
+import { BinaryExpression_Left, BinaryExpression_Right, ElementAccessExpression_ArgumentExpression, Node_Expression, sourceTransparentExpressionOperand } from "@tsonic/target-api/source";
 import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustNativeComparisonProducer } from "../program/records/native-comparisons.js";
 import type { RustNativeComparison } from "../../target-model/records/native-comparisons.js";
 import { isRustIntegerCarrier, isRustSignedNumericCarrier, isRustBoolCarrier, isRustStringCarrier } from "../../target-model/types/index.js";
 import { rustBorrowValueIsUnprojected } from "../storage/borrowed-element-purity.js";
 import { rustProgramNodeIsOutsideNativeCode } from "../control-flow/compile-time-statements.js";
+import { rustProviderInputBorrowMode } from "../../policy/operations/members/input-borrows.js";
+import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 
 export function analyzeRustNativeComparisons(program: Omit<RustAnalysisProgram, "reachability">,
   nodes: readonly Node[], producer: RustNativeComparisonProducer): void {
@@ -34,6 +36,28 @@ export function analyzeRustNativeComparisons(program: Omit<RustAnalysisProgram, 
       node = inner;
     }
     return node;
+  };
+  const scopedStringSource = (node: Node): Extract<RustNativeComparison, { readonly kind: "scoped-string" }>["source"] | undefined => {
+    if (program.records.fieldValueReceiver.get(node) === true && borrowableField(node)) return Object.freeze({ kind: "field", field: node });
+    while (rustBorrowValueIsUnprojected(node, program.records)) {
+      const operand = sourceTransparentExpressionOperand(ast, node);
+      if (operand === undefined) break;
+      node = operand;
+    }
+    if (!rustBorrowValueIsUnprojected(node, program.records)) return undefined;
+    const provider = program.records.targetOperation.get(node);
+    if (provider?.kind !== "provider-operation" || provider.abi.operationKind !== "indexer" || provider.abi.target.form !== "index" ||
+      provider.abi.effects.invocation !== "infallible" || provider.abi.effects.safety !== "safe" ||
+      provider.abi.result.kind !== "sync" || provider.abi.result.conversion.kind !== "identity" ||
+      !isRustStringCarrier(provider.abi.result.carrier) ||
+      !rustTargetTypeRefEquals(provider.abi.result.carrier, program.records.valueRead.get(node)?.value) ||
+      provider.abi.sourceReceiver.kind !== "receiver" || provider.abi.targetReceiver.kind !== "input" ||
+      provider.abi.targetReceiver.input.source.kind !== "receiver" || rustProviderInputBorrowMode(provider.abi.targetReceiver.input) !== "ref" ||
+      program.records.providerEvaluation.get(node, provider) === undefined) return undefined;
+    const receiver = Node_Expression(ast, node);
+    const index = ElementAccessExpression_ArgumentExpression(ast, node);
+    return receiver === undefined || index === undefined ? undefined
+      : Object.freeze({ kind: "provider", node, operation: provider, receiver, arguments: Object.freeze([index]) });
   };
   const range = (left: Node, right: Node, operator: "&&" | "||"):
     Omit<Extract<RustNativeComparison, { readonly kind: "range" }>, "prefix" | "suffix"> | undefined => {
@@ -170,8 +194,10 @@ export function analyzeRustNativeComparisons(program: Omit<RustAnalysisProgram, 
       const value = scoped === undefined ? undefined : program.records.literalValue.get(scoped.literal);
       if (scoped !== undefined && (value?.form === "string" || value?.form === "template") &&
         rustBorrowValueIsUnprojected(scoped.field, program.records) && isRustStringCarrier(program.records.valueRead.get(scoped.field)?.value) &&
-        isRustStringCarrier(program.records.valueRead.get(scoped.literal)?.value) && program.records.fieldValueReceiver.get(scoped.field) === true && borrowableField(scoped.field))
-        selected = { kind: "scoped-string", field: scoped.field, value: value.text, reversed: scoped.reversed, operator: operation.operator };
+        isRustStringCarrier(program.records.valueRead.get(scoped.literal)?.value)) {
+        const source = scopedStringSource(scoped.field);
+        if (source !== undefined) selected = { kind: "scoped-string", source, value: value.text, reversed: scoped.reversed, operator: operation.operator };
+      }
     }
     producer.publish(node, selected);
   }

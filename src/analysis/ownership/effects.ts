@@ -15,11 +15,11 @@ import { rustNativeIndexStorageProjection, rustNativeStoragePathsDisjoint, rustN
 import { rustNativeWriteTargets, rustNoNativeWrites } from "./effect-paths.js";
 
 import { rustSourceValueWrapperContains } from "../../policy/ownership/source-value-wrappers.js";
-import { rustCallArgumentMode, rustCallReceiverMode } from "../callables/parameter-passing.js";
+import { rustCallArgumentMode } from "../callables/parameter-passing.js";
 
 type StoredField = Extract<RustTargetOperationFact, { readonly kind: "source-field" }>;
 
-import type { RustBorrowedFieldWrite } from "../../target-model/records/ownership.js";
+import type { RustBorrowedFieldWrite, RustReadUse } from "../../target-model/records/ownership.js";
 
 export interface RustBorrowEffectsInput {
   readonly ast: AstReader;
@@ -42,6 +42,7 @@ const maximumBorrowStabilityNodes = 4_194_304;
 
 export function analyzeRustBorrowEffects(
   input: RustBorrowEffectsInput,
+  readUses: ReadonlyMap<Node, RustReadUse>,
   maximumNodes = maximumBorrowStabilityNodes,
 ): AnalyzeRustBorrowEffectsResult {
   const rejected = (message: string): AnalyzeRustBorrowEffectsResult => ({
@@ -106,7 +107,7 @@ export function analyzeRustBorrowEffects(
         sourceTransparentExpressionOperand(input.ast, parent) === argument; parent = input.ast.parent(argument)) argument = parent;
       if (!["comparison", "condition", "return", "storage"].includes(use.role) &&
         !(use.role === "argument" && rustCallArgumentMode(argument, input.ast, input.records) === "ref") &&
-        !(use.role === "receiver" && (rustCallReceiverMode(argument, input.ast, input.records) === "ref" ||
+        !(use.role === "receiver" && (readUses.get(argument)?.mode === "shared" ||
           isElementReadReceiver(argument, input))) &&
         !(use.role === "argument" && isLocationBindingArgument(argument, input))) {
         stable = false;
@@ -172,7 +173,7 @@ export function selectRustBorrowRelationship(source: Node, later: Node,
   const root = rustNativeStorageRoot(source, input);
   const path = root === undefined ? undefined : rustNativeStorageProjections(source, root, input);
   const binding = path?.length === 0 && input.records.sourceBinding.get(source)?.scope === "lexical";
-  const indexed = path?.[path.length - 1] === rustNativeIndexStorageProjection;
+  const indexed = path?.[path.length - 1] === rustNativeIndexStorageProjection || typeof path?.[path.length - 1] === "number";
   const field = input.records.targetOperation.get(source);
   if (!binding && !indexed && (!rustDirectBorrowField(source, input) || field?.kind !== "source-field" || field.accessMode !== "read")) return false;
   const targets = effects.pureValues.has(later) ? rustNoNativeWrites : effects.nativeWrites.get(later);

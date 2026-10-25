@@ -328,7 +328,7 @@ export function analyzeRustAnalysisProgram(
     projectTypes: context.projectTypes, objectRepresentations, frozenDataWrites: context.frozenDataWrites,
     structuralShapes: context.structuralShapes.completed,
   };
-  const borrowEffects = analyzeRustBorrowEffects(borrowEffectsInput);
+  const borrowEffects = analyzeRustBorrowEffects(borrowEffectsInput, readUses);
   if (borrowEffects.kind === "rejected") return rejectedTargetStage(borrowEffects.diagnostics);
   const ownership = analyzeRustReadOwnership({ storage: context.sourceStorage, nativeNodes: context.nativeNodes, records, uses: readUses,
     flow: ownershipFlow.flow, borrowEffects: borrowEffects.effects, borrowEffectsInput, definitions: context.typeDefinitions,

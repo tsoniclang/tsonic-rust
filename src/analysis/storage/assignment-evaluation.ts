@@ -73,10 +73,22 @@ export function analyzeRustAssignmentEvaluation(program: Omit<RustAnalysisProgra
       if (carrier === undefined) { refuse(operand, "rust.backend.assignment", "Assignment receiver evaluation requires its exact finalized native carrier."); continue; }
       operands.push(Object.freeze({ node: operand, carrier, role: operand === receiver ? "receiver" : "index", storage }));
     }
-    const common = { left, right, valueField, operands: Object.freeze(operands) };
-    if (fact.kind === "nullish-assignment") producer.publish(node, { ...common, kind: "nullish", fact, copy: isRustCopyCarrier(fact.rightCarrier),
+    const common = { left, right, operands: Object.freeze(operands) };
+    if (fact.kind === "nullish-assignment") producer.publish(node, { ...common, kind: "nullish", fact, valueField, copy: isRustCopyCarrier(fact.rightCarrier),
       rightForm: rustTargetTypeRefEquals(fact.rightCarrier, program.records.valueRead.get(right)?.value) ? "value" : "before-context" });
-    else if (fact.kind === "operator-token" || fact.kind === "operator-call") producer.publish(node, { ...common, kind: "compound", fact, copy: isRustCopyCarrier(fact.resultCarrier) });
+    else if (fact.kind === "operator-token" || fact.kind === "operator-call") {
+      const selection = program.records.assignmentValue.get(node);
+      if (selection === undefined) { refuse(node, "rust.backend.compound-assignment-carrier", "A compound assignment requires its exact previous-value ownership."); continue; }
+      let current: Extract<RustAssignmentEvaluation, { readonly kind: "compound" }>["current"];
+      if (valueField) current = Object.freeze({ kind: "field" });
+      else {
+        const direct = program.records.directStorage.get(left);
+        if (direct === undefined) { refuse(left, "rust.backend.compound-assignment-carrier", "A compound assignment requires its exact native place classification."); continue; }
+        current = direct.kind === "unavailable" ? Object.freeze({ kind: "value" })
+          : Object.freeze({ kind: "direct", ownership: selection.previous });
+      }
+      producer.publish(node, { ...common, kind: "compound", fact, current, copy: isRustCopyCarrier(fact.resultCarrier) });
+    }
   }
   return Object.freeze(issues);
 }
