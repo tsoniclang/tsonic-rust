@@ -81,16 +81,20 @@ test("prepared calls retain their complete contract and failure Boolean before s
   assert.equal(completed?.kind, "checked-call");
   assert.equal(completed.prepared !== undefined, true);
   const { value, callbackEffects } = completed.prepared;
+  assert.equal(value.callback.failure.kind, "invocation", "the native map has its exact invocation contract");
   const current = { ...rustOperationContext(walk, call), ast: forbidden, currentSemantics: forbidden };
   const result = finalizeRustPreparedCheckedCall(completed.request,
-    { ...value, parameterCarriers: [...value.parameterCarriers], callback: { ...value.callback }, template: { ...value.template } },
+    { ...value, parameterCarriers: [...value.parameterCarriers], callback: { ...value.callback,
+      failure: { ...value.callback.failure, resultError: { ...value.callback.failure.resultError } } }, template: { ...value.template } },
     { invocationOwner: callbackEffects.invocationOwner,
       invocationEffects: { ...callbackEffects.invocationEffects, nativeErrors: [...callbackEffects.invocationEffects.nativeErrors] },
       implementationEffects: { ...callbackEffects.implementationEffects, nativeErrors: [...callbackEffects.implementationEffects.nativeErrors] } },
     current, walk.operationOptions);
   assert.equal(result === completed.selection, true);
   for (const changed of [{ ...value, sourceName: "different" }, { ...value, resultCarrier: { kind: "tuple", elements: [] } },
-    { ...value, parameterCarriers: [] }, { ...value, template: { ...value.template, operationId: "different" } }]) {
+    { ...value, parameterCarriers: [] }, { ...value, template: { ...value.template, operationId: "different" } },
+    { ...value, callback: { ...value.callback, failure: { ...value.callback.failure,
+      resultError: { kind: "native", carrier: { kind: "tuple", elements: [] } } } } }]) {
     assert.throws(() => finalizeRustPreparedCheckedCall(completed.request, changed, callbackEffects, current, walk.operationOptions), /Conflicting Rust completed prepared call/u);
   }
   for (const domain of ["invocationEffects", "implementationEffects"]) {

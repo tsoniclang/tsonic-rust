@@ -8,6 +8,10 @@ import {
 } from "../../../dist/target-model/types/index.js";
 import { selectRustCallableConversion } from "../../../dist/policy/conversions/callable.js";
 import { selectRustSourceValueConversion } from "../../../dist/policy/conversions/selection.js";
+import { callbackFallibleTemplate } from "../../../dist/policy/operations/members/deferred-callbacks.js";
+import { rustPreparedCallbackResultEffects } from "../../../dist/analysis/errors/callback-effects.js";
+import { rustRuntimeErrorTargetType } from "../../../dist/target-model/types/carriers/runtime-carriers.js";
+import { selectJsSurfaceOperation } from "../../../dist/policy/operations/source-profiles/js/selection.js";
 
 const inferred = { kind: "opaque", id: "tsonic.rust.infer" };
 const integer = rustSourcePrimitiveTargetType("uint64");
@@ -105,7 +109,7 @@ test("native closure finalization preserves physical callable effects for direct
       resultCarrier: shape === "map" ? rustJsArrayTargetType(inferred) : integer,
       callback: { shape, sourceArgumentIndex: 0,
         ...(shape === "reduce" ? { accumulatorArgumentIndex: 1 } : {}),
-        failure: { kind: "invocation", fallibleTarget: { form: "receiver-method", name: "try_selected" } } } };
+        failure: { kind: "invocation", resultError: { kind: "callback" }, fallibleTarget: { form: "receiver-method", name: "try_selected" } } } };
     const arguments_ = shape === "reduce" ? [actual, integer] : [actual];
     const selected = finalizeRustCallbackOperation(input, arguments_, accepts);
     assert.equal(selected !== undefined, true, shape);
@@ -121,10 +125,55 @@ test("native closure finalization preserves physical callable effects for direct
   }
 });
 
+test("native callback collection reads retain Clone metadata before physical input reification", () => {
+  const callback = rustCallableTargetType([number], integer);
+  for (const ownerName of ["Array", "ReadonlyArray"]) {
+    const request = { ownerName, memberName: "index", operationKind: "indexer",
+      receiverCarrier: rustJsArrayTargetType(callback), argumentCarriers: [number] };
+    const selected = selectJsSurfaceOperation(request);
+    assert.equal(selected !== undefined, true, ownerName);
+    assert.deepEqual(selected.fact.carrierRequirements, [{ carrier: callback, requirement: "clone" }],
+      "logical runtime Callable Clone does not prove a reified physical input's Clone bound");
+    const length = selectJsSurfaceOperation({ ...request, memberName: "length", operationKind: "property", argumentCarriers: [] });
+    assert.equal(length.fact.carrierRequirements, undefined, "a pure length read does not require copying an element");
+  }
+});
+
+test("native callback Result contracts distinguish generic invocation errors from fixed provider errors", () => {
+  const callbackError = rustJsValueTargetType();
+  const nativeError = rustRuntimeErrorTargetType();
+  const invocationEffects = { localErrors: false, nativeErrors: [{ identity: "js-rejection", errorType: callbackError }] };
+  const invocationOwner = {};
+  const effects = { invocationOwner, invocationEffects, implementationEffects: invocationEffects };
+  const template = selection(integer, []).fact;
+  for (const resultError of [{ kind: "callback" }, { kind: "native", carrier: nativeError }]) {
+    const prepared = { template, resultCarrier: integer, parameterCarriers: [],
+      callback: { shape: "direct", sourceArgumentIndex: 0,
+        failure: { kind: "invocation", resultError, fallibleTarget: { form: "receiver-method", name: "try_selected" } } } };
+    const selected = callbackFallibleTemplate(prepared, effects);
+    assert.equal(selected.isFallible, true);
+    assert.equal(selected.target.name, "try_selected");
+    assert.equal(selected.errorBoundary, resultError.kind === "native" ? "provider-native" : "source-program");
+    assert.equal(selected.errorCarrier === nativeError, resultError.kind === "native");
+    const result = rustPreparedCallbackResultEffects(prepared, invocationEffects);
+    assert.equal(result.localErrors, false);
+    assert.equal(result.nativeErrors.length, 1);
+    assert.deepEqual(result.nativeErrors[0].errorType, resultError.kind === "native" ? nativeError : callbackError);
+    assert.equal(invocationEffects.nativeErrors[0].errorType === callbackError, true, "provider selection does not rewrite the original invocation channel");
+    const pure = { localErrors: false, nativeErrors: [] };
+    assert.equal(callbackFallibleTemplate(prepared, { ...effects, invocationEffects: pure }) === template, true);
+    const intrinsic = { ...prepared, template: { ...template, isFallible: true } };
+    const intrinsicEffects = rustPreparedCallbackResultEffects(intrinsic, pure);
+    assert.equal(intrinsicEffects.localErrors, resultError.kind === "callback");
+    assert.equal(intrinsicEffects.nativeErrors.length, resultError.kind === "native" ? 1 : 0);
+    assert.equal(callbackFallibleTemplate(intrinsic, { ...effects, invocationEffects: pure }).target === template.target, true);
+  }
+});
+
 test("reduce finalization closes accumulator placeholders before publishing the immutable native callback contract", () => {
   const input = { ...selection(integer, [{ kind: "closure", args: [inferred, integer], result: inferred }, inferred]),
     callback: { shape: "reduce", sourceArgumentIndex: 0, accumulatorArgumentIndex: 1,
-      failure: { kind: "invocation", fallibleTarget: { form: "receiver-method", name: "try_reduce" } } } };
+      failure: { kind: "invocation", resultError: { kind: "callback" }, fallibleTarget: { form: "receiver-method", name: "try_reduce" } } } };
   const callback = { kind: "closure", args: [integer, integer], result: integer };
   const selected = finalizeRustCallbackOperation(input, [callback, integer]);
   assert.equal(selected !== undefined, true);

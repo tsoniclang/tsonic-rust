@@ -468,6 +468,7 @@ test("provider operation evaluation is observable unless exact metadata opts int
       evaluation: "pure",
       immediateCallback: {
         sourceArgumentIndex: 0,
+        resultError: { kind: "callback" },
         fallibleTarget: { form: "call", path: "acme_validation::try_run" },
       },
     }],
@@ -766,6 +767,7 @@ test("provider immediate-callback metadata declares one exact fallible target AB
       parameterCarriers: [callbackCarrier],
       immediateCallback: {
         sourceArgumentIndex: 0,
+        resultError: { kind: "callback" },
         fallibleTarget: { form: "call", path: "acme_validation::with_fallible_callback" },
       },
     }],
@@ -773,6 +775,7 @@ test("provider immediate-callback metadata declares one exact fallible target AB
   const [contribution] = providerPackage.createTargetContributions({});
   assert.deepEqual(contribution.definition.operations[0].immediateCallback, {
     sourceArgumentIndex: 0,
+    resultError: { kind: "callback" },
     fallibleTarget: { form: "call", path: "acme_validation::with_fallible_callback" },
   });
 });
@@ -782,32 +785,75 @@ test("provider immediate-callback metadata fails closed on an inexact callback c
     {
       label: "missing callback parameter",
       parameterCarriers: [],
-      immediateCallback: { sourceArgumentIndex: 0, fallibleTarget: { form: "call", path: "acme_validation::fallible" } },
+      immediateCallback: { sourceArgumentIndex: 0, resultError: { kind: "callback" }, fallibleTarget: { form: "call", path: "acme_validation::fallible" } },
       pattern: /must select one declared parameter carrier/u,
     },
     {
       label: "non-callable parameter",
       parameterCarriers: [int32Carrier],
-      immediateCallback: { sourceArgumentIndex: 0, fallibleTarget: { form: "call", path: "acme_validation::fallible" } },
+      immediateCallback: { sourceArgumentIndex: 0, resultError: { kind: "callback" }, fallibleTarget: { form: "call", path: "acme_validation::fallible" } },
       pattern: /must select one exact native closure carrier/u,
     },
     {
       label: "retained callable cannot use immediate metadata",
       parameterCarriers: [rustCallableTargetType([], int32Carrier)],
-      immediateCallback: { sourceArgumentIndex: 0, fallibleTarget: { form: "call", path: "acme_validation::fallible" } },
+      immediateCallback: { sourceArgumentIndex: 0, resultError: { kind: "callback" }, fallibleTarget: { form: "call", path: "acme_validation::fallible" } },
       pattern: /must select one exact native closure carrier/u,
     },
     {
       label: "unknown callback field",
       parameterCarriers: [rustClosureTargetType([], int32Carrier)],
-      immediateCallback: { sourceArgumentIndex: 0, fallibleTarget: { form: "call", path: "acme_validation::fallible" }, fallback: true },
+      immediateCallback: { sourceArgumentIndex: 0, resultError: { kind: "callback" }, fallibleTarget: { form: "call", path: "acme_validation::fallible" }, fallback: true },
       pattern: /unsupported field 'fallback'/u,
     },
     {
       label: "raw fallible target",
       parameterCarriers: [rustClosureTargetType([], int32Carrier)],
-      immediateCallback: { sourceArgumentIndex: 0, fallibleTarget: { form: "call", path: "acme_validation::fallible\(\)" } },
+      immediateCallback: { sourceArgumentIndex: 0, resultError: { kind: "callback" }, fallibleTarget: { form: "call", path: "acme_validation::fallible\(\)" } },
       pattern: /not a closed Rust path/u,
+    },
+    {
+      label: "removed missing Result error contract",
+      parameterCarriers: [rustClosureTargetType([], int32Carrier)],
+      immediateCallback: { sourceArgumentIndex: 0, fallibleTarget: { form: "call", path: "acme_validation::fallible" } },
+      pattern: /resultError requires its exact native Result error contract/u,
+    },
+    {
+      label: "unknown Result error selection",
+      parameterCarriers: [rustClosureTargetType([], int32Carrier)],
+      immediateCallback: { sourceArgumentIndex: 0, resultError: { kind: "guessed" },
+        fallibleTarget: { form: "call", path: "acme_validation::fallible" } },
+      pattern: /requires a callback or native error contract/u,
+    },
+    {
+      label: "callback contract cannot silently override its carrier",
+      parameterCarriers: [rustClosureTargetType([], int32Carrier)],
+      immediateCallback: { sourceArgumentIndex: 0, resultError: { kind: "callback", carrier: int32Carrier },
+        fallibleTarget: { form: "call", path: "acme_validation::fallible" } },
+      pattern: /unsupported field 'carrier'/u,
+    },
+    {
+      label: "native Result error carrier is required",
+      parameterCarriers: [rustClosureTargetType([], int32Carrier)],
+      immediateCallback: { sourceArgumentIndex: 0, resultError: { kind: "native" },
+        fallibleTarget: { form: "call", path: "acme_validation::fallible" } },
+      pattern: /resultError.carrier must be a metadata object/u,
+    },
+    {
+      label: "native Result error has no guessed path",
+      parameterCarriers: [rustClosureTargetType([], int32Carrier)],
+      immediateCallback: { sourceArgumentIndex: 0,
+        resultError: { kind: "native", carrier: { kind: "target-named", id: "acme.Unregistered" } },
+        fallibleTarget: { form: "call", path: "acme_validation::fallible" } },
+      pattern: /without a Rust carrier path/u,
+    },
+    {
+      label: "native Result error retains its generic owner",
+      parameterCarriers: [rustClosureTargetType([], int32Carrier)],
+      immediateCallback: { sourceArgumentIndex: 0,
+        resultError: { kind: "native", carrier: { kind: "type-parameter", identity: "acme.ForeignError", name: "ForeignError" } },
+        fallibleTarget: { form: "call", path: "acme_validation::fallible" } },
+      pattern: /undeclared/u,
     },
   ];
   for (const item of cases) {
@@ -826,6 +872,27 @@ test("provider immediate-callback metadata fails closed on an inexact callback c
       item.label,
     );
   }
+});
+
+test("provider immediate callbacks materialize and freeze their exact native Result error carrier", () => {
+  const native = { kind: "target-named", id: "acme.CallbackError" };
+  const callback = { sourceArgumentIndex: 0, resultError: { kind: "native", carrier: native },
+    fallibleTarget: { form: "call", path: "acme_validation::try_run" } };
+  const provider = createRustProviderPackage(definition({
+    carrierPaths: { "acme.CallbackError": "acme_validation::CallbackError" },
+    operations: [{ exportId: "@acme/validation::run", operationKind: "method",
+      target: { form: "call", path: "acme_validation::run" }, resultCarrier: int32Carrier,
+      parameterCarriers: [rustClosureTargetType([], int32Carrier)], immediateCallback: callback }],
+  }));
+  native.id = "acme.ChangedError";
+  callback.resultError = { kind: "callback" };
+  const published = provider.createTargetContributions()[0].definition;
+  const row = collectRustProviderSemanticsFromDefinitions([published], rustProviderContractValidation).operations[0];
+  assert.equal(row.immediateCallback.resultError.kind, "native");
+  assert.equal(rustNamedTypeCarrierValue(row.immediateCallback.resultError.carrier).path, "acme_validation::CallbackError");
+  assert.equal(Object.isFrozen(row.immediateCallback), true);
+  assert.equal(Object.isFrozen(row.immediateCallback.resultError), true);
+  assert.equal(Object.isFrozen(row.immediateCallback.resultError.carrier), true);
 });
 
 test("provider value conversions use only target-owned semantic ids", () => {

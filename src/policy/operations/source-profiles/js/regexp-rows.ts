@@ -136,7 +136,7 @@ function callback(
     shape: "direct",
     sourceArgumentIndex: 1,
     argumentAdapter: { kind: "regexp-replacement", lane },
-    failure: { kind: "invocation", fallibleTarget: target },
+    failure: { kind: "invocation", resultError: { kind: "callback" }, fallibleTarget: target },
   };
 }
 

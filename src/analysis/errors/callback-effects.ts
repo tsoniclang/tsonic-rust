@@ -19,6 +19,21 @@ interface CallbackValueAnalysis {
   readonly subjects: readonly Node[];
 }
 
+export function rustPreparedCallbackResultEffects(
+  prepared: RustPreparedDeferredCheckedCall,
+  invocationEffects: RustErrorEffectsFact,
+): RustErrorEffectsFact | undefined {
+  const failure = prepared.callback.failure;
+  if (failure.kind === "returned-future") return prepared.template.isFallible ? rustLocalErrorEffects : rustPureErrorEffects;
+  if (failure.resultError.kind === "native") return prepared.template.isFallible ||
+    invocationEffects.localErrors || invocationEffects.nativeErrors.length !== 0
+    ? rustCallableInvocationErrorEffects(failure.resultError.carrier) : rustPureErrorEffects;
+  return mergeRustErrorEffects([
+    prepared.template.isFallible ? rustLocalErrorEffects : rustPureErrorEffects,
+    invocationEffects,
+  ]);
+}
+
 export function createRustCallbackEffectAnalysis(input: {
   readonly walk: RustFactWalk;
   readonly budget: RustEffectsWorkBudget;
@@ -148,10 +163,7 @@ export function createRustCallbackEffectAnalysis(input: {
     const pending = walk.preparedCallbackCalls.get(node);
     if (pending === undefined) return rustPureErrorEffects;
     const callback = callbackValueAnalysis(callbackExpression(pending), new Set());
-    return callback === undefined ? undefined : mergeRustErrorEffects([
-      pending.prepared.template.isFallible ? rustLocalErrorEffects : rustPureErrorEffects,
-      pending.prepared.callback.failure.kind === "returned-future" ? rustPureErrorEffects : callback.invocationEffects,
-    ]);
+    return callback === undefined ? undefined : rustPreparedCallbackResultEffects(pending.prepared, callback.invocationEffects);
   };
   return Object.freeze({ callbackExpression, callbackValueExpression, callbackValueAnalysis, preparedCallbackOperationEffects });
 }

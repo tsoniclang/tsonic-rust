@@ -17,6 +17,35 @@ for (const surfaces of [[], ["js"]]) {
   });
 }
 
+test("Map and Set callbacks preserve their native generic invocation error without erasure", { timeout: 300_000 }, () => {
+  const { result } = compileRust({ surfaces: ["js"],
+    target: { id: "rust", options: { outputType: "bin", crateName: "native_collection_callback_errors" } },
+    files: { "index.ts": `
+function visitMap(entries: Map<number, number>, invoke: (value: number) => void): void {
+  entries.forEach(value => { invoke(value); });
+}
+function visitSet(values: Set<number>, invoke: (value: number) => void): void {
+  values.forEach(value => { invoke(value); });
+}
+function acceptMap(value: number): void { if (value !== 7) throw new Error("map value"); }
+function acceptSet(value: number): void { if (value !== 5) throw new Error("set value"); }
+export function main(): void {
+  const entries = new Map<number, number>();
+  entries.set(3, 7);
+  const values = new Set<number>();
+  values.add(5);
+  visitMap(entries, acceptMap);
+  visitSet(values, acceptSet);
+}
+main();
+` } });
+  assert.deepEqual(result.diagnostics, []);
+  const source = artifactText(result, "src/index.rs");
+  assert.equal((source.match(/\.try_for_each_value\(/gu) ?? []).length, 2);
+  assert.doesNotMatch(source, /Box::new|rt::Callable::new/u, "synchronous native callbacks require no erased callable allocation");
+  validateGeneratedProject("native-collection-callback-errors", result.artifacts, { run: true });
+});
+
 test("native callbacks reject implicit precision loss from wide integers", () => {
   const { result } = compileRust({ files: { "index.ts": `
 import type { nativeUint } from "@tsonic/core/types.js";
