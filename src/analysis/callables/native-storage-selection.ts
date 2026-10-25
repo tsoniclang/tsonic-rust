@@ -68,17 +68,18 @@ export function createRustNativeStorageSelection(
     readonly completeNativeOrigin: (node: Node, declaration: Node, carrier: TargetTypeRef,
       activation: NonNullable<Parameters<RustSourceErrorEffectSelection["bindingsFor"]>[3]>) => TargetTypeRef | undefined;
   },
-): (subject: SourceStorageSubject, carrier: TargetTypeRef, bindings: SourceStorageBindings | undefined,
+): (subject: SourceStorageSubject, carrier: TargetTypeRef, bindings: SourceStorageBindings | undefined, scope: Node | undefined,
   position?: "value" | "input") => RustNativeStorageSelection {
   const { inputs, futures, recordMembers, genericInvocationBindingsFor, joinWrites, ownerFor, valueOwnerFor, logicalCarrierFor } = prepared;
   const { boundaries, adaptedReferences, failure: boundaryFailure } = prepared.conversions;
   const unresolved = (reason: string): Extract<RustNativeStorageSelection, { readonly kind: "unresolved" }> =>
     Object.freeze({ kind: "unresolved", reason });
   return (subject: SourceStorageSubject, carrier: TargetTypeRef,
-    bindings: SourceStorageBindings | undefined, position: "value" | "input" = "value"): RustNativeStorageSelection => {
+    bindings: SourceStorageBindings | undefined, scope: Node | undefined,
+    position: "value" | "input" = "value"): RustNativeStorageSelection => {
     if (bindings === undefined) return unresolved("Native callable storage has no exact declaration-local bindings.");
     const owner = ownerFor(subject.node);
-    const availableNativeInputs = owner === undefined ? [] : [...input.native.inputsFor(owner), ...input.native.capturesFor(owner)];
+    const availableNativeInputs = scope === undefined ? [] : [...input.native.inputsFor(scope), ...input.native.capturesFor(scope)];
     const environment = owner === undefined ? undefined : futures.forDeclaration(owner);
     if (environment?.kind === "unresolved") return environment;
     const checked = input.storage.typeFor(subject);
