@@ -26,6 +26,8 @@ import { prepareRustRetainedFrameCounters } from "./frame-counter-storage.js";
 import type { RustFrameCallableImplementation, RustFrameCallableEntryDefinition, RustFrameCallableBinding,
   RustFrameCallableDefinition, RustFrameEntryErrorSelection } from "../../target-model/records/frame-callables.js";
 import { substituteRustTargetGenerics } from "../../target-model/types/carriers/substitution.js";
+import { rustCallableProtocol, rustCallableTargetType } from "../../target-model/types/carriers/callables.js";
+import { rustStaticLifetime } from "../../target-model/lifetimes/index.js";
 
 export interface RustFrameCallablePlanRegistry extends RustFrameCallablePlan {
   completeErrors(select: (definition: RustFrameCallableDefinition,
@@ -282,7 +284,14 @@ export function createRustFrameCallablePlan(input: {
     return undefined;
   };
   const selectedDefinitions = new Map<string, RustFrameCallableDefinition>();
-  const selectedEntries = new Map<string, RustFrameCallableEntryDefinition>();
+  type SelectedFrameCarrier = {
+    readonly carrier: TargetTypeRef;
+    readonly entry: RustFrameCallableEntryDefinition;
+  } & ({ readonly kind: "pending" } | {
+    readonly kind: "completed";
+    readonly independentCarrier: TargetTypeRef | undefined;
+  });
+  const selectedEntries = new Map<string, SelectedFrameCarrier>();
   const activationInputs = new Map<Node, Map<RustFrameCallableDefinition, {
     readonly independent: boolean; readonly receiverOwner?: Node;
   }>>();
@@ -295,7 +304,7 @@ export function createRustFrameCallablePlan(input: {
     selectedDefinitions.set(key, definition);
     const signature = signatureKey(carrier);
     const entry = signature === undefined ? undefined : definition.entries.find(entry => entry.key === signature);
-    if (entry !== undefined) selectedEntries.set(key, entry);
+    if (entry !== undefined) selectedEntries.set(key, Object.freeze({ kind: "pending", carrier, entry }));
     return definition;
   };
   for (const definition of definitions) {
@@ -332,11 +341,19 @@ export function createRustFrameCallablePlan(input: {
   };
   const producer = createRustFrameCallableRecords({
     definitions: Object.freeze(definitions), issues: Object.freeze(issues), activationInputs, receiverOwners,
-    selectedDefinitions, selectedEntries, byDeclaration, implementations, bindings, entryErrors,
+    selectedDefinitions, byDeclaration, implementations, bindings, entryErrors,
+    entryFor: carrier => selectedEntries.get(closedMetadataKey(carrier))?.entry,
+    independentCarrierFor(carrier) {
+      const selected = selectedEntries.get(closedMetadataKey(carrier));
+      if (selected === undefined) return undefined;
+      if (selected.kind !== "completed") failTargetAnalysisInvariant("tsonic-rust",
+        "An independent frame construction requires its completed native entry contract.");
+      return selected.independentCarrier;
+    },
     errorFor(carrier) {
       const frame = rustFrameCallableValue(carrier);
       if (frame === undefined) return undefined;
-      const entry = selectedEntries.get(closedMetadataKey(carrier));
+      const entry = selectedEntries.get(closedMetadataKey(carrier))?.entry;
       const definition = selectedDefinitions.get(closedMetadataKey(carrier));
       const bindings = entry === undefined || definition === undefined ? undefined
         : rustFrameCallableEnvironmentBindings(definition, entry, frame.environment);
@@ -357,7 +374,21 @@ export function createRustFrameCallablePlan(input: {
           subject: diagnostic.sourceNode ?? definition.activation.ownerDeclaration, message: diagnostic.message,
         })));
       }
-      if (rejected.length === 0) errors = selections;
+      if (rejected.length === 0) {
+        errors = selections;
+        for (const [key, selected] of selectedEntries) {
+          let independentCarrier: TargetTypeRef | undefined;
+          if (selected.entry.hasIndependent) {
+            const protocol = rustCallableProtocol(selected.carrier);
+            const error = producer.records.errorFor(selected.carrier);
+            if (protocol === undefined || error === undefined) failTargetAnalysisInvariant("tsonic-rust",
+              "An admitted independent frame entry requires its exact invocation protocol and completed native error.");
+            independentCarrier = rustCallableTargetType(protocol.parameters, protocol.result, rustStaticLifetime, error);
+          }
+          selectedEntries.set(key, Object.freeze({ kind: "completed", carrier: selected.carrier,
+            entry: selected.entry, independentCarrier }));
+        }
+      }
       return Object.freeze(rejected);
     },
     sealCounters(constructions: readonly RustProjectConstructionPlan[]): RustFrameCallablePlan {

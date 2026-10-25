@@ -3,7 +3,51 @@ import test from "node:test";
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { artifactText, compileRust } from "../../helpers/rust-session.mjs";
-import { runCargo, writeGeneratedProject } from "../../helpers/cargo-projects.mjs";
+import { runCargo, validateGeneratedProject, writeGeneratedProject } from "../../helpers/cargo-projects.mjs";
+
+for (const surfaces of [[], ["js"]]) {
+  const surface = surfaces[0] ?? "native";
+  test(`normal constructor retention follows the original receiver and parameter-property inputs in ${surface}`, { timeout: 300_000 }, () => {
+    const { result } = compileRust({ surfaces,
+      target: { id: "rust", options: { outputType: "bin", crateName: `constructor_retention_${surface}` } },
+      files: { "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+import type { Life, Ref } from "@tsonic/rust/types.js";
+import { load, ref } from "@tsonic/rust/lang.js";
+class Relay<Part> {
+  constructor(readonly done: (value: Part) => void, readonly value: Part) {}
+  run(): void { this.done(this.value); }
+}
+class Derived<Part> extends Relay<Part> {
+  constructor(done: (value: Part) => void, value: Part) { super(done, value); }
+}
+class DefaultField { readonly value = 5 as int32; }
+class Bare { constructor(readonly value: int32) { return; } }
+class Same { constructor(readonly value: int32) { return this; } }
+class Alias { constructor(readonly value: int32) { const receiver = this; return receiver; } }
+class Borrowed<Region extends Life> {
+  constructor(readonly value: Ref<int32, Region>) {}
+  read(): int32 { return load(this.value); }
+}
+function make<Part>(done: (value: Part) => void, value: Part): Relay<Part> { return new Relay(done, value); }
+function check(value: int32): void { if (value !== 31) throw new Error("retained Part"); }
+export function main(): void {
+  make(check, 31 as int32).run();
+  new Derived(check, 31 as int32).run();
+  if (new DefaultField().value !== 5) throw new Error("implicit field initialization");
+  if (new Bare(7 as int32).value !== 7) throw new Error("bare constructor return");
+  if (new Same(11 as int32).value !== 11) throw new Error("receiver constructor return");
+  if (new Alias(13 as int32).value !== 13) throw new Error("receiver alias constructor return");
+  const original = 17 as int32;
+  if (new Borrowed(ref(original)).read() !== 17) throw new Error("borrowed receiver field");
+}
+main();
+` } });
+    assert.equal(result.diagnostics.length, 0, result.diagnostics.map(diagnostic => `${diagnostic.code}: ${diagnostic.message}`).join("\n"));
+    const native = validateGeneratedProject(`constructor-retention-${surface}`, result.artifacts, { run: true });
+    assert.equal(native.status, 0, native.stdout + native.stderr);
+  });
+}
 
 const source = `
 import type { int32 } from "@tsonic/core/types.js";

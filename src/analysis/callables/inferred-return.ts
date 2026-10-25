@@ -2,7 +2,7 @@ import { BinaryExpression_Left, BinaryExpression_Right, Node_Expression, Node_In
 import type { Node } from "@tsonic/tsts";
 import { createRustCarrierProbe } from "../program/carrier-probe.js";
 
-import { rustOperationContext, rustResolutionContext } from "../program/walk.js";
+import { rustResolutionContext } from "../program/walk.js";
 import type { RustFactWalk } from "../program/walk.js";
 import { resolveRustTargetTypeRef } from "../source-evidence/types/resolution/source.js";
 import { selectRustNumericBinaryPromotion } from "../../policy/operations/numeric/promotion.js";
@@ -15,8 +15,6 @@ import { rustSourceOptionalElementCarrier } from "../../target-model/types/carri
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 
-import { checkedPropertySelectionInput } from "../operations/member-access.js";
-import { selectRustCheckedPropertyAccess } from "../operations/selected-members.js";
 import { resolveExpressionCarrier } from "../source-evidence/types/resolution/expression-carriers.js";
 import { selectRustConditionalNumericCarrier } from "../../policy/types/conditional-numeric-carrier.js";
 import { resolveRustBranchUnion } from "../source-evidence/types/resolution/branch-unions.js";
@@ -227,11 +225,8 @@ function selectReturn(
           const receiverCarrier = expressionCarrier(receiver);
           if (receiverCarrier === undefined) return undefined;
           if (setCarrierFact(probe, receiver, receiverCarrier) === undefined) return undefined;
-          const selection = selectRustCheckedPropertyAccess(
-            checkedPropertySelectionInput(rustOperationContext(probe, expression), expression, source),
-            rustOperationContext(probe, expression), probe.operationOptions,
-          );
-          return selection.kind === "accept" ? selection.value.resultType : undefined;
+          const sourceFile = ast.getSourceFile(expression);
+          return sourceFile === undefined ? undefined : resolveExpressionCarrier(probe, expression, sourceFile, expected);
         }
         const operands = kind === "KindBinaryExpression"
           ? [BinaryExpression_Left(ast, expression), BinaryExpression_Right(ast, expression)]

@@ -44,13 +44,16 @@ export function recordParameterAbiFacts(walk: RustFactWalk, parameter: Node, sel
   recordRustParameterAbiSelection(walk, parameter, parameterAbi);
 }
 
-export function refuseRustParameterCarrier(walk: RustFactWalk, parameter: Node, reason?: string): void {
+export function refuseRustParameterCarrier(
+  walk: RustFactWalk, parameter: Node, reason?: string, completion?: RustCallableSignatureUnresolved,
+): void {
   appendRustDiagnostic(
     walk,
     reason === undefined ? "RUST_PARAMETER_CARRIER_UNSUPPORTED" : "RUST_FORMAL_MEMBER_WRITE_DEMAND_NOT_PROVEN",
     reason ?? "Parameter type has no closed Rust runtime carrier under the selected source-profile and surface policy.",
     parameter,
-    ["target.capability=rust.callable.parameter-carrier"],
+    ["target.capability=rust.callable.parameter-carrier", ...(completion === undefined ? [] :
+      [`rust.callable.signature-unresolved=${completion.reason.slice(0, 512)}`])],
   );
 }
 
@@ -65,8 +68,7 @@ export function refuseRustUnresolvedParameterCarriers(
     const selection = walk.sourceCallableAbi.resolveParameterAbi(
       parameter, rustResolutionContext(walk, parameter), walk.operationOptions);
     if (selection?.kind === "rejected") refuseRustParameterCarrier(walk, parameter, selection.reason);
-    else if (selection === undefined) appendRustDiagnostic(walk, "RUST_PARAMETER_CARRIER_UNSUPPORTED", failure.reason,
-      parameter, ["target.capability=rust.callable.parameter-carrier"]);
+    else if (selection === undefined) refuseRustParameterCarrier(walk, parameter, undefined, failure);
   }
 }
 
