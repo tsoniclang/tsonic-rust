@@ -12,6 +12,7 @@ import type { RustProjectTypePolicy } from "../project-types/index.js";
 import type { RustObjectRepresentationPlan } from "../project-types/object-representation.js";
 
 import type { RustOwnershipFlow } from "../../target-model/records/ownership-flow.js";
+import type { RustReadUse } from "../../target-model/records/ownership.js";
 
 import type { RustNamePlan } from "../../target-model/names/model.js";
 import type { RustAnalysisRecords } from "../../target-model/records/analysis.js";
@@ -33,6 +34,7 @@ import type { RustNativeStoragePlan } from "../callables/native-storage.js";
 
 export interface RustCallableRequirementInput {
   readonly ownershipFlow: RustOwnershipFlow;
+  readonly readUses: ReadonlyMap<Node, RustReadUse>;
   readonly isStoredValue: (node: Node) => boolean;
   readonly readsValue: (node: Node) => boolean;
   readonly typeDefinitions: RustTypeDefinitions;

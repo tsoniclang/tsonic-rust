@@ -271,6 +271,11 @@ export function invoke(callbacks: Callback[]): number { return callbacks[0](); }
       (surfaces.length === 0 ? operation.abi.target.form === "index"
         : operation.abi.target.form === "receiver-method" && operation.abi.target.name === "get_number"), true,
     "native Index borrows its output while the selected JS array API returns an owned element");
+    if (surfaces.length === 0) {
+      const read = current.program.ownership.reads.get(element);
+      assert.equal(read?.value.kind === "borrow" && read.value.mutable === false, true,
+        "the completed native indexed invocation actually borrows its original stored output");
+    }
     for (const input of inputs) {
       assert.equal(input.subject.node === current.ast.parameters(owner)[0] &&
         input.subject.projection.length === 1 && input.subject.projection[0].kind === "array-element", true,

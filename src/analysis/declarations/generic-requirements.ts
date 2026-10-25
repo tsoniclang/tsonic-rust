@@ -16,6 +16,7 @@ import type { RustProjectProjectionRequirement } from "../../target-model/types/
 import type { RustProjectTypeDefinition } from "../project-types/index.js";
 import { createRustProjectProjectionImplementationIndex } from "./project-projection-requirements.js";
 import type { RustOwnershipFlow } from "../../target-model/records/ownership-flow.js";
+import type { RustReadUse } from "../../target-model/records/ownership.js";
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
 import { resolveTargetContractFixedPoint } from "@tsonic/target-api/analysis";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
@@ -94,6 +95,7 @@ export function analyzeRustDeclarationGenericRequirements(
   nativeStorage: RustNativeStoragePlan,
   classValues: RustClassValuePlan,
   errorTypes: RustErrorTypeContext,
+  readUses: ReadonlyMap<Node, RustReadUse>,
 ): AnalyzeRustDeclarationGenericRequirementsResult {
   const ast = source.ast;
   const diagnostics: TargetDiagnostic[] = [];
@@ -192,6 +194,7 @@ export function analyzeRustDeclarationGenericRequirements(
         structuralShapes: shapes,
         structuralViewsFor: (declaration: Node) => viewsByDeclaration.get(declaration) ?? [],
         ownershipFlow,
+        readUses,
         isStoredValue,
         readsValue(node) {
           const access = ast.is.IsElementAccessExpression(node)

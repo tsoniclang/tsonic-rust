@@ -300,6 +300,7 @@ export function analyzeRustAnalysisProgram(
     context.callableValues.nativeStorage,
     classValues,
     errorTypes,
+    readUses,
   );
   if (declarationGenericRequirements.kind === "rejected") return declarationGenericRequirements;
   const sourceModuleConstructions = analyzeRustSourceModuleConstructions({
