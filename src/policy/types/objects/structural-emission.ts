@@ -64,7 +64,7 @@ export function selectRustStructuralEmission(input: RustStructuralEmissionPolicy
     ] });
     const genericParameterIndices = Object.freeze(input.template.stateGenericParameters.flatMap((parameter, index) =>
       parameter.kind !== "lifetime" || references.lifetimeIdentities.includes(rustLifetimeKey(parameter.lifetime)) ? [index] : []));
-    return { kind: "selected", value: Object.freeze({ dispatch: Object.freeze({ members: native.members,
+    return { kind: "selected", value: Object.freeze({ contextConstructors: Object.freeze([]), dispatch: Object.freeze({ members: native.members,
       genericParameterIndices, lifetime: definition.dispatchLifetime }),
       bases: native.bases, fields: Object.freeze([]), derives: Object.freeze([]) }) };
   }
@@ -104,7 +104,9 @@ export function selectRustStructuralEmission(input: RustStructuralEmissionPolicy
   if (input.clone) derives.push("Clone");
   if (input.copy) derives.push("Copy");
   if (input.default) derives.push("Default");
-  return { kind: "selected", value: Object.freeze({ dispatch: undefined, bases: Object.freeze([]), fields: Object.freeze(fields), derives: Object.freeze(derives) }) };
+  return { kind: "selected", value: Object.freeze({ dispatch: undefined,
+    contextConstructors: Object.freeze([...input.contextConstructors]),
+    bases: Object.freeze([]), fields: Object.freeze(fields), derives: Object.freeze(derives) }) };
 }
 
 export function structuralDispatchSignature(definition: RustStructuralShapeDefinition): {

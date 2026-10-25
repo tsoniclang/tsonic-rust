@@ -51,6 +51,8 @@ for (const surface of ["native", "js"]) {
     assertNoTargetDiagnostics(result.diagnostics);
     const source = result.artifacts.filter(artifact => artifact.path.endsWith(".rs")).map(artifact => artifact.text).join("\n");
     if (surface === "native") assert.doesNotMatch(source, /Box<dyn (?:core::future::)?Future|Pin<Box|Promise|JsValue/u);
+    assert.doesNotMatch(source, /pub fn with_context_and_identity\(/u,
+      "ordinary captured construction does not emit an unused identity-replacement factory");
     validateGeneratedProject(`generic-structural-async-${surface}`, result.artifacts, { run: true });
   });
 }
