@@ -106,6 +106,7 @@ export function applyFlowReadLane(
     expression,
     selectedSource.declaration,
     selectedSource.type,
+    selectedSource.declaredType,
     sourceCarrier,
   ), absenceUse);
   if (selectedCarrier === undefined) {
@@ -163,7 +164,7 @@ function selectedFlowReadSource(
   expression: Node,
   sourceCarrier: TargetTypeRef,
   preservesAbsence: boolean,
-): { readonly declaration?: Node; readonly type: Type } | undefined {
+): { readonly declaration?: Node; readonly type: Type; readonly declaredType?: Type } | undefined {
   const sourceFile = walk.context.ast.getSourceFile(expression);
   if (sourceFile === undefined || !walk.context.source.semantics.includes(sourceFile)) {
     return undefined;
@@ -200,7 +201,7 @@ function selectedFlowReadSource(
   const readsCheckedPayload = refinement.kind === "resolved" && refinement.refinement.kind === "exact" &&
     rustOptionElementCarrier(sourceCarrier) !== undefined && !preservesAbsence;
   return refinement.kind === "resolved" && (refinement.refinement.kind !== "exact" || readsCheckedPayload)
-    ? { declaration: refinement.reference.declaration, type: refinement.selectedType }
+    ? { declaration: refinement.reference.declaration, type: refinement.selectedType, declaredType: refinement.declaredType }
     : undefined;
 }
 
@@ -209,6 +210,7 @@ function resolveSelectedFlowReadCarrier(
   expression: Node,
   declaration: Node | undefined,
   selectedType: Type,
+  declaredType: Type | undefined,
   sourceCarrier: TargetTypeRef,
 ): TargetTypeRef | undefined {
   const semantics = walk.context.semanticsFor(expression);
@@ -217,8 +219,8 @@ function resolveSelectedFlowReadCarrier(
     : walk.context.ast.kindName(expression) === KindElementAccessExpression
       ? semantics.operations.elementAccess(expression)
       : undefined;
-  const declaredReadType = access?.selectedSymbol === undefined ? undefined :
-    semantics.types.typeOfSymbol(access.selectedSymbol);
+  const declaredReadType = access === undefined ? declaredType
+    : access.selectedSymbol === undefined ? undefined : semantics.types.typeOfSymbol(access.selectedSymbol);
   const selectedTypes = semantics.types.isUnion(selectedType)
     ? semantics.types.unionOrIntersectionTypes(selectedType) : [selectedType];
   if (selectedTypes.some(type => type === undefined)) return undefined;
@@ -231,6 +233,13 @@ function resolveSelectedFlowReadCarrier(
       presentReadType !== undefined && rustSourceOptionalElementCarrier(sourceCarrier) !== undefined &&
       semantics.types.isIdentical(declaredReadType, presentReadType))) {
     return sourceCarrier;
+  }
+  const sourceOptionalElement = rustSourceOptionalElementCarrier(sourceCarrier);
+  const declaredPresentType = sourceOptionalElement === undefined || declaredReadType === undefined
+    ? undefined : semantics.types.nonNullableType(declaredReadType);
+  if (sourceOptionalElement !== undefined && declaredPresentType !== undefined &&
+    semantics.types.isIdentical(declaredPresentType, selectedType)) {
+    return sourceOptionalElement;
   }
   const dispatchCarrier = rustOptionElementCarrier(sourceCarrier) ?? sourceCarrier;
   const resolution = rustResolutionContext(walk, expression);

@@ -11,9 +11,12 @@ export function createRustFrameCallableRecords(input: RustFrameCallableRecordInp
     issues: input.issues,
     activationInputs: input.activationInputs,
     receiverOwners: input.receiverOwners,
+    entryErrors: input.entryErrors,
+    errorFor: input.errorFor,
+    independentCarrierFor: input.independentCarrierFor,
     definitionFor: (carrier: TargetTypeRef) => input.selectedDefinitions.get(closedMetadataKey(carrier)),
     definitionForOwner: (declaration: Node) => input.byDeclaration.get(declaration),
-    entryFor: (carrier: TargetTypeRef) => input.selectedEntries.get(closedMetadataKey(carrier)),
+    entryFor: input.entryFor,
     implementationFor: (declaration: Node) => input.implementations.get(declaration),
     bindingFor: (declaration: Node) => input.bindings.get(declaration),
     isSameActivationInput(expression: Node, definition: RustFrameCallableDefinition, receiver?: Node): boolean {

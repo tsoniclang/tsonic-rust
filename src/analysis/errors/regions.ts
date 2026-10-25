@@ -39,11 +39,157 @@ import type { RustAwaitValueLeafFact } from "../../target-model/records/await-va
 import type { RustBinaryHookPlan } from "../project/index.js";
 import { rustRuntimeErrorTargetType } from "../../target-model/types/carriers/runtime-carriers.js";
 import { rustJsRejectionErrorIdentity } from "../../target-model/records/error-effects.js";
+import type { RustFrameCallableDefinition, RustFrameCallableEntryDefinition, RustFrameCallableImplementation,
+  RustFrameEntryErrorSelection, RustFrameImplementationErrorSelection } from "../../target-model/records/frame-callables.js";
+import { mergeRustErrorEffects, rustProducerInvocationErrorEffects } from "./error-effects.js";
+import { rustUninhabitedError } from "../../policy/conversions/callable-physical.js";
+import type { RustFrameCallablePlan } from "../../target-model/records/frame-callables.js";
+import { rustFrameCallableValue } from "../../target-model/types/carriers/frame-callables.js";
+import { rustFrameCallableEnvironmentBindings } from "../callables/frame-values.js";
 
 export interface RustAnalyzedErrorRegions extends Pick<RustErrorRegionRecords, "get" | "sourceFor" | "producerError"> {
   lifecycleFor(initializers: readonly RustInitializerSelection[], owner: RustPhysicalErrorOwner): TargetStageResult<RustLifecycleErrorSelection>;
   taskCompletionFor(node: Node): RustAwaitSelection<RustAwaitValueLeafFact> | undefined;
   complete(initialization: RustInitializationErrorRecords): RustErrorRegionRecords;
+}
+
+export function selectRustErrorRegion(
+  node: Node,
+  effects: RustErrorEffectsFact,
+  input: RustErrorTypeContext & {
+    readonly records: Pick<RustProgramRecords, "targetOperation">;
+    readonly promiseBodies: Pick<RustPromiseBodies, "objects">;
+  },
+  body: boolean,
+): TargetStageResult<RustErrorRegionSelection> {
+  const reject = (message: string): TargetStageResult<RustErrorRegionSelection> => rejectedTargetStage([{
+    code: "RUST_ERROR_REGION_UNRESOLVED", category: "error", source: "tsonic-rust", sourceNode: node,
+    message, evidence: ["target.capability=rust.analysis.error-regions"],
+  }]);
+  const file = input.ast.getSourceFile(node);
+  const owner = effects.localErrors ? selectRustPhysicalProgramErrorOwner(node, input) : undefined;
+  const sources = effects.nativeErrors.map((source, index) => {
+    const errorType = normalizeRustErrorType(source.errorType, input, node);
+    return errorType === undefined ? undefined : Object.freeze({ identity: source.identity,
+      variant: `Error${index + (effects.localErrors ? 1 : 0)}`, errorType });
+  });
+  if (file === undefined || effects.localErrors && owner === undefined || sources.some(source => source === undefined))
+    return reject("An error region has no exact physical package owner or native payload carrier.");
+  const selectedSources = snapshotRustNativeErrorSources(sources as NonNullable<typeof sources[number]>[], isRustTargetTypeRef);
+  if (selectedSources === undefined || selectedSources.length + (owner === undefined ? 0 : 1) > 4096)
+    return reject("An error region exceeds its bounded exact native error-source contract.");
+  const closure = body ? input.records.targetOperation.get(node) : undefined;
+  const callback = closure?.kind === "closure" ? rustCallableProtocol(closure.resultCarrier) : undefined;
+  const promiseBody = body && (input.promiseBodies.objects.has(node) ||
+    rustTargetTypeRefEquals(callback?.error, rustJsValueTargetType()));
+  const jsRejection = promiseBody ? selectRustJsRejectionRegion(owner, selectedSources) : undefined;
+  if (promiseBody && jsRejection === undefined)
+    return reject("A JS Promise rejection region has no bounded exact native conversion selection.");
+  return resolvedTargetStage(Object.freeze({
+    kind: effects.nativeErrors.length > 0 ? "native" : effects.localErrors ? "package" : "infallible",
+    fileName: input.ast.getFileName(file), localOwner: owner, sources: selectedSources,
+    ...(jsRejection === undefined ? {} : { jsRejection }),
+  }));
+}
+
+export function selectRustFrameEntryErrors(
+  definition: RustFrameCallableDefinition,
+  entry: RustFrameCallableEntryDefinition,
+  input: RustErrorTypeContext & {
+    readonly records: Pick<RustProgramRecords, "targetOperation">;
+    readonly promiseBodies: Pick<RustPromiseBodies, "objects" | "declarations">;
+  },
+  effectsFor: (declaration: Node) => RustErrorEffectsFact | undefined,
+): TargetStageResult<RustFrameEntryErrorSelection> {
+  const operands = new Map<RustFrameCallableImplementation, RustErrorRegionSelection>();
+  const effects: RustErrorEffectsFact[] = [];
+  for (const implementation of entry.implementations) {
+    const selected = effectsFor(implementation.declaration);
+    if (selected === undefined) failTargetAnalysisInvariant("tsonic-rust",
+      "A native frame entry requires completed intrinsic effects for every original implementation.", implementation.declaration);
+    const invocation = rustProducerInvocationErrorEffects(implementation.declaration, input);
+    if (invocation === undefined) failTargetAnalysisInvariant("tsonic-rust",
+      "A native frame implementation requires its original selected producer invocation channel.", implementation.declaration);
+    const region = selectRustErrorRegion(implementation.declaration, invocation, input, false);
+    if (region.kind === "rejected") return region;
+    const operand = region.value;
+    operands.set(implementation, operand);
+    effects.push({ localErrors: operand.localOwner !== undefined,
+      nativeErrors: operand.sources.map(source => ({ identity: source.identity, errorType: source.errorType })) });
+  }
+  const merged = mergeRustErrorEffects(effects);
+  if (merged === undefined) return rejectedTargetStage([{
+    code: "RUST_ERROR_EFFECT_CONFLICT", category: "error", source: "tsonic-rust",
+    sourceNode: definition.activation.ownerDeclaration,
+    message: "One native frame entry has inconsistent exact implementation error channels.",
+    evidence: ["target.capability=rust.native-error.exact-effects"],
+  }]);
+  const region = selectRustErrorRegion(definition.activation.ownerDeclaration, merged, input, false);
+  if (region.kind === "rejected") return region;
+  const carrierFor = (selected: RustErrorRegionSelection): TargetTypeRef => {
+    const carrier = rustNativeErrorJoinTargetType(selected.fileName,
+      [...(selected.localOwner === undefined ? [] : [rustProgramErrorTargetType(selected.localOwner)]),
+        ...selected.sources.map(source => source.errorType)]);
+    if (carrier === undefined) failTargetAnalysisInvariant("tsonic-rust",
+      "A completed native frame error region requires its exact closed native carrier.", definition.activation.ownerDeclaration);
+    return carrier;
+  };
+  const carrier = carrierFor(region.value);
+  const implementations = new Map<RustFrameCallableImplementation, RustFrameImplementationErrorSelection>();
+  for (const [implementation, operand] of operands) {
+    const source = carrierFor(operand);
+    if (rustUninhabitedError(source)) implementations.set(implementation, Object.freeze({ kind: "infallible" }));
+    else if (rustTargetTypeRefEquals(source, carrier)) implementations.set(implementation, Object.freeze({ kind: "identity" }));
+    else implementations.set(implementation, Object.freeze({ kind: "mapped", transport: Object.freeze({ operand,
+      local: operand.localOwner === undefined ? undefined : Object.freeze({ kind: "local" as const }),
+      channels: Object.freeze(operand.sources.map(selected => Object.freeze({
+        sourceIdentity: selected.identity, targetIdentity: selected.identity, uninhabited: rustUninhabitedError(selected.errorType),
+      }))),
+    }) }));
+  }
+  return resolvedTargetStage(Object.freeze({ carrier, region: region.value, implementations }));
+}
+
+export function selectRustFrameInvocationErrors(
+  carrier: TargetTypeRef,
+  frames: RustFrameCallablePlan,
+  effects: RustErrorEffectsFact,
+  edges: readonly RustSourceErrorEffectEdge[],
+  regions: Pick<RustErrorRegionRecords, "sourceFor">,
+): RustSourceErrorRegionSelection | undefined {
+  const frame = rustFrameCallableValue(carrier);
+  const entry = frame === undefined ? undefined : frames.entryFor(carrier);
+  const definition = frame === undefined ? undefined : frames.definitionFor(carrier);
+  const substitutions = frame === undefined || entry === undefined || definition === undefined ? undefined
+    : rustFrameCallableEnvironmentBindings(definition, entry, frame.environment);
+  if (entry === undefined || substitutions === undefined) return undefined;
+  const selected = frames.entryErrors(entry);
+  const sources = selected.region.sources.map(source => ({ ...source,
+    errorType: substituteRustTargetGenerics(source.errorType, substitutions, new Map()) }));
+  const operand = Object.freeze({ ...selected.region, sources: Object.freeze(sources) });
+  const selections = edges.map(edge => regions.sourceFor(edge));
+  if (selections.some(selection => selection === undefined)) return undefined;
+  const channels: RustSourceErrorRegionSelection["channels"][number][] = [];
+  for (const source of sources) {
+    const targets = new Set<string>();
+    for (const selection of selections) {
+      const original = selection!.operand.sources.find(candidate => candidate.identity === source.identity &&
+        rustTargetTypeRefEquals(candidate.errorType, source.errorType));
+      if (original === undefined) continue;
+      const channel = selection!.channels.find(candidate => candidate.sourceIdentity === original.identity);
+      if (channel !== undefined) targets.add(channel.targetIdentity);
+    }
+    if (targets.size === 0 && effects.nativeErrors.some(candidate => candidate.identity === source.identity &&
+      rustTargetTypeRefEquals(candidate.errorType, source.errorType))) targets.add(source.identity);
+    if (targets.size !== 1) return undefined;
+    channels.push(Object.freeze({ sourceIdentity: source.identity, targetIdentity: [...targets][0]!,
+      uninhabited: rustUninhabitedError(source.errorType) }));
+  }
+  const locals = selections.filter(selection => selection!.operand.localOwner !== undefined).map(selection => selection!.local);
+  if (operand.localOwner !== undefined && (locals.length === 0 || locals.some(local => local === undefined ||
+    closedMetadataKey(local) !== closedMetadataKey(locals[0])))) return undefined;
+  return Object.freeze({ operand, local: operand.localOwner === undefined ? undefined : locals[0],
+    channels: Object.freeze(channels) });
 }
 
 export function analyzeRustErrorRegions(input: RustErrorTypeContext & {
@@ -52,7 +198,7 @@ export function analyzeRustErrorRegions(input: RustErrorTypeContext & {
   readonly isNativeNode: (node: Node) => boolean;
   readonly records: RustProgramRecords;
   readonly names: RustNamePlan;
-  readonly callables: Pick<RustCallableValuePlan, "native" | "nativeGenericProducers">;
+  readonly callables: Pick<RustCallableValuePlan, "native" | "nativeGenericProducers" | "frames">;
   readonly promiseBodies: RustPromiseBodies;
   readonly nativeTasks: readonly RustNativeTaskCompletion[];
   readonly binaryHooks: readonly RustBinaryHookPlan[];
@@ -100,35 +246,13 @@ export function analyzeRustErrorRegions(input: RustErrorTypeContext & {
     rustTargetTypeChildren(carrier).forEach(inspectCarrier);
   };
   const regionFor = (node: Node, effects: RustErrorEffectsFact, body = false): RustErrorRegionSelection | undefined => {
-    const file = input.ast.getSourceFile(node);
-    const owner = effects.localErrors ? selectRustPhysicalProgramErrorOwner(node, input) : undefined;
-    const sources = effects.nativeErrors.map((source, index) => {
-      const errorType = normalizeRustErrorType(source.errorType, input, node);
-      if (errorType !== undefined) inspectCarrier(errorType);
-      return errorType === undefined ? undefined : Object.freeze({ identity: source.identity,
-        variant: `Error${index + (effects.localErrors ? 1 : 0)}`, errorType });
-    });
-    if (file === undefined || effects.localErrors && owner === undefined || sources.some(source => source === undefined)) {
-      reject(node, "An error region has no exact physical package owner or native payload carrier.");
+    const selection = selectRustErrorRegion(node, effects, input, body);
+    if (selection.kind === "rejected") {
+      diagnostics.push(...selection.diagnostics);
       return undefined;
     }
-    const selectedSources = snapshotRustNativeErrorSources(sources as NonNullable<typeof sources[number]>[], isRustTargetTypeRef);
-    if (selectedSources === undefined || selectedSources.length + (owner === undefined ? 0 : 1) > 4096) {
-      reject(node, "An error region exceeds its bounded exact native error-source contract.");
-      return undefined;
-    }
-    const closure = body ? input.records.targetOperation.get(node) : undefined;
-    const callback = closure?.kind === "closure" ? rustCallableProtocol(closure.resultCarrier) : undefined;
-    const promiseBody = body && (input.promiseBodies.objects.has(node) ||
-      rustTargetTypeRefEquals(callback?.error, rustJsValueTargetType()));
-    const jsRejection = promiseBody ? selectRustJsRejectionRegion(owner, selectedSources) : undefined;
-    if (promiseBody && jsRejection === undefined) {
-      reject(node, "A JS Promise rejection region has no bounded exact native conversion selection.");
-      return undefined;
-    }
-    return Object.freeze({ kind: effects.nativeErrors.length > 0 ? "native" : effects.localErrors ? "package" : "infallible",
-      fileName: input.ast.getFileName(file), localOwner: owner,
-      sources: selectedSources, ...(jsRejection === undefined ? {} : { jsRejection }) });
+    selection.value.sources.forEach(source => inspectCarrier(source.errorType));
+    return selection.value;
   };
   const sourceRegionFor = (node: Node, edge: RustSourceErrorEffectEdge): RustSourceErrorRegionSelection | undefined => {
     const source = input.records.errorEffects.get(edge.declaration);
@@ -234,6 +358,15 @@ export function analyzeRustErrorRegions(input: RustErrorTypeContext & {
     const producerArities = input.callables.nativeGenericProducers.errorAritiesFor(fileName);
     if (producerArities === undefined) reject(file, "Native generic producers have no sealed exact error channels.");
     else for (const arity of producerArities) arities.add(arity);
+    for (const definition of input.callables.frames.definitions) if (definition.ownerFileName === fileName) {
+      for (const entry of definition.entries) {
+        const selected = input.callables.frames.entryErrors(entry);
+        inspectCarrier(selected.carrier);
+        for (const transport of selected.implementations.values()) if (transport.kind === "mapped") {
+          transport.transport.operand.sources.forEach(source => inspectCarrier(source.errorType));
+        }
+      }
+    }
     for (const selected of input.callables.native.inputs) {
       if (selected.protocol.ownerFileName !== fileName) continue;
       usedNames.add(selected.protocol.targetName);

@@ -213,6 +213,7 @@ interface RustStructuralMethodRoot extends RustStructuralMethodDestination {
 }
 
 export function createRustStructuralMethodStorage(input: {
+  readonly frames: Pick<RustFrameCallablePlan, "errorFor">;
   readonly ast: AstReader;
   readonly records: RustProgramRecords;
   readonly sourceStorage: SourceStorageQueries;
@@ -536,7 +537,7 @@ export function createRustStructuralMethodStorage(input: {
           const logical = records.receiverIndependentMethod.get(subject.node)?.carrier ?? operation.resultCarrier;
           const physical = input.nativeProducers.physicalFor(subject.node, logical);
           const source = physical === undefined ? undefined : rustNativeCallablePhysicalSource(logical,
-            { kind: "identity", carrier: physical });
+            { kind: "identity", carrier: physical }, input.frames);
           const owner = sourceEnclosingCallable(ast.parent(subject.node), ast);
           const bound = input.nativeStorage.genericBindingsFor(owner ?? subject.node, producer.bindings);
           if (bound.kind === "unresolved") return reject(subject.node, bound.reason);

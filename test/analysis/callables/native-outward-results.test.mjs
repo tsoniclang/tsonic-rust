@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { sourceNodeIdentity } from "@tsonic/target-api/source";
 import { analyzeRustErrorEffects } from "../../helpers/rust-error-analysis.mjs";
+import { compileRust } from "../../helpers/rust-session.mjs";
 import { createRustNativeOutwardResults } from "../../../dist/analysis/callables/native-outward-results.js";
 
 
@@ -15,6 +16,7 @@ import { rustNativeCallableInvocationArguments } from "../../../dist/policy/type
 import { rustPhysicalPayloadFor } from "../../../dist/policy/conversions/physical-payloads.js";
 import { rustCallablePhysicalSignature } from "../../../dist/target-model/conversions/callable-physical.js";
 import { rustNativeCallableCompletion } from "../../../dist/policy/types/callables/native-completion.js";
+import { rustTargetGenericReferences } from "../../../dist/target-model/types/carriers/generic-references.js";
 
 function fixture(text, surfaces = []) {
   const context = analyzeRustErrorEffects(text, { surfaces });
@@ -32,6 +34,56 @@ function futureOutput(carrier) {
   const outputs = bounds[0].associatedConstraints.filter(constraint => constraint.identity === "rust.core.Future.Output");
   assert.equal(outputs.length, 1);
   return outputs[0].type;
+}
+
+for (const reversed of [false, true]) {
+  test(`returned native callable inputs bind each physical result without exporting the callee binder (${reversed ? "reversed" : "source"} order)`, () => {
+    const declarations = ["const pure = make(noop, 7);", "const failing = make(failure, 7);"];
+    const { result } = compileRust({ files: { "index.ts": `
+      function make<Value>(done: (value: Value) => void, value: Value): () => void {
+        return () => { done(value); };
+      }
+      function noop(value: number): void { void value; }
+      function failure(value: number): void { if (value > 0) throw "failure"; }
+      export function run(): void {
+        ${(reversed ? [...declarations].reverse() : declarations).join("\n")}
+        pure();
+        failing();
+      }
+    ` } });
+    assert.equal(result.diagnostics.length, 0,
+      JSON.stringify(result.diagnostics.map(({ code, message }) => ({ code, message }))));
+    const program = result.program;
+    const ast = program.source.ast;
+    const make = program.callableValues.nativeProducers.producers.find(producer =>
+      ast.name(producer.declaration) !== undefined && ast.text(ast.name(producer.declaration)) === "make")?.declaration;
+    assert.equal(make !== undefined, true, "the original generic producer is retained");
+    const inputs = program.callableValues.native.inputsFor(make);
+    assert.equal(inputs.length, 1, "one actual native callback input");
+    const identity = inputs[0].implementation.identity;
+    const outward = program.callableValues.nativeProducers.outwardReturnFor(make);
+    assert.equal(outward !== undefined, true, "the callee has its selected native return");
+    assert.equal(rustTargetGenericReferences(outward).typeIdentities.includes(identity), true,
+      "the callee still owns and binds its native implementation parameter");
+    const bindings = new Map();
+    const visit = node => {
+      const binding = program.records.localBinding.get(node);
+      if (binding?.kind === "value" && (binding.name === "pure" || binding.name === "failing")) bindings.set(binding.name, binding);
+      ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+    };
+    for (const file of program.sourceFiles) visit(file);
+    assert.equal(bindings.size, 2, "both original checked caller bindings remain distinct");
+    const signatures = [];
+    for (const [name, binding] of bindings) {
+      assert.equal(rustTargetGenericReferences(binding.nativeCarrier).typeIdentities.includes(identity), false,
+        `${name}: the native result cannot retain the callee's unbound implementation parameter`);
+      const signature = rustCallablePhysicalSignature(binding.nativeCarrier);
+      assert.equal(signature !== undefined, true, `${name}: exact physical callable signature`);
+      signatures.push(signature);
+    }
+    assert.equal(rustTargetTypeRefEquals(signatures[0].error, signatures[1].error), false,
+      "identical logical argument types retain their distinct actual producer error channels");
+  });
 }
 
 test("native outward results distinguish pure async T from fallible Result<T,producer E>", () => {

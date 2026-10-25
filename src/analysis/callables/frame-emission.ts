@@ -11,8 +11,8 @@ import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustFrameCallableValue } from "../../target-model/types/carriers/frame-callables.js";
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
 import { rustPhysicalEmissionRecordCarriers } from "./emission-contexts.js";
-import { rustCallableProtocol, rustCallableTargetType } from "../../target-model/types/carriers/callables.js";
 import { rustProgramNodeIsOutsideNativeCode } from "../control-flow/compile-time-statements.js";
+import { rustFrameCallableEnvironmentBindings } from "./frame-values.js";
 
 export function analyzeRustFrameEmission(input: {
   readonly program: Omit<RustAnalysisProgram, "reachability">;
@@ -61,7 +61,8 @@ export function analyzeRustFrameEmission(input: {
     });
     const associated = new Map(contracts.flatMap(contract => contract.associatedTypes).map(requirement => [closedMetadataKey(requirement), requirement]));
     const projections = new Map(contracts.flatMap(contract => contract.projectProjections).map(requirement => [closedMetadataKey(requirement), requirement]));
-    input.producer.definition(definition, { counterName: frames.counterNameFor(definition), parameters: Object.freeze(parameters),
+    input.producer.definition(definition, { errors: new Map(definition.entries.map(entry => [entry, frames.entryErrors(entry)])),
+      counterName: frames.counterNameFor(definition), parameters: Object.freeze(parameters),
       associated: Object.freeze([...associated.values()]), projections: Object.freeze([...projections.values()]),
       payloads: new Map(implementations.map(implementation => [implementation,
         implementation.captures.length !== 0 || implementation.receiverFields.length !== 0 || implementation.receivers.length !== 0 || definition.environmentParameters.length !== 0])),
@@ -124,13 +125,10 @@ export function analyzeRustFrameEmission(input: {
     const entry = frames.entryFor(carrier);
     if (definition === undefined || entry === undefined || value.environment.length !== entry.environmentIndexes.length)
       failTargetAnalysisInvariant("tsonic-rust", "An admitted native frame requires its exact physical entry and environment correspondence.");
-    const environment: (TargetTypeRef | undefined)[] = Array.from({ length: definition.environmentParameters.length }, () => undefined);
-    value.environment.forEach((parameter, index) => {
-      const destination = entry.environmentIndexes[index];
-      if (destination === undefined || destination < 0 || destination >= environment.length)
-        failTargetAnalysisInvariant("tsonic-rust", "An admitted native frame requires its exact environment parameter positions.");
-      environment[destination] = parameter;
-    });
+    const bindings = rustFrameCallableEnvironmentBindings(definition, entry, value.environment);
+    if (bindings === undefined)
+      failTargetAnalysisInvariant("tsonic-rust", "An admitted native frame requires its exact environment parameter positions.");
+    const environment = definition.environmentParameters.map(parameter => bindings.get(parameter.identity));
     if (environment.some(parameter => parameter === undefined))
       failTargetAnalysisInvariant("tsonic-rust", "An admitted native frame requires its complete environment parameter inventory.");
     let owner: import("../../target-model/records/frame-emission.js").RustFrameTypeEmission["owner"];
@@ -145,10 +143,12 @@ export function analyzeRustFrameEmission(input: {
       owner = Object.freeze({ instance, representation,
         environment: program.classValues.forDeclaration(selected.declaration)?.environment?.instancesUseEnvironment === true });
     }
-    const protocol = entry.hasIndependent ? rustCallableProtocol(carrier) : undefined;
-    if (entry.hasIndependent && protocol === undefined)
-      failTargetAnalysisInvariant("tsonic-rust", "An admitted independent frame entry requires its native callable protocol.");
-    input.producer.type(carrier, { definition, entry, environment: Object.freeze(environment as TargetTypeRef[]), owner,
-      independentCarrier: protocol === undefined ? undefined : rustCallableTargetType(protocol.parameters, protocol.result) });
+    const independentCarrier = frames.independentCarrierFor(carrier);
+    if (entry.hasIndependent && independentCarrier === undefined)
+      failTargetAnalysisInvariant("tsonic-rust", "An admitted independent frame entry requires its completed native construction carrier.");
+    const error = frames.errorFor(carrier);
+    if (error === undefined) failTargetAnalysisInvariant("tsonic-rust", "An admitted native frame requires its completed invocation error carrier.");
+    input.producer.type(carrier, { definition, entry, environment: Object.freeze(environment as TargetTypeRef[]), owner, error,
+      independentCarrier });
   }
 }

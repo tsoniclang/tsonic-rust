@@ -6,10 +6,48 @@ import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagn
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 import { rustUnionEntryTransferIssue } from "../../../dist/policy/conversions/union-injection.js";
 import { emptyRustTypeDefinitions } from "../../../dist/target-model/types/source-union-definitions.js";
-import { rustJsArrayTargetType, rustOptionTargetType, rustSourcePrimitiveTargetType, rustVecTargetType } from "../../../dist/target-model/types/index.js";
+import { rustCallableTargetType, rustFutureTargetType, rustJsArrayTargetType, rustOptionTargetType, rustSourcePrimitiveTargetType,
+  rustSourceUnionTargetType, rustVecTargetType } from "../../../dist/target-model/types/index.js";
+import { selectRustNativeStorageTypeDemand } from "../../../dist/analysis/callables/native-future-inputs.js";
 
 const bodyType = "string | number | boolean | null | Record<string, unknown> | unknown[]";
 const identityCode = "RUST_UNION_ENTRY_STORAGE_IDENTITY_NOT_PRESERVED";
+
+test("native TYPE demand distinguishes metadata from real Future and callable storage before projecting a source", () => {
+  const number = rustSourcePrimitiveTargetType("float64");
+  const future = rustFutureTargetType(number);
+  const callable = rustCallableTargetType([number], number, { kind: "static" });
+  for (const [label, carrier, hasFuture, hasImplementation] of [
+    ["native scalar", number, false, false],
+    ["native array", rustVecTargetType(number), false, false],
+    ["native shared array", rustJsArrayTargetType(number), false, false],
+    ["native optional array", rustOptionTargetType(rustVecTargetType(number)), false, false],
+    ["native tuple", { kind: "tuple", elements: [number, rustVecTargetType(number)] }, false, false],
+    ["native Future", future, true, false],
+    ["native Future array", rustVecTargetType(future), true, false],
+    ["native optional Future array", rustOptionTargetType(rustVecTargetType(future)), true, false],
+    ["native callable array", rustVecTargetType(callable), false, true],
+    ["native Future tuple", { kind: "tuple", elements: [number, future] }, true, false],
+    ["native callable tuple", { kind: "tuple", elements: [number, callable] }, false, true],
+    ["native optional shared array", rustOptionTargetType(rustJsArrayTargetType(number)), false, false],
+  ]) {
+    let remaining = 4096;
+    const selected = selectRustNativeStorageTypeDemand(carrier, emptyRustTypeDefinitions,
+      depth => remaining-- > 0 && depth <= 128, 0);
+    assert.equal(selected.kind, "resolved", label + ": the actual admitted native carrier has a finite TYPE inventory");
+    assert.equal(selected.future, hasFuture, label + ": only a real Future value demands Future provenance");
+    assert.equal(selected.implementation, hasImplementation, label + ": only a real native implementation demands value storage");
+  }
+  const missing = selectRustNativeStorageTypeDemand(rustSourceUnionTargetType("/src/index.ts", "Missing"),
+    emptyRustTypeDefinitions, () => true, 0);
+  assert.equal(missing.kind, "unresolved", "a missing source-union payload inventory is not treated as closed-empty metadata");
+  assert.equal(missing.reason, "Native storage TYPE demand requires its admitted source union payload inventory.",
+    "the refusal identifies the actual missing native TYPE evidence");
+  const exhausted = selectRustNativeStorageTypeDemand(rustVecTargetType(future), emptyRustTypeDefinitions, () => false, 0);
+  assert.equal(exhausted.kind, "unresolved", "the real existing native projection budget is not bypassed");
+  assert.equal(exhausted.reason, "Native storage TYPE demand exceeds its bounded carrier projection budget.",
+    "budget exhaustion is not an identity result");
+});
 
 test("native array entry admits a real transfer or native reference identity, never a deep array clone", () => {
   const number = rustSourcePrimitiveTargetType("float64");
@@ -70,8 +108,22 @@ function inspect(body: Body): boolean {
   body[0] = 2;
   return body[0] === 2;
 }
+function dynamicProbe(state: boolean[]): Body {
+  state[0] = !state[0];
+  return [1];
+}
+function staticProbe(state: boolean[]): boolean {
+  state[0] = !state[0];
+  return state[0];
+}
 export function main(): void {
   if (!inspect([1]) || !inspect(true)) throw new Error("native array union storage changed");
+  const dynamicState = [false];
+  const staticState = [false];
+  if (typeof dynamicProbe(dynamicState) !== "object" || !dynamicState[0] ||
+      typeof staticProbe(staticState) !== "boolean" || !staticState[0]) {
+    throw new Error("native runtime and static category operands must execute exactly once");
+  }
 }
 main();
 ` } });

@@ -20,6 +20,7 @@ import { analyzeRustProviderForms } from "../../../dist/analysis/operations/prov
 import { createRustProviderFormProducer } from "../../../dist/analysis/program/records/provider-forms.js";
 import { createRustRecordFixture } from "../../helpers/records.mjs";
 import { analyzeRustProviderMutableEmission } from "../../../dist/analysis/storage/provider-mutable-emission.js";
+import { rustSourceFilePlanContext } from "../../helpers/plan-context.mjs";
 
 function receiverEvaluationPackage() {
   const flag = { kind: "target-named", id: "r14.Flag" };
@@ -310,9 +311,16 @@ export function borrowingUnwind(): number {
     assert.equal(program.ownership.reads.get(receiver)?.readsStorage, false, "owned guard construction is not a terminal stored-place read");
   }
   const argumentsList = ast.arguments(omitted);
+  const sourceCarriers = argumentsList.map(node => program.records.valueRead.get(node)?.source);
+  assert.equal(sourceCarriers.every(carrier => carrier !== undefined), true,
+    "both original operands retain their actual finalized native source carriers");
+  assert.equal(rustNamedTypeCarrierValue(sourceCarriers[0])?.id, token.id,
+    "the omitted operand uses the actual admitted native Token, not its unresolved provider declaration reference");
+  assert.equal(program.records.typeEmission.get(sourceCarriers[0])?.discard, "value",
+    "the original native Token has its actual pre-seal Drop completion contract");
   const abi = finalizeRustProviderOperationAbi({ operationKind: "method",
     form: { form: "call", path: "crate::index::drop_probe::consume", argModes: ["value"], argOrder: [1] },
-    sourceArgumentCarriers: [token, number], declaredSourceArgumentCarriers: [number],
+    sourceArgumentCarriers: sourceCarriers, declaredSourceArgumentCarriers: [number],
     evaluationOnlySourceArgumentIndexes: [0], resultCarrier: number, isAsync: false, isFallible: false });
   assert.equal(abi !== undefined, true, "the existing finalizer explicitly admits the omitted owned operand");
   const fact = { kind: "provider-operation", operationId: "r14-drop-owner-contract", resultCarrier: number, abi };
@@ -327,13 +335,14 @@ export function borrowingUnwind(): number {
   const forms = createRustProviderFormProducer(() => undefined);
   const formIssues = analyzeRustProviderForms({ ...program, physicalEmissionContexts }, [], forms);
   assert.equal(formIssues.length, 0, "the existing native form owner admits the new exact ABI identity");
-  const records = createRustRecordFixture({ ...evaluations.records, ...forms.records }, program.records);
-  const context = { input: { program: { ...program, records } }, sourceFile: ast.getSourceFile(omitted), diagnostics: [],
+  const nativeContext = rustSourceFilePlanContext(program, omitted);
+  const records = createRustRecordFixture({ ...evaluations.records, ...forms.records }, nativeContext.input.program.records);
+  const context = { ...nativeContext, input: { ...nativeContext.input, program: { ...nativeContext.input.program, records } },
     expressionOverrides: new Map(argumentsList.map((node, index) => [node, {
       expression: { kind: "call", path: `crate::index::drop_probe::${index === 0 ? "receiver" : "value"}`, args: [] },
-      carrier: index === 0 ? token : number, valueForm: "value",
+      carrier: sourceCarriers[index], valueForm: "value",
     }])) };
-  assert.throws(() => planRustProviderEvaluationScope({ ...context, input: { program } }, fact, omitted, undefined,
+  assert.throws(() => planRustProviderEvaluationScope({ ...context, input: nativeContext.input }, fact, omitted, undefined,
     argumentsList, planExpression, planProviderOperationExpression),
   error => error.diagnostic?.code === "TSONIC_INTERNAL_PLANNER_INVARIANT" &&
     error.message === "An admitted provider operation requires its exact source evaluation plan.",

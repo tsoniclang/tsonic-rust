@@ -20,7 +20,7 @@ function select(operator, first, second) {
       targetOperation: { get: node => node === expression ? { kind: "operator-token", operator } : undefined },
       valueRead: { get: () => ({ value: { kind: "source-primitive", name: "bool" } }) },
     }),
-  }, ownership: { reads: { get: () => undefined } },
+  }, ownership: { uses: new Map(), reads: { get: () => undefined } },
     safetyApplications: { operationForExpression: () => undefined } }, [expression], producer);
   return { selection: producer.records.nativeComparison.get(expression), left, right };
 }

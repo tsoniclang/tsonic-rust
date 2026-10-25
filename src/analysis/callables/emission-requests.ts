@@ -1,14 +1,14 @@
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
 import { sourceCallableValueParameters } from "@tsonic/target-api/source";
 import { targetUseSiteRef, type TargetUseSiteRef } from "@tsonic/target-api/analysis";
-import { rejectedTargetStage, resolvedTargetStage, type TargetDiagnostic, type TargetStageResult } from "@tsonic/target-api/artifacts";
+import { failTargetAnalysisInvariant, rejectedTargetStage, resolvedTargetStage, type TargetDiagnostic, type TargetStageResult } from "@tsonic/target-api/artifacts";
 import { IsTypeSyntaxNode, Node_Initializer, sourceClassFieldHasStorage, sourceConstructValueInputs, sourceExpressionValueInputs, type SourceValueInput } from "@tsonic/target-api/source";
 import { rustLifetimeKey, type RustLifetimeIndex } from "../../target-model/lifetimes/index.js";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { RustTargetGenericBindings } from "../../target-model/types/carriers/generic-inference.js";
 import type { RustTargetGenericArgument, TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustProjectTypePolicy } from "../../target-model/types/project-types.js";
-import { rustCallableProtocol, rustCallableTargetType } from "../../target-model/types/carriers/callables.js";
+import { rustCallableProtocol } from "../../target-model/types/carriers/callables.js";
 import { rustStructuralObjectCarrierValue } from "../../target-model/types/carriers/source-types.js";
 import { rustFrameCallableValue } from "../../target-model/types/carriers/frame-callables.js";
 import { rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
@@ -312,9 +312,10 @@ export function prepareRustPhysicalCallableEmissionRequests(
     } else if (operation?.kind === "closure") {
       const implementation = input.frames.implementationFor(node);
       const frame = input.frames.entryFor(operation.resultCarrier);
-      const protocol = rustCallableProtocol(operation.resultCarrier);
-      const independent = implementation?.independent === true && frame?.hasIndependent === true && frame.implementations.includes(implementation) && protocol !== undefined
-        ? rustCallableTargetType(protocol.parameters, protocol.result) : undefined;
+      const independent = implementation?.independent === true && frame?.hasIndependent === true && frame.implementations.includes(implementation)
+        ? input.frames.independentCarrierFor(operation.resultCarrier) : undefined;
+      if (implementation?.independent === true && independent === undefined)
+        failTargetAnalysisInvariant("tsonic-rust", "An independent closure construction requires its completed native frame entry carrier.", node);
       const carrier = independent ?? records.receiverIndependentMethod.get(node)?.carrier ?? operation.resultCarrier;
       if (rustFrameCallableValue(carrier) === undefined && rustCallableProtocol(carrier) !== undefined)
         producer(owner, node, node, carrier);

@@ -122,7 +122,9 @@ export function resolvePostCheckBinaryCarrier(
     };
   } else {
     const promoted = selectRustCompoundAssignmentPromotion(operatorKind, left, right);
-    const acceptedPromotion = promoted !== undefined && selectRustCompoundWrite(walk, leftNode, promoted.resultCarrier) !== undefined
+    const promotedWrite = promoted === undefined ? undefined : selectRustCompoundWrite(walk,
+      expression, leftNode, promoted.resultCarrier);
+    const acceptedPromotion = promotedWrite?.kind === "accept" && promotedWrite.value.targetFact?.kind === "runtime-set"
       ? promoted : undefined;
     const compound = selectRustCompoundAssignment(operatorKind, left, right, acceptedPromotion);
     if (compound !== undefined && left !== undefined) {
