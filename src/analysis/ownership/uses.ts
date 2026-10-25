@@ -16,6 +16,8 @@ import { rustLifetimeKey } from "../../target-model/lifetimes/index.js";
 import type { RustStructuralShapePlan } from "../objects/shapes/structural-shape-plan.js";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import { isRustAssignmentOperator } from "../../target-model/syntax/tokens.js";
+import { rustRuntimeSetSourceInputs } from "../control-flow/statement-completion.js";
+import { rustTargetOperationIsDirectLocation } from "../../policy/operations/members/native-contracts.js";
 
 export function rustNativeArgumentBorrowsRead(argument: Node, reference: Node,
   ast: AstReader, records: RustProgramRecords): boolean {
@@ -59,7 +61,8 @@ export function rustNativeArgumentBorrowsRead(argument: Node, reference: Node,
 
 export function analyzeRustReadUses(ast: AstReader, nodes: readonly Node[], records: RustAnalysisRecords,
   definitions: RustTypeDefinitions, ownsExternalArgument: (argument: Node) => boolean,
-  structuralShapes: Pick<RustStructuralShapePlan, "field">): ReadonlyMap<Node, RustReadUse> {
+  structuralShapes: Pick<RustStructuralShapePlan, "field">,
+  isDirectValueField: (node: Node) => boolean): ReadonlyMap<Node, RustReadUse> {
   const uses = new Map<Node, RustReadUse>();
   // A borrowed provider input whose argument is first converted by value (`&JsValue::from(handle)`) consumes the
   // argument's own read, so a later read of the same storage needs its clone.
@@ -139,6 +142,24 @@ export function analyzeRustReadUses(ast: AstReader, nodes: readonly Node[], reco
       if (receiver !== undefined) uses.set(receiver, Object.freeze({ ...use,
         later: Object.freeze([...(index === undefined ? [] : [index]), ...use.later.slice(use.laterStart)]),
         laterStart: 0, stableAcrossEffects: false }));
+    }
+  }
+  for (const node of nodes) {
+    const operation = records.compoundWrite.get(node) ?? records.targetOperation.get(node);
+    if (operation?.kind !== "runtime-set" || operation.abi.targetReceiver.kind !== "input" ||
+      operation.abi.targetReceiver.input.source.kind !== "receiver" || operation.abi.targetReceiver.input.mode !== "mut-ref" ||
+      operation.abi.targetReceiver.input.conversion.kind !== "identity") continue;
+    const selected = rustRuntimeSetSourceInputs(ast, node, operation);
+    let receiver = selected?.receiver;
+    while (receiver !== undefined) {
+      const operand = sourceTransparentExpressionOperand(ast, receiver);
+      const fact = records.targetOperation.get(receiver);
+      const direct = ast.is.IsIdentifier(receiver) || ast.kindName(receiver) === "KindThisExpression" ||
+        ast.kindName(receiver) === "KindThisKeyword" || rustTargetOperationIsDirectLocation(fact) ||
+        fact?.kind === "source-field" && fact.valueSemantics.kind === "stored" && fact.dispatch === undefined && isDirectValueField(receiver);
+      if (operand === undefined && !direct) break;
+      uses.set(receiver, Object.freeze({ mode: "shared", later: Object.freeze([]), laterStart: 0, stableAcrossEffects: false }));
+      receiver = operand ?? Node_Expression(ast, receiver);
     }
   }
   return uses;

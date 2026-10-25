@@ -38,6 +38,7 @@ import { rustFoundationForCarrier } from "../foundation/requirements.js";
 import { maximumRustFoundation } from "../../target-model/foundation/model.js";
 import { analyzeRustProjectFlowReadSelections } from "../control-flow/project-flow-read-selections.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
+import { rustStructuralObjectCarrierValue } from "../../target-model/types/carriers/source-types.js";
 import { analyzeRustErrorRegions, completeRustErrorRegionRecords } from "../errors/regions.js";
 import type { RustErrorTypeContext } from "../errors/error-types.js";
 import { analyzeRustInitializationErrors } from "../errors/initialization.js";
@@ -221,7 +222,14 @@ export function analyzeRustAnalysisProgram(
       return { receivers: [], receiverFields: [], captures };
   };
   const readUses = analyzeRustReadUses(context.ast, context.nativeNodes, records, context.typeDefinitions,
-    projectConstructions.ownsExternalArgument, context.structuralShapes.completed);
+    projectConstructions.ownsExternalArgument, context.structuralShapes.completed, node => {
+      const field = records.targetOperation.get(node);
+      return field?.kind === "source-field" && (field.storage === "structural-object"
+        ? rustStructuralObjectCarrierValue(field.receiverCarrier)?.representation === "value"
+        : objectRepresentations.representationFor(context.projectTypes.definitionForCarrier(field.receiverCarrier))?.kind === "value") &&
+        (field.declaration === undefined || context.callableValues.frames.bindingFor(field.declaration) === undefined &&
+          records.capturedFieldStorage.get(field.declaration) === undefined);
+    });
   const ownershipFlow = analyzeRustOwnershipFlow({
     source: context.source,
     storage: context.sourceStorage,
