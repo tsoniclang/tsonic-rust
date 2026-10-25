@@ -1,7 +1,7 @@
 import { rustBigIntTargetType, rustEmptyObjectTargetType, rustObjectIdentityTargetType, rustFixedArrayTargetType, rustJsArrayTargetType, rustJsSymbolTargetType, rustSourceLocationTargetType, rustAbsenceTargetType, rustNeverTargetType, rustOptionElementCarrier, rustSourcePrimitiveTargetType, rustStructuralObjectTargetType, rustStructuralObjectCarrierValue, rustSourceUnionCarrierValue, rustSourceTypeCarrierValue, rustStringTargetType, rustUnitTargetType, rustVecTargetType, isRustNumericCarrier } from "../../../../target-model/types/index.js";
 import { rustTupleTargetType } from "../../../../policy/types/collections/tuple-carrier.js";
 import { denseDefined, resolveProjectSourceCarrier } from "./project.js";
-import { rustSourceStorageComponentContext, rustSourceStorageSubjectContext } from "./source-storage-projection.js";
+import { rustSourceStorageComponentContext } from "./source-storage-projection.js";
 import { bindRustSourceAliasArguments, resolveRustSelectedTypeArguments } from "./generic-arguments.js";
 import { instantiateTargetType, resolveSourceProfileCarrier } from "./providers.js";
 import { providerCarrierFromRelations } from "../../../../policy/types/project/provider-instantiation.js";
@@ -90,6 +90,7 @@ export function resolveRustTargetType(
     ? options.sourceTypes.structuralObjectForType(type)
     : undefined;
   if (existingStructuralObject !== undefined &&
+    (context.currentSemantics.types.aliasApplication(type)?.bindings.length ?? 0) === 0 &&
     !(existingStructuralObject.fields.length === 0 &&
       rustStructuralObjectCarrierValue(existingStructuralObject.carrier)?.representation === "value")) {
     return existingStructuralObject.carrier;
@@ -372,11 +373,8 @@ export function resolveStructuralObjectType(
     const authoredTypeNodes = propertyTypeNodes.length !== 0 || authoredTypeRoot === undefined
       ? propertyTypeNodes
       : sourceTransformedTypeFactEvidenceNodes(context.ast, semantics, authoredTypeRoot, property.type);
-    const memberContexts = ordinaryDeclarations.length === 0 ? [context] : ordinaryDeclarations.flatMap(declaration => {
-      const selection = context.sourceStorage.memberSubjectFor(declaration);
-      return selection.kind !== "resolved" ? [] : [rustSourceStorageSubjectContext(context, selection)];
-    });
-    if (ordinaryDeclarations.length !== 0 && memberContexts.length !== ordinaryDeclarations.length) return undefined;
+    const memberContexts = ordinaryDeclarations.length === 0 ? [context] : ordinaryDeclarations.map(declaration =>
+      rustSourceStorageComponentContext(context, { kind: "member", declaration }));
     const authoredCarriers = memberContexts.flatMap(memberContext => authoredTypeNodes.map((node) =>
       resolveRustTypeComponentEvidence({
         authoredTypeNode: node,
