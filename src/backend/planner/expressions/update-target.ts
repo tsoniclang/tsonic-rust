@@ -176,7 +176,7 @@ export function findRustUpdateProjectField(
 
 export function planRustUpdateProjectionArguments(
   operand: Node,
-  fieldExpression: Node,
+  fieldExpression: Node | undefined,
   context: RustPlanContext,
 ): {
   readonly bindings: readonly { readonly name: string; readonly value: RustExpr }[];
@@ -189,8 +189,11 @@ export function planRustUpdateProjectionArguments(
   if (context.syntheticNames === undefined) {
     return undefined;
   }
-  const projections = context.input.program.records.updateProjection.get(operand, fieldExpression)
+  const plan = context.input.program.records.updateProjection.get(operand)
     ?? failRustPlannerInvariant("An admitted update projection requires its sealed ordered native arguments.", operand);
+  const offset = fieldExpression === undefined ? plan.complete ? 0 : undefined : plan.fieldOffsets.get(fieldExpression);
+  if (offset === undefined)
+    failRustPlannerInvariant("An admitted update projection requires its exact native argument boundary.", operand);
   const bindings: { name: string; value: RustExpr }[] = [];
   const overrides: {
     node: Node;
@@ -201,7 +204,7 @@ export function planRustUpdateProjectionArguments(
     };
   }[] = [];
   const inputOverrides = new Map<RustFinalizedSourceInput, RustExpr>();
-  for (const projection of projections) {
+  for (const projection of plan.arguments.slice(offset)) {
     const { argument, carrier, targetInput } = projection;
     const value = targetInput === undefined
         ? planExpression(argument, context)

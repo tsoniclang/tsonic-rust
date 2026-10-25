@@ -6,6 +6,7 @@ import { createRustProviderPackage } from "../../../dist/public/provider.js";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 import { rustNativeFixtureNodes } from "../../helpers/records.mjs";
 import { createRustStatementCompletionProducer } from "../../../dist/analysis/program/records/statement-completion.js";
+import { createRustDirectStorageProducer } from "../../../dist/analysis/program/records/direct-storage.js";
 
 // Statement decisions are published as sealed record families; the queries below read those families.
 const statementQueries = Object.freeze({ conditionFor: "statementCondition", controlTargetsFor: "statementControlTargets",
@@ -456,10 +457,11 @@ export function update(): void {
   ++store[0];
   (store[1])--;
 }`, { packages: [acmePlatformPackage({ includeSetters: true })] });
-  const setters = nodes.filter(node => program.records.targetOperation.get(node)?.kind === "runtime-set");
+  const setters = nodes.filter(node => (program.records.compoundWrite.get(node) ??
+    program.records.targetOperation.get(node))?.kind === "runtime-set");
   assert.equal(setters.length, 7, "direct, compound, prefix, postfix, property, index and wrapper source cases remain");
   for (const [ordinal, node] of setters.entries()) {
-    const operation = program.records.targetOperation.get(node);
+    const operation = program.records.compoundWrite.get(node) ?? program.records.targetOperation.get(node);
     const early = rustRuntimeSetSourceInputs(ast, node, operation);
     const final = statementIndex(program.records).setterFor(node);
     const label = `native setter ${ordinal}`;
@@ -480,6 +482,126 @@ export function update(): void {
       `${label}: existing ${name} refusal remains at the single source-input owner`);
   }
 });
+
+for (const surfaces of [[], ["js"]]) {
+  const surface = surfaces[0] ?? "native";
+  for (const collection of ["tuple", "fixed-array"]) {
+  test(collection === "tuple"
+    ? `selected native compound and unary setters preserve values, storage and exact evaluation (${surface})`
+    : `dynamic fixed-array native update receivers retain exact non-Copy places (${surface})`, { timeout: 300_000 }, () => {
+    const { result } = compileRust({ surfaces, packages: [acmePlatformPackage({ includeSetters: true }), acmeTestingPackage()],
+      target: { id: "rust", options: { outputType: "bin", crateName: `native_setter_updates_${surface}` } },
+      files: { "index.ts": `
+import type { FixedArray, int32 } from "@tsonic/core/types.js";
+import { Store } from "@acme/platform";
+import { check } from "@acme/testing";
+let indexCalls: int32 = 0;
+let receiverCalls: int32 = 0;
+let placeCalls: int32 = 0;
+function index(): int32 { indexCalls += 1; return 1; }
+function placeIndex(): ${collection === "tuple" ? "1" : "int32"} { placeCalls += 1; return 1; }
+function fresh(): Store { receiverCalls += 1; return new Store("seed"); }
+class Holder {
+  nested: Store;
+  constructor(nested: Store) { this.nested = nested; }
+}
+export function main(): void {
+  const store = new Store("seed");
+  store.count = 1;
+  (store.count) += 2;
+  check(store.count === 3);
+  const previous = store.count++;
+  check(previous === 3 && store.count === 4);
+  const next = ++store.count;
+  check(next === 5 && store.count === 5);
+  const previousIndex = store[0]++;
+  check(previousIndex === 4 && store[0] === 5);
+  const nextIndex = ++store[1];
+  check(nextIndex === 7 && store[0] === 6);
+  (store[1])--;
+  check(store[0] === 5);
+  store[index()] += 3;
+  check(indexCalls === 1 && store[0] === 8);
+  const temporaryNext = ++fresh()[index()];
+  check(temporaryNext === 6 && receiverCalls === 1 && indexCalls === 2);
+  const stores: ${collection === "tuple" ? "[Store, Store]" : "FixedArray<Store, 2>"} = [new Store("seed"), new Store("abc")] as [Store, Store];
+  stores[placeIndex()].count += stores[1].count;
+  check(stores[0].count === 4 && stores[1].count === 6 && placeCalls === 1);
+  const selectedPrevious = stores[placeIndex()].count++;
+  check(selectedPrevious === 6 && stores[1].count === 7 && placeCalls === 2);
+  stores[placeIndex()][index()] += stores[1][0];
+  check(stores[0][0] === 4 && stores[1][0] === 6 && placeCalls === 3 && indexCalls === 3);
+  const holders: ${collection === "tuple" ? "[Holder, Holder]" : "FixedArray<Holder, 2>"} = [new Holder(new Store("seed")), new Holder(new Store("abc"))] as [Holder, Holder];
+  holders[placeIndex()].nested.count += holders[1].nested.count;
+  check(holders[0].nested.count === 4 && holders[1].nested.count === 6 && placeCalls === 4);
+}
+main();
+` } });
+    assert.equal(result.diagnostics.length, 0,
+      result.diagnostics.map(diagnostic => `${diagnostic.code}: ${diagnostic.message}`).join("\n").slice(0, 2048));
+    const program = result.program;
+    const ast = program.source.ast;
+    const nested = checkedGuardNodes(program).find(node => ast.is.IsPropertyAccessExpression(node) &&
+      ast.text(ast.name(node)) === "nested" && ast.is.IsElementAccessExpression(ast.as.AsPropertyAccessExpression(node).Expression) &&
+      ast.is.IsCallExpression(ast.as.AsElementAccessExpression(ast.as.AsPropertyAccessExpression(node).Expression).ArgumentExpression));
+    assert.equal(nested !== undefined, true, "the complete native control keeps its actual effectful nested field receiver");
+    const projection = program.records.updateProjection.get(nested);
+    assert.equal(projection?.complete, true, "the native place owner completes the whole selected projection path");
+    assert.equal(projection.arguments.length, 1, "the full native receiver path evaluates its one selected index once");
+    assert.equal(projection.fieldOffsets.get(nested), 1, "a source-field consumer selects its empty suffix, not the inner receiver index twice");
+    assert.equal(Object.isFrozen(projection) && Object.isFrozen(projection.arguments), true,
+      "the one published native projection payload and argument inventory are immutable");
+    let open = true;
+    const producer = createRustDirectStorageProducer(() => assert.equal(open, true, "the native projection producer is open"));
+    producer.projection(nested, projection);
+    assert.throws(() => producer.projection(nested, projection),
+      failure => failure?.diagnostic?.code === "TSONIC_INTERNAL_ANALYSIS_INVARIANT" && failure.diagnostic.sourceNode === nested,
+      "the one native projection payload has exactly one writer for its actual source operand");
+    open = false;
+    assert.throws(() => producer.projection(nested, projection), /the native projection producer is open/u,
+      "the native projection owner cannot publish after the seal");
+    const generated = artifactText(result, "src/index.rs");
+    assert.match(generated, /\.set_count\(/u, "the selected property setter is not replaced by a direct field write");
+    assert.match(generated, /\.set\(/u, "the selected index setter is retained");
+    assert.doesNotMatch(generated, /\.clone\(|Box::new|unsafe\s*\{/u,
+      "native update locations do not add copies, boxing or unsafe address reconstruction");
+    validateGeneratedProject(`native-setter-updates-${surface}`, result.artifacts, { run: true });
+  });
+  }
+
+  test(`a native method index getter without a setter never becomes writable storage (${surface})`, () => {
+    const { result } = compileRust({ surfaces, packages: [acmePlatformPackage()], files: { "index.ts": `
+import { Store } from "@acme/platform";
+export function update(): void { const store = new Store("seed"); ++store[0]; }
+` } });
+    assert.equal(result.diagnostics.some(diagnostic => diagnostic.code === "RUST_UNSUPPORTED_AST" &&
+      diagnostic.message.startsWith("Increment/decrement requires a finalized writable Rust location.")), true,
+    "a native method read supplies no fabricated index assignment address");
+    assert.equal(result.program === undefined && result.plan === undefined && result.artifacts.length === 0, true,
+      "missing native write evidence is rejected before publication or partial emission");
+  });
+
+  for (const member of ["count", "[0]"]) {
+    test(`native ${member} update refuses actual receiver rebinding across its RHS (${surface})`, () => {
+      const { result } = compileRust({ surfaces, packages: [acmePlatformPackage({ includeSetters: true })],
+        files: { "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+import { Store } from "@acme/platform";
+function index(): 1 { return 1; }
+export function update(): void {
+  let stores: [Store, Store] = [new Store("seed"), new Store("abc")];
+  const other: [Store, Store] = [new Store("next"), new Store("last")];
+  stores[index()]${member === "count" ? ".count" : member} += (stores = other, 1 as int32);
+}
+` } });
+      assert.equal(result.diagnostics.some(diagnostic => diagnostic.code === "RUST_UNSUPPORTED_AST" &&
+        diagnostic.message.startsWith("Writable projection cannot preserve source evaluation order when a later expression rebinds its selected storage.")), true,
+      `the native place owner rejects actual root rebinding: ${result.diagnostics.slice(0, 3).map(diagnostic => `${diagnostic.code}: ${diagnostic.message}`).join("; ")}`);
+      assert.equal(result.program === undefined && result.plan === undefined && result.artifacts.length === 0, true,
+        "a rejected native storage interval cannot publish a program, plan or partial artifacts");
+    });
+  }
+}
 
 test("the canonical setter renderer preserves receiver and value effects for a selected native macro", () => {
   const carrier = { kind: "target-named", id: "r05.Flag" };

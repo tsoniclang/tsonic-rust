@@ -11,9 +11,7 @@ import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustFrameCallableValue } from "../../target-model/types/carriers/frame-callables.js";
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
 import { rustPhysicalEmissionRecordCarriers } from "./emission-contexts.js";
-import { rustCallableProtocol, rustCallableTargetType } from "../../target-model/types/carriers/callables.js";
 import { rustProgramNodeIsOutsideNativeCode } from "../control-flow/compile-time-statements.js";
-import { rustStaticLifetime } from "../../target-model/lifetimes/index.js";
 import { rustFrameCallableEnvironmentBindings } from "./frame-values.js";
 
 export function analyzeRustFrameEmission(input: {
@@ -145,12 +143,12 @@ export function analyzeRustFrameEmission(input: {
       owner = Object.freeze({ instance, representation,
         environment: program.classValues.forDeclaration(selected.declaration)?.environment?.instancesUseEnvironment === true });
     }
-    const protocol = entry.hasIndependent ? rustCallableProtocol(carrier) : undefined;
-    if (entry.hasIndependent && protocol === undefined)
-      failTargetAnalysisInvariant("tsonic-rust", "An admitted independent frame entry requires its native callable protocol.");
+    const independentCarrier = frames.independentCarrierFor(carrier);
+    if (entry.hasIndependent && independentCarrier === undefined)
+      failTargetAnalysisInvariant("tsonic-rust", "An admitted independent frame entry requires its completed native construction carrier.");
     const error = frames.errorFor(carrier);
     if (error === undefined) failTargetAnalysisInvariant("tsonic-rust", "An admitted native frame requires its completed invocation error carrier.");
     input.producer.type(carrier, { definition, entry, environment: Object.freeze(environment as TargetTypeRef[]), owner, error,
-      independentCarrier: protocol === undefined ? undefined : rustCallableTargetType(protocol.parameters, protocol.result, rustStaticLifetime, error) });
+      independentCarrier });
   }
 }

@@ -6,6 +6,7 @@ import { lexicalSelfBindingSource } from "../../../../tsonic/test/fixtures/lexic
 import { artifactText, compileRust } from "../../helpers/rust-session.mjs";
 import { runCargo, validateGeneratedProject, writeGeneratedProject } from "../../helpers/cargo-projects.mjs";
 import { nativeOwnershipCostSupport } from "../../helpers/native-ownership-cost.mjs";
+import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 
 for (const surfaces of [[], ["js"]]) {
   const profile = surfaces[0] ?? "native";
@@ -14,6 +15,27 @@ for (const surfaces of [[], ["js"]]) {
       files: { "index.ts": (lexicalSelfBindingSource + "\nmain();\n") } });
     assert.equal(result.diagnostics.length, 0,
       result.diagnostics.slice(0, 4).map(row => row.message.slice(0, 256)).join("\n"));
+    const program = result.program;
+    let independentConstructions = 0;
+    for (const definition of program.callableValues.frames.definitions) for (const entry of definition.entries) {
+      for (const implementation of entry.implementations) {
+        if (!implementation.independent) continue;
+        const operation = program.records.targetOperation.get(implementation.declaration);
+        if (operation?.kind !== "closure") continue;
+        const carrier = program.callableValues.frames.independentCarrierFor(operation.resultCarrier);
+        assert.equal(carrier !== undefined, true, "the independent frame entry publishes its completed construction carrier");
+        const lambda = program.records.lambdaBody.get(implementation.declaration);
+        assert.equal(lambda?.construction === "native", true, "an independent closure uses its admitted native construction");
+        assert.equal(rustTargetTypeRefEquals(lambda.constructionCarrier, carrier), true,
+          "inventory and lambda emission consume the identical completed construction ABI");
+        const physical = program.callableValues.nativeProducers.physicalFor(implementation.declaration, carrier);
+        assert.equal(physical !== undefined, true, "the exact completed carrier was prepared before the physical seal");
+        assert.equal(rustTargetTypeRefEquals(lambda.physicalCarrier, physical), true,
+          "the original closure consumes the exact published native invocation ABI");
+        independentConstructions++;
+      }
+    }
+    assert.equal(independentConstructions > 0, true, "the original self-binding program exercises independent frame construction");
     const emitted = artifactText(result, "src/index.rs");
     assert.equal(typeof emitted === "string", true, "actual source-to-native output");
     assert.match(emitted, /::recursive\(/u, "fixed named self uses the existing recursive native owner");

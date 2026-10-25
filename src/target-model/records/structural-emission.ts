@@ -10,7 +10,7 @@ export interface RustConstructorShapeEmission {
     readonly parameters: readonly TargetTypeRef[];
     readonly result: TargetTypeRef;
     readonly selfMode: "rc" | "ref";
-    readonly field: { readonly index: number; readonly role: "getter" | "setter" } | undefined;
+    readonly field: { readonly index: number; readonly role: "value" | "getter" | "setter" } | undefined;
   }[];
 }
 
