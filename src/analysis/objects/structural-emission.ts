@@ -8,9 +8,9 @@ import { selectRustStructuralEmission } from "../../policy/types/objects/structu
 
 export function analyzeRustStructuralEmission(
   program: Omit<RustAnalysisProgram, "reachability">, producer: RustStructuralEmissionProducer,
-  projects: Pick<RustProjectEmissionProducer, "shape">,
+  projects: Pick<RustProjectEmissionProducer, "structuralShapes">,
 ): readonly TargetDiagnostic[] {
-  for (const shape of program.structuralShapes.instances) projects.shape(shape.carrier, shape);
+  projects.structuralShapes(program.structuralShapes.definitionForCarrier);
   const issues: TargetDiagnostic[] = [];
   const templates = new Set(program.structuralShapes.definitions);
   for (const definition of new Set([...program.structuralShapes.definitions, ...program.structuralShapes.instances])) {

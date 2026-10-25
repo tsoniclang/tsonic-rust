@@ -15,6 +15,8 @@ import type { RustLocalBindingProducer } from "../program/records/local-bindings
 import { requireRustRecord, type RustRequiredRecord } from "../program/records/required-records.js";
 import type { RustRuntimeValueUsePlan } from "../program/runtime-value-uses.js";
 import { rustBindingUseIsEmitted } from "../control-flow/binding-liveness.js";
+import { rustNodeIsOutsideNativeCode } from "../control-flow/compile-time-statements.js";
+import type { RustSafetyApplicationFactIndex } from "../safety/application-index.js";
 
 export function analyzeRustLocalBindings(input: {
   readonly ast: AstReader; readonly nodes: readonly Node[]; readonly records: RustProgramRecords;
@@ -24,14 +26,17 @@ export function analyzeRustLocalBindings(input: {
   readonly lexicalFunctions: RustLexicalFunctionQueries; readonly producer: RustLocalBindingProducer;
   readonly required: RustRequiredRecord[];
   readonly runtimeValueUses: Pick<RustRuntimeValueUsePlan, "promiseCallAliasTarget">;
+  readonly safetyApplications: RustSafetyApplicationFactIndex;
 }): readonly TargetDiagnostic[] {
   const issues: TargetDiagnostic[] = [];
+  const safetyOperation = (expression: Node) => input.safetyApplications.operationForExpression(expression);
   const refuse = (node: Node, capability: string, message: string, code = "RUST_UNSUPPORTED_AST"): void => {
     issues.push(Object.freeze({ code, category: "error", source: "tsonic-rust", sourceNode: node,
       message: `${message} Node kind: ${input.ast.kindName(node)}.`, evidence: Object.freeze([`target.capability=${capability}`]) }));
   };
   for (const node of input.nodes) {
-    if (input.records.nativeUnreachable.get(node) === true || input.records.nativeParticipation.get(node) === "erased") continue;
+    if (input.records.nativeParticipation.get(node) === "erased" ||
+      rustNodeIsOutsideNativeCode(input.ast, input.records, safetyOperation, node)) continue;
     if (input.ast.is.IsVariableStatement(node) && input.records.variableDeclarations.get(node)?.length === 0) {
       refuse(node, "rust.backend.variable", "Variable statement has no exact variable declaration.");
     }

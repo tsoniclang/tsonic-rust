@@ -174,7 +174,7 @@ test("the type-alias and mutation producers accept their exact checked inputs", 
   const result = compile("accepted", `${declarations}
     builder.typeAliasDeclarations.register(walk, subject);
     builder.mutatedBindings.written(subject);
-    builder.mutatedReferents.written(subject);
+    builder.mutatedReferents.written(subject, { target: subject, receivers: [{ expression: subject, use: subject }] });
     const sealed: RustProgramRecords = builder;
     const kind: "family" | "string-literal" | "runtime" | "native-alias" | "erased" | undefined = sealed.typeAliasDeclaration.get(subject)?.kind;
     const mutated: true | undefined = sealed.mutatedBinding.get(subject)?.mutated;
@@ -191,11 +191,12 @@ test("removed general writes, leaked producers and malformed producer inputs fai
     builder.typeAliasDeclarations.register(subject, subject);
     builder.mutatedBindings.written(carrier);
     builder.mutatedReferents.written(subject, { mutated: true });
+    builder.mutatedReferents.written(subject);
   `);
   assert.equal(result.error === undefined, true, result.error?.message);
   assert.equal(result.status === 0, false, "every removed or malformed form must fail source checking");
   const codes = [...result.stdout.matchAll(/error TS(\d+):/gu)].map(match => Number(match[1]));
-  assert.deepEqual(codes, [...Array(6).fill(2339), ...Array(3).fill(2551), 2740, 2345, 2554], result.stdout);
+  assert.deepEqual(codes, [...Array(6).fill(2339), ...Array(3).fill(2551), 2740, 2345, 2353, 2554], result.stdout);
 });
 
 test("the three superseded keys and the type-alias forwarder are deleted rather than kept as alternate routes", () => {

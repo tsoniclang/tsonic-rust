@@ -86,6 +86,19 @@ export function createRustIntrinsicErrorEffectsPublication(input: {
             "expression", "recordFallibilityFacts");
           walk.context.records.errorEffectPlans.selected(node, completeEffects(effects));
         }
+        for (const node of walk.preparedCallbackCalls.keys()) {
+          budget.step();
+          const attempt = walk.operationAttempts.get(node);
+          if (attempt?.kind !== "checked-call" || attempt.prepared === undefined) continue;
+          const callback = attempt.prepared.callbackEffects;
+          const invocationEffects = completeEffects(callback.invocationEffects);
+          const implementationEffects = completeEffects(callback.implementationEffects);
+          budget.metadata(invocationEffects);
+          budget.metadata(implementationEffects);
+          walk.operationAttempts.set(node, { ...attempt, prepared: Object.freeze({ ...attempt.prepared,
+            callbackEffects: Object.freeze({ invocationOwner: callback.invocationOwner, invocationEffects, implementationEffects }),
+          }) });
+        }
         for (const [node, edges] of sourceErrorEdges) {
           budget.step();
           for (const edge of edges) {

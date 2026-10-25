@@ -15,6 +15,7 @@ import { closedMetadataEquals } from "../../target-model/metadata/closed-data.js
 import { rustEffectiveValueCarrier } from "../conversions/value-carrier-queries.js";
 import { rustNodeInCatchingTryBody } from "../errors/catching-try.js";
 import { rustProgramErrorTargetType } from "../../target-model/types/carriers/js.js";
+import { rustStructuralObjectCarrierValue } from "../../target-model/types/carriers/source-types.js";
 
 export function rustNativeInputEffectsMatch(call: RustNativeCallableCall, effects: RustSourceCallEffectsFact): boolean {
   return effects.invocation === "fallible" && effects.awaiting === (call.completion === undefined ? "not-applicable" : "fallible") &&
@@ -23,7 +24,7 @@ export function rustNativeInputEffectsMatch(call: RustNativeCallableCall, effect
 }
 
 export function analyzeRustNativeProtocolEmission(input: {
-  readonly program: Pick<RustAnalysisProgram, "source" | "records" | "errorRegions" | "callableValues" | "typeDefinitions" | "sourcePackageComponents">;
+  readonly program: Pick<RustAnalysisProgram, "source" | "records" | "errorRegions" | "callableValues" | "typeDefinitions" | "sourcePackageComponents" | "structuralShapes">;
   readonly sourceFiles: readonly SourceFile[];
   readonly producer: RustNativeProtocolProducer;
 }): readonly TargetDiagnostic[] {
@@ -76,10 +77,24 @@ export function analyzeRustNativeProtocolEmission(input: {
       genericProducers.push(Object.freeze({ ownerFileName, definition: binding.definition, returnCarrier,
         future: future === undefined ? undefined : Object.freeze({ optional: future.optional }) }));
     }
+    const producer = analyzeRustNativeProducerBridge(protocol, input.program.typeDefinitions);
+    const headers = [...protocol.method.parameters, protocol.method.result, protocol.result, protocol.trait,
+      ...protocol.associatedObligations.flatMap(obligation => [obligation.owner, obligation.trait]),
+      ...genericProducers.map(selected => selected.returnCarrier),
+      ...producer === undefined ? [] : [producer.concreteResult, producer.implementationResult,
+        ...producer.futureBounds.flatMap(bound => [bound.parameter, bound.output, bound.error]),
+        ...producer.higherRanked === undefined ? [] : [producer.higherRanked.helperResult,
+          producer.higherRanked.publicResult, ...producer.higherRanked.outputs]]];
+    for (const carrier of headers) mapRustTargetTypes(carrier, (current, source) => {
+      if (rustStructuralObjectCarrierValue(source) !== undefined &&
+        input.program.structuralShapes.definitionForCarrier(source) === undefined)
+        failTargetAnalysisInvariant("tsonic-rust", "An admitted native protocol header requires its exact structural template application.");
+      return current;
+    });
     input.producer.select(protocol, {
     invoked: input.program.callableValues.nativeDispatch.requiredFor(protocol),
     nativeFutures: Object.freeze((protocol.completion?.futures ?? []).filter(future => rustJsPromiseOutputTargetType(future.carrier) === undefined)),
-    producer: analyzeRustNativeProducerBridge(protocol, input.program.typeDefinitions),
+    producer,
     genericProducers: Object.freeze(genericProducers),
     });
   }

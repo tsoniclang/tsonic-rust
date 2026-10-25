@@ -24,7 +24,7 @@ export interface RustProjectEmissionProducer {
   projections(definition: RustProjectTypeDefinition, values: readonly RustProjectProjectionImplementation[]): void;
   stateConstruction(definition: RustProjectTypeDefinition, value: { readonly baseName: string; readonly visibility: "public" | "crate" }): void;
   checkedProjection(carrier: TargetTypeRef, value: RustCheckedProjectProjectionEmission): void;
-  shape(carrier: TargetTypeRef, value: RustStructuralShapeDefinition): void;
+  structuralShapes(reader: (carrier: TargetTypeRef | undefined) => RustStructuralShapeDefinition | undefined): void;
   structuralDeclarations(component: string, values: readonly RustStructuralShapeDefinition[]): void;
   union(carrier: TargetTypeRef, value: RustGeneratedUnionDefinition): void;
   unionDeclarations(component: string, values: readonly RustGeneratedUnionDefinition[]): void;
@@ -37,12 +37,12 @@ export interface RustProjectEmissionProducer {
 
 export function createRustProjectEmissionProducer(assertOpen: () => void): RustProjectEmissionProducer {
   let structuralGenerics: ((carrier: TargetTypeRef) => RustShapeGenericRequirementContract | undefined) | undefined;
+  let structuralShapes: ((carrier: TargetTypeRef | undefined) => RustStructuralShapeDefinition | undefined) | undefined;
   const definitions = new Map<string, Map<string, RustProjectTypeDefinition>>();
   const declarations = new WeakMap<Node, RustProjectTypeDefinition>();
   const members = new WeakMap<Node, RustProjectTypeDefinition>();
   const representations = new WeakMap<RustProjectTypeDefinition, RustObjectRepresentation>();
   const generics = new WeakMap<RustProjectTypeDefinition, Map<string, RustProjectGenericEmission>>();
-  const shapes = new Map<string, RustStructuralShapeDefinition>();
   const structuralDeclarations = new Map<string, readonly RustStructuralShapeDefinition[]>();
   const unions = new Map<string, RustGeneratedUnionDefinition>();
   const unionDeclarations = new Map<string, readonly RustGeneratedUnionDefinition[]>();
@@ -65,7 +65,10 @@ export function createRustProjectEmissionProducer(assertOpen: () => void): RustP
     projectProjectionImplementations: Object.freeze({ get: (definition: RustProjectTypeDefinition) => projections.get(definition) }),
     projectStateConstruction: Object.freeze({ get: (definition: RustProjectTypeDefinition) => stateConstruction.get(definition) }),
     checkedProjectProjection: Object.freeze({ get: (carrier: TargetTypeRef) => checkedProjections.get(closedMetadataKey(carrier)) }),
-    structuralShape: Object.freeze({ get: (carrier: TargetTypeRef | undefined) => carrier === undefined ? undefined : shapes.get(closedMetadataKey(carrier)) }),
+    structuralShape: Object.freeze({ get: (carrier: TargetTypeRef | undefined) => {
+      if (structuralShapes === undefined) failTargetAnalysisInvariant("tsonic-rust", "Native structural lookup requires its sealed canonical publication.");
+      return structuralShapes(carrier);
+    } }),
     structuralDeclarations: Object.freeze({ get: (component: string) => structuralDeclarations.get(component) }),
     sourceUnion: Object.freeze({ get: (carrier: TargetTypeRef) => unions.get(closedMetadataKey(carrier)) }),
     sourceUnionDeclarations: Object.freeze({ get: (component: string) => unionDeclarations.get(component) }),
@@ -124,11 +127,10 @@ export function createRustProjectEmissionProducer(assertOpen: () => void): RustP
       if (checkedProjections.has(key)) failTargetAnalysisInvariant("tsonic-rust", "A native checked projection has one exact carrier owner.");
       checkedProjections.set(key, value);
     },
-    shape(carrier: TargetTypeRef, value: RustStructuralShapeDefinition): void {
+    structuralShapes(reader: (carrier: TargetTypeRef | undefined) => RustStructuralShapeDefinition | undefined): void {
       assertOpen();
-      const key = closedMetadataKey(carrier);
-      if (shapes.has(key)) failTargetAnalysisInvariant("tsonic-rust", "An exact structural instance has one native shape producer.");
-      shapes.set(key, value);
+      if (structuralShapes !== undefined) failTargetAnalysisInvariant("tsonic-rust", "The sealed canonical structural lookup is published exactly once.");
+      structuralShapes = reader;
     },
     structuralDeclarations(component: string, values: readonly RustStructuralShapeDefinition[]): void {
       assertOpen();

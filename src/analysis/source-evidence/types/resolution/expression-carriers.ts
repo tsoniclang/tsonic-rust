@@ -462,6 +462,7 @@ function resolveIndependentValueOperation(
     return;
   }
   if (kind === KindIdentifier || kind === KindCallExpression || kind === KindNewExpression ||
+    kind === KindAwaitExpression ||
     kind === "KindRegularExpressionLiteral" ||
     kind === KindPropertyAccessExpression || kind === KindElementAccessExpression ||
     kind === KindNonNullExpression || kind === "KindAsExpression" ||
