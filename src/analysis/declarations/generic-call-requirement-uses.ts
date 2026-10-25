@@ -52,8 +52,10 @@ export function collectRustSourceCallRequirements(input: RustCallableRequirement
         const expression = ast.arguments(node)[argument.sourceArgumentIndex];
         if (expression === undefined || !ast.is.IsIdentifier(expression) ||
           input.ownershipFlow.movingReads.has(expression)) continue;
-        const argumentCarrier = records.runtimeCarrier.get(expression)?.carrier;
-        if (argumentCarrier === undefined || isRustCopyCarrier(argumentCarrier)) continue;
+        const storage = input.nativeStorage.operandFor(expression);
+        if (storage.kind === "unresolved") return storage.reason;
+        const argumentCarrier = storage.carrier;
+        if (isRustCopyCarrier(argumentCarrier)) continue;
         const error = addUse(expression, argumentCarrier, ["clone"]);
         if (error !== undefined) return error;
       }
