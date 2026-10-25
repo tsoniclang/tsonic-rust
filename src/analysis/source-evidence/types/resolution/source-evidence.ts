@@ -45,7 +45,8 @@ export function resolveRustCallableStorageCarrier(
   const source = context.sourceStorageResolution;
   if (source?.kind === "unresolved" || context.callableRepresentation === "storage" && source?.subject === undefined) return undefined;
   const subject = source?.subject;
-  const parameterNode = subject?.kind === "value" && subject.projection.length === 0 ? subject.node : undefined;
+  const parameterNode = (subject?.kind === "value" || subject?.kind === "input") &&
+    subject.projection.length === 0 && context.ast.is.IsParameterDeclaration(subject.node) ? subject.node : undefined;
   const parameter = parameterNode === undefined ? undefined : context.ast.as.AsParameterDeclaration(parameterNode);
   const uses = parameterNode === undefined || parameter === undefined ? undefined :
     context.source.navigation.parameterUseSummary(parameterNode);
