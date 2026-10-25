@@ -5,6 +5,7 @@ import { analyzeRust } from "../../helpers/rust-session.mjs";
 import { borrowedNullishSequencesSource } from "../../../../tsonic/test/fixtures/borrowed-nullish-sequences.mjs";
 import { createTsonicPlugin } from "../../../../rust-nodejs/dist/index.js";
 import { analyzeRustBorrowedInitializers } from "../../../dist/analysis/storage/borrowed-initializers.js";
+import { createRustBorrowedInitializerProducer } from "../../../dist/analysis/program/records/borrowed-initializers.js";
 
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 
@@ -14,7 +15,9 @@ for (const surfaces of [[], ["js"]]) {
       files: { "index.ts": borrowedNullishSequencesSource } });
     const { ast } = program.source;
     const initializers = [];
+    const nativeNodes = [];
     const visit = node => {
+      nativeNodes.push(node);
       if (ast.is.IsVariableDeclaration(node) && ast.text(ast.name(node)) === "values")
         initializers.push(ast.as.AsVariableDeclaration(node).Initializer);
       ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
@@ -50,8 +53,10 @@ for (const surfaces of [[], ["js"]]) {
 targetOperation: { get: (node) => {
     return node === initializer ? mutation : program.records.targetOperation.get(node);
 } }}, program.records);
-      const selected = analyzeRustBorrowedInitializers(ast, program.sourceFiles, records);
-      assert.equal(selected.forExpression(initializer) === undefined, true, "missing or incompatible borrowing evidence is never manufactured");
+      const selected = createRustBorrowedInitializerProducer(() => {});
+      analyzeRustBorrowedInitializers(ast, nativeNodes, records,
+        program.ownership.reads, selected);
+      assert.equal(selected.records.get(initializer) === undefined, true, "missing or incompatible borrowing evidence is never manufactured");
     }
   });
 }

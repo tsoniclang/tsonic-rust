@@ -6,6 +6,7 @@ import { rustMemberAccessReceiver } from "../../target-model/syntax/expressions.
 import { rustTargetGenericReferences } from "../../target-model/types/carriers/generic-references.js";
 import type { RustOwnershipRecords } from "../../target-model/records/ownership.js";
 import type { RustBorrowedInitializerProducer } from "../program/records/borrowed-initializers.js";
+import { rustProviderInputBorrowMode } from "../../policy/operations/members/input-borrows.js";
 
 export function analyzeRustBorrowedInitializers(
   ast: AstReader, nativeNodes: readonly Node[], records: RustProgramRecords,
@@ -29,7 +30,7 @@ export function analyzeRustBorrowedInitializers(
     const result = abi?.result.kind === "sync" ? abi.result.rawCarrier : undefined;
     const selected = abi?.sourceReceiver.kind === "receiver" && abi.sourceReceiver.disposition === "runtime" &&
       (abi.target.form === "receiver-method" || abi.target.form === "arg-method") &&
-      input?.source.kind === "receiver" && input.mode === "ref" && input.conversion.kind === "identity" &&
+      input?.source.kind === "receiver" && rustProviderInputBorrowMode(input) === "ref" && input.conversion.kind === "identity" &&
       receiver !== undefined && result !== undefined &&
       abi.result.kind === "sync" &&
       rustTargetGenericReferences(abi.result.carrier).elisionInputs.some(lifetime => lifetime.kind === "placeholder") &&

@@ -165,7 +165,7 @@ for (const projection of [false, true]) test(`owned native getter results remain
         kind: "void-expression", operationId: "ownership-read.discard", resultCarrier: rustUnitTargetType(),
       });
       const records = builder.seal([]);
-      const uses = analyzeRustReadUses(ast, storage.nodes, records, emptyRustTypeDefinitions, () => false, program.structuralShapes);
+      const uses = analyzeRustReadUses(ast, storage.nodes, records, emptyRustTypeDefinitions, () => false, program.structuralShapes, () => false);
       const prepared = prepareRustReadOwnership({ storage, nativeNodes: storage.nodes, records, uses,
         flow: { movingReads: new Set(owned ? [element] : []), captureTransfers: new Map() },
         borrowEffects: { pureValues: new Set(), fieldWrites: new Map(), stableBindings: new Set(), nativeWrites: new Map() },
@@ -336,7 +336,7 @@ async function fixture() {
     storage,
     nativeNodes: storage.nodes,
     records,
-    uses: analyzeRustReadUses(source.ast, storage.nodes, records, emptyRustTypeDefinitions, () => false, program.structuralShapes),
+    uses: analyzeRustReadUses(source.ast, storage.nodes, records, emptyRustTypeDefinitions, () => false, program.structuralShapes, () => false),
     flow: { movingReads: new Set(), captureTransfers: new Map() },
     borrowEffects: { pureValues: new Set(), fieldWrites: new Map(), stableBindings: new Set(), nativeWrites: new Map() },
     borrowEffectsInput: readBorrowEffectsInput(source, program, storage.nodes, records),
@@ -428,7 +428,7 @@ for (const projection of [false, true]) {
         });
       }
       const records = builder.seal([]);
-      const uses = analyzeRustReadUses(ast, storage.nodes, records, emptyRustTypeDefinitions, () => false, program.structuralShapes);
+      const uses = analyzeRustReadUses(ast, storage.nodes, records, emptyRustTypeDefinitions, () => false, program.structuralShapes, () => false);
       const prepared = prepareRustReadOwnership({
         storage, nativeNodes: storage.nodes, records, uses,
         flow: { movingReads: new Set(), captureTransfers: new Map() },

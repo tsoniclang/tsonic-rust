@@ -12,13 +12,13 @@ export function analyzeRustCompletionBindings(program: Omit<RustAnalysisProgram,
   producer: RustCompletionBindingProducer): void {
   const { ast } = program.source;
   const selected = new Map<Node, RustCompletionBinding[]>();
-  const moved = new Set<Node>();
+  const owners = new Map<Node, Node>();
   for (const scope of new Set(nodes)) {
     if (!ast.is.IsBlock(scope) && !ast.is.IsSourceFile(scope)) continue;
     const statements = ast.statements(scope).filter((node): node is Node => node !== undefined);
     for (const [index, statement] of statements.entries()) for (const declaration of program.records.variableDeclarations.get(statement) ?? []) {
       const binding = program.records.localBinding.get(declaration);
-      if (moved.has(declaration) || binding?.kind !== "value" || binding.initializer !== undefined || binding.absenceInitializer || binding.storage !== undefined ||
+      if (owners.has(declaration) || binding?.kind !== "value" || binding.initializer !== undefined || binding.absenceInitializer || binding.storage !== undefined ||
         program.records.nativeArrayStorage.get(declaration) !== undefined) continue;
       const cache = new Map<Node, ReadonlySet<Access>>();
       const sequence = (values: readonly (Node | undefined)[]): ReadonlySet<Access> => {
@@ -85,6 +85,61 @@ export function analyzeRustCompletionBindings(program: Omit<RustAnalysisProgram,
         cache.set(node, result);
         return result;
       };
+      const used = (node: Node | undefined): boolean => node !== undefined && (first(node).has("read") || first(node).has("write"));
+      const admitted = (node: Node | undefined): boolean => node === undefined || !first(node).has("read") && !first(node).has("none");
+      const admittedTarget = (target: Node): boolean => {
+        const body = TryStatement_TryBlock(ast, target);
+        const caught = CatchClause_Block(ast, TryStatement_CatchClause(ast, target));
+        return program.records.statementExit.get(target) !== true && body !== undefined &&
+          !used(TryStatement_FinallyBlock(ast, target)) && admitted(body) && admitted(caught);
+      };
+      const directOutput = (block: Node | undefined): Node | undefined => {
+        if (block === undefined) return undefined;
+        for (const statement of ast.statements(block)) {
+          if (statement === undefined) continue;
+          const access = first(statement);
+          if (access.has("write")) return ast.is.IsTryStatement(statement) && admittedTarget(statement) ? statement : undefined;
+          if (!access.has("none")) break;
+        }
+        return undefined;
+      };
+      const collectNested = (node: Node, declarationTarget: Node | undefined): void => {
+        if (!first(node).has("write")) return;
+        if (ast.is.IsTryStatement(node)) {
+          selectTarget(node, node === declarationTarget ? "declare" : "assign");
+        } else if (ast.is.IsBlock(node)) {
+          for (const statement of ast.statements(node)) {
+            if (statement === undefined) continue;
+            collectNested(statement, declarationTarget);
+            if (!first(statement).has("none")) break;
+          }
+        } else if (ast.is.IsIfStatement(node)) {
+          const statement = ast.as.AsIfStatement(node);
+          const condition = statement?.Expression;
+          if (condition !== undefined && (first(condition).size !== 1 || !first(condition).has("none"))) return;
+          const guard = condition === undefined ? undefined : program.records.nativeGuardResult.get(condition);
+          for (const branch of guard === undefined ? [statement?.ThenStatement, statement?.ElseStatement]
+            : [guard ? statement?.ThenStatement : statement?.ElseStatement]) {
+            if (branch !== undefined) collectNested(branch, declarationTarget);
+          }
+        }
+      };
+      const selectTarget = (target: Node, output: RustCompletionBinding["output"]): boolean => {
+        if (!admittedTarget(target)) return false;
+        const body = TryStatement_TryBlock(ast, target);
+        const caught = CatchClause_Block(ast, TryStatement_CatchClause(ast, target));
+        if (body === undefined) return false;
+        const bodyOutput = directOutput(body);
+        const catchOutput = directOutput(caught);
+        const values = selected.get(target) ?? [];
+        values.push(Object.freeze({ declaration, output,
+          body: !used(body) ? "unused" : bodyOutput === undefined ? "entry" : "nested-output",
+          catch: !used(caught) ? "unused" : catchOutput === undefined ? "entry" : "nested-output" }));
+        selected.set(target, values);
+        collectNested(body, bodyOutput);
+        if (caught !== undefined) collectNested(caught, catchOutput);
+        return true;
+      };
       for (const target of statements.slice(index + 1)) {
         const access = first(target);
         if (!access.has("read") && !access.has("write")) {
@@ -92,18 +147,11 @@ export function analyzeRustCompletionBindings(program: Omit<RustAnalysisProgram,
           continue;
         }
         if (!ast.is.IsTryStatement(target) || program.records.statementExit.get(target) === true) break;
-        const body = TryStatement_TryBlock(ast, target);
-        const caught = CatchClause_Block(ast, TryStatement_CatchClause(ast, target));
-        const finalized = TryStatement_FinallyBlock(ast, target);
-        const used = (node: Node | undefined): boolean => node !== undefined && (first(node).has("read") || first(node).has("write"));
-        const admitted = (node: Node | undefined): boolean => node === undefined || !first(node).has("read") && !first(node).has("none");
-        if (used(finalized) || body === undefined || !admitted(body) || !admitted(caught)) break;
-        const values = selected.get(target) ?? [];
-        values.push(Object.freeze({ declaration, body: used(body), catch: used(caught) }));
-        selected.set(target, values); moved.add(declaration);
+        if (!selectTarget(target, "declare")) break;
+        owners.set(declaration, target);
         break;
       }
     }
   }
-  for (const [node, values] of selected) producer.publish(node, Object.freeze(values));
+  producer.publish(selected, owners);
 }
