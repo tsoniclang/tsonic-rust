@@ -104,7 +104,6 @@ import { analyzeRustPropertyReads } from "../operations/property-reads.js";
 import { analyzeRustSourceCalls } from "../callables/source-calls.js";
 import { admitRustCalls } from "../operations/call-admission.js";
 import { analyzeRustExpressionSyntax } from "../operations/expression-syntax.js";
-import { analyzeRustExpressionExits } from "../control-flow/expression-exits.js";
 import { analyzeRustCompletionBindings } from "../control-flow/completion-bindings.js";
 import { analyzeRustIndexedRecords } from "../objects/indexed-records.js";
 import { analyzeRustObjectProjections } from "../objects/projection-emission.js";
@@ -273,7 +272,6 @@ export function finalizeRustNativeEmission(
   if (propertyProjectionIssues.length !== 0) return rejectedTargetStage(propertyProjectionIssues);
   const optionalChainIssues = analyzeRustOptionalChainEmission(program, context.nativeNodes, context.records.optionalChainEmissionPlans, context.requiredRecords);
   if (optionalChainIssues.length !== 0) return rejectedTargetStage(optionalChainIssues);
-  analyzeRustExpressionExits(program, context.nativeNodes, context.records.expressionExitPlans);
   analyzeRustCompletionBindings(program, context.nativeNodes, context.records.completionBindingPlans);
   const valueReadIssues = analyzeRustValueReads(program, context.nativeNodes, providerReads.reads, context.records.valueReadPlans,
     context.records.valueProjectionPlans, context.records.conversionEmissionPlans);

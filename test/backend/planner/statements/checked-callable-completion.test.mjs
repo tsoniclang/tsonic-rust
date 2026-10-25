@@ -69,3 +69,26 @@ export function choose(value: "left" | "right"): number {
 }
 ` } }), /TS2366/u);
 });
+
+test("checked switch completion preserves every case expression evaluation", { timeout: 300_000 }, () => {
+  const { result } = compileRust({ packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "checked_switch_effects" } },
+    files: { "index.ts": `
+import { check } from "@acme/testing";
+let cases = 0;
+let selections = 0;
+function first(): false { cases++; return false; }
+function last(): true { cases++; return true; }
+function selected(value: boolean): boolean { selections++; return value; }
+function choose(value: boolean): number {
+  switch (value) { case first(): return 10; case last(): return 20; }
+}
+export function main(): void {
+  check(choose(selected(false)) === 10 && cases === 1 && selections === 1);
+  check(choose(selected(true)) === 20 && cases === 3 && selections === 2);
+}
+main();
+` } });
+  assertNoTargetDiagnostics(result.diagnostics);
+  validateGeneratedProject("checked-switch-effects", result.artifacts, { run: true });
+});

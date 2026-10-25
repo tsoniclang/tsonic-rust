@@ -44,7 +44,7 @@ export function run(value: bigint, other: bigint): bigint {
       if (operation !== undefined) builder.targetOperations.source(node, operation);
     }
     const uses = analyzeRustReadUses(source.ast, storage.nodes, builder.readers, program.typeDefinitions,
-      () => false, program.structuralShapes);
+      () => false, program.structuralShapes, () => false);
     const reads = references(source, storage, "value");
     const others = references(source, storage, "other");
     assert.equal(reads.length, 2, "both original reads of the same native value remain in checked liveness");

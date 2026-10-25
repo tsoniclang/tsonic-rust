@@ -18,19 +18,24 @@ export function sourceInput(
   definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
   declaredCarrier: TargetTypeRef = sourceCarrier,
 ): RustFinalizedSourceInput | undefined {
-  const selected = rustTargetTypeRefEquals(sourceCarrier, declaredCarrier)
-    ? undefined : selectRustSourceValueConversion(sourceCarrier, declaredCarrier, definitions);
-  const sourceConversion = finalizeValueConversion(selected, sourceCarrier, declaredCarrier, definitions);
-  const targetConversion = finalizeValueConversion(conversion, declaredCarrier, undefined, definitions);
+  const referenceValue = conversion === undefined && mode === "ref" &&
+    sourceCarrier.kind === "reference" && !sourceCarrier.mutable &&
+    rustTargetTypeRefEquals(sourceCarrier, carrierAfterMode(declaredCarrier, mode));
+  const conversionCarrier = referenceValue ? sourceCarrier : declaredCarrier;
+  const inputMode = referenceValue ? "value" : mode;
+  const selected = rustTargetTypeRefEquals(sourceCarrier, conversionCarrier)
+    ? undefined : selectRustSourceValueConversion(sourceCarrier, conversionCarrier, definitions);
+  const sourceConversion = finalizeValueConversion(selected, sourceCarrier, conversionCarrier, definitions);
+  const targetConversion = finalizeValueConversion(conversion, conversionCarrier, undefined, definitions);
   const finalized = sourceConversion === undefined || targetConversion === undefined
     ? undefined : composeFinalizedValueConversions(sourceConversion, targetConversion);
-  const parameterCarrier = finalized === undefined ? undefined : carrierAfterMode(finalized.targetCarrier, mode);
+  const parameterCarrier = finalized === undefined ? undefined : carrierAfterMode(finalized.targetCarrier, inputMode);
   const first = finalized?.kind === "sequence" ? finalized.steps[0] : finalized;
   return finalized === undefined || parameterCarrier === undefined ? undefined : {
     source,
     sourceCarrier,
     conversion: finalized,
-    mode,
+    mode: inputMode,
     parameterCarrier,
     sharedConversion: first?.kind === "semantic" && rustValueConversionContract(first.conversion, definitions)?.sourceMode === "ref",
     elementView: parameterCarrier.kind === "reference" && parameterCarrier.referent.kind === "target-named" &&

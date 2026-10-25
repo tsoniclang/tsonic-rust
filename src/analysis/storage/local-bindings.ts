@@ -1,5 +1,5 @@
 import type { AstReader, Node } from "@tsonic/tsts";
-import { sourceEnclosingCallable, type SourceProgramNavigation } from "@tsonic/target-api/source";
+import { Node_Expression, sourceEnclosingCallable, sourceTransparentExpressionOperand, type SourceProgramNavigation } from "@tsonic/target-api/source";
 import { failTargetAnalysisInvariant, type TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { RustNamePlan } from "../../target-model/names/model.js";
@@ -101,6 +101,16 @@ export function analyzeRustLocalBindings(input: {
     const ownerCallable = sourceEnclosingCallable(node, input.ast);
     const nativelyWritten = input.navigation.declarationUses(node).some(use => {
       if (!rustBindingUseIsEmitted(input.ast, input.records, use.reference, node, ownerCallable)) return false;
+      if (nativeArray !== undefined) {
+        let receiver = use.reference;
+        let access = input.ast.parent(receiver);
+        while (access !== undefined && sourceTransparentExpressionOperand(input.ast, access) === receiver) {
+          receiver = access;
+          access = input.ast.parent(receiver);
+        }
+        if (access !== undefined && Node_Expression(input.ast, access) === receiver &&
+          input.records.nativeArrayStorage.get(access)?.kind === "element") return false;
+      }
       const read = input.records.readOwnership.get(use.reference);
       return summary.bindingWritten && use.role === "write" || read?.readsStorage === true &&
         read.source.kind === "borrow" && read.source.mutable;

@@ -49,3 +49,22 @@ test("identity native inputs retain exact shared, exclusive, by-value and refere
     assert.equal(rustProviderInputBorrowMode(input), expected, label + ": exact native ownership role");
   }
 });
+
+test("an existing exact shared native reference supplies the selected borrowed receiver without owning its referent", () => {
+  const receiver = { kind: "target-named", id: "fixture.NativeReceiver" };
+  const reference = { kind: "reference", mutable: false, referent: receiver };
+  const input = sourceInput({ kind: "receiver" }, reference, "ref", undefined, undefined, receiver);
+  assert.equal(input !== undefined, true, "the exact native reference is already the selected parameter");
+  assert.equal(input.sourceCarrier === reference, true, "the real native storage identity is unchanged");
+  assert.equal(input.conversion.kind, "identity", "no owner clone or dereference conversion is selected");
+  assert.equal(input.mode, "value", "the native reference itself is passed, not borrowed again");
+  assert.equal(input.parameterCarrier === reference, true, "the parameter remains the original native reference");
+  assert.equal(rustProviderInputBorrowMode(input), "ref", "ownership consumes the existing native-reference role");
+  for (const [label, carrier, mode, declared] of [
+    ["shared cannot become exclusive", reference, "mut-ref", receiver],
+    ["shared cannot become owned", reference, "value", receiver],
+    ["different native referent", reference, "ref", { kind: "target-named", id: "fixture.OtherReceiver" }],
+  ]) assert.equal(sourceInput({ kind: "receiver" }, carrier, mode, undefined, undefined, declared) === undefined, true, label);
+  const owned = sourceInput({ kind: "receiver" }, receiver, "ref", undefined, undefined, receiver);
+  assert.equal(owned?.mode, "ref", "an actual owned receiver is still borrowed exactly once");
+});
