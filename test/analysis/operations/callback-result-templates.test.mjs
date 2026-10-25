@@ -180,9 +180,10 @@ test("pure intrinsic callback helpers publish their actual selected native Resul
     argumentCarriers: [rustJsValueTargetType(), callback] });
   assert.equal(selected !== undefined, true, "the selected JSON helper retains its checked callback contract");
   assert.equal(selected.fact.isFallible, true);
-  assert.equal(selected.fact.errorBoundary, "provider-native");
-  assert.deepEqual(selected.fact.errorCarrier, rustRuntimeErrorTargetType(),
-    "JSON's real pure helper returns TsonicResult, independently of the callback's pure invocation");
+  assert.equal(selected.fact.errorBoundary, "target-runtime",
+    "the canonical native boundary selects JSON's actual TsonicResult, independently of callback fallibility");
+  assert.equal(selected.fact.errorCarrier, undefined, "a target-runtime boundary has no second provider-native carrier");
+  assert.deepEqual(selected.callback.failure.resultError, { kind: "native", carrier: rustRuntimeErrorTargetType() });
   const prepared = { template: selected.fact, callback: selected.callback };
   const effects = { invocationEffects: { localErrors: false, nativeErrors: [] } };
   assert.equal(callbackFallibleTemplate(prepared, effects) === selected.fact, true);

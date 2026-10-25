@@ -128,6 +128,14 @@ function definition(overrides = {}) {
   };
 }
 
+function callbackExport() {
+  const selected = functionExport("@acme/validation");
+  selected.signatures[0].id = "@acme/validation::run(callback)";
+  selected.signatures[0].parameters = [{ name: "callback", type: { kind: "function",
+    id: "@acme/validation::run.callback", parameters: [], returnType: int32Carrier } }];
+  return selected;
+}
+
 function providerContext(selectedCapabilities) {
   return captureRustProviderContributions(selectedCapabilities);
 }
@@ -859,6 +867,7 @@ test("provider immediate-callback metadata fails closed on an inexact callback c
   for (const item of cases) {
     assert.throws(
       () => createRustProviderPackage(definition({
+        modules: [{ moduleSpecifier: "@acme/validation", providerModuleId: "acme.validation", exports: [callbackExport()] }],
         operations: [{
           exportId: "@acme/validation::run",
           operationKind: "method",
@@ -880,6 +889,7 @@ test("provider immediate callbacks materialize and freeze their exact native Res
     fallibleTarget: { form: "call", path: "acme_validation::try_run" } };
   const provider = createRustProviderPackage(definition({
     carrierPaths: { "acme.CallbackError": "acme_validation::CallbackError" },
+    modules: [{ moduleSpecifier: "@acme/validation", providerModuleId: "acme.validation", exports: [callbackExport()] }],
     operations: [{ exportId: "@acme/validation::run", operationKind: "method",
       target: { form: "call", path: "acme_validation::run" }, resultCarrier: int32Carrier,
       parameterCarriers: [rustClosureTargetType([], int32Carrier)], immediateCallback: callback }],

@@ -337,10 +337,7 @@ function selectJsSurfaceOperationForDemand(
         : { returnedFuture: row.returnedFuture }),
       ...(row.shape.evaluation === undefined ? {} : { evaluation: row.shape.evaluation }),
       errorBoundary: row.fallible === true ? row.errorBoundary ?? "provider-native" : "none",
-      ...(row.fallible === true && row.errorBoundary === undefined ? {
-        errorCarrier: callback?.failure.kind === "invocation" && callback.failure.resultError.kind === "native"
-          ? callback.failure.resultError.carrier : rustJsErrorTargetType(),
-      } : {}),
+      ...(row.fallible === true && row.errorBoundary === undefined ? { errorCarrier: rustJsErrorTargetType() } : {}),
       ...(resultConversion === undefined
         ? {}
         : { resultConversion }),
