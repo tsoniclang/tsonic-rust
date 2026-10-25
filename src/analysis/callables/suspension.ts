@@ -19,6 +19,15 @@ import { selectedSourceCallableReturn } from "./source-callable-abi.js";
 import { resolveRustSuspendedCallableStorage } from "./suspension-storage.js";
 import { selectRustAsyncBodyFacts } from "./async-results.js";
 
+export function completeRustFutureValue(walk: RustFactWalk, errors: RustSourceErrorEffectSelection,
+  fact: RustFutureValueFact | undefined): RustFutureValueFact | undefined {
+  if (fact?.errorBoundary !== "source-native") return fact;
+  if (fact.errorSource === undefined || fact.errorCarrier === undefined) return undefined;
+  const error = errors.complete({ identity: fact.errorSource, errorType: fact.errorCarrier },
+    walk.context.callableValues.nativeStorage);
+  return error === undefined ? undefined : { ...fact, errorCarrier: error.errorType, errorSource: error.identity };
+}
+
 export function recordFutureValueFacts(walk: RustFactWalk, sourceErrors: RustSourceErrorEffectSelection): void {
   walk.context.records.assertOpen();
   const resolve = (node: Node): RustFutureValueFact | undefined => walk.context.records.futureValues.resolve(node, () => {
@@ -68,6 +77,13 @@ export function recordFutureValueFacts(walk: RustFactWalk, sourceErrors: RustSou
     if (fact === undefined) {
       return undefined;
     }
+    fact = completeRustFutureValue(walk, sourceErrors, fact);
+    if (fact === undefined) {
+      appendRustDiagnostic(walk, "RUST_FUTURE_VALUE_CARRIER_CONFLICT",
+        "Future-value transport requires its completed exact native error channel.", node,
+        ["target.capability=rust.async.future-value"]);
+      return undefined;
+    }
     const carrier = walk.context.records.runtimeCarrier.get(node)?.carrier;
     if (!rustFutureValueMatchesCarrier(fact, carrier, walk.context.typeDefinitions)) {
       appendRustDiagnostic(
@@ -96,7 +112,8 @@ export function recordFutureValueFacts(walk: RustFactWalk, sourceErrors: RustSou
     const awaiting = walk.context.records.awaitValues.finalize(node, carrier, operation.resultCarrier, leaf => {
       if (knownFuture !== undefined && rustFutureValueMatchesCarrier(knownFuture, leaf, walk.context.typeDefinitions)) return knownFuture;
       const intrinsic = rustFutureValueForSourceStorage(leaf);
-      return intrinsic === undefined ? rustFutureValueForStoredBranch(walk, operand, leaf, sourceErrors) : intrinsic;
+      return intrinsic === undefined ? completeRustFutureValue(walk, sourceErrors,
+        rustFutureValueForStoredBranch(walk, operand, leaf, sourceErrors)) : intrinsic;
     }, (source, target) => selectRustSourceValueConversion(source, target, walk.context.typeDefinitions));
     if (awaiting === undefined) {
       appendRustDiagnostic(walk, "RUST_AWAIT_VALUE_CONTRACT_NOT_PROVEN",

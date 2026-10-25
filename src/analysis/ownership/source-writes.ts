@@ -3,6 +3,12 @@ import type { RustFactWalk } from "../program/walk.js";
 import { KindParenthesizedExpression, KindPropertyAccessExpression, KindElementAccessExpression, KindCallExpression,
   KindIdentifier, Node_Expression } from "@tsonic/target-api/source";
 import { requireRustRecord } from "../program/records/required-records.js";
+import type { RustReferentWrite } from "../program/records/mutated-referent.js";
+import type { RustProgramRecords } from "../../target-model/records/program.js";
+import type { TargetTypeRef } from "../../target-model/types/model.js";
+import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
+import { rustReferentMutationRequiresMutableBinding } from "../../policy/types/storage/referent-mutation.js";
+import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 
 export function recordBindingWrite(walk: RustFactWalk, target: Node | undefined, writeKind: "binding" | "referent" = "binding"): void {
   walk.context.records.assertOpen();
@@ -10,40 +16,71 @@ export function recordBindingWrite(walk: RustFactWalk, target: Node | undefined,
     return;
   }
   const { ast } = walk.context;
-  const kind = ast.kindName(target);
-  if (kind === KindParenthesizedExpression) {
-    recordBindingWrite(walk, Node_Expression(ast, target), writeKind);
-    return;
-  }
-  if (kind === KindPropertyAccessExpression || kind === KindElementAccessExpression) {
-    const operation = walk.context.records.targetOperation.get(target);
-    if (operation?.kind === "source-indexed-field" ||
-      operation?.kind === "source-index-signature" && operation.storage.kind === "record") return;
-    const receiver = Node_Expression(walk.context.ast, target);
-    const receiverKind = receiver === undefined ? "" : ast.kindName(receiver);
-    if (receiverKind === "KindThisExpression" || receiverKind === "KindThisKeyword") {
+  const original = target;
+  const receivers: { readonly expression: Node; readonly use: Node }[] = [];
+  const record = (current: Node | undefined, kind: "binding" | "referent"): void => {
+    if (current === undefined) return;
+    const nodeKind = ast.kindName(current);
+    if (nodeKind === KindParenthesizedExpression) {
+      record(Node_Expression(ast, current), kind);
       return;
     }
-    recordBindingWrite(walk, receiver, "referent");
-    return;
-  }
-  if (kind === KindCallExpression) {
-    const fact = walk.context.records.targetOperation.get(target);
-    if (fact !== undefined && fact.kind === "flow-marker") {
-      recordBindingWrite(walk, ast.arguments(target)[0], "referent");
+    if (nodeKind === KindPropertyAccessExpression || nodeKind === KindElementAccessExpression) {
+      const operation = walk.context.records.targetOperation.get(current);
+      if (operation?.kind === "source-indexed-field" ||
+        operation?.kind === "source-index-signature" && operation.storage.kind === "record") return;
+      const receiver = Node_Expression(ast, current);
+      const receiverKind = receiver === undefined ? "" : ast.kindName(receiver);
+      if (receiverKind === "KindThisExpression" || receiverKind === "KindThisKeyword") return;
+      if (receiver !== undefined) receivers.push({ expression: receiver, use: current });
+      record(receiver, "referent");
+      return;
     }
-    return;
-  }
-  if (kind !== KindIdentifier) {
-    return;
-  }
-  const declaration = walk.context.source.navigation.sourceReferenceFor(target)?.declaration;
-  if (declaration !== undefined) {
-    requireRustRecord(walk.context.requiredRecords, writeKind === "binding" ? "mutatedBinding" : "mutatedReferent",
-      declaration, writeKind, "recordBindingWrite");
-    if (writeKind === "binding") walk.context.records.mutatedBindings.written(declaration);
-    else walk.context.records.mutatedReferents.written(declaration);
-  }
+    if (nodeKind === KindCallExpression) {
+      const fact = walk.context.records.targetOperation.get(current);
+      if (fact?.kind === "flow-marker") {
+        const receiver = ast.arguments(current)[0];
+        if (receiver !== undefined) receivers.push({ expression: receiver, use: current });
+        record(receiver, "referent");
+      }
+      return;
+    }
+    if (nodeKind !== KindIdentifier) return;
+    const declaration = walk.context.source.navigation.sourceReferenceFor(current)?.declaration;
+    if (declaration === undefined) return;
+    requireRustRecord(walk.context.requiredRecords, kind === "binding" ? "mutatedBinding" : "mutatedReferent",
+      declaration, kind, "recordBindingWrite");
+    if (kind === "binding") walk.context.records.mutatedBindings.written(declaration);
+    else walk.context.records.mutatedReferents.written(declaration, { target: original,
+      receivers: receivers.length === 0 ? [{ expression: current, use: original }] : receivers });
+  };
+  record(target, writeKind);
+}
+
+export function rustReferentWriteRequiresMutableBinding(
+  records: Pick<RustProgramRecords, "targetOperation" | "runtimeCarrier" | "flowReadProjection">,
+  write: RustReferentWrite,
+  isSharedObject: (carrier: TargetTypeRef) => boolean,
+): boolean {
+  const path = write.receivers.map(receiver => {
+    const operation = records.targetOperation.get(receiver.use);
+    if (operation?.kind === "source-union-field") {
+      if (operation.selectedVariantIndexes.length === 0)
+        failTargetAnalysisInvariant("tsonic-rust", "A native referent write requires its selected union receivers.", receiver.use);
+      return operation.selectedVariantIndexes.map(index => {
+        const variant = operation.variants[index];
+        if (variant === undefined) failTargetAnalysisInvariant("tsonic-rust", "A native referent write requires its exact selected union receiver.", receiver.use);
+        return variant.carrier;
+      });
+    }
+    const carrier = records.runtimeCarrier.get(receiver.expression)?.carrier;
+    if (carrier === undefined) failTargetAnalysisInvariant("tsonic-rust", "A native referent write requires its actual receiver carrier.", receiver.expression);
+    const projection = records.flowReadProjection.get(receiver.expression);
+    if (projection !== undefined && !rustTargetTypeRefEquals(carrier, projection.sourceCarrier))
+      failTargetAnalysisInvariant("tsonic-rust", "A native referent write requires its exact source projection.", receiver.expression);
+    return [projection === undefined ? carrier : projection.selectedCarrier];
+  });
+  return rustReferentMutationRequiresMutableBinding(path, isSharedObject);
 }
 
 export function recordAssignmentWrite(

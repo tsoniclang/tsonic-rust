@@ -61,7 +61,7 @@ export function planRustLexicalFunctionArguments(declaration: Node, context: Rus
       arguments_.push({ kind: "reference", expr: raw });
       continue;
     }
-    const value = planExpressionBeforeValueProjections(capture.reference, context, "value");
+    const value = planExpressionBeforeValueProjections(capture.reference, context, "value", "shared-place");
     if (value === undefined) failRustPlannerInvariant("An admitted lexical function requires its renderable native capture environment.", declaration);
     arguments_.push({ kind: "reference", expr: value,
       ...(mutable ? { mutable: true } : {}) });

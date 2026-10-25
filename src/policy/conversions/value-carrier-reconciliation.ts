@@ -194,8 +194,17 @@ export function selectRustValueCarrierReconciliation(
   definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
 ): RustValueCarrierReconciliation {
   targetCarrier = rustCallableTargetForSourceLifetime(sourceCarrier, targetCarrier);
-  if (rustTargetTypeRefEquals(sourceCarrier, targetCarrier) ||
-    rustTargetTypeRefEquals(rustCarrierWithTargetPlaceholderLifetimes(sourceCarrier, targetCarrier), targetCarrier)) {
+  if (rustTargetTypeRefEquals(sourceCarrier, targetCarrier)) {
+    return { kind: "identity" };
+  }
+  const lifetimeReconciliation = selectRustCallScopedLifetimeReconciliation(
+    sourceCarrier,
+    targetCarrier,
+  );
+  if (lifetimeReconciliation !== undefined) {
+    return { kind: "call-scoped-lifetime", fact: lifetimeReconciliation };
+  }
+  if (rustTargetTypeRefEquals(rustCarrierWithTargetPlaceholderLifetimes(sourceCarrier, targetCarrier), targetCarrier)) {
     return { kind: "identity" };
   }
   if (rustGenericCallableSignaturesMatch(sourceCarrier, targetCarrier)) {
@@ -215,13 +224,6 @@ export function selectRustValueCarrierReconciliation(
       sourceCarrier, targetCarrier,
       conversion: { kind: "empty-record", source: sourceCarrier, target: targetCarrier },
     } };
-  }
-  const lifetimeReconciliation = selectRustCallScopedLifetimeReconciliation(
-    sourceCarrier,
-    targetCarrier,
-  );
-  if (lifetimeReconciliation !== undefined) {
-    return { kind: "call-scoped-lifetime", fact: lifetimeReconciliation };
   }
   const targetDefinition = projectTypes.definitionForCarrier(targetCarrier);
   const sourceVariants = definitions.sourceUnionVariants(sourceCarrier);

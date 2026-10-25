@@ -353,11 +353,10 @@ function collectFallibilityFacts(
       budget.step();
       ownedCallbackClosures.add(subject);
     }
-    const callbackFallible = callbackAnalysis.fallible;
     const finalized = finalizeRustPreparedCheckedCall(
       pending.request,
       pending.prepared,
-      callbackFallible,
+      callbackAnalysis,
       rustOperationContext(walk, call),
       walk.operationOptions,
     );
@@ -369,7 +368,7 @@ function collectFallibilityFacts(
     if (operation?.kind !== "provider-operation") failTargetAnalysisInvariant("tsonic-rust",
       "An admitted prepared callback requires its finalized native operation.", call);
     recordFinalizedOperationInputEffects(walk, call, operation);
-    if (callbackAnalysis.implementationFallible) {
+    if (rustErrorEffectsAreFallible(callbackAnalysis.implementationEffects)) {
       for (const subject of callbackAnalysis.subjects) {
         fallibleSubjects.add(subject);
       }

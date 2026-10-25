@@ -1,5 +1,6 @@
 import type { Node, SourceFile } from "@tsonic/tsts";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
+import { sourceCallableValueParameters, type TargetSourceProgram } from "@tsonic/target-api/source";
 import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustGenericEmissionProducer } from "../program/records/generic-emission.js";
 import type { RustGenericMemberEmission } from "../../target-model/records/generic-emission.js";
@@ -18,12 +19,13 @@ import { substituteRustTargetGenerics } from "../../target-model/types/carriers/
 
 export function analyzeRustGenericEmission(input: {
   readonly program: Omit<RustAnalysisProgram, "reachability">;
+  readonly source: TargetSourceProgram;
   readonly sourceFiles: readonly SourceFile[];
   readonly nodes: readonly Node[];
   readonly producer: RustGenericEmissionProducer;
   readonly sourceValues: readonly RustSourceCallableValueFact[];
 }): void {
-  const { program, producer } = input;
+  const { program, producer, source } = input;
   const generic = program.callableValues.generic;
   const nativeHeaderTypes = new Set<string>();
   const admitNativeHeader = (roots: readonly TargetTypeRef[]): void => {
@@ -48,11 +50,12 @@ export function analyzeRustGenericEmission(input: {
     if (environment === undefined || requirements === undefined) failTargetAnalysisInvariant("tsonic-rust",
       "An admitted generic implementation requires its finalized physical environment and generic contract.", implementation.declaration);
     const returned = program.records.sourceCallableReturn.get(implementation.declaration);
-    const declaration = program.records.callableDeclaration.get(implementation.declaration);
-    if (returned === undefined || declaration === undefined)
+    const parameters = sourceCallableValueParameters(source.ast, implementation.declaration,
+      source.semantics.forNode(implementation.declaration));
+    if (returned === undefined || parameters === undefined)
       failTargetAnalysisInvariant("tsonic-rust", "An admitted generic native helper requires its exact source parameter and return contract.", implementation.declaration);
     const helperTypes = [returned.returnCarrier];
-    for (const parameter of declaration.contract.parameters) {
+    for (const parameter of parameters) {
       const abi = parameter === undefined ? undefined : program.records.sourceParameterAbi.get(parameter);
       if (abi === undefined)
         failTargetAnalysisInvariant("tsonic-rust", "An admitted generic native helper requires every exact source parameter ABI.", parameter);

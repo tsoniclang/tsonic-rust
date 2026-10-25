@@ -101,270 +101,272 @@ export function resolveFunctionExpressionCarrier(
     }
     if (participation === "erased") return setCarrierFact(walk, expression, rustUnitTargetType());
   }
-  const genericParameters = walk.context.sourceLifetimes.contractFor(expression)?.parameters
-    .flatMap(parameter => parameter.kind === "type" ? [rustTypeParameterFromSourceContract(parameter)] : []);
-  const parameters = sourceCallableValueParameters(ast, expression, walk.context.semanticsFor(expression));
-  if (parameters === undefined) return undefined;
-  const inferred = expected === undefined || options?.sourceCarrier !== undefined
-    ? resolveFunctionExpressionSignature(walk, expression, options?.sourceCarrier) : undefined;
-  if (expected === undefined && inferred?.inference.kind === "pending") return undefined;
-  const sourceSelected = options?.sourceCarrier ?? inferred?.sourceCarrier;
-  const resolvedSourceCallable = inferred?.protocol;
-  const selectedExpected = selectRustClosedCallableContext(walk, expression, expected ?? inferred?.carrier);
-  if (selectedExpected === undefined || (selectedExpected.kind !== "function-pointer" &&
-    rustClosureProtocol(selectedExpected) === undefined &&
-    rustGenericCallableProtocol(selectedExpected, genericParameters) === undefined &&
-    rustCallableProtocol(selectedExpected) === undefined)) {
-    return undefined;
-  }
-  const selectedGeneric = rustGenericCallableValue(selectedExpected);
-  if ((genericParameters?.length ?? 0) > 0 && selectedGeneric === undefined &&
-    (selectedExpected.kind !== "closure" || options?.selectedMethodDeclaration === undefined ||
-      !ast.is.IsMethodDeclaration(expression) || rustGenericCallableValue(sourceSelected) === undefined)) {
-    return undefined;
-  }
-  const callable = rustGenericCallableProtocol(selectedExpected, genericParameters) ?? rustCallableProtocol(selectedExpected);
-  const closure = rustClosureProtocol(selectedExpected);
-  const selectedParameters = selectedExpected.kind === "function-pointer"
-    ? selectedExpected.args
-    : closure?.parameters ?? callable?.parameters;
-  const selectedResult = selectedExpected.kind === "function-pointer"
-    ? selectedExpected.result
-    : closure?.result ?? callable?.result;
-  if (selectedParameters === undefined || selectedResult === undefined) {
-    return undefined;
-  }
   const leadingParameters = options?.leadingParameters ?? [];
-  if (selectedParameters.length < leadingParameters.length ||
-    !leadingParameters.every((parameter, index) =>
-      rustTargetTypeRefEquals(parameter.carrier, selectedParameters[index]))) {
-    return undefined;
-  }
-  const targetParameterCarriers = selectedParameters.slice(leadingParameters.length);
-  const authoredBoundCallable = sourceSelected ?? (
-    (selectedExpected.kind === "function-pointer" || selectedExpected.kind === "closure") &&
-      selectedExpected.lifetimeBinder !== undefined
-      ? resolveRustTargetTypeRef(
-          expression,
-          rustResolutionContext(walk, expression),
-          walk.operationOptions,
-        )
-      : undefined
-  );
-  const sourceCallableIsAlphaEquivalent = authoredBoundCallable !== undefined &&
-    rustTargetTypeRefEquals(authoredBoundCallable, selectedExpected);
-  const authoredBoundProtocol = sourceCallableIsAlphaEquivalent
-    ? authoredBoundCallable?.kind === "function-pointer"
-      ? { parameters: authoredBoundCallable.args, result: authoredBoundCallable.result }
-      : rustClosureProtocol(authoredBoundCallable)
-    : undefined;
-  const lifetimeBinders = sourceCallableIsAlphaEquivalent &&
-      (authoredBoundCallable?.kind === "function-pointer" || authoredBoundCallable?.kind === "closure") &&
-      (selectedExpected.kind === "function-pointer" || selectedExpected.kind === "closure") &&
-      authoredBoundCallable.lifetimeBinder !== undefined &&
-      selectedExpected.lifetimeBinder !== undefined
-    ? {
-        authored: authoredBoundCallable.lifetimeBinder,
-        selected: selectedExpected.lifetimeBinder,
-      }
-    : undefined;
-  if (parameters.length > targetParameterCarriers.length) {
-    return undefined;
-  }
-  if (resolvedSourceCallable !== undefined &&
-    parameters.length !== resolvedSourceCallable.parameters.length) {
-    return undefined;
-  }
-  const parameterAbis: import("../../target-model/records/callables-and-resources.js").RustSourceParameterAbiFact[] = [];
-  const byRefCopyParams: boolean[] = [];
-  for (const [index, parameter] of parameters.entries()) {
-    if (parameter === undefined) {
-      return undefined;
-    }
-    const targetParameterCarrier = targetParameterCarriers[index];
-    const sourceParameterCarrier = sourceCallableIsAlphaEquivalent
-      ? authoredBoundProtocol?.parameters[index]
-      : resolvedSourceCallable?.parameters[index];
-    if (targetParameterCarrier === undefined ||
-      (targetParameterCarrier.kind === "opaque" && targetParameterCarrier.id === "tsonic.rust.infer")) {
-      return undefined;
-    }
-    const parameterSelection = resolveRustContextualParameterAbi(
-      parameter,
-      targetParameterCarrier,
-      rustResolutionContext(walk, parameter),
-      walk.operationOptions,
-      lifetimeBinders,
-      selectedExpected.kind === "closure" && selectedExpected.callTrait !== undefined
-        ? targetParameterCarrier : undefined,
-    );
-    if (parameterSelection?.kind === "rejected") {
-      refuseRustParameterCarrier(walk, parameter, parameterSelection.reason);
-      return undefined;
-    }
-    const parameterAbi = parameterSelection?.abi;
-    if (parameterAbi === undefined ||
-      (sourceParameterCarrier !== undefined &&
-        !rustTargetTypeRefEquals(parameterAbi.valueCarrier, parameterAbi.form === "default"
-          ? rustOptionElementCarrier(sourceParameterCarrier) : sourceParameterCarrier)) ||
-      rustCallableInputProtocol(selectedExpected) === undefined && !rustTargetTypeRefEquals(
-        parameterAbi.parameterCarrier,
-        retainedParameterContract(parameterAbi.parameterCarrier, targetParameterCarrier),
-      )) {
-      return undefined;
-    }
-    if (!recordRustParameterAbiSelection(walk, parameter, parameterAbi)) return undefined;
-    parameterAbis.push(parameterAbi);
-    byRefCopyParams.push(false);
-  }
-  if (rustCallableInputProtocol(selectedExpected) !== undefined) {
-    const physical = rustCallableTargetType([
-      ...leadingParameters.map(parameter => parameter.carrier),
-      ...parameterAbis.map(abi => abi.parameterCarrier),
-      ...targetParameterCarriers.slice(parameters.length),
-    ], selectedResult);
-    if (!rustTargetTypeRefEquals(physical, rustCallableTargetType(selectedParameters, selectedResult)) &&
-      selectRustCallableConversion(physical, selectedExpected,
-        (source, target) => selectRustSourceValueConversion(source, target, walk.context.typeDefinitions),
-        walk.context.typeDefinitions) === undefined) return undefined;
-  }
-  const body = ast.body(expression);
-  if (body === undefined) {
-    return undefined;
-  }
-  const receiver = leadingParameters.find(parameter => parameter.kind === "this")?.carrier;
-  const suspended = ast.hasModifierKind(expression, "async") ||
-    walk.context.semanticsFor(expression).operations.generator(expression) !== undefined;
-  const inferResult = selectedResult.kind === "opaque" && selectedResult.id === "tsonic.rust.infer";
-  const signatureRequest = { parameterAbis, ownedReceiver: receiver?.kind === "reference" ? undefined : receiver,
-    contextualResult: selectedResult, ...(!suspended && !inferResult ? { selectedReturn: selectedResult } : {}) };
-  const completedSignature = finalizeRustCallableSignature(walk, expression, signatureRequest);
-  const generator = walk.context.records.generator.get(expression);
-  const asynchronous = walk.context.records.asyncFunction.get(expression);
-  if (walk.context.semanticsFor(expression).operations.generator(expression) !== undefined
-    ? generator === undefined
-    : ast.hasModifierKind(expression, "async") && asynchronous === undefined) {
-    return undefined;
-  }
-  const finalizedReturn = walk.context.records.sourceCallableReturn.get(expression)?.returnCarrier;
-  const resultInference = selectedResult.kind === "opaque" && selectedResult.id === "tsonic.rust.infer"
-    ? completedSignature.kind === "complete" ? { kind: "complete" as const, carrier: completedSignature.logicalReturn }
-    : selectRustInferredReturn(walk, expression, resolveRustTargetTypeRef(Node_Type(ast, expression) ??
-        (ast.kindName(body) === KindBlock ? selectedSourceCallableReturn(walk, expression) : undefined),
-      rustResolutionContext(walk, expression), walk.operationOptions))
-    : { kind: "complete" as const, carrier: selectedResult };
-  const selectedResultExpectation = resultInference.kind === "complete" ? resultInference.carrier : undefined;
-  const suspendedResult = generator?.resultCarrier ?? asynchronous?.futureCarrier;
-  const invocationResult = suspendedResult === undefined || selectedResultExpectation === undefined ||
-      rustTargetTypeRefEquals(suspendedResult, selectedResultExpectation)
-    ? undefined : finalizeValueConversion(selectRustSourceValueConversion(suspendedResult,
-        selectedResultExpectation, walk.context.typeDefinitions), suspendedResult,
-        selectedResultExpectation, walk.context.typeDefinitions);
-  if (suspendedResult !== undefined && selectedResultExpectation !== undefined &&
-      !rustTargetTypeRefEquals(suspendedResult, selectedResultExpectation) && invocationResult === undefined) return undefined;
-  const selectedValueResult = suspended ? selectedResultExpectation ?? suspendedResult : finalizedReturn ?? selectedResultExpectation;
-  const selectedBodyResult = generator?.returnType ?? asynchronous?.outputCarrier ?? finalizedReturn ?? selectedResultExpectation;
-  const resultExpectation = selectedBodyResult ?? finalizedReturn;
-  const parameterCarriers = parameterAbis.map((abi) => abi.parameterCarrier);
-  const expressionName = Node_Name(ast, expression);
-  if (ast.kindName(expression) === KindFunctionExpression && expressionName !== undefined) {
-    if (selectedValueResult === undefined) {
-      return undefined;
-    }
-    // The self binding holds the closure value itself, so it takes the value's retained lifetime, not the expected one.
-    const rebound = rebindRustCallableCarrier(selectedExpected, parameterCarriers, selectedValueResult,
-      { typeParameters: genericParameters ?? [] });
-    const recursiveCarrier = rebound === undefined ? undefined : rustSourceClosureValueCarrier(walk, expression, rebound);
-    if (recursiveCarrier === undefined) return undefined;
-    setCarrierFact(walk, expression, recursiveCarrier);
-    setCarrierFact(walk, expressionName, recursiveCarrier);
-  }
-  let bodyCarrier = resultExpectation;
-  const previousCallable = walk.currentCallableDeclaration;
-  const previousGenerator = walk.currentGeneratorDeclaration;
-  const previousMethod = walk.currentMethodDeclaration;
   const previousThis = walk.currentThisCarrier;
-  walk.currentCallableDeclaration = expression;
-  walk.currentGeneratorDeclaration = generator === undefined ? undefined : expression;
-  walk.currentMethodDeclaration = options?.selectedMethodDeclaration;
-  walk.currentThisCarrier = walk.context.ast.kindName(expression) === "KindArrowFunction"
-    ? previousThis
-    : leadingParameters.find((parameter) => parameter.kind === "this")?.carrier;
+  walk.currentThisCarrier = ast.is.IsArrowFunction(expression)
+    ? previousThis : leadingParameters.find(parameter => parameter.kind === "this")?.carrier;
   try {
-    if (!recordCallableDefaultParameterFacts(walk, expression)) return undefined;
-    if (ast.kindName(body) === KindBlock) {
-      if (bodyCarrier === undefined) {
-        return undefined;
-      }
-      const statements = requireDenseSourceNodes(walk, ast.statements(body), "Callable-expression body contains an undefined or non-data statement slot.");
-      if (statements === undefined) {
-        return undefined;
-      }
-      for (const statement of statements) {
-        recordStatementFacts(walk, statement, sourceFile, bodyCarrier);
-      }
-    } else {
-      const resolved = resolveExpressionCarrier(walk, body, sourceFile, resultExpectation);
-      if (resolved === undefined || resultExpectation !== undefined &&
-        !reconcileRequiredCarrier(walk, body, resolved, resultExpectation)) {
-        return undefined;
-      }
-      bodyCarrier = resultExpectation ?? resolved;
+    const genericParameters = walk.context.sourceLifetimes.contractFor(expression)?.parameters
+      .flatMap(parameter => parameter.kind === "type" ? [rustTypeParameterFromSourceContract(parameter)] : []);
+    const parameters = sourceCallableValueParameters(ast, expression, walk.context.semanticsFor(expression));
+    if (parameters === undefined) return undefined;
+    const inferred = expected === undefined || options?.sourceCarrier !== undefined
+      ? resolveFunctionExpressionSignature(walk, expression, options?.sourceCarrier) : undefined;
+    if (expected === undefined && inferred?.inference.kind === "pending") return undefined;
+    const sourceSelected = options?.sourceCarrier ?? inferred?.sourceCarrier;
+    const resolvedSourceCallable = inferred?.protocol;
+    const selectedExpected = selectRustClosedCallableContext(walk, expression, expected ?? inferred?.carrier);
+    if (selectedExpected === undefined || (selectedExpected.kind !== "function-pointer" &&
+      rustClosureProtocol(selectedExpected) === undefined &&
+      rustGenericCallableProtocol(selectedExpected, genericParameters) === undefined &&
+      rustCallableProtocol(selectedExpected) === undefined)) {
+      return undefined;
     }
+    const selectedGeneric = rustGenericCallableValue(selectedExpected);
+    if ((genericParameters?.length ?? 0) > 0 && selectedGeneric === undefined &&
+      (selectedExpected.kind !== "closure" || options?.selectedMethodDeclaration === undefined ||
+        !ast.is.IsMethodDeclaration(expression) || rustGenericCallableValue(sourceSelected) === undefined)) {
+      return undefined;
+    }
+    const callable = rustGenericCallableProtocol(selectedExpected, genericParameters) ?? rustCallableProtocol(selectedExpected);
+    const closure = rustClosureProtocol(selectedExpected);
+    const selectedParameters = selectedExpected.kind === "function-pointer"
+      ? selectedExpected.args
+      : closure?.parameters ?? callable?.parameters;
+    const selectedResult = selectedExpected.kind === "function-pointer"
+      ? selectedExpected.result
+      : closure?.result ?? callable?.result;
+    if (selectedParameters === undefined || selectedResult === undefined) {
+      return undefined;
+    }
+    if (selectedParameters.length < leadingParameters.length ||
+      !leadingParameters.every((parameter, index) =>
+        rustTargetTypeRefEquals(parameter.carrier, selectedParameters[index]))) {
+      return undefined;
+    }
+    const targetParameterCarriers = selectedParameters.slice(leadingParameters.length);
+    const authoredBoundCallable = sourceSelected ?? (
+      (selectedExpected.kind === "function-pointer" || selectedExpected.kind === "closure") &&
+        selectedExpected.lifetimeBinder !== undefined
+        ? resolveRustTargetTypeRef(
+            expression,
+            rustResolutionContext(walk, expression),
+            walk.operationOptions,
+          )
+        : undefined
+    );
+    const sourceCallableIsAlphaEquivalent = authoredBoundCallable !== undefined &&
+      rustTargetTypeRefEquals(authoredBoundCallable, selectedExpected);
+    const authoredBoundProtocol = sourceCallableIsAlphaEquivalent
+      ? authoredBoundCallable?.kind === "function-pointer"
+        ? { parameters: authoredBoundCallable.args, result: authoredBoundCallable.result }
+        : rustClosureProtocol(authoredBoundCallable)
+      : undefined;
+    const lifetimeBinders = sourceCallableIsAlphaEquivalent &&
+        (authoredBoundCallable?.kind === "function-pointer" || authoredBoundCallable?.kind === "closure") &&
+        (selectedExpected.kind === "function-pointer" || selectedExpected.kind === "closure") &&
+        authoredBoundCallable.lifetimeBinder !== undefined &&
+        selectedExpected.lifetimeBinder !== undefined
+      ? {
+          authored: authoredBoundCallable.lifetimeBinder,
+          selected: selectedExpected.lifetimeBinder,
+        }
+      : undefined;
+    if (parameters.length > targetParameterCarriers.length) {
+      return undefined;
+    }
+    if (resolvedSourceCallable !== undefined &&
+      parameters.length !== resolvedSourceCallable.parameters.length) {
+      return undefined;
+    }
+    const parameterAbis: import("../../target-model/records/callables-and-resources.js").RustSourceParameterAbiFact[] = [];
+    const byRefCopyParams: boolean[] = [];
+    for (const [index, parameter] of parameters.entries()) {
+      if (parameter === undefined) {
+        return undefined;
+      }
+      const targetParameterCarrier = targetParameterCarriers[index];
+      const sourceParameterCarrier = sourceCallableIsAlphaEquivalent
+        ? authoredBoundProtocol?.parameters[index]
+        : resolvedSourceCallable?.parameters[index];
+      if (targetParameterCarrier === undefined ||
+        (targetParameterCarrier.kind === "opaque" && targetParameterCarrier.id === "tsonic.rust.infer")) {
+        return undefined;
+      }
+      const parameterSelection = resolveRustContextualParameterAbi(
+        parameter,
+        targetParameterCarrier,
+        rustResolutionContext(walk, parameter),
+        walk.operationOptions,
+        lifetimeBinders,
+        selectedExpected.kind === "closure" && selectedExpected.callTrait !== undefined
+          ? targetParameterCarrier : undefined,
+      );
+      if (parameterSelection?.kind === "rejected") {
+        refuseRustParameterCarrier(walk, parameter, parameterSelection.reason);
+        return undefined;
+      }
+      const parameterAbi = parameterSelection?.abi;
+      if (parameterAbi === undefined ||
+        (sourceParameterCarrier !== undefined &&
+          !rustTargetTypeRefEquals(parameterAbi.valueCarrier, parameterAbi.form === "default"
+            ? rustOptionElementCarrier(sourceParameterCarrier) : sourceParameterCarrier)) ||
+        rustCallableInputProtocol(selectedExpected) === undefined && !rustTargetTypeRefEquals(
+          parameterAbi.parameterCarrier,
+          retainedParameterContract(parameterAbi.parameterCarrier, targetParameterCarrier),
+        )) {
+        return undefined;
+      }
+      if (!recordRustParameterAbiSelection(walk, parameter, parameterAbi)) return undefined;
+      parameterAbis.push(parameterAbi);
+      byRefCopyParams.push(false);
+    }
+    if (rustCallableInputProtocol(selectedExpected) !== undefined) {
+      const physical = rustCallableTargetType([
+        ...leadingParameters.map(parameter => parameter.carrier),
+        ...parameterAbis.map(abi => abi.parameterCarrier),
+        ...targetParameterCarriers.slice(parameters.length),
+      ], selectedResult);
+      if (!rustTargetTypeRefEquals(physical, rustCallableTargetType(selectedParameters, selectedResult)) &&
+        selectRustCallableConversion(physical, selectedExpected,
+          (source, target) => selectRustSourceValueConversion(source, target, walk.context.typeDefinitions),
+          walk.context.typeDefinitions) === undefined) return undefined;
+    }
+    const body = ast.body(expression);
+    if (body === undefined) {
+      return undefined;
+    }
+    const receiver = leadingParameters.find(parameter => parameter.kind === "this")?.carrier;
+    const suspended = ast.hasModifierKind(expression, "async") ||
+      walk.context.semanticsFor(expression).operations.generator(expression) !== undefined;
+    const inferResult = selectedResult.kind === "opaque" && selectedResult.id === "tsonic.rust.infer";
+    const signatureRequest = { parameterAbis, ownedReceiver: receiver?.kind === "reference" ? undefined : receiver,
+      contextualResult: selectedResult, ...(!suspended && !inferResult ? { selectedReturn: selectedResult } : {}) };
+    const completedSignature = finalizeRustCallableSignature(walk, expression, signatureRequest);
+    const generator = walk.context.records.generator.get(expression);
+    const asynchronous = walk.context.records.asyncFunction.get(expression);
+    if (walk.context.semanticsFor(expression).operations.generator(expression) !== undefined
+      ? generator === undefined
+      : ast.hasModifierKind(expression, "async") && asynchronous === undefined) {
+      return undefined;
+    }
+    const finalizedReturn = walk.context.records.sourceCallableReturn.get(expression)?.returnCarrier;
+    const resultInference = selectedResult.kind === "opaque" && selectedResult.id === "tsonic.rust.infer"
+      ? completedSignature.kind === "complete" ? { kind: "complete" as const, carrier: completedSignature.logicalReturn }
+      : selectRustInferredReturn(walk, expression, resolveRustTargetTypeRef(Node_Type(ast, expression) ??
+          (ast.kindName(body) === KindBlock ? selectedSourceCallableReturn(walk, expression) : undefined),
+        rustResolutionContext(walk, expression), walk.operationOptions))
+      : { kind: "complete" as const, carrier: selectedResult };
+    const selectedResultExpectation = resultInference.kind === "complete" ? resultInference.carrier : undefined;
+    const suspendedResult = generator?.resultCarrier ?? asynchronous?.futureCarrier;
+    const invocationResult = suspendedResult === undefined || selectedResultExpectation === undefined ||
+        rustTargetTypeRefEquals(suspendedResult, selectedResultExpectation)
+      ? undefined : finalizeValueConversion(selectRustSourceValueConversion(suspendedResult,
+          selectedResultExpectation, walk.context.typeDefinitions), suspendedResult,
+          selectedResultExpectation, walk.context.typeDefinitions);
+    if (suspendedResult !== undefined && selectedResultExpectation !== undefined &&
+        !rustTargetTypeRefEquals(suspendedResult, selectedResultExpectation) && invocationResult === undefined) return undefined;
+    const selectedValueResult = suspended ? selectedResultExpectation ?? suspendedResult : finalizedReturn ?? selectedResultExpectation;
+    const selectedBodyResult = generator?.returnType ?? asynchronous?.outputCarrier ?? finalizedReturn ?? selectedResultExpectation;
+    const resultExpectation = selectedBodyResult ?? finalizedReturn;
+    const parameterCarriers = parameterAbis.map((abi) => abi.parameterCarrier);
+    const expressionName = Node_Name(ast, expression);
+    if (ast.kindName(expression) === KindFunctionExpression && expressionName !== undefined) {
+      if (selectedValueResult === undefined) {
+        return undefined;
+      }
+      // The self binding holds the closure value itself, so it takes the value's retained lifetime, not the expected one.
+      const rebound = rebindRustCallableCarrier(selectedExpected, parameterCarriers, selectedValueResult,
+        { typeParameters: genericParameters ?? [] });
+      const recursiveCarrier = rebound === undefined ? undefined : rustSourceClosureValueCarrier(walk, expression, rebound);
+      if (recursiveCarrier === undefined) return undefined;
+      setCarrierFact(walk, expression, recursiveCarrier);
+      setCarrierFact(walk, expressionName, recursiveCarrier);
+    }
+    let bodyCarrier = resultExpectation;
+    const previousCallable = walk.currentCallableDeclaration;
+    const previousGenerator = walk.currentGeneratorDeclaration;
+    const previousMethod = walk.currentMethodDeclaration;
+    walk.currentCallableDeclaration = expression;
+    walk.currentGeneratorDeclaration = generator === undefined ? undefined : expression;
+    walk.currentMethodDeclaration = options?.selectedMethodDeclaration;
+    try {
+      if (!recordCallableDefaultParameterFacts(walk, expression)) return undefined;
+      if (ast.kindName(body) === KindBlock) {
+        if (bodyCarrier === undefined) {
+          return undefined;
+        }
+        const statements = requireDenseSourceNodes(walk, ast.statements(body), "Callable-expression body contains an undefined or non-data statement slot.");
+        if (statements === undefined) {
+          return undefined;
+        }
+        for (const statement of statements) {
+          recordStatementFacts(walk, statement, sourceFile, bodyCarrier);
+        }
+      } else {
+        const resolved = resolveExpressionCarrier(walk, body, sourceFile, resultExpectation);
+        if (resolved === undefined || resultExpectation !== undefined &&
+          !reconcileRequiredCarrier(walk, body, resolved, resultExpectation)) {
+          return undefined;
+        }
+        bodyCarrier = resultExpectation ?? resolved;
+      }
+    } finally {
+      walk.currentCallableDeclaration = previousCallable;
+      walk.currentGeneratorDeclaration = previousGenerator;
+      walk.currentMethodDeclaration = previousMethod;
+    }
+    const finalizedParameterCarriers = [
+      ...leadingParameters.map((parameter) => parameter.carrier),
+      ...parameterCarriers,
+      ...targetParameterCarriers.slice(parameters.length),
+    ];
+    const valueResult = selectedValueResult ?? bodyCarrier;
+    if (finalizeRustCallableSignature(walk, expression,
+      { ...signatureRequest, selectedReturn: generator?.resultCarrier ??
+        (completedSignature.kind === "complete" ? completedSignature.logicalReturn : undefined) ?? selectedResultExpectation }).kind !== "complete") return undefined;
+    const captures = collectRustLexicalCaptures(walk, expression, [...parameters.flatMap(parameter => {
+      const initializer = parameter === undefined ? undefined : Node_Initializer(ast, parameter);
+      return initializer === undefined ? [] : [initializer];
+    }), body],
+      generator === undefined && asynchronous === undefined && ast.typeParameters(expression).length === 0 &&
+      ["KindArrowFunction", "KindFunctionExpression"].includes(ast.kindName(expression)),
+      selectedExpected.kind === "closure" ? selectedExpected.callTrait : undefined);
+    if (captures === undefined) {
+      return undefined;
+    }
+    const logicalCarrier = rebindRustCallableCarrier(selectedExpected, finalizedParameterCarriers, valueResult,
+      selectedGeneric === undefined ? {} : { typeParameters: genericParameters ?? [],
+        environment: [...selectedGeneric.environment, ...captures.captures.map(capture => capture.carrier),
+          ...captures.receiverFields.map(capture => capture.carrier), ...captures.receivers.map(capture => capture.carrier)],
+      });
+    const closureCarrier = logicalCarrier === undefined ? undefined : rustSourceClosureValueCarrier(walk, expression, logicalCarrier,
+      [...captures.captures, ...captures.receiverFields, ...captures.receivers].map(capture => capture.carrier));
+    if (closureCarrier === undefined) return undefined;
+    requireRustRecord(walk.context.requiredRecords, "closureCapture", expression, "closure", "analysis/callables/closures.ts");
+    walk.context.records.closureCaptures.capture(expression, captures.captures, captures.receivers, captures.receiverFields,
+      captures, (generator !== undefined || asynchronous !== undefined) &&
+          rustFrameCallableValue(closureCarrier) === undefined &&
+          rustCallableProtocol(closureCarrier) !== undefined &&
+          (captures.captures.length > 0 || captures.receiverFields.length > 0 || captures.receivers.length > 0 || captures.recursiveDeclaration !== undefined)
+        ? "shared-state" : undefined);
+    requireRustRecord(walk.context.requiredRecords, "targetOperation", expression, "closure", "analysis/callables/closures.ts");
+    walk.context.records.targetOperations.source(expression, {
+      kind: "closure",
+      operationId: "tsonic.rust.closure",
+      parameterForms: options?.preserveSourceParameterForms === true
+        ? "source"
+        : "required-only",
+      byRefCopyParams,
+      ignoredParameterCarriers: targetParameterCarriers.slice(parameters.length),
+      ...(invocationResult === undefined ? {} : { invocationResult }),
+      ...(leadingParameters.length === 0 ? {} : { leadingParameters }),
+      resultCarrier: closureCarrier,
+    });
+    return setCarrierFact(walk, expression, closureCarrier);
   } finally {
-    walk.currentCallableDeclaration = previousCallable;
-    walk.currentGeneratorDeclaration = previousGenerator;
-    walk.currentMethodDeclaration = previousMethod;
     walk.currentThisCarrier = previousThis;
   }
-  const finalizedParameterCarriers = [
-    ...leadingParameters.map((parameter) => parameter.carrier),
-    ...parameterCarriers,
-    ...targetParameterCarriers.slice(parameters.length),
-  ];
-  const valueResult = selectedValueResult ?? bodyCarrier;
-  if (finalizeRustCallableSignature(walk, expression,
-    { ...signatureRequest, selectedReturn: generator?.resultCarrier ??
-      (completedSignature.kind === "complete" ? completedSignature.logicalReturn : undefined) ?? selectedResultExpectation }).kind !== "complete") return undefined;
-  const captures = collectRustLexicalCaptures(walk, expression, [...parameters.flatMap(parameter => {
-    const initializer = parameter === undefined ? undefined : Node_Initializer(ast, parameter);
-    return initializer === undefined ? [] : [initializer];
-  }), body],
-    generator === undefined && asynchronous === undefined && ast.typeParameters(expression).length === 0 &&
-    ["KindArrowFunction", "KindFunctionExpression"].includes(ast.kindName(expression)),
-    selectedExpected.kind === "closure" ? selectedExpected.callTrait : undefined);
-  if (captures === undefined) {
-    return undefined;
-  }
-  const logicalCarrier = rebindRustCallableCarrier(selectedExpected, finalizedParameterCarriers, valueResult,
-    selectedGeneric === undefined ? {} : { typeParameters: genericParameters ?? [],
-      environment: [...selectedGeneric.environment, ...captures.captures.map(capture => capture.carrier),
-        ...captures.receiverFields.map(capture => capture.carrier), ...captures.receivers.map(capture => capture.carrier)],
-    });
-  const closureCarrier = logicalCarrier === undefined ? undefined : rustSourceClosureValueCarrier(walk, expression, logicalCarrier,
-    [...captures.captures, ...captures.receiverFields, ...captures.receivers].map(capture => capture.carrier));
-  if (closureCarrier === undefined) return undefined;
-  requireRustRecord(walk.context.requiredRecords, "closureCapture", expression, "closure", "analysis/callables/closures.ts");
-  walk.context.records.closureCaptures.capture(expression, captures.captures, captures.receivers, captures.receiverFields,
-    captures, (generator !== undefined || asynchronous !== undefined) &&
-        rustFrameCallableValue(closureCarrier) === undefined &&
-        rustCallableProtocol(closureCarrier) !== undefined &&
-        (captures.captures.length > 0 || captures.receiverFields.length > 0 || captures.receivers.length > 0 || captures.recursiveDeclaration !== undefined)
-      ? "shared-state" : undefined);
-  requireRustRecord(walk.context.requiredRecords, "targetOperation", expression, "closure", "analysis/callables/closures.ts");
-  walk.context.records.targetOperations.source(expression, {
-    kind: "closure",
-    operationId: "tsonic.rust.closure",
-    parameterForms: options?.preserveSourceParameterForms === true
-      ? "source"
-      : "required-only",
-    byRefCopyParams,
-    ignoredParameterCarriers: targetParameterCarriers.slice(parameters.length),
-    ...(invocationResult === undefined ? {} : { invocationResult }),
-    ...(leadingParameters.length === 0 ? {} : { leadingParameters }),
-    resultCarrier: closureCarrier,
-  });
-  return setCarrierFact(walk, expression, closureCarrier);
 }
 
 export function collectRustLexicalCaptures(

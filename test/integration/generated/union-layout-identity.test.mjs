@@ -13,6 +13,47 @@ import { selectRustNativeStorageTypeDemand } from "../../../dist/analysis/callab
 const bodyType = "string | number | boolean | null | Record<string, unknown> | unknown[]";
 const identityCode = "RUST_UNION_ENTRY_STORAGE_IDENTITY_NOT_PRESERVED";
 
+for (const [label, body, mutable, written] of [
+  ["selected native vector", `
+type Body = boolean | unknown[];
+export function inspect(value: Body): boolean {
+  if (typeof value === "boolean") return value;
+  value[0] = 2;
+  return value[0] === 2;
+}`, true, true],
+  ["shared object interior", `
+class Box { count: number = 0; }
+type Body = boolean | Box;
+export function inspect(value: Body): boolean {
+  if (typeof value === "boolean") return value;
+  const alias = value;
+  value.count = 2;
+  return alias.count === 2;
+}`, false, true],
+  ["untouched native vector", `
+type Body = boolean | unknown[];
+export function inspect(value: Body): boolean {
+  if (typeof value === "boolean") return value;
+  return value[0] === 2;
+}`, false, false],
+]) test(`native written-path mutability follows the actual union use: ${label}`, () => {
+  const { program } = analyzeRust({ files: { "index.ts": body } });
+  const ast = program.source.ast;
+  const nodes = [];
+  const visit = node => { nodes.push(node); ast.forEachChild(node, child => { if (child !== undefined) visit(child); }); };
+  program.sourceFiles.forEach(visit);
+  const parameter = nodes.find(node => ast.is.IsParameterDeclaration(node) && ast.text(ast.name(node)) === "value");
+  assert.equal(parameter !== undefined, true, `${label}: use the original checked source parameter`);
+  assert.equal(program.records.mutatedReferent.get(parameter) !== undefined, written,
+    `${label}: source writes are retained without inventing a write for an untouched union`);
+  assert.equal(program.records.mutatedReferentBinding.get(parameter) !== undefined, mutable,
+    `${label}: the sole final decision follows the actual native write path, not all declared union arms`);
+  const selected = program.records.callableParameter.get(parameter);
+  assert.equal(selected !== undefined, true, `${label}: the native parameter consumes its completed required records`);
+  assert.equal(selected.parameterMutable, mutable,
+    `${label}: native parameter emission consumes exactly the final binding fact`);
+});
+
 test("native TYPE demand distinguishes metadata from real Future and callable storage before projecting a source", () => {
   const number = rustSourcePrimitiveTargetType("float64");
   const future = rustFutureTargetType(number);
@@ -176,7 +217,9 @@ export function enter(): number {
   ${entry}
 }
 ` } });
-    assert.equal(result.diagnostics.length, 1, `${label}: one precise source refusal, not an arbitrary diagnostic`);
+    assert.equal(result.diagnostics.length, 1, `${label}: one precise source refusal, not an arbitrary diagnostic: ${
+      result.diagnostics.slice(0, 6).map(issue => `${issue.code}: ${issue.message} (${
+        issue.sourceNode === undefined ? "absent" : source.ast.kindName(issue.sourceNode)})`).join("; ")}`);
     const diagnostic = result.diagnostics[0];
     assert.equal(diagnostic.code, identityCode, `${label}: the exact native identity admission owns the refusal`);
     assert.equal(diagnostic.message.startsWith("A native union entry requires an identity-preserving array transfer;"), true,

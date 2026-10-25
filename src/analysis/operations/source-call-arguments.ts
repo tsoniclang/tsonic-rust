@@ -14,7 +14,6 @@ import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 
 import { rustSpreadElementCarrier } from "../../target-model/operations/rest-assembly.js";
 import { rustCallableProtocol } from "../../target-model/types/carriers/callables.js";
-import { rustCallableInvocationSignaturesMatch } from "../../policy/conversions/callable-input.js";
 import { reconcileRequiredCarrier } from "../conversions/contextual-values.js";
 import { selectRustSourceValueConversion } from "../../policy/conversions/selection.js";
 import { rustValueConversionContract } from "../../policy/conversions/contracts.js";
@@ -105,7 +104,7 @@ export function prepareSelectedSourceCallArguments(
     if (expected !== undefined && rustCallableProtocol(expected) !== undefined &&
       walk.context.records.contextualValueConversion.get(argument) === undefined &&
       rustCallableProtocol(resolvedArgumentCarrier) !== undefined &&
-      !rustCallableInvocationSignaturesMatch(expected, resolvedArgumentCarrier) &&
+      !rustTargetTypeRefEquals(expected, resolvedArgumentCarrier) &&
       !reconcileRequiredCarrier(walk, argument, resolvedArgumentCarrier, expected)) {
       appendRustDiagnostic(
         walk,

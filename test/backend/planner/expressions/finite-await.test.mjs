@@ -2,14 +2,20 @@ import { createRustRecordFixture } from "../../../helpers/records.mjs";
 import { assertNoTargetDiagnostics } from "../../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
-import { rustPackageFallibleBoundary } from "../../../../dist/backend/planner/program/fallible-boundaries.js";
 import { analyzeRust } from "../../../helpers/rust-session.mjs";
-
-
+import { rustSourceFilePlanContext } from "../../../helpers/plan-context.mjs";
+import { sourceEnclosingCallable } from "@tsonic/target-api/source";
+import { planRustErrorRegion } from "../../../../dist/backend/planner/program/error-regions.js";
+import { rustAwaitValueMatchesCarrier } from "../../../../dist/analysis/callables/await-values.js";
+import { createRustAwaitValueProducer } from "../../../../dist/analysis/program/records/await-value.js";
+import { selectRustSourceValueConversion } from "../../../../dist/policy/conversions/selection.js";
+import { rustAwaitSelectionLeaves } from "../../../../dist/target-model/types/await.js";
 import { rustSourcePrimitiveTargetType } from "../../../../dist/target-model/types/index.js";
 import { planRustAwaitExpression } from "../../../../dist/backend/planner/expressions/await.js";
-import { createRustSyntheticNameState } from "../../../../dist/backend/planner/names/synthetic.js";
-import { rustRuntimeErrorTypeIdentity } from "../../../../dist/target-model/types/carriers/runtime-carriers.js";
+import { rustTargetTypeRefEquals } from "../../../../dist/target-model/types/equality.js";
+
+const invariant = message => error => error?.diagnostic?.code === "TSONIC_INTERNAL_PLANNER_INVARIANT" &&
+  message.test(error.diagnostic.message);
 
 function awaitProgram(source) {
   const { program } = analyzeRust({ surfaces: ["js"], files: { "index.ts": source } });
@@ -27,16 +33,12 @@ function awaitProgram(source) {
 
 function contextFor(program, node, records = program.records) {
   const { ast } = program.source;
-  return { input: { program: { ...program, records } }, diagnostics: [],
-    sourceFile: ast.getSourceFile(node), moduleName: "index", structuralShapesModuleName: "shapes",
-    moduleNameByFileName: new Map([["/src/index.ts", "index"]]), externalCrateNameByFileName: new Map(),
-    externalItemPathByIdentity: new Map(), externalStructuralShapeModuleByFileName: new Map(),
-    sourcePackageComponentId: "test", sourcePackageErrors: { domainsByComponentId: new Map([["test", {
-      componentId: "test", errorDomain: "runtime", errorTypeIdentity: rustRuntimeErrorTypeIdentity,
-    }]]) },
-    usedAliases: new Set(), syntheticNames: createRustSyntheticNameState(ast, node, []),
-    fallibleBoundary: rustPackageFallibleBoundary({ componentId: "test", errorDomain: "runtime",
-      errorTypePath: "rt::TsonicError", errorTypeIdentity: "tsonic-rust-runtime:TsonicError" }) };
+  const selected = rustSourceFilePlanContext({ ...program, records }, node);
+  const declaration = sourceEnclosingCallable(node, ast);
+  assert.equal(declaration !== undefined, true, "the original await has its checked callable owner");
+  const region = planRustErrorRegion(declaration, selected);
+  assert.equal(region !== undefined, true, "the real completed native error region is available");
+  return { ...selected, callableDeclaration: declaration, fallibleBoundary: region.boundary };
 }
 
 test("finite await planner emits native branch selection and preserves one operand evaluation", () => {
@@ -87,11 +89,16 @@ import type { uint64 } from "@tsonic/core/types.js";
 export async function read(value: uint64 | Promise<uint64>): Promise<uint64> { return await value; }
 `);
   const selected = contextFor(program, node);
-  selected.sourcePackageErrors.domainsByComponentId.clear();
-  assert.equal(planRustAwaitExpression(node, selected, () => ({ kind: "path", path: "value" })) === undefined, true);
-  assert.equal(selected.diagnostics.length, 1);
-  assert.equal(selected.diagnostics[0].code, "RUST_MISSING_TARGET_FACT");
-  assert.equal(selected.diagnostics[0].evidence.includes("target.capability=rust.backend.await-union"), true);
+  const original = program.records.sourcePackageErrors.get();
+  const records = createRustRecordFixture({ sourcePackageErrors: { get: () => undefined } }, program.records);
+  let evaluations = 0;
+  assert.throws(() => {
+    const missing = contextFor(program, node, records);
+    planRustAwaitExpression(node, missing, () => { evaluations += 1; return { kind: "path", path: "value" }; });
+  }, invariant(/source-package graph requires its exact native error domains/u));
+  assert.equal(evaluations, 0, "missing required error-domain publication is refused before operand work");
+  assert.equal(program.records.sourcePackageErrors.get() === original, true, "the failed child cannot replace the original publication");
+  assertNoTargetDiagnostics(selected.diagnostics);
 });
 
 test("await planner rejects missing or mutated branch and effect contracts before operand planning", () => {
@@ -100,25 +107,40 @@ import type { uint64 } from "@tsonic/core/types.js";
 export async function read(value: uint64 | Promise<uint64>): Promise<uint64> { return await value; }
 `);
   const integer = rustSourcePrimitiveTargetType("int32");
-  const mutations = [ undefined, { ...fact, resultCarrier: integer }, { ...fact, operandCarrier: integer },
-    { ...fact, unexpected: true },
-    { ...fact, selection: { ...fact.selection, alternatives: [] } },
-    { ...fact, selection: { ...fact.selection, alternatives: [...fact.selection.alternatives].reverse() } },
-    { ...fact, selection: { ...fact.selection, alternatives: fact.selection.alternatives.map(alternative =>
+  const mutations = [ ["missing fact", undefined], ["wrong result", { ...fact, resultCarrier: integer }],
+    ["wrong operand", { ...fact, operandCarrier: integer }], ["unexpected field", { ...fact, unexpected: true }],
+    ["missing branches", { ...fact, selection: { ...fact.selection, alternatives: [] } }],
+    ["reordered branches", { ...fact, selection: { ...fact.selection, alternatives: [...fact.selection.alternatives].reverse() } }],
+    ["missing native error channel", { ...fact, selection: { ...fact.selection, alternatives: fact.selection.alternatives.map(alternative =>
       alternative.selection.value.future === undefined ? alternative : { ...alternative,
         selection: { ...alternative.selection, value: { ...alternative.selection.value,
-          future: { ...alternative.selection.value.future, errorBoundary: "none" } } } }) } },
+          future: { ...alternative.selection.value.future, errorBoundary: "none" } } } }) } }],
   ];
-  for (const mutation of mutations) {
-    const records = createRustRecordFixture({
-awaitValue: { get: (subject) => subject === node
-    ? mutation : program.records.awaitValue.get(subject) }}, program.records);
-    const selected = contextFor(program, node, records);
-    assert.equal(planRustAwaitExpression(node, selected, () => {
-      assert.fail("an invalid await contract must not reach operand planning");
-    }), undefined);
-    assert.equal(selected.diagnostics.length, 1);
-    assert.equal(selected.diagnostics[0].code, "RUST_MISSING_TARGET_FACT");
-    assert.ok(selected.diagnostics[0].evidence.includes("target.capability=rust.backend.await-value"));
+  const leaves = rustAwaitSelectionLeaves(fact.selection);
+  for (const [label, mutation] of mutations) {
+    const inherited = { get: subject => subject === node ? mutation : program.records.awaitValue.get(subject) };
+    if (mutation === undefined) {
+      const records = createRustRecordFixture({ awaitValue: inherited }, program.records);
+      const selected = contextFor(program, node, records);
+      let evaluations = 0;
+      assert.throws(() => planRustAwaitExpression(node, selected, () => {
+        evaluations += 1;
+        assert.fail("an invalid await contract must not reach operand planning");
+      }), invariant(/native operand and completion selection/u), label);
+      assert.equal(evaluations, 0, label);
+      assert.equal(records.awaitValue.get(node) === undefined, true, label + ": no missing fact is invented");
+    } else {
+      assert.equal(rustAwaitValueMatchesCarrier(mutation, fact.operandCarrier, fact.resultCarrier,
+        program.typeDefinitions), false, label);
+      let admissions = 0;
+      const producer = createRustAwaitValueProducer(() => {}, () => { admissions += 1; }, program.typeDefinitions, inherited);
+      assert.throws(() => producer.finalize(node, fact.operandCarrier, fact.resultCarrier,
+        carrier => leaves.find(leaf => rustTargetTypeRefEquals(leaf.carrier, carrier))?.future,
+        (source, target) => selectRustSourceValueConversion(source, target, program.typeDefinitions)),
+      /Conflicting Rust semantic plan 'tsonic.rust.awaitValue'/u, label);
+      assert.equal(admissions, 0, label + ": contradictory inherited evidence is never admitted");
+      assert.equal(producer.records.get(node) === mutation, true, label + ": failed admission does not replace inherited evidence");
+    }
+    assert.equal(program.records.awaitValue.get(node) === fact, true, label + ": original sealed plan remains unchanged");
   }
 });

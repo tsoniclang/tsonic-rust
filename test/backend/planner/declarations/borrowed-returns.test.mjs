@@ -96,6 +96,10 @@ for (const surface of ["native", "js"]) {
         assert.match(generated, /fn capturedRead\(input: String,/u);
         assert.match(generated, /fn comparedRead\(input: String\) -> String/u);
         assert.doesNotMatch(generated, /fn (?:capturedRead|comparedRead)<'input>/u);
+        assert.equal(/change\(&mut calls, &mut compared\)/u.test(generated), true,
+          "the mutable lexical capture borrows the original owner, not an owned snapshot");
+        assert.equal(/comparedRead\(compared\.clone\(\)\)/u.test(generated), true,
+          "the earlier comparison operand still owns its required pre-mutation snapshot");
       }
       validateGeneratedProject(`lexical-${name}-return-${surface}`, result.artifacts, { run: true });
     });

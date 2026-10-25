@@ -3,6 +3,42 @@ import test from "node:test";
 import { createTargetSourceProgram } from "@tsonic/target-api/source";
 import { analyzeRust, compileRust, rustSourceText } from "../../helpers/rust-session.mjs";
 
+for (const surfaces of [[], ["js"]]) {
+  const surface = surfaces[0] ?? "native";
+  test(`local-binding admission follows the actual excluded native ancestor (${surface})`, () => {
+    const { result } = compileRust({ surfaces, files: { "index.ts": `
+export function inspect(key: string): number {
+  if (false) { const excluded = { [key]: 1 }; }
+  const selected = 7;
+  return selected;
+}
+` } });
+    assert.equal(result.diagnostics.length, 0,
+      result.diagnostics.map(issue => `${issue.code}: ${issue.message}`).join("; "));
+    assert.equal(result.program !== undefined && result.plan !== undefined && result.artifacts.length > 0, true,
+      "the selected native path completes actual admission, sealing and emission");
+    const program = result.program;
+    const ast = program.source.ast;
+    const nodes = [];
+    const visit = node => { nodes.push(node); ast.forEachChild(node, child => { if (child !== undefined) visit(child); }); };
+    program.sourceFiles.forEach(visit);
+    const guard = nodes.find(ast.is.IsIfStatement);
+    const excluded = nodes.find(node => ast.is.IsVariableDeclaration(node) && ast.text(ast.name(node)) === "excluded");
+    const selected = nodes.find(node => ast.is.IsVariableDeclaration(node) && ast.text(ast.name(node)) === "selected");
+    assert.equal(guard !== undefined && excluded !== undefined && selected !== undefined, true,
+      "all original checked declarations and their actual native guard remain in the source");
+    const branch = ast.as.AsIfStatement(guard).ThenStatement;
+    assert.equal(program.records.nativeUnreachable.get(branch), true,
+      "the existing reachability owner marks the exact excluded ancestor");
+    assert.equal(program.records.nativeUnreachable.get(excluded) === true, false,
+      "an excluded descendant does not require a fabricated per-node unreachable record");
+    assert.equal(program.records.localBinding.get(excluded) === undefined, true,
+      "no native local binding is published for an excluded descendant");
+    assert.equal(program.records.localBinding.get(selected)?.kind, "value",
+      "the selected declaration still requires its real native binding and finalized carrier");
+  });
+}
+
 const cases = [
   ["then reads the incoming value", "if ((marker = step()) > 0) { use(marker); return 1; } else { return 0; }", false],
   ["else reads the incoming value", "if ((marker = step()) > 0) { return 1; } else { use(marker); return 0; }", false],

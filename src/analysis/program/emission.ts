@@ -133,11 +133,13 @@ import type { RustGenericCallableErrorIndex } from "../../target-model/records/g
 import type { RustOwnershipFlow } from "../../target-model/records/ownership-flow.js";
 import { analyzeRustBindingLiveness } from "../control-flow/binding-liveness.js";
 import { analyzeRustLocalBindings } from "../storage/local-bindings.js";
+import type { RustOperationAttempt } from "./operation-attempts.js";
 
 export function finalizeRustNativeEmission(
   program: Omit<RustAnalysisProgram, "reachability" | "records"> & { readonly records: RustAnalysisRecords & SourceLiteralIndex },
   context: RustAnalysisContext, genericCallableErrors: RustGenericCallableErrorIndex,
   flow: RustOwnershipFlow,
+  operationAttempts: Pick<WeakMap<Node, RustOperationAttempt>, "get">,
 ): TargetStageResult<RustNativeEmissionResult> {
   const { projectTypes, objectRepresentations, typeDefinitions } = program;
   const records = context.records.readers;
@@ -163,7 +165,7 @@ export function finalizeRustNativeEmission(
     producer: context.records.errorEmissionPlans });
   const sourceCallableEmission = analyzeRustSourceCallableEmission(program, context.nativeNodes, context.records.sourceCallableEmissionPlans);
   if (sourceCallableEmission.issues.length !== 0) return rejectedTargetStage(sourceCallableEmission.issues);
-  analyzeRustGenericEmission({ program, sourceFiles: context.sourceFiles, nodes: context.nativeNodes,
+  analyzeRustGenericEmission({ program, source: context.source, sourceFiles: context.sourceFiles, nodes: context.nativeNodes,
     producer: context.records.genericEmissionPlans, sourceValues: sourceCallableEmission.values });
   const nativeDeclarations = analyzeRustNativeDeclarationForms({ ast: context.ast, sourceFiles: context.sourceFiles,
     semanticsFor: context.semanticsFor,
@@ -227,7 +229,7 @@ export function finalizeRustNativeEmission(
     navigation: context.source.navigation, names: context.names, aliases: program.localStorageAliases,
     representations: objectRepresentations, projectTypes, nativeStorage: program.callableValues.nativeStorage,
     lexicalFunctions: program.lexicalFunctions, producer: context.records.localBindings, required: context.requiredRecords,
-    runtimeValueUses: context.runtimeValueUses });
+    runtimeValueUses: context.runtimeValueUses, safetyApplications: program.safetyApplications });
   if (localBindingIssues.length !== 0) return rejectedTargetStage(localBindingIssues);
   const classEmissionIssues = analyzeRustClassEmission({ program, source: context.source, reachability, producer: context.records.classEmissionPlans });
   if (classEmissionIssues.length !== 0) return rejectedTargetStage(classEmissionIssues);
@@ -263,7 +265,7 @@ export function finalizeRustNativeEmission(
   const genericRequirementEmissionIssues = analyzeRustGenericRequirementEmission(program, context.nativeNodes, context.records.nativeGenericPlans);
   if (genericRequirementEmissionIssues.length !== 0) return rejectedTargetStage(genericRequirementEmissionIssues);
   // Provider reads select Copy/Clone from the declaration-owned clone guarantees published just above.
-  const providerFormIssues = analyzeRustProviderForms(program, context.nativeNodes, context.records.providerFormPlans);
+  const providerFormIssues = analyzeRustProviderForms(program, context.nativeNodes, context.records.providerFormPlans, operationAttempts);
   if (providerFormIssues.length !== 0) return rejectedTargetStage(providerFormIssues);
   const arrayLiteralIssues = analyzeRustArrayLiterals(program, context.nativeNodes, context.records.arrayLiteralPlans);
   if (arrayLiteralIssues.length !== 0) return rejectedTargetStage(arrayLiteralIssues);
