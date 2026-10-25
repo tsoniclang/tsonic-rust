@@ -796,12 +796,11 @@ for (const [name, body] of [
   ["erased-forwarding", "function unused() { return identity(value); } return 1;"],
 ]) {
   test(`Rust erases ${name} without refusing or executing its generic async body`, { timeout: 300_000 }, () => {
-    const { result } = compileRust({ surfaces: ["js"],
+    const { result, source } = compileRust({ surfaces: ["js"],
       target: { id: "rust", options: { outputType: "bin", crateName: "generic_erased_adoption" } },
       files: { "index.ts": `${identity}\nfunction consume<Value>(value: Value): number { ${body} }
         console.log(consume(Promise.resolve(1)));` } });
-    assert.equal(result.diagnostics.length, 0,
-      JSON.stringify(result.diagnostics.map(({ code, message }) => ({ code, message }))));
+    assert.equal(result.diagnostics.length, 0, diagnosticSummary(result, source));
     const executed = validateGeneratedProject(`generic-erased-${name}`, result.artifacts, { run: true });
     assert.equal(executed.stdout.trim(), "1", "only the retained consume body runs");
   });
