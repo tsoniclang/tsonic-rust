@@ -88,9 +88,10 @@ export function selectRustOperationReadUses(ast: AstReader, node: Node, input: {
     const binary = ast.is.IsBinaryExpression(node);
     const left = binary ? BinaryExpression_Left(ast, node) : Node_Operand(ast, node);
     const right = binary ? BinaryExpression_Right(ast, node) : undefined;
-    if (operation.operandModes[0] !== "value") select(left, operation.operandModes[0] === "ref" ? "shared" : "mutable", right === undefined ? [] : [right]);
+    select(left, operation.operandModes[0] === "ref" ? "shared"
+      : operation.operandModes[0] === "mut-ref" ? "mutable" : "value", right === undefined ? [] : [right]);
     const rightMode = operation.operandModes[1];
-    if (rightMode !== undefined && rightMode !== "value") select(right, rightMode === "ref" ? "shared" : "mutable");
+    if (rightMode !== undefined) select(right, rightMode === "ref" ? "shared" : rightMode === "mut-ref" ? "mutable" : "value");
   } else if (operation?.kind === "source-indexed-field") {
     const key = ElementAccessExpression_ArgumentExpression(ast, node);
     select(receiver, "shared", key === undefined ? [] : [key], 0, true);

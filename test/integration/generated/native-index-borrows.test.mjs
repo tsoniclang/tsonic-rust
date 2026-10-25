@@ -56,7 +56,8 @@ fn shared_native_index_matches_direct_native_allocation_cost() {
     let values = vec![String::from("before")];
     let expected = String::from("before");
     for _ in 0..32 {
-        let (generated, generated_cost) = measure(|| index::observe(&values, 0.0, &expected).unwrap());
+        let (generated, generated_cost) =
+            measure(|| index::observe(&values, 0.0, &expected).unwrap());
         let (native, native_cost) = measure(|| values[0].as_str() == expected.as_str());
         assert_eq!(generated, native);
         assert!(generated);
@@ -115,11 +116,11 @@ fn replacing_the_inner_allocation_preserves_receiver_evaluation_and_first_value(
 fn a_real_owning_call_preserves_its_first_value_and_native_snapshot_cost() {
     let generated_value = String::from("before");
     let native_value = String::from("before");
-    let (generated, generated_cost) = measure(|| index::consuming(generated_value).unwrap());
+    let (generated, generated_cost) = measure(|| index::consuming(generated_value));
     let (native, native_cost) = measure(|| {
         let before = native_value.clone();
         let mut output = native_value;
-        output.push_str("!");
+        output.push('!');
         before == output
     });
     assert!(!generated);

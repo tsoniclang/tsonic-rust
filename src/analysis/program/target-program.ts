@@ -50,7 +50,7 @@ import { analyzeRustSourceOutputIdentities } from "../names/source-output-identi
 import { analyzeRustRetainedCallableInputs } from "../callables/retained-inputs.js";
 import { analyzeRustGenericCallableErrors } from "../callables/generic-errors.js";
 
-import { rustNativeArgumentBorrowsRead } from "../ownership/uses.js";
+import { analyzeRustReadUses, rustNativeArgumentBorrowsRead } from "../ownership/uses.js";
 import { analyzeRustStatementCompletions } from "../control-flow/statement-completion.js";
 import { analyzeRustStatementExits } from "../control-flow/statement-exits.js";
 import { eraseRustCompileTimeVariableStatements } from "../control-flow/compile-time-statements.js";
@@ -220,10 +220,13 @@ export function analyzeRustAnalysisProgram(
       }
       return { receivers: [], receiverFields: [], captures };
   };
+  const readUses = analyzeRustReadUses(context.ast, context.nativeNodes, records, context.typeDefinitions,
+    projectConstructions.ownsExternalArgument, context.structuralShapes.completed);
   const ownershipFlow = analyzeRustOwnershipFlow({
     source: context.source,
     storage: context.sourceStorage,
     nativeNodes: context.nativeNodes,
+    uses: readUses,
     capturesFor,
     sourceCallableFor: invocation => asSourceNode(records.selectedCall.get(invocation)?.sourceDeclaration, context.ast),
     mayBorrowArgument: (argument, reference) => !projectConstructions.ownsExternalArgument(argument) &&
@@ -326,9 +329,8 @@ export function analyzeRustAnalysisProgram(
   };
   const borrowEffects = analyzeRustBorrowEffects(borrowEffectsInput);
   if (borrowEffects.kind === "rejected") return rejectedTargetStage(borrowEffects.diagnostics);
-  const ownership = analyzeRustReadOwnership({ storage: context.sourceStorage, nativeNodes: context.nativeNodes, records,
+  const ownership = analyzeRustReadOwnership({ storage: context.sourceStorage, nativeNodes: context.nativeNodes, records, uses: readUses,
     flow: ownershipFlow.flow, borrowEffects: borrowEffects.effects, borrowEffectsInput, definitions: context.typeDefinitions,
-    ownsExternalArgument: projectConstructions.ownsExternalArgument,
     genericRequirements: declarationGenericRequirements.index, genericCallables: context.callableValues.generic,
     capturesFor, invocationTransfersCapture: owner => {
       const selected = lexicalFunctions.forDeclaration(owner);
