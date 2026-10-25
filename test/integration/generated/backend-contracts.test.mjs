@@ -70,6 +70,7 @@ test("named carriers elide only an exact trailing Rust generic-default suffix", 
     {
       kind: "named",
       path: "acme::Family",
+      identity: "acme.Family",
       genericArguments: [{ kind: "type", type: { kind: "primitive", name: "i32" } }],
     },
   );
@@ -83,6 +84,7 @@ test("named carriers elide only an exact trailing Rust generic-default suffix", 
     {
       kind: "named",
       path: "acme::Family",
+      identity: "acme.Family",
       genericArguments: [
         { kind: "type", type: { kind: "primitive", name: "i32" } },
         { kind: "type", type: { kind: "primitive", name: "u8" } },
