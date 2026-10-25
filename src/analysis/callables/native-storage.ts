@@ -120,7 +120,8 @@ export function createRustNativeStorageQueries(input: {
     if (cached !== undefined) return cached;
     if (input.storage.typeFor(subject).kind === "unresolved" ||
       input.storage.boundOriginsFor(subject, bindings).kind === "unresolved") return undefined;
-    const root = subject.kind === "input" ? input.records.sourceParameterAbi.get(subject.node)?.parameterCarrier
+    const parameter = subject.kind === "input" ? input.records.sourceParameterAbi.get(subject.node) : undefined;
+    const root = subject.kind === "input" ? subject.projection.length === 0 ? parameter?.parameterCarrier : parameter?.valueCarrier
       : subject.kind === "return" ? input.records.sourceCallableReturn.get(subject.node)?.returnCarrier
       : input.records.runtimeCarrier.get(subject.node)?.carrier;
     const method = subject.projection.some(component => component.kind === "method-value");
