@@ -56,7 +56,7 @@ function fixture(purpose) {
     sourceStorage: storage,
     sourceStorageResolution: { kind: "resolved", subject, bindings: scope.bindings },
     currentSemantics: semantics,
-    ast: { kind: () => undefined, as: { AsParameterDeclaration: () => undefined } },
+    ast: { ...source.ast },
     source: { sourceFacts: { getFact: (selected, key) => selected === symbol && key === sourcePrimitiveFactKey ? { kind: "float64" } : undefined } },
     sourceLifetimes: { contractFor: () => undefined },
   };
