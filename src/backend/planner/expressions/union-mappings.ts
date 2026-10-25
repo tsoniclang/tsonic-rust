@@ -9,9 +9,11 @@ import { failRustPlannerInvariant } from "../diagnostics.js";
 import { planRustUnionPattern, planRustUnionConstruction } from "./union-patterns.js";
 
 export function planRustUnionProjection(node: Node, expression: RustExpr, selected: RustUnionProjectionEmission,
-  access: "move" | "clone" | "shared-reference", context: RustPlanContext): Extract<RustExpr, { readonly kind: "match" }> {
+  access: "move" | "clone" | "shared-reference" | "mutable-reference", context: RustPlanContext): Extract<RustExpr, { readonly kind: "match" }> {
   const type = rustTypeFromCarrierInContext(selected.dispatchCarrier, context);
-  if (type?.kind !== "named" || access === "shared-reference" && selected.targetOptional ||
+  const referenced = access === "shared-reference" || access === "mutable-reference";
+  if (type?.kind !== "named" || referenced && selected.targetOptional ||
+    access === "mutable-reference" && selected.variant.kind !== "payload" ||
     selected.variant.kind === "payload" && access === "clone" && !rustCarrierHasCloneContract(selected.carrier, context))
     failRustPlannerInvariant("An admitted native union projection requires its exact type, presence and read contract.", node);
   const name = allocateRustSyntheticName(context.syntheticNames ?? createRustSyntheticNameState(context.input.program.source.ast, node, []), "flow_value");
@@ -23,7 +25,8 @@ export function planRustUnionProjection(node: Node, expression: RustExpr, select
     : access !== "clone" ? { kind: "path", path: name } : rustCarrierHasCopyContract(selected.carrier, context)
       ? { kind: "dereference", pointer: { kind: "path", path: name } }
       : { kind: "method-call", receiver: { kind: "path", path: name }, method: "clone", args: [] };
-  return { kind: "match", expression: access === "move" ? expression : { kind: "reference", expr: expression }, arms: [
+  return { kind: "match", expression: access === "move" ? expression : access === "mutable-reference"
+    ? { kind: "reference", expr: expression, mutable: true } : { kind: "reference", expr: expression }, arms: [
     { pattern, expression: selected.targetOptional ? { kind: "call", path: "Some", args: [payload] } : payload },
     ...(selected.targetOptional ? [{ pattern: { kind: "path" as const, path: "None" }, expression: { kind: "path" as const, path: "None" } }] : []),
     ...(selected.exhaustive ? [] : [{ pattern: { kind: "wildcard" as const }, expression: {
