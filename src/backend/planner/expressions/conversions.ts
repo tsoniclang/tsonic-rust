@@ -46,6 +46,9 @@ export function planProviderOperationExpression(context: RustPlanContext,
   fact: Extract<RustTargetOperationFact, { readonly kind: "provider-operation" | "runtime-set" }>,
   receiverNode: Node | undefined, argumentNodes: readonly (Node | undefined)[], operationNode: Node,
   options: { readonly resultUse: "value" | "storage"; readonly overrides?: RustFinalizedInputPlanOverrides }): RustExpr | undefined {
+  const form = context.input.program.records.providerForm.get(operationNode, fact.abi, context.promiseBody)
+    ?? failRustPlannerInvariant("An admitted provider operation requires its sealed emission form.", operationNode);
+  context = { ...context, providerCallbackBody: form.callbackBody };
   const evaluation = planRustProviderEvaluationScope(context, fact, operationNode, receiverNode, argumentNodes,
     planExpression, planProviderOperationExpression, options.overrides?.inputs,
     input => planFinalizedSourceInput(context, input, receiverNode, argumentNodes, operationNode, "target-argument", options.overrides));

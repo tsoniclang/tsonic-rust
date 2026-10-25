@@ -205,3 +205,31 @@ main();
   assert.match(artifactText(result, "src/index.rs"), /\.flatten\(\)/u);
   validateGeneratedProject("dense-optional-coalescing", result.artifacts, { run: true });
 });
+
+test("RegExp callback helper Result stays independent of the enclosing error join and eager arguments", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    surfaces: ["js"],
+    packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin" } },
+    files: { "index.ts": `
+import { check } from "@acme/testing";
+import { jsstr } from "@tsonic/js/lang.js";
+let evaluations = 0;
+function input(): string { evaluations += 1; return "a1b2"; }
+export function main(): void {
+  const replaced = input().replaceAll(/\\d/g, (whole, _offset, _input) => "[" + whole + "]");
+  check(replaced === "a[1]b[2]");
+  check(evaluations === 1);
+  const exact = jsstr("a1").replace(/\\d/g, (whole, _offset, _input) => whole);
+  check(exact.length === 2);
+}
+main();
+` },
+  });
+  assert.equal(result.diagnostics.length === 0, true, "the complete native callback contract is admitted");
+  const source = artifactText(result, "src/index.rs");
+  assert.match(source, /Ok::<_, js_abi::JsError>/u);
+  assert.match(source, /string_try_replace_all_regexp_native_with/u);
+  assert.match(source, /string_replace_regexp_with/u);
+  assert.equal(validateGeneratedProject("regexp-callback-physical-error", result.artifacts, { run: true }).status, 0);
+});

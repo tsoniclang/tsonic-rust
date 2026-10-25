@@ -41,6 +41,8 @@ export function applyRustRegExpReplacementCallbackConversion(
     return undefined;
   }
   const existing = form.argConversions;
+  const target = rustCallbackProtocol(contract.targetCarrier);
+  if (target?.representation !== "closure") return undefined;
   if (sourceArgumentIndex < 0 || sourceArgumentIndex >= sourceArgumentCount ||
     (existing !== undefined && existing.length !== sourceArgumentCount) ||
     existing?.[sourceArgumentIndex] !== undefined ||
@@ -58,7 +60,8 @@ export function applyRustRegExpReplacementCallbackConversion(
     kind: "js-argument-vector-callback",
     lane: contract.lane,
     source: contract.sourceCarrier,
-    target: contract.targetCarrier,
+    target: { kind: "closure" as const, args: target.parameters, result: target.result,
+      ...(contract.lane === "native" || sourceFallible ? { fallible: true as const } : {}) },
     projections: contract.projections,
     sourceFallible,
   });
