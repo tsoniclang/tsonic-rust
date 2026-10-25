@@ -27,6 +27,7 @@ export interface RustFrameCallablePlan {
   entryFor(carrier: TargetTypeRef): RustFrameCallableEntryDefinition | undefined;
   entryErrors(entry: RustFrameCallableEntryDefinition): RustFrameEntryErrorSelection;
   errorFor(carrier: TargetTypeRef): TargetTypeRef | undefined;
+  independentCarrierFor(carrier: TargetTypeRef): TargetTypeRef | undefined;
   implementationFor(declaration: Node): RustFrameCallableImplementation | undefined;
   bindingFor(declaration: Node): RustFrameCallableBinding | undefined;
   isSameActivationInput(expression: Node, definition: RustFrameCallableDefinition, receiver?: Node): boolean;
@@ -36,12 +37,13 @@ export interface RustFrameCallablePlan {
 export interface RustFrameCallableRecordInput {
   readonly entryErrors: (entry: RustFrameCallableEntryDefinition) => RustFrameEntryErrorSelection;
   readonly errorFor: (carrier: TargetTypeRef) => TargetTypeRef | undefined;
+  readonly independentCarrierFor: (carrier: TargetTypeRef) => TargetTypeRef | undefined;
+  readonly entryFor: (carrier: TargetTypeRef) => RustFrameCallableEntryDefinition | undefined;
   readonly definitions: readonly RustFrameCallableDefinition[];
   readonly issues: readonly RustSourceCallableSpecializationIssue[];
   readonly activationInputs: ReadonlyMap<Node, ReadonlyMap<RustFrameCallableDefinition, RustFrameInputAdmission>>;
   readonly receiverOwners: ReadonlyMap<Node, Node>;
   readonly selectedDefinitions: ReadonlyMap<string, RustFrameCallableDefinition>;
-  readonly selectedEntries: ReadonlyMap<string, RustFrameCallableEntryDefinition>;
   readonly byDeclaration: ReadonlyMap<Node, RustFrameCallableDefinition>;
   readonly implementations: ReadonlyMap<Node, RustFrameCallableImplementation>;
   readonly bindings: ReadonlyMap<Node, RustFrameCallableBinding>;
