@@ -7,6 +7,21 @@ import { runCargo, validateGeneratedProject, writeGeneratedProject } from "../..
 import { assertRejectedAsyncSource } from "../../helpers/native-promise-lifetimes.mjs";
 
 const cases = [
+  ["qualified-owned-field-read", `
+import type { int64 } from "@tsonic/core/types.js";
+class Counter {
+  constructor(public total: int64) {}
+  async read(pending: Promise<void>): Promise<int64> {
+    await pending;
+    return this.total;
+  }
+}
+async function run(): Promise<boolean> {
+  const value: int64 = 9007199254740993n;
+  const owner = new Counter(value);
+  const pending = owner.read(Promise.resolve(undefined));
+  return await pending === value && owner.total === value;
+}`],
   ["owned-capture", `
 async function keep(value: number, pending: Promise<void>): Promise<number> {
   const read = () => value;
