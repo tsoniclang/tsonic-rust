@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRust } from "../../helpers/rust-session.mjs";
+import { nonReturningCallsSource } from "../../../../tsonic/test/fixtures/non-returning-calls.mjs";
 
 test("source completion is sealed for returns, exhaustive branches and deferred callable bodies", () => {
   const { program } = analyzeRust({ files: { "index.ts": `
@@ -28,4 +29,34 @@ export function itemOnly(value: number): number { function helper(): number { re
   assert.equal(program.records.statementExit.get(first("switched")), true, "checked exhaustive switch has no fabricated fallthrough");
   assert.equal(program.records.statementExit.get(first("itemOnly")), false, "a nested callable declaration is not an executed return");
   assert.equal(program.records.statementExit.get({}), undefined, "no source identity is inferred from object shape");
+});
+
+test("guaranteed terminal operands complete statements before source completion is sealed", () => {
+  const { program } = analyzeRust({ files: { "index.ts": nonReturningCallsSource + `
+export function conditional(failed: boolean): void { failed && fail(); }
+` } });
+  const { ast } = program.source;
+  const pending = [...program.sourceFiles];
+  let terminalStatements = 0;
+  let conditionalStatements = 0;
+  while (pending.length !== 0) {
+    const node = pending.pop();
+    if (ast.is.IsExpressionStatement(node)) {
+      const expression = ast.as.AsExpressionStatement(node).Expression;
+      if (program.records.expressionExit.get(expression) !== undefined) {
+        assert.equal(program.records.statementExit.get(node), true,
+          "the existing guaranteed terminal operand is consumed by source statement completion");
+        assert.equal(program.records.statementExit.get(ast.parent(node)), true,
+          "an error-region body never receives a fabricated normal completion after its terminal operand");
+        terminalStatements++;
+      } else if (ast.is.IsBinaryExpression(expression) && ast.operatorKindName(expression) === "KindAmpersandAmpersandToken") {
+        assert.equal(program.records.statementExit.get(node), false,
+          "a conditionally evaluated terminal right operand does not terminate the complete statement");
+        conditionalStatements++;
+      }
+    }
+    ast.forEachChild(node, child => { if (child !== undefined) pending.push(child); });
+  }
+  assert.equal(terminalStatements >= 2, true, "both synchronous and awaited terminal operands use the real producer");
+  assert.equal(conditionalStatements, 1, "the actual conditional inverse is checked");
 });

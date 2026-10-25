@@ -16,7 +16,8 @@ export function analyzeRustStatementExits(input: {
   const exits = analyzeSourceStatementExits(input.ast, input.nodes, {
     erased: node => input.records.nativeUnreachable.get(node) === true ||
       input.records.compileTimeSource.get(node) !== undefined || input.records.nativeParticipation.get(node) === "erased",
-    expressionExits: node => isRustNeverCarrier(input.records.runtimeCarrier.get(node)?.carrier),
+    expressionExits: node => input.records.expressionExit.get(node) !== undefined ||
+      isRustNeverCarrier(input.records.runtimeCarrier.get(node)?.carrier),
     guardResult: node => input.records.nativeGuardResult.get(node),
   });
   for (const [subject, alwaysExits] of exits) {

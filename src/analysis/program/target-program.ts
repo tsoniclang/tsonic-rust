@@ -54,6 +54,7 @@ import { analyzeRustGenericCallableErrors } from "../callables/generic-errors.js
 import { analyzeRustReadUses, rustNativeArgumentBorrowsRead } from "../ownership/uses.js";
 import { analyzeRustStatementCompletions } from "../control-flow/statement-completion.js";
 import { analyzeRustStatementExits } from "../control-flow/statement-exits.js";
+import { analyzeRustExpressionExits } from "../control-flow/expression-exits.js";
 import { eraseRustCompileTimeVariableStatements } from "../control-flow/compile-time-statements.js";
 import { analyzeRustResourceScopes } from "../control-flow/resource-scopes.js";
 import { rustReferentWriteRequiresMutableBinding } from "../ownership/source-writes.js";
@@ -386,6 +387,7 @@ export function analyzeRustAnalysisProgram(
     jsEnabled, asynchronous: sourceStage.nativeTaskCompletions.length !== 0 || initializationErrors.value.root.asynchronous ||
       initializationErrors.value.workers.some(worker => worker.initializer.asynchronous) });
   if (binaryExecution.kind === "rejected") return binaryExecution;
+  analyzeRustExpressionExits({ source: context.source, records }, context.nativeNodes, context.records.expressionExitPlans);
   analyzeRustStatementExits({ ast: context.ast, nodes: context.nativeNodes, sourceFiles: context.sourceFiles, records,
     producer: context.records.statementExits, required: context.requiredRecords });
   eraseRustCompileTimeVariableStatements({ ast: context.ast, nodes: context.nativeNodes, records,
