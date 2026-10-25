@@ -66,7 +66,10 @@ import { type RustSourcePackageComponentClassifications } from "../../target-mod
 import type { RustSourceTypeRegistry } from "../project-types/source-type-model.js";
 import { completeRustNativeTaskValues, type RustNativeTaskCompletion } from "../callables/native-tasks.js";
 
+import type { RustOperationAttempt } from "./operation-attempts.js";
+
 interface RustSourceStageOutput {
+  readonly operationAttempts: Pick<WeakMap<Node, RustOperationAttempt>, "get">;
   readonly nativeTasks: SourceNativeTaskGraph;
   readonly nativeTaskCompletions: readonly RustNativeTaskCompletion[];
   readonly lexicalFunctions: RustLexicalFunctionQueries;
@@ -135,11 +138,20 @@ export function analyzeRustProgram(context: RustAnalysisContext, outputType: "bi
       const demand = subject === undefined ? undefined : context.errorStorageDemands.storageFor(subject);
       if (demand?.kind === "unresolved") return undefined;
       if (demand?.kind === "writable") return rustWritableSourceErrorTargetType();
-      const origins = subject === undefined ? undefined : context.errorStorageDemands.storageOriginsFor(subject);
-      if (origins?.kind === "resolved" && origins.origins.some(origin => {
-        const types = context.source.semantics.forNode(origin.node).types;
-        return types.isUnknown(origin.type) || types.isAny(origin.type);
-      })) return rustSourceErrorTargetType();
+      const origins = subject === undefined ? undefined : context.sourceStorage.originsFor(subject);
+      if (origins?.kind === "unresolved") return undefined;
+      let requiresSourceError = false;
+      if (origins?.kind === "resolved") {
+        for (const origin of origins.origins) {
+          const originDemand = context.errorStorageDemands.storageFor(origin.subject);
+          if (originDemand.kind === "unresolved") return undefined;
+          const types = context.source.semantics.forNode(origin.subject.node).types;
+          if (originDemand.kind === "writable" || types.isUnknown(origin.type) || types.isAny(origin.type)) {
+            requiresSourceError = true;
+          }
+        }
+      }
+      if (requiresSourceError) return rustSourceErrorTargetType();
       return subject !== undefined && context.errorStorageDemands.receivesWritableNative(subject)
           ? rustSourceErrorTargetType() : context.errorStorageDemands.retainedBoundaries.length !== 0
             ? rustSourceErrorTargetType() : context.projectTypes.sourceErrorCarrier();
@@ -601,12 +613,6 @@ export function analyzeRustProgram(context: RustAnalysisContext, outputType: "bi
   const fallibility = recordFallibilityFacts(walk, projectSourceFiles, nativeTasks);
   if (fallibility === undefined || context.diagnostics.length !== selectedIssuePosition) return;
   recordResourceManagementFacts(walk);
-  recordFutureValueFacts(walk, fallibility.sourceErrors);
-  const nativeTaskCompletions = completeRustNativeTaskValues(walk, nativeTasks, fallibility.sourceErrors);
-  if (nativeTaskCompletions.kind === "rejected") {
-    context.diagnostics.push(...nativeTaskCompletions.diagnostics);
-    return;
-  }
   const sourcePackageComponents = analyzeRustSourcePackageComponents(context, outputType, fallibility.effectsFor);
   if (sourcePackageComponents.kind === "rejected") {
     context.diagnostics.push(...sourcePackageComponents.diagnostics);
@@ -622,6 +628,12 @@ export function analyzeRustProgram(context: RustAnalysisContext, outputType: "bi
   }
   physicalIssues.forEach(callableIssue);
   if (context.diagnostics.length !== selectedIssuePosition) return;
+  recordFutureValueFacts(walk, fallibility.sourceErrors);
+  const nativeTaskCompletions = completeRustNativeTaskValues(walk, nativeTasks, fallibility.sourceErrors);
+  if (nativeTaskCompletions.kind === "rejected") {
+    context.diagnostics.push(...nativeTaskCompletions.diagnostics);
+    return;
+  }
   recordRustDeferredProducerEffects(walk, fallibility.sourceErrors);
   const lexicalFunctions = finalizeRustLexicalFunctionQueries(lexical, context.source, context.records, context.sourceLifetimes,
     callableValues.nativeStorage, callableValues.native);
@@ -638,6 +650,7 @@ export function analyzeRustProgram(context: RustAnalysisContext, outputType: "bi
     context.diagnostics.splice(selectedIssuePosition, 0, ...context.diagnostics.splice(effectDiagnosticEnd));
   }
   return Object.freeze({ lexicalFunctions, nativeTasks, nativeTaskCompletions: nativeTaskCompletions.value,
+    operationAttempts: walk.operationAttempts,
     sourcePackageComponents: sourcePackageComponents.plan,
     sourceTypes: Object.freeze({ structuralObjectForType: sourceTypes.structuralObjectForType }) });
 }

@@ -71,6 +71,28 @@ test("receiver evaluation and target consumption are independent closed ABI deci
     true, "the removed carrier-only fact finalizer signature is rejected");
 });
 
+test("native namespace calls and associated values preserve explicit inputs without a runtime namespace carrier", () => {
+  for (const [label, operationKind, form, arguments_] of [
+    ["primitive function", "method", { form: "call", path: "core::primitive::i32::div_euclid" }, [integer, integer]],
+    ["primitive constant", "property", { form: "associated-value", owner: integer, name: "MAX" }, []],
+  ]) {
+    const selected = { operationKind, form, sourceReceiver: { kind: "compile-time" },
+      sourceArgumentCarriers: arguments_, resultCarrier: integer, isAsync: false, isFallible: false };
+    const abi = finalizeRustProviderOperationAbi(selected);
+    assert.equal(abi !== undefined && validateRustFinalizedOperationAbi(abi), true,
+      `${label}: the existing finalized ABI accepts actual namespace evidence`);
+    assert.equal(abi.sourceReceiver.kind, "compile-time", `${label}: no fictitious namespace value`);
+    assert.equal(abi.targetReceiver.kind, "none", `${label}: no runtime receiver allocation or argument`);
+    assert.equal(abi.targetArguments.length, arguments_.length, `${label}: every explicit native input remains`);
+    for (const [index, input] of abi.targetArguments.entries())
+      assert.equal(input.source.kind === "argument" && input.source.sourceIndex === index, true,
+        `${label}: source argument ${index} preserves its actual selected order`);
+    assert.equal(finalizeRustProviderOperationAbi({ ...selected,
+      sourceReceiver: { kind: "compile-time", carrier: integer } }) === undefined, true,
+      `${label}: a namespace cannot smuggle a fabricated runtime payload`);
+  }
+});
+
 test("free-call receiver conversion retains the exact native borrowed-str ABI and rejects mutations", () => {
   const string = rustStringTargetType();
   const borrowed = rustBorrowedStrTargetType();

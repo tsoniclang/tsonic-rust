@@ -17,8 +17,43 @@ import { substituteRustTargetGenerics, substituteRustTargetTypeParameters } from
 import { emptyRustTypeDefinitions } from "../../../dist/target-model/types/source-union-definitions.js";
 import { selectRustCallableValueAdapter } from "../../../dist/policy/conversions/callable-adapters.js";
 import { selectRustStructuralDispatchArguments } from "../../../dist/policy/types/objects/structural-generics.js";
+import { createRustProgramRecordBuilder } from "../../../dist/analysis/program/records/create.js";
+import { authoredObjectMethodEvidenceSource } from "../../../../tsonic/test/fixtures/generic-object-methods.mjs";
 
 const parameter = { kind: "type-parameter", identity: "source:Value", name: "Value" };
+
+test("canonical structural publication retains source aliases and rejects missing, duplicate and sealed writes", () => {
+  const { program } = analyzeRust({ surfaces: [], target: { id: "rust", options: { outputType: "bin" } }, files: {
+    "index.ts": authoredObjectMethodEvidenceSource + '\nexport function main(): void { if (!run()) throw new Error("authored method evidence"); }\nmain();\n',
+  } });
+  const canonical = program.structuralShapes.definitionForCarrier;
+  const aliases = program.structuralShapes.definitions.flatMap(definition => definition.sourceCarriers);
+  const alias = aliases.find(carrier => {
+    const selected = canonical(carrier);
+    return selected !== undefined && !rustTargetTypeRefEquals(carrier, selected.carrier);
+  });
+  assert.equal(alias !== undefined, true, "the original fixed native methods have a genuine distinct source-key alias");
+  const expected = canonical(alias);
+  const owner = createRustProgramRecordBuilder();
+  const producer = owner.projectEmissionPlans;
+  const invariant = message => error => error.diagnostic?.code === "TSONIC_INTERNAL_ANALYSIS_INVARIANT" &&
+    error.diagnostic.message === message;
+  assert.throws(() => owner.structuralShape.get(alias),
+    invariant("Native structural lookup requires its sealed canonical publication."));
+  assert.equal(Object.hasOwn(producer, "shape"), false, "the superseded instance-replay publisher does not exist");
+  producer.structuralShapes(canonical);
+  assert.equal(owner.structuralShape.get(alias) === expected, true, "the original source alias retains its exact canonical physical definition");
+  assert.equal(owner.structuralShape.get(expected.carrier) === canonical(expected.carrier), true,
+    "the physical key reads the same canonical index rather than a copied inventory");
+  assert.equal(owner.structuralShape.get(rustStringTargetType()) === undefined, true,
+    "a genuine nonstructural carrier cannot manufacture a shape");
+  assert.throws(() => producer.structuralShapes(canonical),
+    invariant("The sealed canonical structural lookup is published exactly once."));
+  owner.seal([]);
+  assert.equal(owner.structuralShape.get(alias) === expected, true, "sealed repeated reads preserve native definition identity");
+  assert.throws(() => producer.structuralShapes(canonical),
+    invariant("Rust semantic plans cannot be written after analysis is sealed."));
+});
 
 test("native structural method emission preserves its canonical source field and sealed liveness owner", () => {
   const { program } = analyzeRust({ surfaces: [], files: { "index.ts": `

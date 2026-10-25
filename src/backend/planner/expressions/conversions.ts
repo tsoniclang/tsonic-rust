@@ -21,7 +21,7 @@ import { applyFinalizedRustArgumentMode } from "./input-shaping.js";
 import { planRustBorrowedSingletonSlice, planRustRestAssembly } from "./calls/rest-assembly.js";
 import { planRustFinalizedOperationForm } from "./finalized-operation-form.js";
 import { rustAutoBorrowedReceiver } from "./auto-borrowed-receivers.js";
-import { planRustSourceErrorPropagation } from "./calls/source-errors.js";
+import { planRustSelectedSourceErrorPropagation } from "./calls/source-errors.js";
 
 function providerConstantExpression(argument: RustProviderConstantArgument, context: RustPlanContext): RustExpr {
   switch (argument.kind) {
@@ -95,7 +95,7 @@ export function finishProviderOperationExpression(context: RustPlanContext, fact
   let raw = expression;
   const nativeResult = context.input.program.records.providerForm.get(node, fact.abi, context.promiseBody)?.nativeResult;
   if (nativeResult !== undefined) {
-    const result = planRustSourceErrorPropagation(node, nativeResult, raw, context);
+    const result = planRustSelectedSourceErrorPropagation(node, nativeResult, raw, context);
     if (result === undefined) return undefined;
     raw = result;
   } else if (fact.abi.effects.invocation === "fallible") {

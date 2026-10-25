@@ -186,6 +186,13 @@ export function finalizeRustLexicalFunctionQueries(
   let steps = 0;
   for (const declaration of environments.declarations) {
     const references = new Set<string>();
+    const future = nativeStorage.futureEnvironmentFor(declaration);
+    if (future.kind === "unresolved") {
+      failures.set(declaration, future.reason);
+      identities.set(declaration, references);
+      continue;
+    }
+    const futureIdentities = new Set([...future.inputs, ...future.captures].map(input => input.implementation.identity));
     for (const node of environments.genericNodesFor(declaration)) {
       if (++steps > maximumLexicalCaptureSteps) return exhausted();
       const parameter = ast.is.IsParameterDeclaration(node) ? records.sourceParameterAbi.get(node)?.parameterCarrier : undefined;
@@ -198,7 +205,7 @@ export function finalizeRustLexicalFunctionQueries(
       if (selected.kind === "unresolved") { failures.set(declaration, selected.reason); continue; }
       const generic = rustTargetGenericReferences(selected.carrier);
       for (const identity of [...generic.typeIdentities, ...generic.lifetimeIdentities]) {
-        if (!nativeIdentities.has(identity)) references.add(identity);
+        if (!nativeIdentities.has(identity) && !futureIdentities.has(identity)) references.add(identity);
       }
     }
     identities.set(declaration, references);

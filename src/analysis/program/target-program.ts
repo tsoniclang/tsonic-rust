@@ -479,11 +479,12 @@ export function analyzeRustAnalysisProgram(
     borrowedElementReads,
     genericCallableErrors: genericCallableErrors.value,
   };
-  const emission = finalizeRustNativeEmission(program, context, genericCallableErrors.value, ownershipFlow.flow);
+  const emission = finalizeRustNativeEmission(program, context, genericCallableErrors.value, ownershipFlow.flow, sourceStage.operationAttempts);
   if (emission.kind === "rejected") return emission;
   context.callableValues.publish();
   const finalFoundation = finalizeRustFoundation(program.foundation, context.records.minimumFoundation());
   if (finalFoundation.diagnostics.length !== 0) return rejectedTargetStage(finalFoundation.diagnostics);
+  context.sourceStorage.sealFormalMemberWriteDemands();
   context.records.seal(context.requiredRecords);
   return resolvedTargetStage(Object.freeze({
     ...program,

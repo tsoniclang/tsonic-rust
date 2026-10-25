@@ -150,13 +150,10 @@ export function selectRustFrameEntryErrors(
   return resolvedTargetStage(Object.freeze({ carrier, region: region.value, implementations }));
 }
 
-export function selectRustFrameInvocationErrors(
+export function rustFrameInvocationErrorOperand(
   carrier: TargetTypeRef,
   frames: RustFrameCallablePlan,
-  effects: RustErrorEffectsFact,
-  edges: readonly RustSourceErrorEffectEdge[],
-  regions: Pick<RustErrorRegionRecords, "sourceFor">,
-): RustSourceErrorRegionSelection | undefined {
+): RustErrorRegionSelection | undefined {
   const frame = rustFrameCallableValue(carrier);
   const entry = frame === undefined ? undefined : frames.entryFor(carrier);
   const definition = frame === undefined ? undefined : frames.definitionFor(carrier);
@@ -166,11 +163,22 @@ export function selectRustFrameInvocationErrors(
   const selected = frames.entryErrors(entry);
   const sources = selected.region.sources.map(source => ({ ...source,
     errorType: substituteRustTargetGenerics(source.errorType, substitutions, new Map()) }));
-  const operand = Object.freeze({ ...selected.region, sources: Object.freeze(sources) });
+  return Object.freeze({ ...selected.region, sources: Object.freeze(sources) });
+}
+
+export function selectRustFrameInvocationErrors(
+  carrier: TargetTypeRef,
+  frames: RustFrameCallablePlan,
+  effects: RustErrorEffectsFact,
+  edges: readonly RustSourceErrorEffectEdge[],
+  regions: Pick<RustErrorRegionRecords, "sourceFor">,
+): RustSourceErrorRegionSelection | undefined {
+  const operand = rustFrameInvocationErrorOperand(carrier, frames);
+  if (operand === undefined) return undefined;
   const selections = edges.map(edge => regions.sourceFor(edge));
   if (selections.some(selection => selection === undefined)) return undefined;
   const channels: RustSourceErrorRegionSelection["channels"][number][] = [];
-  for (const source of sources) {
+  for (const source of operand.sources) {
     const targets = new Set<string>();
     for (const selection of selections) {
       const original = selection!.operand.sources.find(candidate => candidate.identity === source.identity &&

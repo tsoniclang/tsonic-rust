@@ -460,7 +460,6 @@ export function createRustStructuralMethodStorage(input: {
         if (operation?.kind !== "record-literal" || operation.storage !== "structural-object") continue;
         const definition = structuralShapes.definitionForCarrier(operation.resultCarrier);
         if (definition === undefined) failTargetAnalysisInvariant("tsonic-rust", "An admitted structural literal requires its original checked layout owner.", node);
-        if (!definition.fields.some(field => field.methodPlan?.kind === "fixed")) continue;
         const physical = input.nativeStorage.valueFor(node);
         if (physical.kind === "unresolved") return reject(node, physical.reason);
         literals.push({ definition, carrier: physical.carrier });

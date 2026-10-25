@@ -4,8 +4,7 @@ import type { RustFactWalk } from "../program/walk.js";
 import type { RustPreparedDeferredCheckedCall } from "../../target-model/records/deferred-callbacks.js";
 import type { RustErrorEffectsFact } from "../../target-model/records/error-effects.js";
 import type { RustEffectsWorkBudget } from "./effects-work-budget.js";
-import { rustCallbackProtocol } from "../../policy/operations/members/callbacks.js";
-import { mergeRustErrorEffects, rustCallableInvocationErrorEffects, rustErrorEffectsAreFallible, rustLocalErrorEffects,
+import { mergeRustErrorEffects, rustCallableInvocationErrorEffects, rustLocalErrorEffects,
   rustProducerInvocationErrorEffects, rustPureErrorEffects } from "./error-effects.js";
 import { rustCallableProtocol } from "../../target-model/types/carriers/callables.js";
 import { rustFrameCallableValue } from "../../target-model/types/carriers/frame-callables.js";
@@ -14,8 +13,7 @@ import { substituteRustTargetGenerics } from "../../target-model/types/carriers/
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 
 interface CallbackValueAnalysis {
-  readonly fallible: boolean;
-  readonly implementationFallible: boolean;
+  readonly invocationOwner: Node;
   readonly implementationEffects: RustErrorEffectsFact;
   readonly invocationEffects: RustErrorEffectsFact;
   readonly subjects: readonly Node[];
@@ -88,19 +86,28 @@ export function createRustCallbackEffectAnalysis(input: {
         if (selectedEffects === undefined) return undefined;
         invocationEffects = selectedEffects;
       }
-      const invocationFallible = frame !== undefined || invocationError !== undefined
-        ? rustErrorEffectsAreFallible(invocationEffects) : rustCallbackProtocol(carrier)?.fallible === true;
       budget.metadata(invocationEffects);
+      const selectedInvocationEffects = (declaration: Node, implementation: RustErrorEffectsFact): RustErrorEffectsFact => {
+        if (frame !== undefined || invocationError !== undefined) return invocationEffects;
+        const producer = producerContext.producers.forDeclaration(declaration);
+        if (producer !== undefined) {
+          const selected = rustProducerInvocationErrorEffects(declaration, producerContext);
+          if (selected === undefined) failTargetAnalysisInvariant("tsonic-rust",
+            "A source callback requires its exact original producer invocation effects.", declaration);
+          budget.metadata(selected);
+          return selected;
+        }
+        return walk.context.records.asyncFunction.get(declaration) !== undefined || walk.context.records.generator.get(declaration) !== undefined
+          ? rustPureErrorEffects : implementation;
+      };
       const body = ast.body(value);
       if (body !== undefined) {
         const implementationEffects = expressionRegionEffects(body);
         if (implementationEffects === undefined) return undefined;
-        const implementationFallible = rustErrorEffectsAreFallible(implementationEffects);
         return {
-          fallible: invocationFallible || implementationFallible,
-          implementationFallible,
+          invocationOwner: value,
           implementationEffects,
-          invocationEffects,
+          invocationEffects: selectedInvocationEffects(value, implementationEffects),
           subjects: [value],
         };
       }
@@ -109,18 +116,18 @@ export function createRustCallbackEffectAnalysis(input: {
         return undefined;
       }
       if (isFallible(declaration)) {
-        return { fallible: true, implementationFallible: true, implementationEffects: declarationEffects(declaration), invocationEffects, subjects: [value, declaration] };
+        const implementationEffects = declarationEffects(declaration);
+        return { invocationOwner: declaration, implementationEffects,
+          invocationEffects: selectedInvocationEffects(declaration, implementationEffects), subjects: [value, declaration] };
       }
       const declarationBody = ast.body(declaration);
       if (declarationBody !== undefined) {
         const implementationEffects = expressionRegionEffects(declarationBody);
         if (implementationEffects === undefined) return undefined;
-        const implementationFallible = rustErrorEffectsAreFallible(implementationEffects);
         return {
-          fallible: invocationFallible || implementationFallible,
-          implementationFallible,
+          invocationOwner: declaration,
           implementationEffects,
-          invocationEffects,
+          invocationEffects: selectedInvocationEffects(declaration, implementationEffects),
           subjects: [value, declaration],
         };
       }
@@ -128,10 +135,9 @@ export function createRustCallbackEffectAnalysis(input: {
       return initialized === undefined
         ? undefined
         : {
-            fallible: invocationFallible || initialized.fallible,
-            implementationFallible: initialized.implementationFallible,
+            invocationOwner: invocationError === undefined && frame === undefined ? initialized.invocationOwner : declaration,
             implementationEffects: initialized.implementationEffects,
-            invocationEffects,
+            invocationEffects: invocationError === undefined && frame === undefined ? initialized.invocationEffects : invocationEffects,
             subjects: [value, declaration, ...initialized.subjects],
           };
     } finally {
@@ -144,8 +150,7 @@ export function createRustCallbackEffectAnalysis(input: {
     const callback = callbackValueAnalysis(callbackExpression(pending), new Set());
     return callback === undefined ? undefined : mergeRustErrorEffects([
       pending.prepared.template.isFallible ? rustLocalErrorEffects : rustPureErrorEffects,
-      callback.invocationEffects,
-      callback.implementationEffects,
+      pending.prepared.callback.failure.kind === "returned-future" ? rustPureErrorEffects : callback.invocationEffects,
     ]);
   };
   return Object.freeze({ callbackExpression, callbackValueExpression, callbackValueAnalysis, preparedCallbackOperationEffects });

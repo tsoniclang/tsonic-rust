@@ -1,11 +1,35 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { rustNativeCallableInvocationArguments } from "../../../dist/policy/types/callables/native-invocations.js";
-import { rustStringTargetType, rustSourceOptionalTargetType, rustSourcePrimitiveTargetType } from "../../../dist/target-model/types/index.js";
+import { rustCallableTargetType, rustStringTargetType, rustSourceOptionalTargetType, rustSourcePrimitiveTargetType } from "../../../dist/target-model/types/index.js";
 import { rustLifetimeKey } from "../../../dist/target-model/lifetimes/index.js";
+import { selectRustCallScopedLifetimeReconciliation, selectRustValueCarrierReconciliation } from "../../../dist/policy/conversions/value-carrier-reconciliation.js";
 
 const string = rustStringTargetType();
 const number = rustSourcePrimitiveTargetType("float64");
+
+test("native callable input reconciliation publishes the original call-scoped lifetime instead of placeholder identity", () => {
+  const error = { kind: "target-named", id: "test:ExactInvocationError" };
+  const source = rustCallableTargetType([], number, { kind: "placeholder" }, error);
+  const projectTypes = { definitionForCarrier: () => undefined };
+  for (const callIdentity of ["call:first", "call:second"]) {
+    const lifetime = { kind: "call-scoped-elision", callIdentity, parameterIdentity: "input:environment" };
+    const target = rustCallableTargetType([], number, lifetime, error);
+    const selected = selectRustValueCarrierReconciliation(source, target, projectTypes);
+    assert.equal(selected.kind, "call-scoped-lifetime", callIdentity + ": the required lifetime transition is published");
+    assert.equal(selected.fact.sourceCarrier === source, true, callIdentity + ": original callable identity is unchanged");
+    assert.equal(selected.fact.selectedCarrier === target, true, callIdentity + ": the original invocation owns its exact lifetime");
+    assert.equal(selectRustValueCarrierReconciliation(target, target, projectTypes).kind, "identity",
+      callIdentity + ": already identical physical contracts need no transition");
+    const foreign = rustCallableTargetType([], number,
+      { ...lifetime, callIdentity: callIdentity + ":foreign" }, error);
+    assert.equal(selectRustCallScopedLifetimeReconciliation(target, foreign) === undefined, true,
+      callIdentity + ": distinct original calls cannot share a lifetime proof");
+    assert.equal(selectRustCallScopedLifetimeReconciliation(source,
+      rustCallableTargetType([], number, lifetime, { kind: "target-named", id: "test:OtherInvocationError" })) === undefined,
+      true, callIdentity + ": matching lifetimes never replace the invocation error identity");
+  }
+});
 
 function inputs(parameterCarrier, valueCarrier = string, resultCarrier = number) {
   const binding = { environment: [], protocol: {
