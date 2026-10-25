@@ -10,6 +10,7 @@ import { planProjectMethod, planProjectMethodVariants } from "./methods.js";
 import { planRustCallableParameterPrelude, planRustCallableParameters } from "../callables/parameters.js";
 import { planStatementSequence } from "../../statements/index.js";
 import { planRustConstructionBody } from "./construction-body.js";
+import { applyRustTailShape } from "../../../target-ast/normalization/block-flow.js";
 import { requireRustConstructorContract } from "./constructor-contracts.js";
 import { projectOwnMethodProperties } from "../../objects/polymorphism/model.js";
 import type { ProjectMethodPropertyPlan } from "../../objects/polymorphism/model.js";
@@ -367,7 +368,7 @@ function planConstructor(
     ...(errorBoundary === undefined ? {} : { errorType: rustErrorType(errorBoundary) }),
     params,
     returnType: classType,
-    body: { statements },
+    body: applyRustTailShape({ statements }, true, new Set(params.map(parameter => parameter.name))),
   };
 }
 
