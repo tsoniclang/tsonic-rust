@@ -116,6 +116,8 @@ for (const [name, source, node] of [
       assert.match(text, /first: u32/u);
       assert.match(text, /timer: u64/u);
       assert.match(text, /interval: u64/u);
+      assert.doesNotMatch(text, /\(\*match span\.as_ref\(\)/u,
+        "native tuple fields retain their prepared borrowed receiver for native auto-dereference");
     }
     validateGeneratedProject(name, result.artifacts, { run: true });
   });
