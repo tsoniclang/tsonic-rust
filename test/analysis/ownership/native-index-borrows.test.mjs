@@ -99,9 +99,15 @@ export function compare(values: string[]): boolean { return values[mutateIndex(v
 
 test("String-consuming RHS calls retain their actual first-value snapshots", () => {
   const { program } = analyzeRust({ files: { "index.ts": `
-function consume(value: string): string { return value; }
+function consume(value: string): string { let output = value; output += "!"; return output; }
 export function compare(value: string): boolean { return value === consume(value); }
 ` } });
+  const ownedParameters = expressions(program, node => program.source.ast.is.IsParameterDeclaration(node) &&
+    program.source.ast.is.IsFunctionDeclaration(program.source.ast.parent(node)) &&
+    program.source.ast.text(program.source.ast.name(program.source.ast.parent(node))) === "consume");
+  assert.equal(ownedParameters.length, 1, "the actual mutating native callee has one exact source parameter");
+  assert.equal(program.records.sourceParameterAbi.get(ownedParameters[0])?.mode, "value",
+    "the snapshot inverse proves a genuinely owned native argument, not an inferred borrowed-return identity");
   const comparisons = expressions(program, node => program.records.binaryEmission.get(node)?.operator === "==");
   assert.equal(comparisons.length, 1, "the exact owned String consumer remains in the checked program");
   const left = BinaryExpression_Left(program.source.ast, comparisons[0]);

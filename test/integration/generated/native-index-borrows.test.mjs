@@ -28,6 +28,8 @@ function replaceArray(values: string[][], calls: number[]): number {
 export function reallocated(values: string[][], calls: number[]): boolean {
   return values[0]![replaceArray(values, calls)]! === "before";
 }
+function consumeOwned(value: string): string { let output = value; output += "!"; return output; }
+export function consuming(value: string): boolean { return value === consumeOwned(value); }
 function callbackIndex(values: readonly string[], select: () => number): boolean { return values[select()]! === "tail"; }
 export function verify_callback(): boolean {
   const values = ["head", "tail"];
@@ -106,6 +108,22 @@ fn replacing_the_inner_allocation_preserves_receiver_evaluation_and_first_value(
     assert_eq!(generated_values[0], ["after", "tail"]);
     assert_eq!(generated_calls, native_calls);
     assert_eq!(generated_calls, [1.0]);
+    assert_eq!(generated_cost, native_cost);
+}
+
+#[test]
+fn a_real_owning_call_preserves_its_first_value_and_native_snapshot_cost() {
+    let generated_value = String::from("before");
+    let native_value = String::from("before");
+    let (generated, generated_cost) = measure(|| index::consuming(generated_value).unwrap());
+    let (native, native_cost) = measure(|| {
+        let before = native_value.clone();
+        let mut output = native_value;
+        output.push_str("!");
+        before == output
+    });
+    assert!(!generated);
+    assert_eq!(generated, native);
     assert_eq!(generated_cost, native_cost);
 }
 
