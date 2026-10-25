@@ -4,6 +4,7 @@ import type { RustRecordFamily } from "./program.js";
 import type { RustSourceCallableSpecializationVariant } from "./callable-emission.js";
 import type { RustProjectMethodDispatchVariant } from "./method-dispatch.js";
 import type { RustSourceErrorEffectEdge } from "./source-error-effects.js";
+import type { RustSourceErrorRegionEmission } from "./error-emission.js";
 
 export interface RustSourceCallEmission {
   readonly declaration: Node | undefined;
@@ -30,6 +31,7 @@ export interface RustSourceCallEmission {
   readonly physicalCallableError?: TargetTypeRef;
   readonly never: boolean;
   readonly errorEdge: RustSourceErrorEffectEdge | undefined;
+  readonly frameError: RustSourceErrorRegionEmission | undefined;
   readonly pinnedBodies: ReadonlySet<string>;
 }
 

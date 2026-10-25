@@ -1,5 +1,5 @@
 import type { Node, SourceFile } from "@tsonic/tsts";
-import type { RustFrameCallableBinding, RustFrameCallableDefinition, RustFrameCallableImplementation } from "./frame-callables.js";
+import type { RustFrameCallableBinding, RustFrameCallableDefinition, RustFrameCallableImplementation, RustFrameEntryErrorSelection } from "./frame-callables.js";
 import type { RustGenericRequirement, RustAssociatedTypeRequirement } from "./generic-requirements.js";
 import type { RustProjectProjectionRequirement } from "../types/project-projections.js";
 import type { TargetTypeRef } from "../types/model.js";
@@ -7,6 +7,7 @@ import type { RustFrameCallableEntryDefinition } from "./frame-callables.js";
 import type { RustObjectRepresentation } from "./object-representation.js";
 
 export interface RustFrameTypeEmission {
+  readonly error: TargetTypeRef;
   readonly independentCarrier: TargetTypeRef | undefined;
   readonly definition: RustFrameCallableDefinition;
   readonly entry: RustFrameCallableEntryDefinition;
@@ -20,6 +21,7 @@ export interface RustClassFrameFieldEmission {
 }
 
 export interface RustFrameDefinitionEmission {
+  readonly errors: ReadonlyMap<RustFrameCallableEntryDefinition, RustFrameEntryErrorSelection>;
   readonly counterName: string | undefined;
   readonly parameters: readonly { readonly identity: string; readonly name: string; readonly requirements: readonly RustGenericRequirement[] }[];
   readonly associated: readonly RustAssociatedTypeRequirement[];

@@ -75,6 +75,27 @@ export function selectedCallProviderDeclaration(
   ]);
 }
 
+export function selectedCallProviderDomain(
+  request: RustCheckedCallSelectionInput,
+  identity: ProviderDeclarationIdentity,
+  context: Pick<RustSourcePolicyContext, "source" | "semanticsFor">,
+): "operation" | "value" | undefined {
+  const selected = context.semanticsFor(request.source.call).operations.callResult(request.source)?.providerSignature;
+  const document = identity.artifactFileName === undefined ? undefined
+    : context.source.sourceFacts.getVirtualDeclarationDocument(identity.artifactFileName);
+  if (selected?.kind !== "available" || selected.signature.id !== identity.signatureId || document === undefined ||
+    document.provider.id !== identity.providerId || document.provider.version !== identity.providerVersion ||
+    document.providerModuleId !== identity.providerModuleId || document.moduleSpecifier !== identity.moduleSpecifier) return undefined;
+  const exports = document.declarationModel.exports.filter(declaration => declaration.id === identity.exportId);
+  if (exports.length !== 1) return undefined;
+  const exported = exports[0]!;
+  const members = identity.memberId === undefined ? [exported]
+    : (exported.members ?? []).filter(member => member.id === identity.memberId);
+  if (members.length !== 1) return undefined;
+  const owner = members[0]!;
+  return owner.signatures?.some(signature => signature.id === selected.signature.id) === true ? "operation" : "value";
+}
+
 function providerDeclarationIdentityWithoutSignature(
   identity: ProviderDeclarationIdentity,
 ): ProviderDeclarationIdentity {

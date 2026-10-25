@@ -28,6 +28,7 @@ export function analyzeRustLocationCallbacks(program: Omit<RustAnalysisProgram, 
       const callable = rustCallableProtocol(declared);
       const source = argument === undefined || declared === undefined ? undefined : rustNativeCallableOperand(declared, argument, {
         records: program.records, storage: program.callableValues.nativeStorage, producers: program.callableValues.nativeProducers,
+        frames: program.callableValues.frames,
       });
       const boundary = program.retainedCallableInputs.forBoundary(node, index);
       if (callable === undefined || source === undefined || source.input !== undefined && boundary?.inputs.includes(source.input) !== true)

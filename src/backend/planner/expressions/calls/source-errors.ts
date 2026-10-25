@@ -22,6 +22,15 @@ export function planRustSourceErrorPropagation(
 ): RustExpr | undefined {
   const selection = context.input.program.records.sourceErrorRegion.get(edge);
   if (selection === undefined) return reject(node, context);
+  return planRustSelectedSourceErrorPropagation(node, selection, expression, context);
+}
+
+export function planRustSelectedSourceErrorPropagation(
+  node: Node,
+  selection: RustSourceErrorRegionEmission,
+  expression: RustExpr,
+  context: RustPlanContext,
+): RustExpr | undefined {
   const channels = selection.channels;
   const planned = planRustSelectedErrorRegion(selection.operand, context, node);
   if (planned === undefined) return reject(node, context);

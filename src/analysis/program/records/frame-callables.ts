@@ -11,6 +11,8 @@ export function createRustFrameCallableRecords(input: RustFrameCallableRecordInp
     issues: input.issues,
     activationInputs: input.activationInputs,
     receiverOwners: input.receiverOwners,
+    entryErrors: input.entryErrors,
+    errorFor: input.errorFor,
     definitionFor: (carrier: TargetTypeRef) => input.selectedDefinitions.get(closedMetadataKey(carrier)),
     definitionForOwner: (declaration: Node) => input.byDeclaration.get(declaration),
     entryFor: (carrier: TargetTypeRef) => input.selectedEntries.get(closedMetadataKey(carrier)),
