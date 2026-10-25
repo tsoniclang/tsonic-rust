@@ -12,39 +12,90 @@ import { rustInfallibleTargetId } from "../../../dist/target-model/types/carrier
 import { Node_Expression } from "@tsonic/target-api/source";
 import { rustNativeCallablePhysicalSource } from "../../../dist/policy/conversions/native-callables.js";
 import { rustCallableInvocationSignaturesMatch } from "../../../dist/policy/conversions/callable-input.js";
-import { awaitOperandCallableSource } from "../../../../tsonic/test/fixtures/await-operand-callables.mjs";
+import { awaitOperandCallableSource, nativeAwaitOperandCallableSource } from "../../../../tsonic/test/fixtures/await-operand-callables.mjs";
+import { rustUninhabitedError } from "../../../dist/policy/conversions/callable-physical.js";
 
 test("frame invocations retain their actual grouped native error contract", () => {
-  const context = analyzeRustErrorEffects(awaitOperandCallableSource);
-  const frames = context.callableValues.frames;
-  let mixed = 0;
-  for (const definition of frames.definitions) for (const entry of definition.entries) {
-    const selection = frames.entryErrors(entry);
-    if (selection.region.localOwner === undefined ||
-      !selection.region.sources.some(source => rustTargetTypeRefEquals(source.errorType, rustJsValueTargetType()))) continue;
-    mixed += 1;
-    assert.equal(entry.implementations.length > 0, true, "the original native entry retains its actual implementations");
-    assert.equal(selection.implementations.size, entry.implementations.length,
-      "every original implementation has its required body-to-entry error transport");
-    for (const implementation of entry.implementations) {
-      const physical = rustNativeCallablePhysicalSource(implementation.carrier,
-        { kind: "identity", carrier: implementation.carrier }, frames);
-      assert.equal(physical !== undefined, true, "the actual frame owns a completed physical signature");
-      assert.equal(rustTargetTypeRefEquals(physical.signature.error, frames.errorFor(implementation.carrier)), true,
-        "the physical factory consumes the one canonical instantiated entry error");
-      const selected = rustCallableTargetType(physical.signature.parameters, physical.signature.result, undefined,
-        physical.signature.error);
-      assert.equal(rustCallableInvocationSignaturesMatch(selected,
-        rustCallableTargetType(physical.signature.parameters, physical.signature.result)), false,
-      "a mixed frame error cannot be replaced by a logical native error");
-      assert.equal(rustCallableInvocationSignaturesMatch(selected,
-        rustCallableTargetType(physical.signature.parameters, physical.signature.result, undefined, rustJsValueTargetType())), false,
-      "a mixed frame error cannot be replaced by uniform JS rejection");
+  const mixedSource = awaitOperandCallableSource.replace("resolve(order);",
+    'resolve(order); throw new Error("actual native frame failure");');
+  for (const [kind, source, surfaces] of [
+    ["js", awaitOperandCallableSource, ["js"]],
+    ["infallible", nativeAwaitOperandCallableSource, []],
+    ["mixed", mixedSource, ["js"]],
+  ]) {
+    const context = analyzeRustErrorEffects(source, { surfaces });
+    const frames = context.callableValues.frames;
+    let entries = 0;
+    let mixed = 0;
+    for (const definition of frames.definitions) for (const entry of definition.entries) {
+      entries += 1;
+      const selection = frames.entryErrors(entry);
+      const nativeAndJs = selection.region.localOwner !== undefined &&
+        selection.region.sources.some(source => rustTargetTypeRefEquals(source.errorType, rustJsValueTargetType()));
+      if (nativeAndJs) mixed += 1;
+      if (kind === "js") assert.equal(rustTargetTypeRefEquals(selection.carrier, rustJsValueTargetType()), true,
+        "the complete original JS program has its actual uniform JsValue invocation channel");
+      if (kind === "infallible") assert.equal(rustUninhabitedError(selection.carrier), true,
+        "the complete original native program's recursive invocation is genuinely infallible");
+      assert.equal(entry.implementations.length > 0, true, "the original native entry retains its actual implementations");
+      assert.equal(selection.implementations.size, entry.implementations.length,
+        "every original implementation has its required body-to-entry error transport");
+      for (const implementation of entry.implementations) {
+        const physical = rustNativeCallablePhysicalSource(implementation.carrier,
+          { kind: "identity", carrier: implementation.carrier }, frames);
+        assert.equal(physical !== undefined, true, "the actual frame owns a completed physical signature");
+        assert.equal(rustTargetTypeRefEquals(physical.signature.error, frames.errorFor(implementation.carrier)), true,
+          "the physical factory consumes the one canonical instantiated entry error");
+        const selected = rustCallableTargetType(physical.signature.parameters, physical.signature.result, undefined,
+          physical.signature.error);
+        if (nativeAndJs) {
+          assert.equal(rustCallableInvocationSignaturesMatch(selected,
+            rustCallableTargetType(physical.signature.parameters, physical.signature.result)), false,
+          "a mixed frame error cannot be replaced by a logical native error");
+          assert.equal(rustCallableInvocationSignaturesMatch(selected,
+            rustCallableTargetType(physical.signature.parameters, physical.signature.result, undefined, rustJsValueTargetType())), false,
+          "a mixed frame error cannot be replaced by uniform JS rejection");
+        }
+      }
+      assert.throws(() => frames.entryErrors({ ...entry }),
+        /completed original entry selection/, "an equal-shaped foreign entry cannot supply native error evidence");
     }
-    assert.throws(() => frames.entryErrors({ ...entry }),
-      /completed original entry selection/, "an equal-shaped foreign entry cannot supply native error evidence");
+    assert.equal(entries > 0, true, `${kind}: the full source retains its actual native frame entry`);
+    if (kind === "mixed") assert.equal(mixed > 0, true,
+      "the added real throw and original resolver invocation retain BOTH native and JsValue errors");
   }
-  assert.equal(mixed > 0, true, "the complete original source exercises local and JS errors in one native frame entry");
+});
+
+test("prepared provider callbacks use actual native frame invocation effects", () => {
+  const original = `
+import type { int32 } from "@tsonic/core/types.js";
+export function run(): int32 {
+  let total: int32 = 0;
+  const receive = (value: int32): void => { total += value; detach(); };
+  const detach = (): void => { if (total < 0) receive(0); };
+  const values: int32[] = [1, 2];
+  values.forEach(receive);
+  return total;
+}
+`;
+  for (const fallible of [false, true]) {
+    const source = fallible ? original.replace("total += value;",
+      'total += value; if (value < 0) throw new Error("native callback failure");') : original;
+    const context = analyzeRustErrorEffects(source);
+    const calls = context.sourceStorage.nodes.filter(node => context.ast.is.IsCallExpression(node) &&
+      context.records.targetOperation.get(node)?.kind === "provider-operation");
+    assert.equal(calls.length, 1, "the full original program has one checked provider callback invocation");
+    assert.equal(context.records.targetOperation.get(calls[0]).abi.effects.invocation,
+      fallible ? "fallible" : "infallible", "native invocation effects are not the Result-wrapped representation flag");
+    const run = context.sourceStorage.nodes.find(node => context.ast.is.IsFunctionDeclaration(node) &&
+      context.ast.text(context.ast.name(node)) === "run");
+    assert.equal(run !== undefined, true, "the original checked caller is retained");
+    assert.equal(context.records.errorEffects.get(run)?.localErrors, fallible,
+      "the actual caller owns a local error exactly when its native callback can produce one");
+    const compiled = compileRust({ surfaces: ["js"], files: { "index.ts": source } });
+    assert.equal(compiled.result.diagnostics.length, 0,
+      compiled.result.diagnostics.map(diagnostic => `${diagnostic.code}: ${diagnostic.message}`).join("\n"));
+  }
 });
 
 test("source JS calls use their Promise rejection channel rather than body-local fallibility", () => {
