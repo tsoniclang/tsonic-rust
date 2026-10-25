@@ -134,6 +134,7 @@ export function choose(first: boolean, value: int32): Choice<int32> { return fir
     "facade.ts": `export type { Choice as Selected } from "./definitions.js";
 export { choose } from "./definitions.js";`,
     "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
 import type { Selected as ImportedChoice } from "./facade.js";
 import { choose } from "./facade.js";
 function valid(value: ImportedChoice<int32>): boolean {
