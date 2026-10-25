@@ -7,9 +7,15 @@ import type { RustProviderFormProducer } from "../program/records/provider-forms
 import type { RustProviderFormEmission } from "../../target-model/records/provider-forms.js";
 import { isRustFinalizedSourceInput } from "../../target-model/operations/finalized-inputs.js";
 import { rustGeneratorSourceInvocationKind } from "../../policy/operations/source-profiles/generator-source-profile.js";
+import type { RustOperationAttempt } from "../program/operation-attempts.js";
+import { materializeRustSourceErrorRegion } from "../errors/source-regions.js";
+import { rustFrameInvocationErrorOperand, selectRustErrorRegion } from "../errors/regions.js";
+import { rustFrameCallableValue } from "../../target-model/types/carriers/frame-callables.js";
+import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
+import { rustUninhabitedError } from "../../policy/conversions/callable-physical.js";
 
 export function analyzeRustProviderForms(program: Omit<RustAnalysisProgram, "reachability">, nodes: readonly Node[],
-  producer: RustProviderFormProducer): readonly TargetDiagnostic[] {
+  producer: RustProviderFormProducer, attempts: Pick<WeakMap<Node, RustOperationAttempt>, "get">): readonly TargetDiagnostic[] {
   const issues: TargetDiagnostic[] = [];
   const { ast } = program.source;
   // A provider disposer is planned at its resource declaration, outside the source operation occurrences.
@@ -30,13 +36,43 @@ export function analyzeRustProviderForms(program: Omit<RustAnalysisProgram, "rea
     const operation = program.records.targetOperation.get(node);
     if (operation?.kind === "provider-operation" && rustGeneratorSourceInvocationKind(operation.operationId) === "sync") {
       const edges = program.records.sourceErrorEffects.get(node)?.edges;
-      nativeResult = edges?.length === 1 ? edges[0] : undefined;
-      if (nativeResult === undefined || program.records.generator.get(nativeResult.declaration) === undefined) {
+      const edge = edges?.length === 1 ? edges[0] : undefined;
+      nativeResult = edge === undefined ? undefined : program.records.sourceErrorRegion.get(edge);
+      if (edge === undefined || nativeResult === undefined || program.records.generator.get(edge.declaration) === undefined) {
         issues.push({ code: "RUST_GENERATOR_BODY_ERRORS_NOT_CLOSED", category: "error", source: "tsonic-rust", sourceNode: node,
           message: "A generator resume result requires its exact admitted body error correspondence before rendering.",
           evidence: ["target.capability=rust.generator.exact-body-errors"] });
         continue;
       }
+    }
+    const attempt = attempts.get(node);
+    const callback = attempt?.kind === "checked-call" ? attempt.prepared : undefined;
+    if (attempt?.kind === "checked-call" && callback !== undefined && callback.value.callback.failure.kind !== "returned-future" &&
+      abi.effects.invocation === "fallible" && (callback.callbackEffects.invocationEffects.localErrors ||
+        callback.callbackEffects.invocationEffects.nativeErrors.length !== 0)) {
+      const effects = callback.callbackEffects.invocationEffects;
+      const argument = attempt.request.source.sourceArguments[callback.value.callback.sourceArgumentIndex]?.expression;
+      const physical = argument === undefined ? undefined : program.callableValues.nativeStorage.operandFor(argument);
+      if (argument === undefined || physical === undefined || physical.kind === "unresolved")
+        failTargetAnalysisInvariant("tsonic-rust", "An admitted provider callback requires its exact physical invocation operand.", node);
+      const frame = rustFrameCallableValue(physical.carrier);
+      const selected = frame === undefined ? selectRustErrorRegion(callback.callbackEffects.invocationOwner, effects,
+        { ast, records: program.records, producers: program.callableValues.nativeProducers,
+          definitions: program.typeDefinitions, components: program.sourcePackageComponents, promiseBodies: program.promiseBodies }, false) : undefined;
+      if (selected?.kind === "rejected") {
+        issues.push(...selected.diagnostics);
+        continue;
+      }
+      const operand = frame === undefined ? selected?.kind === "resolved" ? selected.value : undefined
+        : rustFrameInvocationErrorOperand(physical.carrier, program.callableValues.frames);
+      if (operand === undefined || (operand.localOwner !== undefined) !== effects.localErrors ||
+        operand.sources.length !== effects.nativeErrors.length || operand.sources.some(source =>
+          !effects.nativeErrors.some(error => error.identity === source.identity && rustTargetTypeRefEquals(error.errorType, source.errorType))))
+        failTargetAnalysisInvariant("tsonic-rust", "An admitted provider callback requires its exact selected physical error correspondence.", node);
+      nativeResult = materializeRustSourceErrorRegion(node, { operand,
+        local: operand.localOwner === undefined ? undefined : { kind: "local" },
+        channels: operand.sources.map(source => ({ sourceIdentity: source.identity, targetIdentity: source.identity,
+          uninhabited: rustUninhabitedError(source.errorType) })) });
     }
     if (form.form === "source-module-construction") {
       const construction = program.sourceModuleConstructions.construction(node);

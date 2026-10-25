@@ -80,7 +80,7 @@ export interface RustCallableValuePlan {
   readonly generic: RustGenericCallablePlan;
   readonly suspended: RustSuspendedCallablePlan;
   readonly frames: RustFrameCallablePlan;
-  readonly native: Omit<RustNativeCallableInputPlan, "bindingsFor" | "originsFor" | "originsForValue">;
+  readonly native: Omit<RustNativeCallableInputPlan, "bindingsFor" | "originsFor" | "originsForValue" | "isConcreteCallableStorage">;
   readonly nativeStorage: RustPhysicalCallableStorage;
   readonly nativeCaptures: RustNativeCapturePlan;
   readonly nativeProducers: RustNativeCallableProducerPlan;
@@ -316,7 +316,7 @@ function createRustCallableValueLifecycle(input: RustCallableValuePlanInput,
   const frameConstruction = createRustFrameCallablePlan({ ...input, usedNames });
   const retentionIssues: RustSourceCallableSpecializationIssue[] = [];
   const native = createRustNativeCallableInputPlan({ ast: input.ast, records: input.records, sourcePackages: input.sourcePackages,
-    storage: input.sourceStorage, nativeNodes: input.nativeNodes, definitions: input.typeDefinitions, usedNames,
+    storage: input.sourceStorage, nativeNodes: input.nativeNodes, definitions: input.typeDefinitions, projectTypes: input.projectTypes, usedNames,
     declaresGenericInputs: owner => input.ast.is.IsFunctionDeclaration(owner) || input.ast.is.IsMethodDeclaration(owner) ||
       input.ast.is.IsConstructorDeclaration(owner) || input.ast.is.IsGetAccessorDeclaration(owner) ||
       input.ast.is.IsSetAccessorDeclaration(owner) || genericImplementations.has(owner) ||

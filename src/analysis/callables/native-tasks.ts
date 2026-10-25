@@ -20,6 +20,7 @@ import { providerCarrierFromRelations } from "../../policy/types/project/provide
 import { isRustNativeFutureCarrier } from "../../target-model/types/carriers/primitives.js";
 import { rustJsPromiseOutputTargetType } from "../../target-model/types/carriers/promises.js";
 import { rustUnparenthesizedExpression } from "../../target-model/syntax/expressions.js";
+import { completeRustFutureValue } from "./suspension.js";
 
 export interface RustNativeTaskCompletion extends SourceNativeTaskSpawn {
   readonly selection: RustAwaitSelection<RustAwaitValueLeafFact>;
@@ -35,9 +36,9 @@ export function completeRustNativeTaskValues(
   for (const spawn of graph.spawns) {
     const carrier = rustEffectiveValueCarrier(walk.context.records, spawn.operand);
     const known = walk.context.records.futureValue.get(spawn.operand);
-    const selection = carrier === undefined ? undefined : finalizeRustDiscardedAwaitSelection(carrier, branch =>
+    const selection = carrier === undefined ? undefined : finalizeRustDiscardedAwaitSelection(carrier, branch => completeRustFutureValue(walk, errors,
       known !== undefined && rustFutureValueMatchesCarrier(known, branch, walk.context.typeDefinitions)
-        ? known : rustFutureValueForStoredBranch(walk, spawn.operand, branch, errors), walk.context.typeDefinitions);
+        ? known : rustFutureValueForStoredBranch(walk, spawn.operand, branch, errors)), walk.context.typeDefinitions);
     if (selection === undefined || rustAwaitSelectionLeaves(selection).some(leaf => leaf.future === undefined ||
       leaf.future.errorBoundary === "js-rejection" || rustJsPromiseOutputTargetType(leaf.carrier) !== undefined)) {
       diagnostics.push({ code: "RUST_NATIVE_TASK_COMPLETION_NOT_CLOSED", category: "error", source: "tsonic-rust",
