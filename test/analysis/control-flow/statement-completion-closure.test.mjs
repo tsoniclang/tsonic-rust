@@ -29,6 +29,15 @@ function checkedGuardNodes(program) {
   return nodes;
 }
 
+function diagnosticSourceLabel(diagnostic, source) {
+  const node = diagnostic.sourceNode;
+  if (node === undefined) return "";
+  const name = source.ast.is.IsIdentifier(node) ? node : source.ast.name(node);
+  const parent = source.ast.parent(node);
+  return ` at ${source.ast.kindName(node)}${name === undefined ? "" : ` ${source.ast.text(name).slice(0, 192)}`}` +
+    `${parent === undefined ? "" : ` parent=${source.ast.kindName(parent)}`}`;
+}
+
 for (const surfaces of [[], ["js"]]) {
   const surface = surfaces[0] ?? "native";
   for (const selectedThen of [false, true]) {
@@ -489,7 +498,7 @@ for (const surfaces of [[], ["js"]]) {
   test(collection === "tuple"
     ? `selected native compound and unary setters preserve values, storage and exact evaluation (${surface})`
     : `dynamic fixed-array native update receivers retain exact non-Copy places (${surface})`, { timeout: 300_000 }, () => {
-    const { result } = compileRust({ surfaces, packages: [acmePlatformPackage({ includeSetters: true }), acmeTestingPackage()],
+    const { result, source } = compileRust({ surfaces, packages: [acmePlatformPackage({ includeSetters: true }), acmeTestingPackage()],
       target: { id: "rust", options: { outputType: "bin", crateName: `native_setter_updates_${surface}` } },
       files: { "index.ts": `
 import type { FixedArray, int32 } from "@tsonic/core/types.js";
@@ -538,7 +547,8 @@ export function main(): void {
 main();
 ` } });
     assert.equal(result.diagnostics.length, 0,
-      result.diagnostics.map(diagnostic => `${diagnostic.code}: ${diagnostic.message}`).join("\n").slice(0, 2048));
+      result.diagnostics.map(diagnostic => `${diagnostic.code}: ${diagnostic.message}${diagnosticSourceLabel(diagnostic, source)}`)
+        .join("\n").slice(0, 2048));
     const program = result.program;
     const ast = program.source.ast;
     const nested = checkedGuardNodes(program).find(node => ast.is.IsPropertyAccessExpression(node) &&
@@ -583,7 +593,7 @@ export function update(): void { const store = new Store("seed"); ++store[0]; }
 
   for (const member of ["count", "[0]"]) {
     test(`native ${member} update refuses actual receiver rebinding across its RHS (${surface})`, () => {
-      const { result } = compileRust({ surfaces, packages: [acmePlatformPackage({ includeSetters: true })],
+      const { result, source } = compileRust({ surfaces, packages: [acmePlatformPackage({ includeSetters: true })],
         files: { "index.ts": `
 import type { int32 } from "@tsonic/core/types.js";
 import { Store } from "@acme/platform";
@@ -596,7 +606,8 @@ export function update(): void {
 ` } });
       assert.equal(result.diagnostics.some(diagnostic => diagnostic.code === "RUST_UNSUPPORTED_AST" &&
         diagnostic.message.startsWith("Writable projection cannot preserve source evaluation order when a later expression rebinds its selected storage.")), true,
-      `the native place owner rejects actual root rebinding: ${result.diagnostics.slice(0, 3).map(diagnostic => `${diagnostic.code}: ${diagnostic.message}`).join("; ")}`);
+      `the native place owner rejects actual root rebinding: ${result.diagnostics.slice(0, 3).map(diagnostic =>
+        `${diagnostic.code}: ${diagnostic.message}${diagnosticSourceLabel(diagnostic, source)}`).join("; ")}`);
       assert.equal(result.program === undefined && result.plan === undefined && result.artifacts.length === 0, true,
         "a rejected native storage interval cannot publish a program, plan or partial artifacts");
     });
