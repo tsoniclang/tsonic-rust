@@ -27,6 +27,9 @@ test("native TYPE demand distinguishes metadata from real Future and callable st
     ["native Future array", rustVecTargetType(future), true, false],
     ["native optional Future array", rustOptionTargetType(rustVecTargetType(future)), true, false],
     ["native callable array", rustVecTargetType(callable), false, true],
+    ["native Future tuple", { kind: "tuple", elements: [number, future] }, true, false],
+    ["native callable tuple", { kind: "tuple", elements: [number, callable] }, false, true],
+    ["native optional shared array", rustOptionTargetType(rustJsArrayTargetType(number)), false, false],
   ]) {
     let remaining = 4096;
     const selected = selectRustNativeStorageTypeDemand(carrier, emptyRustTypeDefinitions,

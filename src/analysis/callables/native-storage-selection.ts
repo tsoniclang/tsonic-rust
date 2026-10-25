@@ -437,12 +437,18 @@ export function createRustNativeStorageSelection(
         return physical ?? fail("Native callable storage has no selected physical input implementation.");
       }
       if (current.kind === "array" || current.kind === "slice") {
+        const demand = selectRustNativeStorageTypeDemand(current.element, input.definitions, step, depth + 1);
+        if (demand.kind === "unresolved") return fail(demand.reason);
+        if (!demand.future && !demand.implementation) return current;
         const component = project(selectedSubject, { kind: "array-element" });
         const element = component === undefined ? undefined : visit(current.element, component, bindings, depth + 1, false, position);
         return element === undefined ? undefined : element === current.element ? current : Object.freeze({ ...current, element });
       }
       const jsElement = rustJsArrayLikeElementTargetType(current);
       if (jsElement !== undefined && current.kind === "target-named") {
+        const demand = selectRustNativeStorageTypeDemand(jsElement, input.definitions, step, depth + 1);
+        if (demand.kind === "unresolved") return fail(demand.reason);
+        if (!demand.future && !demand.implementation) return current;
         const component = project(selectedSubject, { kind: "array-element" });
         const element = component === undefined ? undefined : visit(jsElement, component, bindings, depth + 1, false, position);
         return element === undefined ? undefined : element === jsElement ? current
@@ -507,6 +513,12 @@ export function createRustNativeStorageSelection(
       if (current.kind === "tuple") {
         const elements: TargetTypeRef[] = [];
         for (const [index, element] of current.elements.entries()) {
+          const demand = selectRustNativeStorageTypeDemand(element, input.definitions, step, depth + 1);
+          if (demand.kind === "unresolved") return fail(demand.reason);
+          if (!demand.future && !demand.implementation) {
+            elements.push(element);
+            continue;
+          }
           const component = project(selectedSubject, { kind: "tuple-element", index });
           const selected = component === undefined ? undefined : visit(element, component, bindings, depth + 1, false, position);
           if (selected === undefined) return undefined;
