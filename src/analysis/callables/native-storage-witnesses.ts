@@ -8,6 +8,7 @@ import type { RustNativeCallableInput } from "../../target-model/records/native-
 import type { RustSourceCallParameterPlan } from "../../target-model/operations/model.js";
 import type { RustSourceCallableSpecializationIssue } from "../../target-model/records/callable-issues.js";
 import type { RustNativeCallableInputPlan } from "./native-inputs.js";
+import { callableValueCarrier } from "./native-storage-values.js";
 import type { RustStructuralStorageLookup } from "../../policy/model/operation-record-inputs.js";
 import { rustCallableProtocol } from "../../target-model/types/carriers/callables.js";
 import { rustOptionElementCarrier } from "../../target-model/types/carriers/optional.js";
@@ -45,21 +46,18 @@ export function selectRustNativeConversionBoundaries(input: RustNativeStorageSou
     const operation = input.records.targetOperation.get(node);
     const field = operation?.kind === "source-field" && operation.storage === "structural-object"
       ? input.structuralShapes.field(operation.receiverCarrier, operation.storageIndex) : undefined;
-    if (operation?.kind === "source-field" && field?.storage === "property" && field.method !== true &&
-      rustCallableProtocol(operation.resultCarrier) !== undefined) {
-      const selected = input.storage.subject(node, "value");
-      if (selected.kind === "unresolved") failure ??= selected.reason;
-      else conversionBoundaries.push(selected.subject);
-      continue;
-    }
-    if (input.records.contextualValueConversion.get(node)?.conversion.kind !== "callable-adapter") continue;
+    const value = operation?.kind === "source-field" ? callableValueCarrier(operation.resultCarrier) : undefined;
+    const getter = operation?.kind === "source-field" && field?.storage === "property" && field.method !== true &&
+      value !== undefined && rustCallableProtocol(value) !== undefined;
+    const adapter = input.records.contextualValueConversion.get(node)?.conversion.kind === "callable-adapter";
+    if (!getter && !adapter) continue;
     const selected = input.storage.subject(node, "value");
     if (selected.kind === "unresolved") { failure ??= selected.reason; continue; }
     const declaration = input.ast.is.IsIdentifier(node)
       ? input.storage.source.navigation.sourceReferenceFor(node)?.declaration : undefined;
     // A reference to a native callable input is transported as the input itself and is never on a frontier; any other
     // adapted reference (a local binding read) is a frontier stop of the storage it is written into.
-    if (declaration === undefined || !input.native.isConcreteCallableParameter(declaration) &&
+    if (getter || declaration === undefined || !input.native.isConcreteCallableParameter(declaration) &&
       !input.native.inputs.some(candidate => candidate.subject.node === declaration)) {
       conversionBoundaries.push(selected.subject);
       continue;

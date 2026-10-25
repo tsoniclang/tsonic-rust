@@ -248,7 +248,7 @@ export function createRustNativeStorageSelection(
       }
       if (rustCallableProtocol(current) !== undefined) {
         if (boundaryFailure !== undefined) return fail(boundaryFailure);
-        const selectedGetter = (origin: SourceStorageSubject, sourceBindings: SourceStorageBindings):
+        const selectedGetter = (origin: SourceStorageSubject, sourceBindings: SourceStorageBindings, readPosition: "value" | "input"):
           | { readonly kind: "not-getter" }
           | { readonly kind: "selected"; readonly carrier: TargetTypeRef }
           | { readonly kind: "unresolved" } => {
@@ -258,6 +258,11 @@ export function createRustNativeStorageSelection(
             ? input.structuralShapes.field(operation.receiverCarrier, operation.storageIndex) : undefined;
           if (operation?.kind !== "source-field" || property?.storage !== "property" || property.method === true)
             return { kind: "not-getter" };
+          const conversion = input.records.contextualValueConversion.get(origin.node);
+          if (readPosition === "value" && conversion?.conversion.kind === "callable-adapter") {
+            const physical = adaptedPhysical(origin, sourceBindings, current, depth);
+            return physical === undefined ? { kind: "unresolved" } : { kind: "selected", carrier: physical };
+          }
           const generics = genericsFor(ownerFor(origin.node), sourceBindings, depth + 1);
           if (generics.kind === "unresolved") {
             fail(generics.reason);
@@ -274,7 +279,7 @@ export function createRustNativeStorageSelection(
           erasedPhysicals.add(physical);
           return { kind: "selected", carrier: physical };
         };
-        const directGetter = selectedGetter(selectedSubject, bindings);
+        const directGetter = selectedGetter(selectedSubject, bindings, position);
         if (directGetter.kind !== "not-getter") return directGetter.kind === "selected" ? directGetter.carrier : undefined;
         const selected = input.storage.boundValueFrontierFor(selectedSubject, bindings, boundaries, position);
         if (selected.kind === "unresolved") return fail(selected.reason);
@@ -289,7 +294,7 @@ export function createRustNativeStorageSelection(
           let candidatePhysical: TargetTypeRef | undefined;
           if (frontier.kind === "boundary") {
             joinable = false;
-            const getter = selectedGetter(origin, frontier.bindings);
+            const getter = selectedGetter(origin, frontier.bindings, "value");
             candidatePhysical = getter.kind === "selected" ? getter.carrier
               : getter.kind === "not-getter" ? adaptedPhysical(origin, frontier.bindings, current, depth) : undefined;
             if (candidatePhysical === undefined) return undefined;
