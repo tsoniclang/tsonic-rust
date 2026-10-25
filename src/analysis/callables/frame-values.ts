@@ -396,7 +396,7 @@ export function createRustFrameCallablePlan(input: {
       return Object.freeze(rejected);
     },
     sealCounters(constructions: readonly RustProjectConstructionPlan[]): RustFrameCallablePlan {
-      return producer.finalizeCounters(prepareRustRetainedFrameCounters(definitions, input.ast, constructions));
+      return producer.finalizeCounters(() => prepareRustRetainedFrameCounters(definitions, input.ast, constructions));
     },
   });
 }

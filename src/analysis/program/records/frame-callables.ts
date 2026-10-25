@@ -33,9 +33,9 @@ export function createRustFrameCallableRecords(input: RustFrameCallableRecordInp
     },
   });
   return Object.freeze({ records,
-    finalizeCounters(names: ReadonlyMap<RustFrameCallableDefinition, string | undefined>): RustFrameCallablePlan {
-      if (counters !== undefined) failTargetAnalysisInvariant("tsonic-rust", "Native frame counter decisions publish once.");
-      counters = new Map(names);
+    finalizeCounters(prepare: () => ReadonlyMap<RustFrameCallableDefinition, string | undefined>): RustFrameCallablePlan {
+      if (counters !== undefined) return records;
+      counters = new Map(prepare());
       return records;
     },
   });
