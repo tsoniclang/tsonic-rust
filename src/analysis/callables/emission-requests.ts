@@ -209,6 +209,8 @@ export function prepareRustPhysicalCallableEmissionRequests(
     const flow = records.contextualValueConversion.get(node)?.conversion;
     if (flow?.kind === "generic-callable-flow" || flow?.kind === "callable-adapter" || flow?.kind === "callable-input")
       runtime(owner, node, role, sourceOwner);
+    if (operation?.kind === "source-field" && rustCallableProtocol(operation.resultCarrier) !== undefined)
+      runtime(owner, node, role, sourceOwner);
     if (handler?.kind === "memory-binding") {
       const selected = handler.selection;
       if (selected.kind === "field") visitUse(selected.expression, owner, "native-memory:value", node);
