@@ -337,16 +337,21 @@ export function analyzeRustPromiseResults(input: {
       const read = input.reads.get(request.reference);
       if (read === undefined || read.value.kind === "borrow") return undefined;
       const projection = input.records.flowReadProjection.get(request.reference);
-      if (projection !== undefined && !rustTargetTypeRefEquals(projection.sourceCarrier, read.carrier)) return undefined;
+      if (projection !== undefined && !rustTargetTypeRefEquals(projection.sourceCarrier, read.carrier)) return unresolved(value.node,
+        "A retained native read requires its identical selected source carrier before projection.");
       const carrier = projection?.selectedCarrier ?? read.carrier;
       const converted = rustEffectiveValueCarrier(input.records, request.reference);
       if (converted === undefined) return undefined;
       const owner = sourceEnclosingCallable(request.reference, input.ast);
-      if (classify(carrier, owner, request.reference, "read-value").kind !== "supported" ||
-        classify(converted, owner, request.reference, "read-value").kind !== "supported") return undefined;
+      const originalRequirement = classify(carrier, owner, request.reference, "read-value");
+      const convertedRequirement = classify(converted, owner, request.reference, "read-value");
+      if (originalRequirement.kind === "unresolved") return unresolved(value.node, originalRequirement.reason);
+      if (convertedRequirement.kind === "unresolved") return unresolved(value.node, convertedRequirement.reason);
+      if (originalRequirement.kind !== "supported" || convertedRequirement.kind !== "supported") return undefined;
       const retained = retainedCarrierFor(value, bindings, carrier);
       if (retained.kind === "unresolved") return retained;
       const selected = classify(retained, owner, request.reference, "read-value");
+      if (selected.kind === "unresolved") return unresolved(value.node, selected.reason);
       if (selected.kind !== "supported") return undefined;
       return Object.freeze({ kind: "resolved", premises: Object.freeze([Object.freeze({ ...evidence,
         kind: "retained", reason: "owned-value" })]) });
