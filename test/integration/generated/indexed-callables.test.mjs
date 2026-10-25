@@ -10,6 +10,8 @@ test("indexed callables retain exact presence, evaluation order and shared mutat
       "index.ts": indexedCallableSource + '\nexport function main(): void { if (!run()) throw new Error("indexed callable identity and order"); }\nmain();\n',
     } });
   assert.deepEqual(result.diagnostics, []);
+  assert.match(artifactText(result, "src/index.rs"), /let member_receiver = &callbacks;/u,
+    "the already-selected immutable receiver lease is acquired before the effectful key without moving or cloning its owner");
   assert.doesNotMatch(artifactText(result, "src/index.rs"), /\.get_number\([^\n]*\)\.call/u);
   assert.doesNotMatch(artifactText(result, "src/index.rs"), /\.get_number\([^\n]*\)\.as_ref\(\)/u);
   validateGeneratedProject("indexed-callables", result.artifacts, { run: true });

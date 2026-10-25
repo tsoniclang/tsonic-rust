@@ -116,7 +116,7 @@ export function planTryStatement(node: Node, context: RustPlanContext): readonly
     if (binding === undefined) failRustPlannerInvariant("An admitted catch requires its exact native binding plan.", catchClause);
     const terminates = statementExits(catchBlock, context);
     plannedCatch = {
-      bindings: normalBindings.filter((_binding, index) => completionBindings[index]!.catch),
+      bindings: normalBindings.filter((_binding, index) => completionBindings[index]!.catch === "entry"),
       binding: binding.name,
       bindingUsed: binding.used,
       body: terminates ? tailCompletionExits(catchBody) : catchBody,
@@ -156,7 +156,7 @@ export function planTryStatement(node: Node, context: RustPlanContext): readonly
     bodyName: allocateRustSyntheticName(context.syntheticNames, "try_body"),
     flowName,
     normalBindings,
-    bodyBindings: normalBindings.filter((_binding, index) => completionBindings[index]!.body),
+    bodyBindings: normalBindings.filter((_binding, index) => completionBindings[index]!.body === "entry"),
     ...(plannedFinally === undefined
       ? {}
       : { finallyName: allocateRustSyntheticName(context.syntheticNames, "finally_flow") }),
@@ -178,9 +178,13 @@ export function planTryStatement(node: Node, context: RustPlanContext): readonly
     })),
     terminates,
   };
-  return [scope, ...normalBindings.map((binding, index) => ({ ...binding, init: {
-    kind: "field" as const, receiver: { kind: "path" as const, path: flowName }, name: String(index),
-  } }))];
+  return [scope, ...normalBindings.map((binding, index): RustStmt => {
+    const owner = context.input.program.records.completionBindingOwner.get(completionBindings[index]!.declaration);
+    if (owner === undefined) failRustPlannerInvariant("An admitted completion output requires its lexical binding owner.", node);
+    const value: RustExpr = { kind: "field", receiver: { kind: "path", path: flowName }, name: String(index) };
+    return completionBindings[index]!.output === "declare" ? { ...binding, init: value }
+      : { kind: "assign", target: { kind: "path", path: binding.name }, operator: "=", value };
+  })];
 }
 
 function statementExits(node: Node, context: RustPlanContext): boolean {

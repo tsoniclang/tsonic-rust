@@ -6,7 +6,10 @@ import type { RustExpressionExitProducer } from "../program/records/expression-e
 import { isRustNeverCarrier } from "../../target-model/types/index.js";
 import { rustMemberAccessReceiver } from "../../target-model/syntax/expressions.js";
 
-export function analyzeRustExpressionExits(program: Omit<RustAnalysisProgram, "reachability">, nodes: readonly Node[],
+export function analyzeRustExpressionExits(program: {
+  readonly source: Pick<RustAnalysisProgram["source"], "ast">;
+  readonly records: Pick<RustAnalysisProgram["records"], "optionalChain" | "targetOperation" | "runtimeCarrier">;
+}, nodes: readonly Node[],
   producer: RustExpressionExitProducer): void {
   const { ast } = program.source;
   const exits = new Map<Node, boolean>();
