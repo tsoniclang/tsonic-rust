@@ -69,9 +69,14 @@ export function analyzeRustProviderForms(program: Omit<RustAnalysisProgram, "rea
       if (argument === undefined || physical === undefined || conversion?.kind === "callable-adapter" && adapted === undefined)
         failTargetAnalysisInvariant("tsonic-rust", "An admitted provider callback requires its exact physical invocation operand.", node);
       const signature = adapted?.physical ?? physical.signature;
-      const failure = callback.value.callback.failure;
-      const frame = failure.resultError.kind === "native" || adapted !== undefined ? undefined : rustFrameCallableValue(physical.carrier);
-      const selected = frame === undefined ? selectRustErrorRegion(failure.resultError.kind === "native" ? node
+      const callbackFallible = callback.callbackEffects.invocationEffects.localErrors ||
+        callback.callbackEffects.invocationEffects.nativeErrors.length !== 0;
+      const helperError = abi.effects.errorCarrier;
+      if (abi.effects.errorBoundary === "provider-native" && helperError === undefined ||
+        !callbackFallible && abi.effects.errorBoundary !== "provider-native")
+        failTargetAnalysisInvariant("tsonic-rust", "An admitted intrinsic callback helper requires its exact selected native Result error carrier.", node);
+      const frame = helperError !== undefined || adapted !== undefined ? undefined : rustFrameCallableValue(physical.carrier);
+      const selected = frame === undefined ? selectRustErrorRegion(helperError !== undefined ? node
         : callback.callbackEffects.invocationOwner, effects,
         { ast, records: program.records, producers: program.callableValues.nativeProducers,
           definitions: program.typeDefinitions, components: program.sourcePackageComponents, promiseBodies: program.promiseBodies }, false) : undefined;
@@ -85,11 +90,11 @@ export function analyzeRustProviderForms(program: Omit<RustAnalysisProgram, "rea
         operand.sources.length !== effects.nativeErrors.length || operand.sources.some(source =>
           !effects.nativeErrors.some(error => error.identity === source.identity && rustTargetTypeRefEquals(error.errorType, source.errorType))))
         failTargetAnalysisInvariant("tsonic-rust", "An admitted provider callback requires its exact selected physical error correspondence.", node);
-      const expected = failure.resultError.kind === "native" ? failure.resultError.carrier : rustNativeErrorJoinTargetType(
+      const expected = helperError ?? rustNativeErrorJoinTargetType(
         operand.fileName, [...(operand.localOwner === undefined ? [] : [rustProgramErrorTargetType(operand.localOwner)]),
           ...operand.sources.map(source => source.errorType)]);
-      if (expected === undefined || !rustTargetTypeRefEquals(signature.error, expected) &&
-        !(failure.resultError.kind === "native" && rustUninhabitedError(signature.error)))
+      if (expected === undefined || callbackFallible && !rustTargetTypeRefEquals(signature.error, expected) &&
+        !(helperError !== undefined && rustUninhabitedError(signature.error)))
         failTargetAnalysisInvariant("tsonic-rust", "An admitted provider Result requires its exact selected callback adapter error contract.", node);
       nativeResult = materializeRustSourceErrorRegion(node, { operand,
         local: operand.localOwner === undefined ? undefined : { kind: "local" },

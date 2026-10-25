@@ -11,6 +11,7 @@ import { rustFrameCallableValue } from "../../target-model/types/carriers/frame-
 import { rustFrameCallableEnvironmentBindings } from "../callables/frame-values.js";
 import { substituteRustTargetGenerics } from "../../target-model/types/carriers/substitution.js";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
+import { callbackFallibleTemplate } from "../../policy/operations/members/deferred-callbacks.js";
 
 interface CallbackValueAnalysis {
   readonly invocationOwner: Node;
@@ -25,9 +26,10 @@ export function rustPreparedCallbackResultEffects(
 ): RustErrorEffectsFact | undefined {
   const failure = prepared.callback.failure;
   if (failure.kind === "returned-future") return prepared.template.isFallible ? rustLocalErrorEffects : rustPureErrorEffects;
-  if (failure.resultError.kind === "native") return prepared.template.isFallible ||
-    invocationEffects.localErrors || invocationEffects.nativeErrors.length !== 0
-    ? rustCallableInvocationErrorEffects(failure.resultError.carrier) : rustPureErrorEffects;
+  const selected = callbackFallibleTemplate(prepared, { invocationEffects });
+  if (!selected.isFallible) return rustPureErrorEffects;
+  if (selected.errorBoundary === "provider-native") return selected.errorCarrier === undefined
+    ? undefined : rustCallableInvocationErrorEffects(selected.errorCarrier);
   return mergeRustErrorEffects([
     prepared.template.isFallible ? rustLocalErrorEffects : rustPureErrorEffects,
     invocationEffects,

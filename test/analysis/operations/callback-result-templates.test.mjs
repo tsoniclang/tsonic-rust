@@ -2,9 +2,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { finalizeRustCallbackOperation } from "../../../dist/policy/operations/members/callbacks.js";
 import {
-  rustCallableTargetType, rustJsArrayTargetType, rustJsPromiseTargetType,
+  rustCallableTargetType, rustJsArrayTargetType, rustJsErrorTargetType, rustJsPromiseTargetType,
   rustJsValueTargetType, rustOptionTargetType, rustProgramErrorTargetType, rustSourcePrimitiveTargetType,
-  rustUnitTargetType,
+  rustStringTargetType, rustUnitTargetType,
 } from "../../../dist/target-model/types/index.js";
 import { selectRustCallableConversion } from "../../../dist/policy/conversions/callable.js";
 import { selectRustSourceValueConversion } from "../../../dist/policy/conversions/selection.js";
@@ -162,12 +162,30 @@ test("native callback Result contracts distinguish generic invocation errors fro
     assert.equal(invocationEffects.nativeErrors[0].errorType === callbackError, true, "provider selection does not rewrite the original invocation channel");
     const pure = { localErrors: false, nativeErrors: [] };
     assert.equal(callbackFallibleTemplate(prepared, { ...effects, invocationEffects: pure }) === template, true);
-    const intrinsic = { ...prepared, template: { ...template, isFallible: true } };
+    const intrinsic = { ...prepared, template: { ...template, isFallible: true,
+      errorBoundary: "provider-native", errorCarrier: rustJsErrorTargetType() } };
     const intrinsicEffects = rustPreparedCallbackResultEffects(intrinsic, pure);
-    assert.equal(intrinsicEffects.localErrors, resultError.kind === "callback");
-    assert.equal(intrinsicEffects.nativeErrors.length, resultError.kind === "native" ? 1 : 0);
-    assert.equal(callbackFallibleTemplate(intrinsic, { ...effects, invocationEffects: pure }).target === template.target, true);
+    assert.equal(intrinsicEffects.localErrors, false);
+    assert.equal(intrinsicEffects.nativeErrors.length, 1);
+    assert.deepEqual(intrinsicEffects.nativeErrors[0].errorType, rustJsErrorTargetType());
+    assert.equal(callbackFallibleTemplate(intrinsic, { ...effects, invocationEffects: pure }) === intrinsic.template, true,
+      "the pure helper retains its original target and exact native error contract, independently of the try callback contract");
   }
+});
+
+test("pure intrinsic callback helpers publish their actual selected native Result error", () => {
+  const callback = { kind: "closure", args: [rustStringTargetType(), rustJsValueTargetType()],
+    result: rustJsValueTargetType(), callTrait: "FnMut" };
+  const selected = selectJsSurfaceOperation({ ownerName: "JSON", memberName: "stringify", operationKind: "call",
+    argumentCarriers: [rustJsValueTargetType(), callback] });
+  assert.equal(selected !== undefined, true, "the selected JSON helper retains its checked callback contract");
+  assert.equal(selected.fact.isFallible, true);
+  assert.equal(selected.fact.errorBoundary, "provider-native");
+  assert.deepEqual(selected.fact.errorCarrier, rustRuntimeErrorTargetType(),
+    "JSON's real pure helper returns TsonicResult, independently of the callback's pure invocation");
+  const prepared = { template: selected.fact, callback: selected.callback };
+  const effects = { invocationEffects: { localErrors: false, nativeErrors: [] } };
+  assert.equal(callbackFallibleTemplate(prepared, effects) === selected.fact, true);
 });
 
 test("reduce finalization closes accumulator placeholders before publishing the immutable native callback contract", () => {

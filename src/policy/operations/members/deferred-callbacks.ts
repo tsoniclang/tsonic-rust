@@ -11,11 +11,11 @@ export interface RustPreparedCallbackEffects {
 
 export function callbackFallibleTemplate(
   prepared: RustPreparedDeferredCheckedCall,
-  effects: RustPreparedCallbackEffects,
+  effects: Pick<RustPreparedCallbackEffects, "invocationEffects">,
 ): RustProviderOperationTemplate {
   const failure = prepared.callback.failure;
   const callbackFallible = effects.invocationEffects.localErrors || effects.invocationEffects.nativeErrors.length !== 0;
-  if (failure.kind === "returned-future" || !callbackFallible && !prepared.template.isFallible) {
+  if (failure.kind === "returned-future" || !callbackFallible) {
     return prepared.template;
   }
   const { errorCarrier: _providerErrorCarrier, ...template } = prepared.template;
