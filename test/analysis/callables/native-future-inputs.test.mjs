@@ -123,7 +123,10 @@ test("native Future tuple and array projections retain separate exact formal lea
   const { inputs } = requireEnvironment(current, owner);
   assert.equal(inputs.length, 3);
   for (const [index, name] of ["first", "second", "element"].entries()) {
-    const value = requireSelected(current.plan.valueFor(current.initializer(name)), name);
+    const binding = current.declaration(name);
+    assert.equal(binding !== undefined && current.ast.is.IsElementAccessExpression(current.initializer(name)), true,
+      `${name}: the actual checked projection initializes its published native storage binding`);
+    const value = requireSelected(current.plan.valueFor(binding), name);
     assert.equal(contains(value, inputs[index].implementation, current.program.typeDefinitions), true, name);
     assert.equal(inputs[index].subject.projection[0].kind, index === 2 ? "array-element" : "tuple-element");
   }

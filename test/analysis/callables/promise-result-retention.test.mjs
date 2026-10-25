@@ -2,11 +2,103 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { appendFileSync } from "node:fs";
 import { join } from "node:path";
-import { compileRust } from "../../helpers/rust-session.mjs";
+import { boolCarrier, compileRust } from "../../helpers/rust-session.mjs";
 import { runCargo, validateGeneratedProject, writeGeneratedProject } from "../../helpers/cargo-projects.mjs";
 import { assertRejectedAsyncSource } from "../../helpers/native-promise-lifetimes.mjs";
+import { analyzeRustCheckedContext } from "../../helpers/rust-session-analysis-context.mjs";
+import { analyzeRustPromiseResults, analyzeRustPromiseResultUses } from "../../../dist/analysis/callables/promise-results.js";
+import { rustAwaitSelectionLeaves } from "../../../dist/target-model/types/await.js";
+import { rustAwaitSelection } from "../../../dist/policy/operations/flow/await.js";
+import { rustJsPromiseTargetType } from "../../../dist/target-model/types/carriers/promises.js";
+
+for (const [name, expected] of [
+  ["contradictory projected source carrier", /identical selected source carrier before projection/u],
+  ["unresolved final generic read contract", /actual completed final contract/u],
+]) {
+  test(`native retention rejects ${name} before owning-origin fallback`, () => {
+    let reachedRead = false;
+    let originQueriesAfterRead = 0;
+    let selected;
+    const { result } = compileRust({ surfaces: ["js"], files: { "index.ts": `
+      async function hold<Value>(value: Value, completion: Promise<void>): Promise<Value> {
+        await completion;
+        return value;
+      }
+      await hold(7, Promise.resolve(undefined));
+    ` }, compileTarget(request) {
+      const context = analyzeRustCheckedContext(request);
+      assert.equal(context.diagnostics.length, 0, `the original source has an actual checked native context: ${JSON.stringify(
+        context.diagnostics.map(({ code, message }) => ({ code, message })))}`);
+      const reference = context.nativeNodes.find(node => context.ast.is.IsIdentifier(node) &&
+        context.ast.text(node) === "value" && context.ast.is.IsReturnStatement(context.ast.parent(node)));
+      const call = context.nativeNodes.find(node => context.ast.is.IsCallExpression(node) &&
+        context.source.semantics.forNode(node).operations.call(node)?.sourceArguments.some(argument =>
+          context.ast.kindName(argument.expression) === "KindNumericLiteral"));
+      assert.equal(reference !== undefined && call !== undefined, true, "exact original read and invocation identities");
+      const carrier = context.records.runtimeCarrier.get(reference)?.carrier;
+      assert.equal(carrier?.kind, "type-parameter", "the actual checked generic read has its selected native parameter");
+      const readSubject = context.sourceStorage.subjectFor(reference);
+      assert.equal(readSubject.kind, "resolved", "the checked reference has its canonical storage subject");
+      const callRecord = context.records.runtimeCarrier.get(call);
+      const completion = rustAwaitSelection(callRecord?.carrier, context.typeDefinitions);
+      assert.equal(completion !== undefined, true, "the actual selected call has its native completion carrier");
+      const leaves = rustAwaitSelectionLeaves(completion);
+      assert.equal(leaves.length === 1 && leaves[0].future !== undefined, true, "one exact native completion, without guessed output");
+      const facade = { ...callRecord, carrier: rustJsPromiseTargetType(leaves[0].future.outputCarrier) };
+      const storage = { ...context.sourceStorage, storageProducersFor(value, bindings) {
+        if (reachedRead && value === readSubject.subject) originQueriesAfterRead += 1;
+        return context.sourceStorage.storageProducersFor(value, bindings);
+      } };
+      const records = { ...context.records, runtimeCarrier: { get(node) {
+        return node === call ? facade : context.records.runtimeCarrier.get(node);
+      } }, flowReadProjection: { get(node) {
+        if (node === reference && name === "contradictory projected source carrier")
+          return { sourceCarrier: boolCarrier, selectedCarrier: carrier };
+        return context.records.flowReadProjection.get(node);
+      } } };
+      selected = analyzeRustPromiseResults({
+        ast: context.ast, source: context.source, genericAdoption: [], storage, nodes: [call], records,
+        reads: { get(node) {
+          if (node !== reference) return undefined;
+          reachedRead = true;
+          return { carrier, source: { kind: "move" }, value: { kind: "move" }, snapshot: undefined,
+            stablePlace: true, readsStorage: true, pure: true, sharedReference: false, borrowedAcross: new Set() };
+        } },
+        uses: analyzeRustPromiseResultUses(context.ast, [call]), definitions: context.typeDefinitions,
+        nativeStorage: context.callableValues.nativeStorage, native: context.callableValues.native,
+        promiseBodies: context.promiseBodies.plan, nativeCaptures: undefined, errorTypes: undefined,
+        sourceTypes: { structuralObjectForType() { assert.fail("an unresolved read cannot inspect structural captures"); } },
+        sourceLifetimes: context.sourceLifetimes, requirements: { kind: "resolved", index: { contractFor: () => undefined } },
+        retentionIssues: [], families: context.typeFamilies, evidence: {}, jsEnabled: true,
+      });
+      return { kind: "resolved", value: { artifacts: [] }, diagnostics: selected.diagnostics };
+    } });
+    assert.equal(reachedRead, true, `the production native adapter inspected the exact checked reference: ${JSON.stringify(
+      selected?.diagnostics.map(({ code, message }) => ({ code, message })))}`);
+    assert.equal(originQueriesAfterRead, 0, "invalid or unresolved read evidence never invokes the owning-origin fallback");
+    assert.equal(selected.diagnostics.some(diagnostic => diagnostic.code === "RUST_ASYNC_RESULT_USE_NOT_PROVEN" &&
+      expected.test(diagnostic.message)), true, `the original native read refusal is preserved at its owner: ${JSON.stringify(
+        selected.diagnostics.map(({ code, message }) => ({ code, message })))}`);
+    assert.equal(result.artifacts.length, 0, "the refused source publishes no artifacts");
+  });
+}
 
 const cases = [
+  ["qualified-owned-field-read", `
+import type { int64 } from "@tsonic/core/types.js";
+class Counter {
+  constructor(public total: int64) {}
+  async read(pending: Promise<void>): Promise<int64> {
+    await pending;
+    return this.total;
+  }
+}
+async function run(): Promise<boolean> {
+  const value: int64 = 9007199254740993n;
+  const owner = new Counter(value);
+  const pending = owner.read(Promise.resolve(undefined));
+  return await pending === value && owner.total === value;
+}`],
   ["owned-capture", `
 async function keep(value: number, pending: Promise<void>): Promise<number> {
   const read = () => value;
