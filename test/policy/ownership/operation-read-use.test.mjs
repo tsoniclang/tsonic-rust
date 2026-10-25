@@ -68,6 +68,130 @@ function select(ast, node, operation) {
     arguments: undefined, address: undefined, location: undefined, guard: undefined, callableMode: undefined, structuralReceiverMode: "shared" });
 }
 
+for (const surfaces of [[], ["js"]]) {
+  test(`native operator inputs publish their selected value and shared demands on ${surfaces[0] ?? "native"}`, () => {
+    const { program } = analyzeRust({ surfaces, files: { "index.ts": `
+export function divide(left: bigint, right: bigint): bigint { return left / right; }
+export function remainder(left: bigint, right: bigint): bigint { return left % right; }
+export function equal(left: bigint, right: bigint): boolean { return left === right; }
+` } });
+    const { ast } = program.source;
+    let values = 0;
+    let shared = 0;
+    const visit = node => {
+      const operation = program.records.targetOperation.get(node);
+      if (ast.is.IsBinaryExpression(node) && (operation?.kind === "operator-call" || operation?.kind === "operator-token")) {
+        const binary = ast.as.AsBinaryExpression(node);
+        const selected = select(ast, node, operation);
+        for (const [index, operand] of [binary.Left, binary.Right].entries()) {
+          const mode = operation.operandModes[index];
+          const use = selected.get(operand);
+          assert.equal(use !== undefined, true, "every exact selected native operand has one read demand");
+          assert.equal(use.mode, mode === "ref" ? "shared" : mode === "mut-ref" ? "mutable" : "value",
+            "native consumption is taken from the selected operand contract, not source syntax");
+          assert.equal(use.mode === "move", false, "a native value demand does not itself authorize a final-use move");
+          assert.equal(Object.isFrozen(use), true, "the native input demand is immutable");
+          if (use.mode === "value") values += 1;
+          if (use.mode === "shared") shared += 1;
+        }
+      }
+      ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+    };
+    program.sourceFiles.forEach(visit);
+    assert.equal(values, 4, "both owned division and remainder inputs retain their native consumption");
+    assert.equal(shared, 2, "native equality still observes both operands through its original shared ABI");
+  });
+  test(`selected native projection observations retain their non-Copy receiver demand on ${surfaces[0] ?? "native"}`, () => {
+    const { program } = analyzeRust({ surfaces, files: { "index.ts": `
+import type { FixedArray } from "@tsonic/core/types.js";
+export function tuple(values: [string, string]): boolean { return ((values))[0] === ""; }
+export function fixed(values: FixedArray<string, 2>): boolean { return ((values))[0] === ""; }
+` } });
+    const { ast } = program.source;
+    let receivers = 0;
+    const visit = node => {
+      const operation = program.records.targetOperation.get(node);
+      if (operation?.kind === "tuple-index" || operation?.kind === "fixed-index") {
+        const receiver = Node_Expression(ast, node);
+        const read = program.records.readOwnership.get(receiver);
+        assert.equal(read?.source.kind, "borrow", "a selected projection observer never clones its tuple or fixed-array owner");
+        assert.equal(read.source.mutable, false, "a read-only native projection remains a shared native place");
+        assert.equal(read.value.kind, "borrow", "the same admitted native demand reaches the value read without a transfer override");
+        receivers += 1;
+      }
+      ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+    };
+    program.sourceFiles.forEach(visit);
+    assert.equal(receivers, 2, "both actual tuple and fixed-array projection receivers remain covered");
+  });
+}
+
+test("native runtime and static typeof categories share their actual storage operand without copying union payloads", () => {
+  const { program } = analyzeRust({ files: { "index.ts": `
+type Body = boolean | unknown[];
+export function inspect(body: Body): string {
+  if (typeof body === "boolean") return typeof ((body));
+  return typeof body;
+}
+` } });
+  assert.equal(program !== undefined, true, "a native category probe is not an aliased array entry");
+  const { ast } = program.source;
+  const probes = [];
+  const visit = node => {
+    if (ast.is.IsTypeOfExpression(node)) probes.push(node);
+    ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+  };
+  program.sourceFiles.forEach(visit);
+  assert.equal(probes.length, 3, "the runtime union, wrapped boolean and narrowed array probes all remain admitted");
+  let runtime = 0;
+  let staticResult = 0;
+  for (const probe of probes) {
+    const fact = program.records.targetOperation.get(probe);
+    assert.equal(fact?.kind, "typeof", "the actual category producer owns the selected operation");
+    if (typeof fact.result === "string") staticResult += 1;
+    else runtime += 1;
+    const operand = Node_Expression(ast, probe);
+    const use = select(ast, probe, fact).get(operand);
+    assert.equal(use?.mode, "shared", "category selection never consumes or clones its payload storage");
+    assert.equal(use.later.length, 0, "the probe does not extend a borrow into a later operand");
+    let subject = operand;
+    while (ast.is.IsParenthesizedExpression(subject)) subject = Node_Expression(ast, subject);
+    const ownership = program.records.readOwnership.get(subject);
+    assert.equal(ownership?.source.kind, "borrow", "the complete ownership producer publishes the native source borrow");
+    assert.equal(ownership.source.mutable, false, "a category probe never needs a mutable native borrow");
+    assert.equal(select(ast, subject, undefined).has(subject), false, "ordinary non-probe reads do not acquire a blanket borrow policy");
+  }
+  assert.equal(runtime, 1, "the full native union retains its real runtime category selection");
+  assert.equal(staticResult, 2, "both checked narrowed categories retain their native static outcomes");
+});
+
+test("a checked shared field probe remains borrowed across its actual effect-free later operand", () => {
+  const { program } = analyzeRust({ files: { "index.ts": `
+interface Options { extensions?: string[] | false; }
+export function enabled(options?: Options): boolean {
+  return options?.extensions !== false && options?.extensions !== undefined;
+}
+` } });
+  assert.equal(program !== undefined, true, "a readonly field guard is not an aliased array entry");
+  const { ast } = program.source;
+  const comparisons = [];
+  const visit = node => {
+    if (program.records.targetOperation.get(node)?.kind === "union-equality") comparisons.push(node);
+    ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+  };
+  program.sourceFiles.forEach(visit);
+  assert.equal(comparisons.length, 1, "the real field-versus-false guard is the only native union comparison");
+  const comparison = ast.as.AsBinaryExpression(comparisons[0]);
+  assert.equal(ast.kindName(comparison.Right), "KindFalseKeyword", "the later operand is the checked effect-free literal, not an unknown call");
+  const selected = select(ast, comparisons[0], program.records.targetOperation.get(comparisons[0]));
+  assert.equal(selected.get(comparison.Left)?.mode, "shared", "the native comparison requires a real shared field input");
+  const read = program.records.readOwnership.get(comparison.Left);
+  assert.equal(read?.source.kind, "borrow", "the preseal producer retains the actual field storage view");
+  assert.equal(read.source.mutable, false, "a readonly native comparison does not need an exclusive borrow");
+  assert.equal(read.value.kind, "borrow", "no hidden union or Vec clone is selected for the comparison");
+  assert.equal(read.borrowedAcross.has(comparison.Right), true, "the published interval includes this exact later operand");
+});
+
 test("native reference loads and stores select only their actual operand's nonconsuming place use", async () => {
   const source = createTargetSourceProgram(await checkedSource("ownership-native-reference-operands", {
     "src/index.ts": `
@@ -346,9 +470,9 @@ test("operator ownership consumes selected operand modes instead of rediscoverin
   assert.equal(node !== undefined, true, "checked binary operands");
   const binary = source.ast.as.AsBinaryExpression(node);
   for (const [modes, expected] of [
-    [["value", "value"], [undefined, undefined]],
-    [["ref", "value"], ["shared", undefined]],
-    [["value", "ref"], [undefined, "shared"]],
+    [["value", "value"], ["value", "value"]],
+    [["ref", "value"], ["shared", "value"]],
+    [["value", "ref"], ["value", "shared"]],
     [["mut-ref", "ref"], ["mutable", "shared"]],
   ]) {
     const operation = { kind: "operator-token", operationId: "fixture-selected-native-operands",
@@ -488,7 +612,7 @@ test("native string append and arithmetic carry their exact operand contracts be
       operations.push(operation.operator);
       assert.deepEqual(operation.operandModes, operation.operator === "+=" ? ["mut-ref", "ref"] : ["value", "value"]);
       const uses = select(program.source.ast, node, operation);
-      assert.equal(uses.get(binary.Right)?.mode, operation.operator === "+=" ? "shared" : undefined);
+      assert.equal(uses.get(binary.Right)?.mode, operation.operator === "+=" ? "shared" : "value");
       if (operation.operator === "+=") assert.equal(program.ownership.reads.get(binary.Right)?.value.kind, "borrow");
     }
     program.source.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });

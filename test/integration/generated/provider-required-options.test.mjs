@@ -69,8 +69,10 @@ for (const surfaces of [[], ["js"]]) {
     const code = artifactText(result, "src/index.rs");
     assert.doesNotMatch(code, /Default::default|unsafe|transmute/u);
     assert.match(code, /acme_required_options::Options\s*\{/u);
-    assert.equal((code.match(/label:\s*None/gu) ?? []).length, 2, "literal and structural copy retain native absence");
-    assert.equal((code.match(/enabled:\s*None/gu) ?? []).length, 2, "no aggregate Default or invented boolean is used");
+    assert.equal((code.match(/label:\s*Option::<String>::None/gu) ?? []).length, 2,
+      `literal and structural copy retain native absence: ${code.split("\n")
+        .filter(line => /\b(?:label|enabled):/u.test(line)).slice(0, 8).join("; ")}`);
+    assert.equal((code.match(/enabled:\s*Option::<bool>::None/gu) ?? []).length, 2, "no aggregate Default or invented boolean is used");
     validateGeneratedProject(`required-options-${surfaces[0] ?? "native"}`, result.artifacts, { run: true });
   });
 }

@@ -183,12 +183,12 @@ export function createRustNativeStorageQueries(input: {
         !rustTargetTypeRefEquals(abi.valueCarrier, result?.returnCarrier))
         return unresolved("Native paired return requires its exact source parameter and shared input ABI.");
       const subject = input.storage.subject(parameter, "input");
-      return subject.kind === "unresolved" ? subject : select(subject.subject, abi.parameterCarrier, bindingsFor(declaration));
+      return subject.kind === "unresolved" ? subject : select(subject.subject, abi.parameterCarrier, bindingsFor(declaration), declaration);
     }
     const carrier = result?.returnCarrier;
     if (carrier === undefined) return unresolved("Native callable return has no finalized logical carrier.");
     const subject = input.storage.subject(declaration, "return");
-    return subject.kind === "unresolved" ? subject : select(subject.subject, carrier, bindingsFor(declaration));
+    return subject.kind === "unresolved" ? subject : select(subject.subject, carrier, bindingsFor(declaration), declaration);
   };
   const invocationCallableFor = (node: Node, bindings: SourceStorageBindings | undefined): RustNativeStorageSelection => {
     if (!nodes.has(node)) return unresolved("Native callable invocation requires its exact owned source call.");
@@ -199,7 +199,7 @@ export function createRustNativeStorageQueries(input: {
       : rustEffectiveValueCarrier(input.records, callee);
     if (callee === undefined || carrier === undefined) return unresolved("Native callable invocation has no exact selected storage contract.");
     const subject = input.storage.subjectFor(callee);
-    return subject.kind === "unresolved" ? subject : select(subject.subject, carrier, bindings);
+    return subject.kind === "unresolved" ? subject : select(subject.subject, carrier, bindings, ownerFor(node));
   };
   const witnesses = collectRustNativeAbsenceWitnesses(input, invocationBindingsFor);
   const { absenceWitnesses, argumentWitnesses } = witnesses;
@@ -233,7 +233,7 @@ export function createRustNativeStorageQueries(input: {
       const carrier = rustEffectiveValueCarrier(input.records, node);
       if (carrier === undefined) return unresolved("Native callable value has no finalized logical carrier.");
       const subject = input.storage.subjectFor(node);
-      return subject.kind === "unresolved" ? subject : select(subject.subject, carrier, bindingsFor(valueOwnerFor(node)));
+      return subject.kind === "unresolved" ? subject : select(subject.subject, carrier, bindingsFor(valueOwnerFor(node)), valueOwnerFor(node));
     },
     operandFor(node: Node): RustNativeStorageSelection {
       if (!nodes.has(node)) return unresolved("Native callable operand requires an owned source node.");
@@ -241,15 +241,16 @@ export function createRustNativeStorageQueries(input: {
       if (carrier === undefined) return unresolved("Native callable operand has no finalized logical carrier.");
       const subject = input.storage.subjectFor(node);
       return subject.kind === "unresolved" ? subject
-        : select(subject.subject, carrier, bindingsFor(valueOwnerFor(node)), "input");
+        : select(subject.subject, carrier, bindingsFor(valueOwnerFor(node)), valueOwnerFor(node), "input");
     },
     subjectFor(subject: SourceStorageSubject, carrier: TargetTypeRef, owner?: Node): RustNativeStorageSelection {
       const checked = input.storage.typeFor(subject);
-      return checked.kind === "unresolved" ? checked : select(subject, carrier, bindingsFor(owner ?? ownerFor(subject.node)));
+      const scope = owner ?? ownerFor(subject.node);
+      return checked.kind === "unresolved" ? checked : select(subject, carrier, bindingsFor(scope), scope);
     },
     boundSubjectFor(subject: SourceStorageSubject, carrier: TargetTypeRef, bindings: SourceStorageBindings): RustNativeStorageSelection {
       const selected = input.storage.boundOriginsFor(subject, bindings);
-      return selected.kind === "unresolved" ? selected : select(subject, carrier, bindings);
+      return selected.kind === "unresolved" ? selected : select(subject, carrier, bindings, ownerFor(subject.node));
     },
     invocationReturnFor(implementation: Node, invocation: Node, owner?: Node): RustNativeStorageSelection {
       const bindings = invocationBindingsFor(implementation, invocation, owner);
@@ -257,7 +258,7 @@ export function createRustNativeStorageQueries(input: {
       const operation = input.records.targetOperation.get(invocation);
       if (operation?.kind !== "source-call") return unresolved("Native invocation return has no finalized source call.");
       const subject = input.storage.subject(implementation, "return");
-      return subject.kind === "unresolved" ? subject : select(subject.subject, operation.resultCarrier, bindings.bindings);
+      return subject.kind === "unresolved" ? subject : select(subject.subject, operation.resultCarrier, bindings.bindings, owner ?? ownerFor(invocation));
     },
     invocationInputFor(selected: RustNativeCallableInput, invocation: Node, owner?: Node): RustNativeStorageSelection {
       if (!ownedInputs.has(selected)) return unresolved("Native invocation input requires its exact owned input identity.");
@@ -273,7 +274,7 @@ export function createRustNativeStorageQueries(input: {
       const generics = rustTargetGenericBindingsForArguments(signature.member.genericParameters ?? [], operation.targetGenericArguments ?? []);
       return generics === undefined ? unresolved("Native invocation input has no exact selected generic arguments.")
         : select(selected.subject, substituteRustTargetGenerics(selected.carrier, generics.types,
-          generics.lifetimes, generics.consts), bindings.bindings);
+          generics.lifetimes, generics.consts), bindings.bindings, owner ?? ownerFor(invocation));
     },
     invocationWitnessFor: (selected: RustNativeCallableInput, invocation: Node) => absenceWitnesses.get(invocation)?.get(selected),
     invocationArgumentWitnessFor,
