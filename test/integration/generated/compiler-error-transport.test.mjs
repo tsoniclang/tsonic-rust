@@ -167,7 +167,7 @@ export function fail(error: Error): void { throw error; }
   assert.equal(rendered.length, 1, "one admitted throw produces one native throw");
   assert.equal(rendered[0].kind, "throw");
   assertNoTargetDiagnostics(selected.diagnostics);
-  const invariant = message => failure => failure?.diagnostic?.code === "TSONIC_INTERNAL_PLANNER_INVARIANT" &&
+  const invariant = message => failure => failure?.diagnostic?.code === "TSONIC_INTERNAL_ANALYSIS_INVARIANT" &&
     message.test(failure.diagnostic.message);
   for (const [label, error, message] of [
     ["wrong source operand", { ...fact.error, expression: declaration }, /exact selected source operation/u],

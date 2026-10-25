@@ -200,6 +200,39 @@ test("direct native callback awaits keep native identities and do not manufactur
   assert.equal(effects.nativeErrors[0].identity, native.awaitErrorSources[0]);
 });
 
+test("completed native error channels retain their full correspondence through repeated transport", () => {
+  const current = fixture(`
+    export function source(callback: () => number): number { return callback(); }
+    export function consumer(callback: () => number): number { return source(callback); }
+  `);
+  const declaration = current.declaration("source");
+  const invocation = current.nodes.find(node => current.ast.is.IsCallExpression(node) &&
+    current.ast.text(Node_Expression(current.ast, node)) === "source");
+  assert.equal(invocation !== undefined, true, "the original checked invocation is retained");
+  const effects = current.context.records.errorEffects.get(declaration);
+  const selection = createRustSourceErrorEffectSelection({ context: current.context });
+  const bindings = selection.bindingsFor(invocation, declaration, effects.nativeErrors.map(error => error.errorType));
+  assert.equal(bindings !== undefined, true, "the original selected parameters supply the actual native bindings");
+  const edge = selection.edgeFor(declaration, "invoke", effects, bindings);
+  assert.equal(edge !== undefined && edge.nativeErrors.length === 1, true, "the real callback supplies one exact channel");
+  const pending = edge.nativeErrors[0].target;
+  const physical = current.context.callableValues.nativeStorage;
+  const completed = selection.complete(pending, physical);
+  assert.equal(completed !== undefined, true, "the canonical physical owner completes the original channel");
+  assert.equal(selection.complete(pending, physical) === completed, true, "the original pending input retains its cached result");
+  const transported = selection.complete(completed, physical);
+  assert.equal(transported !== undefined && transported.identity === completed.identity &&
+    rustTargetTypeRefEquals(transported.errorType, completed.errorType), true,
+  "the owner's completed identity and full native carrier remain admissible together");
+  const foreign = rustSourcePrimitiveTargetType("bool");
+  assert.equal(rustTargetTypeRefEquals(foreign, pending.errorType), false, "the pending inverse changes its real native payload");
+  assert.equal(rustTargetTypeRefEquals(foreign, completed.errorType), false, "the completed inverse changes its real native payload");
+  assert.equal(selection.complete({ ...pending, errorType: foreign }, physical) === undefined, true,
+    "a cached pending identity never authorizes a contradictory native payload");
+  assert.equal(selection.complete({ ...completed, errorType: foreign }, physical) === undefined, true,
+    "a completed identity never authorizes a contradictory native payload");
+});
+
 for (const [name, files] of [
   ["original finite lexical sequencing", { "index.ts": finiteCompletionSequencingSource }],
   ["original closed native async callables", { ...nativeAsyncCallableFiles,
