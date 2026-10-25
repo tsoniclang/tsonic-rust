@@ -470,7 +470,7 @@ export interface RustOperationCarrierRequirement {
   readonly source: (
     | { readonly kind: "receiver" }
     | { readonly kind: "argument"; readonly sourceIndex: number }
-  ) & { readonly projection: readonly number[] };
+  ) & { readonly projection: readonly (number | "array-element")[] };
 }
 
 export interface RustProviderOperationTemplate<
