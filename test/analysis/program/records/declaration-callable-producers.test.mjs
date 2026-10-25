@@ -243,7 +243,7 @@ function ambientFixture(builder, { malformed = false, runtime = false, nativeRef
         "profile ownership belongs to the exact checked declaration in the original program");
       return sourceProfile;
     } },
-    source: { sourceFacts: { getFact: () => undefined }, navigation: { declarationUses(subject) {
+    source: { sourceFacts: { getFact: () => undefined }, navigation: { sourceReferenceFor: () => undefined, declarationUses(subject) {
       assert.equal(subject === declaration, true);
       events.push(builder.typeOnlyDeclaration.get(statement)?.reason);
       assert.equal(builder.typeOnlyDeclaration.get(declaration) === undefined, true, "use diagnostics precede declaration admission");
@@ -266,6 +266,27 @@ test("ambient finalization preserves statement admission, then diagnostics, then
   builder.typeOnlyDeclarations.finalize(selected.walk, [selected.file]);
   assert.deepEqual(selected.events, ["ambient"], "a complete ambient query does not recheck uses");
   assert.equal(diagnostics.length, 1, "the original diagnostic is not duplicated");
+});
+
+test("ambient provider admission uses the exact checked symbol and declaration correspondence", () => {
+  for (const evidence of ["canonical", "missing", "foreign"]) {
+    const selected = ambientFixture(createRustProgramRecordBuilder(), { runtime: true });
+    const symbol = {};
+    const identity = { providerId: "fixture.provider", providerVersion: "1.0.0", providerModuleId: "fixture.module",
+      moduleSpecifier: "fixture:module", exportId: "fixture.callable", exportName: "callable" };
+    selected.walk.context.source.navigation.sourceReferenceFor = reference => {
+      assert.equal(reference === selected.reference, true, "the actual demanded reference selects the provider symbol");
+      return { declaration: evidence === "foreign" ? {} : selected.declaration, symbol };
+    };
+    selected.walk.context.source.sourceFacts.getFact = subject => subject === symbol && evidence !== "missing" ? identity : undefined;
+    checkRustAmbientVariableUse(selected.walk, selected.declaration, {
+      kind: "first-class", role: "value", reference: selected.reference, throughMember: false, captured: false,
+    });
+    assert.equal(selected.walk.context.diagnostics.length, evidence === "canonical" ? 0 : 1, evidence);
+    assert.equal(selected.walk.rejectedExpressions.has(selected.reference), evidence !== "canonical", evidence);
+    if (evidence !== "canonical") assert.equal(selected.walk.context.diagnostics[0].code,
+      "RUST_AMBIENT_VALUE_IMPLEMENTATION_MISSING", "missing or foreign evidence never supplies a native implementation");
+  }
 });
 
 test("source-ready ambient statement admission precedes native binding work without reading unfinished families", () => {
