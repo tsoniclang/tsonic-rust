@@ -45,6 +45,7 @@ import { rustProgramErrorTargetType } from "../../target-model/types/carriers/js
 import type { TargetSourceProgram } from "@tsonic/target-api/source";
 import { rustLifetimeKey } from "../../target-model/lifetimes/index.js";
 import { selectRustNativeFutureEnvironmentRetention } from "../../policy/ownership/retained-storage.js";
+import type { RustProjectTypePolicy } from "../../target-model/types/project-types.js";
 
 export type RustNativeCallableOrigins =
   | { readonly kind: "resolved"; readonly inputs: readonly RustNativeCallableInput[];
@@ -64,6 +65,7 @@ export interface RustNativeCallableInputPlan {
   protocolForSourceItem(fileName: string, typeName: string): RustNativeCallableProtocol | undefined;
   /** Whether a callable parameter keeps its concrete callable carrier because its owner is emitted as a closure value. */
   isConcreteCallableParameter(parameter: Node): boolean;
+  isConcreteCallableStorage(subject: SourceStorageSubject): boolean | undefined;
   /** Whether a callable parameter is retained by native code in its concrete runtime representation. */
   isNativeRetainedParameter(parameter: Node): boolean;
 }
@@ -74,6 +76,7 @@ export function createRustNativeCallableInputPlan(input: {
   readonly storage: SourceStorageQueries;
   readonly records: RustProgramRecords;
   readonly definitions: RustTypeDefinitions;
+  readonly projectTypes: RustProjectTypePolicy;
   readonly sourcePackages: TargetSourcePackageGraph;
   readonly usedNames: Set<string>;
   /**
@@ -129,6 +132,9 @@ export function createRustNativeCallableInputPlan(input: {
   const inputs = new Map<Node, Map<SourceStorageSubject, RustNativeCallableInput>>();
   const captures = new Map<Node, Set<RustNativeCallableInput>>();
   const values = new Map<Node, RustNativeCallableOrigins>();
+  const concreteStorage = new Map<SourceStorageSubject, boolean>();
+  const fields = new Set(input.projectTypes.definitions.flatMap(definition =>
+    input.projectTypes.objectLayoutForDefinition(definition)?.fields.map(field => field.declaration) ?? []));
   let collecting = true;
   const bindingsFor = (declaration: Node): SourceStorageBindings | undefined => {
     const existing = bindings.get(declaration);
@@ -138,16 +144,26 @@ export function createRustNativeCallableInputPlan(input: {
     bindings.set(declaration, result ?? null);
     return result;
   };
-  const closureParameter = (subject: SourceStorageSubject): boolean => {
-    const owner = subject.kind === "input" ? input.ast.parent(subject.node) : undefined;
-    return owner !== undefined && (input.ast.is.IsArrowFunction(owner) || input.ast.is.IsFunctionExpression(owner)) &&
-      !input.declaresGenericInputs(owner);
+  const selectConcreteStorage = (subject: SourceStorageSubject): boolean | undefined => {
+    const existing = concreteStorage.get(subject);
+    if (existing !== undefined) return existing;
+    if (!collecting || input.storage.typeFor(subject).kind === "unresolved") return undefined;
+    const component = subject.projection[subject.projection.length - 1];
+    const declaration = subject.kind === "member" && subject.projection.length === 0 ? subject.node
+      : component?.kind === "member" ? component.declaration : undefined;
+    const declared = declaration === undefined || !fields.has(declaration) ? undefined
+      : input.records.runtimeCarrier.get(declaration)?.carrier;
+    if (declaration !== undefined && fields.has(declaration) && declared === undefined) return undefined;
+    const selected = subject.kind === "input" && concreteParameters.has(subject.node) ||
+      declared !== undefined && rustCallableProtocol(rustOptionElementCarrier(declared) ?? declared) !== undefined;
+    concreteStorage.set(subject, selected);
+    return selected;
   };
   const selectInput = (subject: SourceStorageSubject, carrier: TargetTypeRef): RustNativeCallableInput | undefined => {
     if (subject.kind !== "input") return undefined;
     const owner = input.ast.parent(subject.node);
     if (owner === undefined || sourceCallableValueParameters(input.ast, owner, input.storage.source.semantics.forNode(owner))?.includes(subject.node) !== true) return undefined;
-    if (!input.declaresGenericInputs(owner) || keepsConcreteCarrier(subject.node)) return undefined;
+    if (selectConcreteStorage(subject) !== false) return undefined;
     const selected = rustOptionElementCarrier(carrier) ?? carrier;
     if (rustGenericCallableProtocol(selected) === undefined && rustCallableProtocol(selected) === undefined) return undefined;
     const members = inputs.get(owner) ?? new Map<SourceStorageSubject, RustNativeCallableInput>();
@@ -191,11 +207,14 @@ export function createRustNativeCallableInputPlan(input: {
       // input of this declaration.
       // A callable parameter of an owner emitted as a closure value keeps its concrete callable carrier; it is a concrete
       // value of this declaration, not a generic native input. A closure cannot be generic either.
-      const inputOwner = origin.kind === "input" ? input.ast.parent(origin.node) : undefined;
-      if (origin.kind !== "input" || closureParameter(origin) || origin.projection[origin.projection.length - 1]?.kind === "method-value" &&
-        rustGenericCallableValue(rustOptionElementCarrier(carrier) ?? carrier) !== undefined ||
-        inputOwner !== undefined && sourceCallableValueParameters(input.ast, inputOwner, input.storage.source.semantics.forNode(inputOwner))?.includes(origin.node) === true &&
-          (!input.declaresGenericInputs(inputOwner) || keepsConcreteCarrier(origin.node))) {
+      if (origin.kind !== "input") {
+        implementations.add(origin);
+        continue;
+      }
+      const concrete = selectConcreteStorage(origin);
+      if (concrete === undefined) return { kind: "unresolved", reason: "Native callable storage requires its exact precomputed storage classification." };
+      if (concrete || origin.projection[origin.projection.length - 1]?.kind === "method-value" &&
+        rustGenericCallableValue(rustOptionElementCarrier(carrier) ?? carrier) !== undefined) {
         implementations.add(origin);
         continue;
       }
@@ -212,6 +231,10 @@ export function createRustNativeCallableInputPlan(input: {
       implementations: Object.freeze([...implementations]) });
   };
   for (const node of input.nativeNodes) {
+    if (fields.has(node)) {
+      const subject = input.storage.subject(node, "member");
+      if (subject.kind === "resolved") selectConcreteStorage(subject.subject);
+    }
     if (!input.ast.is.IsParameterDeclaration(node)) continue;
     const carrier = input.records.sourceParameterAbi.get(node)?.valueCarrier ??
       input.records.runtimeCarrier.get(node)?.carrier;
@@ -219,7 +242,7 @@ export function createRustNativeCallableInputPlan(input: {
     const selected = rustOptionElementCarrier(carrier) ?? carrier;
     if (rustGenericCallableValue(selected) === undefined && rustCallableProtocol(selected) === undefined) continue;
     const subject = input.storage.subject(node, "input");
-    if (subject.kind === "resolved" && !closureParameter(subject.subject)) selectInput(subject.subject, carrier);
+    if (subject.kind === "resolved") selectInput(subject.subject, carrier);
   }
   for (const node of input.nativeNodes) {
     const carrier = input.records.runtimeCarrier.get(node)?.carrier;
@@ -265,6 +288,7 @@ export function createRustNativeCallableInputPlan(input: {
   const emptyInputs: readonly RustNativeCallableInput[] = Object.freeze([]);
   const isConcreteCallableParameter = (parameter: Node): boolean => concreteParameters.has(parameter);
   return Object.freeze({ bindingsFor, originsFor, isConcreteCallableParameter,
+    isConcreteCallableStorage: (subject: SourceStorageSubject) => concreteStorage.get(subject),
     isNativeRetainedParameter: keepsConcreteCarrier, inputs: selectedInputs, protocols: definitions,
     calls: Object.freeze([...calls.values()]), callFor: (node: Node) => calls.get(node),
     inputsFor: (declaration: Node) => declarationInputs.get(declaration) ?? emptyInputs,

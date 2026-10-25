@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { analyzeRust } from "../../helpers/rust-session.mjs";
+import { analyzeRust, compileRust, rustSourceText } from "../../helpers/rust-session.mjs";
+import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 import { createTargetSourceProgram, Node_Initializer, sourceNodesOutsideErasedSubtrees } from "@tsonic/target-api/source";
 import { createSourceStorageQuery } from "@tsonic/target-api/analysis";
 import { createRustNativeCallableInputPlan } from "../../../dist/analysis/callables/native-inputs.js";
@@ -69,7 +70,7 @@ function fixture(text, options = {}) {
   const input = { source, ast: source.ast, storage, nativeNodes, records: program.records, definitions: program.typeDefinitions,
     frames: program.callableValues.frames,
     capturesFor: declaration => captures.forDeclaration(declaration),
-    structuralShapes: program.structuralShapes,
+    structuralShapes: program.structuralShapes, projectTypes: program.projectTypes,
     generic, lexicalFunctions: program.lexicalFunctions, lifetimes: program.sourceLifetimes,
     physicalCarrierFor: (carrier, ownerFileName, subject, bindings, producers) =>
       physical.carrierFor(carrier, ownerFileName, subject, bindings, producers) };
@@ -469,15 +470,18 @@ test("physical captured forwarding retains outer inputs without mistaking a new 
 test("physical member and array reads use exact projected owner identities", () => {
   const current = fixture(`
     interface Callback { (): number; }
-    interface Holder<Value> { readonly callback: Value; }
-    export function project(left: Holder<Callback>, right: Holder<Callback>, many: Callback[]): Callback {
-      const first = left.callback; const second = right.callback; const element = many[0]; return second;
+    type Holder<Value> = { readonly callback: Value; };
+    export function project(left: Holder<Callback>, right: Holder<Callback>, many: Callback[]): void {
+      const first = left.callback; const second = right.callback; const element = many[0];
     }
   `);
   const owner = current.declaration("project");
   const parameters = current.source.ast.parameters(owner);
   const inputs = current.native.inputsFor(owner);
+  assert.equal(inputs.length, 3, "the unretained inputs preserve three genuinely generic source input slots");
   for (const [index, name] of ["first", "second", "element"].entries()) {
+    assert.equal(current.native.isConcreteCallableParameter(parameters[index]), false,
+      `${name} is not a retained concrete parameter`);
     const input = inputs.find(value => value.subject.node === parameters[index]);
     assert.equal(input !== undefined, true, `${name} has exact projected input`);
     selected(current.plan.valueFor(current.declaration(name)), input.implementation, name);
@@ -488,6 +492,46 @@ test("physical member and array reads use exact projected owner identities", () 
     if (index !== 2) assert.equal(input.subject.projection[0].declaration === current.declaration("callback"), true);
   }
   assert.equal(inputs[0].implementation !== inputs[1].implementation, true, "field spelling is not owner identity");
+});
+
+test("native callable storage classification retains exact subjects and is a pure finalized lookup", () => {
+  const current = fixture(`
+    interface Reader { read: (value: number) => number; }
+    function original(value: number): number { return value; }
+    export function inspect(callback: (value: number) => number, reader: Reader): void {
+      const generic = callback; const fixed = reader.read; const produced = original;
+    }
+  `);
+  const owner = current.declaration("inspect");
+  const generic = current.exactSubject(current.source.ast.parameters(owner)[0], "input");
+  const fixedOrigins = current.native.originsForValue(current.initializer("fixed"));
+  assert.equal(fixedOrigins.kind, "resolved", "the fixed read retains its actual declaration-local origin");
+  assert.equal(fixedOrigins.inputs.length, 0, "the nominal field is not reified as an unrelated generic input");
+  assert.equal(fixedOrigins.implementations.length, 1, "the fixed field retains one exact source storage subject");
+  const fixed = fixedOrigins.implementations[0];
+  assert.equal(fixed.projection[0].kind, "member", "the fixed slot keeps the full member projection");
+  const physical = current.program.callableValues.nativeStorage.valueFor(current.declaration("fixed"));
+  assert.equal(physical.kind, "selected", "the actual nominal field publishes its exact physical runtime Callable");
+  assert.equal(physical.erased, true, "the existing runtime Callable preserves its transported invocation error");
+  const logical = current.program.records.runtimeCarrier.get(current.declaration("fixed")).carrier;
+  assert.equal(rustTargetTypeRefEquals(rustCallablePhysicalSignature(physical.carrier).error,
+    rustCallableProtocol(logical).error), true, "selection keeps the fixed Callable's exact original error carrier");
+  const genericPhysical = current.program.callableValues.nativeStorage.valueFor(current.declaration("generic"));
+  assert.equal(genericPhysical.kind, "selected", "the genuine native input retains its exact implementation");
+  assert.equal(genericPhysical.erased === true, false, "an associated-error native input is not a fixed erased Callable");
+  assert.equal(current.program.callableValues.nativeStorage.valueFor(current.declaration("produced")).erased === true,
+    false, "a source-native producer does not acquire the fixed runtime Callable's error classification");
+  const foreign = { ...fixed };
+  current.revokeSource();
+  current.revokeQueries();
+  assert.equal(current.native.isConcreteCallableStorage(generic), false,
+    "a finalized admitted generic subject reads its precomputed false without source queries");
+  assert.equal(current.native.isConcreteCallableStorage(fixed), true,
+    "a finalized fixed field reads its precomputed true without source queries");
+  assert.equal(current.native.isConcreteCallableStorage(foreign), undefined,
+    "an equal-looking foreign subject cannot silently become a generic input");
+  assert.equal(current.native.isConcreteCallableStorage({}), undefined,
+    "a missing classification remains unknown rather than an invented generic fallback");
 });
 
 test("physical selection preserves optional topology and borrowed parameter lifetime", () => {
@@ -523,8 +567,8 @@ test("physical tuple and array transport reuses exact existing component inputs"
     export function tuple(callbacks: [Callback, Callback]): [Callback, Callback] {
       const left = callbacks[0]; const right = callbacks[1]; return callbacks;
     }
-    export function array(callbacks: Callback[]): Callback[] {
-      const item = callbacks[0]; return callbacks;
+    export function array(callbacks: Callback[]): [Callback[]] {
+      const item = callbacks[0]; return [callbacks];
     }
   `);
   const tuple = current.declaration("tuple");
@@ -541,9 +585,76 @@ test("physical tuple and array transport reuses exact existing component inputs"
   const array = current.declaration("array");
   const list = current.plan.prepareReturn(array);
   assert.equal(list.kind, "selected", list.reason);
-  assert.equal(list.carrier.kind, "array");
-  assert.equal(list.carrier.element === current.native.inputsFor(array)[0].implementation, true);
+  assert.equal(current.native.isConcreteCallableParameter(current.source.ast.parameters(array)[0]), false,
+    "the tuple return keeps the array component genuinely generic rather than nominally retained");
+  assert.equal(list.carrier.kind, "tuple");
+  assert.equal(list.carrier.elements[0].kind, "array");
+  assert.equal(list.carrier.elements[0].element === current.native.inputsFor(array)[0].implementation, true);
 });
+
+const projectedNativePrograms = [
+  ["retained member and array", `
+    interface Callback { (): number; }
+    interface Holder<Value> { readonly callback: Value; }
+    export function project(left: Holder<Callback>, right: Holder<Callback>, many: Callback[]): Callback {
+      const first = left.callback; const second = right.callback; const element = many[0]; return second;
+    }
+  `],
+  ["tuple and retained array", `
+    interface Callback { (): number; }
+    export function tuple(callbacks: [Callback, Callback]): [Callback, Callback] {
+      const left = callbacks[0]; const right = callbacks[1]; return callbacks;
+    }
+    export function array(callbacks: Callback[]): Callback[] {
+      const item = callbacks[0]; return callbacks;
+    }
+  `],
+  ["fixed field and getter", `
+    interface Reader { read: (value: number) => number; }
+    class Owner { get read(): (value: number) => number { return value => value + 1; } }
+    function apply(callback: (value: number) => number, value: number): number { return callback(value); }
+    export function run(reader: Reader): number { return apply(new Owner().read, reader.read(2)); }
+  `],
+];
+
+for (const surfaces of [[], ["js"]]) for (const [name, sourceText] of projectedNativePrograms) {
+  test(`projected callable storage preserves the original ${name} in ${surfaces[0] ?? "native"}`, () => {
+    const { result } = compileRust({ surfaces, files: { "index.ts": sourceText } });
+    assert.equal(result.diagnostics.length, 0,
+      result.diagnostics.slice(0, 6).map(issue => `${issue.code}: ${issue.message.slice(0, 256)}`).join("\n"));
+    assert.equal(result.artifacts.length > 0, true, "the complete original source reaches native emission");
+    const program = result.program;
+    const { ast } = program.source;
+    const declaration = sourceName => program.sourceFiles.flatMap(file => ast.statements(file)).find(node =>
+      ast.is.IsFunctionDeclaration(node) && ast.text(ast.name(node)) === sourceName);
+    if (name === "retained member and array") {
+      const owner = declaration("project");
+      assert.equal(program.callableValues.native.inputsFor(owner).length, 0,
+        "the original owned return retains the real aggregate storage, not invented implementation parameters");
+      for (const parameter of ast.parameters(owner)) {
+        assert.equal(program.callableValues.native.isNativeRetainedParameter(parameter), true,
+          "each original native-owned input retains its concrete physical storage");
+      }
+    } else if (name === "tuple and retained array") {
+      const tuple = declaration("tuple");
+      const inputs = program.callableValues.native.inputsFor(tuple);
+      assert.equal(inputs.length, 2, "the original tuple carries both exact component implementations");
+      assert.equal(inputs[0].subject !== inputs[1].subject, true,
+        "equal signatures do not collapse the two original tuple positions");
+      const array = declaration("array");
+      assert.equal(program.callableValues.native.inputsFor(array).length, surfaces.length === 0 ? 0 : 1,
+        "the original native-owned array and JS array retain their actual distinct ABI geometry");
+    } else {
+      assert.equal(program.callableValues.native.inputsFor(declaration("run")).length, 0,
+        "a nominally fixed field never becomes an unrelated implementation type parameter");
+      assert.equal(program.callableValues.native.inputsFor(declaration("apply")).length, 1,
+        "an actual direct callable formal retains its separate exact native implementation");
+      assert.match(rustSourceText(result), /pub fn run\(/u,
+        "the original exported function retains its actual nongeneric native field ABI");
+    }
+    validateGeneratedProject(`projected-callable-original-${surfaces[0] ?? "native"}`, result.artifacts);
+  });
+}
 
 test("physical generic callable forwarding retains its quantified contract", () => {
   const current = fixture(`
