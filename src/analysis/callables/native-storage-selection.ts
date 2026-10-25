@@ -663,6 +663,9 @@ export function createRustNativeStorageSelection(
         const checkedProperties = fieldSemantics.types.propertyInfos(selectedType.type);
         const fields = structural.fields.map(field => {
           if (field.method === true || field.accessor !== undefined) return field;
+          const requiresImplementation = containsCallable(field.type, depth + 1);
+          if (requiresImplementation === undefined) return undefined;
+          if (requiresImplementation === false) return field;
           const property = checkedProperties.find(property => property.name === field.sourceName);
           const declarations = property === undefined ? [] : [...new Set([property.symbol, ...property.rootSymbols]
             .flatMap(symbol => fieldSemantics.declarations.symbolDeclarations(symbol)))];
