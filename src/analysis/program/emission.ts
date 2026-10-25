@@ -227,7 +227,7 @@ export function finalizeRustNativeEmission(
     navigation: context.source.navigation, names: context.names, aliases: program.localStorageAliases,
     representations: objectRepresentations, projectTypes, nativeStorage: program.callableValues.nativeStorage,
     lexicalFunctions: program.lexicalFunctions, producer: context.records.localBindings, required: context.requiredRecords,
-    runtimeValueUses: context.runtimeValueUses });
+    runtimeValueUses: context.runtimeValueUses, safetyApplications: program.safetyApplications });
   if (localBindingIssues.length !== 0) return rejectedTargetStage(localBindingIssues);
   const classEmissionIssues = analyzeRustClassEmission({ program, source: context.source, reachability, producer: context.records.classEmissionPlans });
   if (classEmissionIssues.length !== 0) return rejectedTargetStage(classEmissionIssues);

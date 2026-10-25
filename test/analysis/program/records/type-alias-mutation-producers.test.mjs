@@ -9,6 +9,10 @@ const families = [
 ];
 const text = { kind: "target-named", id: "rust.std.String" };
 
+function referentWrite(target) {
+  return { target, receivers: [{ expression: target, use: target }] };
+}
+
 function stringLiteralWalk(builder, variants) {
   return {
     sourceTypes: { enumVariantsForDeclaration: () => variants, carrierForDeclaration: () => text },
@@ -34,7 +38,7 @@ test("type-alias and mutation families expose one immutable reader and no genera
   for (const attempt of [
     () => builder.typeAliasDeclarations.register({}, subject),
     () => builder.mutatedBindings.written(subject),
-    () => builder.mutatedReferents.written(subject),
+    () => builder.mutatedReferents.written(subject, referentWrite(subject)),
   ]) assert.throws(attempt, /after analysis is sealed/u);
 });
 
@@ -43,7 +47,7 @@ test("binding and referent writes publish one frozen fact for the exact declarat
   const binding = {};
   const referent = {};
   builder.mutatedBindings.written(binding);
-  builder.mutatedReferents.written(referent);
+  builder.mutatedReferents.written(referent, referentWrite(referent));
   assert.deepEqual(builder.mutatedBinding.get(binding), { mutated: true });
   assert.equal(Object.isFrozen(builder.mutatedBinding.get(binding)), true);
   assert.deepEqual(builder.mutatedReferent.get(referent), { mutated: true });
@@ -59,8 +63,8 @@ test("repeated writes of the same declaration keep the first fact without reject
   builder.mutatedBindings.written(declaration);
   const first = builder.mutatedBinding.get(declaration);
   assert.doesNotThrow(() => builder.mutatedBindings.written(declaration));
-  assert.doesNotThrow(() => builder.mutatedReferents.written(declaration));
-  assert.doesNotThrow(() => builder.mutatedReferents.written(declaration));
+  assert.doesNotThrow(() => builder.mutatedReferents.written(declaration, referentWrite(declaration)));
+  assert.doesNotThrow(() => builder.mutatedReferents.written(declaration, referentWrite(declaration)));
   assert.equal(builder.mutatedBinding.get(declaration) === first, true);
 });
 
@@ -68,7 +72,7 @@ test("scoped builders read inherited mutation facts and never publish new ones i
   const parent = createRustProgramRecordBuilder();
   const inherited = {};
   parent.mutatedBindings.written(inherited);
-  parent.mutatedReferents.written(inherited);
+  parent.mutatedReferents.written(inherited, referentWrite(inherited));
   const sealed = parent.seal([]);
   const child = createRustProgramRecordBuilder(undefined, sealed);
   assert.equal(child.mutatedBinding.get(inherited) === sealed.mutatedBinding.get(inherited), true);
@@ -77,7 +81,7 @@ test("scoped builders read inherited mutation facts and never publish new ones i
   assert.equal(child.mutatedBinding.get(inherited) === sealed.mutatedBinding.get(inherited), true);
   const fresh = {};
   child.mutatedBindings.written(fresh);
-  child.mutatedReferents.written(fresh);
+  child.mutatedReferents.written(fresh, referentWrite(fresh));
   assert.equal(sealed.mutatedBinding.get(fresh) === undefined, true);
   assert.equal(sealed.mutatedReferent.get(fresh) === undefined, true);
 });
@@ -86,13 +90,13 @@ test("positive mutation events retain canonical local and inherited facts and st
   const parent = createRustProgramRecordBuilder();
   const declaration = {};
   parent.mutatedBindings.written(declaration);
-  parent.mutatedReferents.written(declaration);
+  parent.mutatedReferents.written(declaration, referentWrite(declaration));
   const binding = parent.mutatedBinding.get(declaration);
   const referent = parent.mutatedReferent.get(declaration);
   const child = createRustProgramRecordBuilder(undefined, parent);
   for (let repeat = 0; repeat < 4; repeat += 1) {
     child.mutatedBindings.written(declaration);
-    child.mutatedReferents.written(declaration);
+    child.mutatedReferents.written(declaration, referentWrite(declaration));
     assert.equal(child.mutatedBinding.get(declaration) === binding, true);
     assert.equal(child.mutatedReferent.get(declaration) === referent, true);
   }
@@ -106,8 +110,56 @@ test("positive mutation events retain canonical local and inherited facts and st
   child.seal([]);
   for (const subject of [declaration, fresh]) {
     assert.throws(() => child.mutatedBindings.written(subject), /after analysis is sealed/u);
-    assert.throws(() => child.mutatedReferents.written(subject), /after analysis is sealed/u);
+    assert.throws(() => child.mutatedReferents.written(subject, referentWrite(subject)), /after analysis is sealed/u);
   }
+});
+
+test("referent finalization retains each original write and its immutable native receiver path once", () => {
+  const builder = createRustProgramRecordBuilder();
+  const declaration = {};
+  const first = {};
+  const second = {};
+  const receiver = {};
+  const path = [{ expression: receiver, use: first }];
+  builder.mutatedReferents.written(declaration, { target: first, receivers: path });
+  builder.mutatedReferents.written(declaration, { target: first, receivers: [...path] });
+  builder.mutatedReferents.written(declaration, referentWrite(second));
+  let decisions = 0;
+  builder.mutatedReferents.finalizeBindings((selected, writes) => {
+    decisions++;
+    assert.equal(selected === declaration, true, "the decision belongs to the original checked declaration");
+    assert.equal(writes.length, 2, "equal repeats preserve both distinct source writes without duplicating either");
+    assert.equal(writes[0].target === first && writes[1].target === second, true,
+      "receiver normalization never substitutes the original actual write target");
+    assert.equal(writes[0].receivers[0].expression === receiver && writes[0].receivers[0].use === first, true,
+      "the native receiver stays paired with its exact admitted use");
+    assert.equal(Object.isFrozen(writes) && Object.isFrozen(writes[0]) && Object.isFrozen(writes[0].receivers) &&
+      Object.isFrozen(writes[0].receivers[0]), true, "only owned write data is frozen at its producer");
+    assert.equal(Object.isFrozen(first), false, "source nodes are not recursively frozen");
+    assert.throws(() => { writes[0].receivers[0].expression = second; }, TypeError,
+      "a consumer cannot replace the actual source receiver");
+    return true;
+  });
+  assert.equal(decisions, 1, "there is one final native mutability decision for the declaration");
+  assert.equal(builder.mutatedReferentBinding.get(declaration)?.mutableBinding, true,
+    "the canonical final fact is the only consumer-visible mutability decision");
+  assert.throws(() => builder.mutatedReferents.written(declaration, referentWrite(second)), /must precede/u,
+    "later source writes cannot silently bypass completed native classification");
+  assert.throws(() => builder.mutatedReferents.finalizeBindings(() => true), /finalized once/u,
+    "a second finalization cannot recompute the decision");
+});
+
+test("referent writes require their actual complete receiver path", () => {
+  const builder = createRustProgramRecordBuilder();
+  const declaration = {};
+  const target = {};
+  assert.throws(() => builder.mutatedReferents.written(declaration, { target, receivers: [] }), /actual receiver path/u);
+  assert.equal(builder.mutatedReferent.get(declaration) === undefined, true,
+    "an incomplete source write publishes no mutation fact");
+  builder.mutatedReferents.written(declaration, referentWrite(target));
+  assert.throws(() => builder.mutatedReferents.written(declaration,
+    { target, receivers: [{ expression: declaration, use: target }] }), /one exact source receiver path/u,
+  "a repeated target cannot silently replace its original receiver identity");
 });
 
 test("type-alias registration publishes the selected declaration fact and keeps its carrier side effect", () => {
