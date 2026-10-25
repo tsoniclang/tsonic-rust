@@ -133,11 +133,13 @@ import type { RustGenericCallableErrorIndex } from "../../target-model/records/g
 import type { RustOwnershipFlow } from "../../target-model/records/ownership-flow.js";
 import { analyzeRustBindingLiveness } from "../control-flow/binding-liveness.js";
 import { analyzeRustLocalBindings } from "../storage/local-bindings.js";
+import type { RustOperationAttempt } from "./operation-attempts.js";
 
 export function finalizeRustNativeEmission(
   program: Omit<RustAnalysisProgram, "reachability" | "records"> & { readonly records: RustAnalysisRecords & SourceLiteralIndex },
   context: RustAnalysisContext, genericCallableErrors: RustGenericCallableErrorIndex,
   flow: RustOwnershipFlow,
+  operationAttempts: Pick<WeakMap<Node, RustOperationAttempt>, "get">,
 ): TargetStageResult<RustNativeEmissionResult> {
   const { projectTypes, objectRepresentations, typeDefinitions } = program;
   const records = context.records.readers;
@@ -263,7 +265,7 @@ export function finalizeRustNativeEmission(
   const genericRequirementEmissionIssues = analyzeRustGenericRequirementEmission(program, context.nativeNodes, context.records.nativeGenericPlans);
   if (genericRequirementEmissionIssues.length !== 0) return rejectedTargetStage(genericRequirementEmissionIssues);
   // Provider reads select Copy/Clone from the declaration-owned clone guarantees published just above.
-  const providerFormIssues = analyzeRustProviderForms(program, context.nativeNodes, context.records.providerFormPlans);
+  const providerFormIssues = analyzeRustProviderForms(program, context.nativeNodes, context.records.providerFormPlans, operationAttempts);
   if (providerFormIssues.length !== 0) return rejectedTargetStage(providerFormIssues);
   const arrayLiteralIssues = analyzeRustArrayLiterals(program, context.nativeNodes, context.records.arrayLiteralPlans);
   if (arrayLiteralIssues.length !== 0) return rejectedTargetStage(arrayLiteralIssues);
