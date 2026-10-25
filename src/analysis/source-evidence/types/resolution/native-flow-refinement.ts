@@ -40,7 +40,7 @@ export function selectRustNativeFlowMembers(
   selectGuard: (expression: Node) => SourceNativeGuard<RustClosedTypePredicate> | undefined,
   resolveNominal: (guard: Extract<SourceNativeValueGuard, { readonly kind: "nominal" }>) => TargetTypeRef | undefined,
 ): ReturnType<typeof rustUnionLeaves> {
-  const members = rustUnionLeaves(sourceCarrier, definitions) ?? [{ carrier: sourceCarrier, path: [] }];
+  const members = nativeFlowInputMembers(sourceCarrier, definitions);
   return selectSourceGuardedValueMembers(context, reference, members,
     expression => selectNativeGuard(context, expression, selectGuard, resolveNominal),
     (member, predicate) => selectRustNativeCarrierPredicate(member.carrier, predicate, projectTypes, definitions));
@@ -56,15 +56,19 @@ export function selectRustNativeGuardResult(
   return selectSourceNativeGuardResult(context, expression, reference => {
     const sourceCarrier = resolveCarrier(reference);
     if (sourceCarrier === undefined) return undefined;
-    const present = rustOptionElementCarrier(sourceCarrier) ?? sourceCarrier;
-    const payloads = rustUnionLeaves(present, definitions)?.map(member => member.carrier) ?? [present];
-    return present === sourceCarrier ? payloads : [...payloads, rustAbsenceTargetType()];
+    return nativeFlowInputMembers(sourceCarrier, definitions).map(member => member.carrier);
   }, selected => {
     const guard = selectSourceNativeValueGuard(context, selected);
     return guard?.kind === "typeof" || guard?.kind === "absence"
       ? { sourceOperand: guard.sourceOperand, predicate: guard } : undefined;
   },
     (member, predicate) => selectRustNativeCarrierPredicate(member, predicate, projectTypes, definitions));
+}
+
+function nativeFlowInputMembers(sourceCarrier: TargetTypeRef, definitions: RustTypeDefinitions): readonly RustUnionLeaf[] {
+  const present = rustOptionElementCarrier(sourceCarrier) ?? sourceCarrier;
+  const members = rustUnionLeaves(present, definitions) ?? [{ carrier: present, path: [] }];
+  return present === sourceCarrier ? members : [...members, { carrier: rustAbsenceTargetType(), path: [] }];
 }
 
 export function selectRustNativeFlowTypeMembers(
