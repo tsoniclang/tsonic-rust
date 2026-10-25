@@ -67,7 +67,7 @@ test("native named error carriers preserve checked identity across qualified and
   const body = applyFallibleShape({ statements: [{ kind: "tail", expr: expression }] }, {
     fallible: true, hasReturnValue: true, errorType: selected, inferErrorTypeFromReturnType: false, canFallThrough: false,
   });
-  assert.equal(body.statements[0].expr === effect, true, "the completed identical Result is returned without Ok or question-mark wrappers");
+  assert.deepEqual(body.statements[0].expr, effect, "the completed identical Result contains precisely the original native call without Ok or question-mark wrappers");
   const foreign = rustTypeFromCarrier(rustNamedTargetType("another-runtime:TsonicError", selected.path));
   assert.equal(rustTypeEquals(foreign, boundary), false, "matching spelling cannot erase a different native identity");
 });
