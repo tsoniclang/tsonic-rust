@@ -107,6 +107,33 @@ export function inspect(body: Body): string {
   assert.equal(staticResult, 2, "both checked narrowed categories retain their native static outcomes");
 });
 
+test("a checked shared field probe remains borrowed across its actual effect-free later operand", () => {
+  const { program } = analyzeRust({ files: { "index.ts": `
+interface Options { extensions?: string[] | false; }
+export function enabled(options?: Options): boolean {
+  return options?.extensions !== false && options?.extensions !== undefined;
+}
+` } });
+  assert.equal(program !== undefined, true, "a readonly field guard is not an aliased array entry");
+  const { ast } = program.source;
+  const comparisons = [];
+  const visit = node => {
+    if (program.records.targetOperation.get(node)?.kind === "union-equality") comparisons.push(node);
+    ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+  };
+  program.sourceFiles.forEach(visit);
+  assert.equal(comparisons.length, 1, "the real field-versus-false guard is the only native union comparison");
+  const comparison = ast.as.AsBinaryExpression(comparisons[0]);
+  assert.equal(ast.kindName(comparison.Right), "KindFalseKeyword", "the later operand is the checked effect-free literal, not an unknown call");
+  const selected = select(ast, comparisons[0], program.records.targetOperation.get(comparisons[0]));
+  assert.equal(selected.get(comparison.Left)?.mode, "shared", "the native comparison requires a real shared field input");
+  const read = program.records.readOwnership.get(comparison.Left);
+  assert.equal(read?.source.kind, "borrow", "the preseal producer retains the actual field storage view");
+  assert.equal(read.source.mutable, false, "a readonly native comparison does not need an exclusive borrow");
+  assert.equal(read.value.kind, "borrow", "no hidden union or Vec clone is selected for the comparison");
+  assert.equal(read.borrowedAcross.has(comparison.Right), true, "the published interval includes this exact later operand");
+});
+
 test("native reference loads and stores select only their actual operand's nonconsuming place use", async () => {
   const source = createTargetSourceProgram(await checkedSource("ownership-native-reference-operands", {
     "src/index.ts": `

@@ -117,7 +117,8 @@ export function analyzeRustReadOwnership(input: {
       const use = uses.get(node);
       const operation = records.targetOperation.get(node);
       const referenceLoad = operation?.kind === "reference-operation" && operation.operation === "load";
-      if (use?.stableAcrossEffects === true && borrowEffects.stableBindings.has(node) &&
+      if (use?.mode === "shared" && borrowEffects.pureValues.has(value) ||
+        use?.stableAcrossEffects === true && borrowEffects.stableBindings.has(node) &&
         (laterPositions.get(use.later)?.get(value) ?? -1) >= use.laterStart ||
         referenceLoad && (!operation.operandCarrier.mutable && isRustStringCarrier(operation.operandCarrier.referent) ||
           borrowEffects.pureValues.has(value)) ||
