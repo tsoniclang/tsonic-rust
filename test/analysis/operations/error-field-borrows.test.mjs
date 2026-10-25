@@ -6,6 +6,8 @@ import { rustSourceFilePlanContext } from "../../helpers/plan-context.mjs";
 import { planBinaryExpression } from "../../../dist/backend/planner/expressions/binary.js";
 import { printRustExpr } from "../../../dist/print/source/index.js";
 import { planRustErrorRegion } from "../../../dist/backend/planner/program/error-regions.js";
+import { rustStrTargetType } from "../../../dist/target-model/types/index.js";
+import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 import { borrowedComparisonMutationSource, closedUnionEqualitySource } from "../../../../tsonic/test/fixtures/closed-union-equality.mjs";
 
 const nativeClosedUnionComparisonSource = `
@@ -14,6 +16,41 @@ class Token { value: int32 = 3; }
 type TextOrToken = string | Token;
 export function path(value: TextOrToken): boolean { return value === "/" && "/" === value; }
 `;
+
+for (const [label, expression, view] of [
+  ["parenthesized", '((("17")))', "value"],
+  ["asserted", '((("17" as string)))', "literal"],
+  ["satisfied", '((("17" satisfies string)))', "value"],
+  ["non-null", '((("17" as string)!))', "literal"],
+]) test(`native literal argument views preserve exact transparent ${label} source`, () => {
+  const { program } = analyzeRust({ surfaces: ["js"], files: { "index.ts": `
+export function inspect(): number { return parseInt(${expression}, 10); }
+export function converted(): unknown { return (("17" as unknown)); }
+` } });
+  const ast = program.source.ast;
+  const arguments_ = [];
+  const converted = [];
+  const visit = node => {
+    if (ast.is.IsCallExpression(node) && ast.text(ast.as.AsCallExpression(node).Expression) === "parseInt")
+      arguments_.push(ast.arguments(node)[0]);
+    if (ast.is.IsAsExpression(node) && sourceEnclosingCallable(node, ast) !== undefined &&
+      ast.text(ast.name(sourceEnclosingCallable(node, ast))) === "converted") converted.push(node);
+    ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+  };
+  program.sourceFiles.forEach(visit);
+  assert.equal(arguments_.length, 1, "the actual selected provider input is present exactly once");
+  const selected = program.records.stringComparisonView.get(arguments_[0]);
+  assert.equal(selected?.kind, view, "only an actually widened native String needs the literal borrowing recipe");
+  if (view === "literal") assert.equal(selected.value, "17", "the exact checked literal content is retained");
+  else {
+    const carrier = program.records.valueRead.get(arguments_[0])?.value;
+    assert.equal(carrier?.kind === "reference" && rustTargetTypeRefEquals(carrier.referent, rustStrTargetType()), true,
+      "an already-borrowed native str retains its existing exact carrier rather than acquiring an owned String view");
+  }
+  assert.equal(converted.length, 1, "the nonidentity native source conversion remains in the same checked program");
+  assert.equal(program.records.stringComparisonView.get(converted[0])?.kind, "value",
+    "a real closed-value conversion cannot be replaced by its inner literal storage");
+});
 
 for (const surfaces of [[], ["js"]]) {
   for (const [label, source] of [["borrowed union payload", surfaces.length === 0 ? nativeClosedUnionComparisonSource : closedUnionEqualitySource],
