@@ -1,7 +1,7 @@
 import type { Node, Symbol } from "@tsonic/tsts";
 import { rustProgramNodeIsOutsideNativeCode } from "../control-flow/compile-time-statements.js";
 import { BinaryExpression_Left, BinaryExpression_Right, ElementAccessExpression_ArgumentExpression, Node_Expression, Node_Operand } from "@tsonic/target-api/source";
-import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
+import { failTargetAnalysisInvariant, type TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustDirectStorageProducer } from "../program/records/direct-storage.js";
 import type { RustDirectStorageEmission, RustDirectStorageIdentity } from "../../target-model/records/direct-storage.js";
@@ -83,11 +83,12 @@ export function analyzeRustDirectStorage(program: Omit<RustAnalysisProgram, "rea
       // (bindings/locals.ts), so it is written directly.
       if (binding !== undefined && (program.records.bindingStorage.get(binding.sourceDeclaration) === undefined ||
         program.records.nativeArrayStorage.get(binding.sourceDeclaration) !== undefined) &&
-        module?.storage !== "module-cell" && !(module?.storage === "native-callable" && module.value !== undefined)) value = { kind: "identifier" };
-    } else if (ast.kindName(node) === "KindThisExpression" || ast.kindName(node) === "KindThisKeyword") value = { kind: "this" };
+        module?.storage !== "module-cell" && !(module?.storage === "native-callable" && module.value !== undefined))
+        value = { kind: "identifier", projection: undefined };
+    } else if (ast.kindName(node) === "KindThisExpression" || ast.kindName(node) === "KindThisKeyword") value = { kind: "this", projection: undefined };
     else if (ast.is.IsParenthesizedExpression(node)) {
       const inner = Node_Expression(ast, node);
-      if (inner !== undefined) { select(inner); value = { kind: "parenthesized", inner }; }
+      if (inner !== undefined) { select(inner); value = { kind: "parenthesized", inner, projection: undefined }; }
     } else {
       const fact = program.records.targetOperation.get(node);
       const receiver = Node_Expression(ast, node);
@@ -96,18 +97,31 @@ export function analyzeRustDirectStorage(program: Omit<RustAnalysisProgram, "rea
       if (fact?.kind === "source-field" && fact.valueSemantics.kind === "stored" && fact.storage === "project-object" && fact.dispatch === undefined) {
         const representation = program.objectRepresentations.representationFor(program.projectTypes.definitionForCarrier(fact.receiverCarrier));
         const path = program.records.storedField.get("project-object", fact.receiverCarrier, fact.storageIndex)?.path;
-        if (representation?.kind === "value" && path !== undefined && receiver !== undefined) value = { kind: "field", receiver, path };
+        if (representation?.kind === "value" && path !== undefined && receiver !== undefined) value = { kind: "field", receiver, path, projection: undefined };
       } else if (rustTargetOperationIsDirectLocation(fact)) {
         if (fact?.kind === "provider-operation" && fact.abi.result.kind === "sync" && fact.abi.result.conversion.kind === "identity" &&
           fact.abi.effects.invocation === "infallible" && (fact.abi.target.form === "field" || fact.abi.target.form === "index")) {
           const receiverInput = fact.abi.targetReceiver.kind === "input" && fact.abi.targetReceiver.input.source.kind === "receiver"
             ? fact.abi.targetReceiver.input : undefined;
           if (receiverInput === undefined || receiverInput.conversion.kind === "identity" && receiver !== undefined)
-            value = { kind: "provider", operation: fact, receiver, index, receiverInput };
+            value = { kind: "provider", operation: fact, receiver, index, receiverInput, projection: undefined };
         } else if ((fact?.kind === "tuple-index" || fact?.kind === "fixed-index") && receiver !== undefined && index !== undefined)
           value = { kind: fact.kind === "tuple-index" ? "tuple" : "fixed", receiver, index, position: fact.index,
-            evaluateIndex: !ast.is.IsNumericLiteral(index) };
+            evaluateIndex: !ast.is.IsNumericLiteral(index), projection: undefined };
       }
+    }
+    const inner = value.kind === "parenthesized" ? select(value.inner) : undefined;
+    const flow = program.records.flowReadProjection.get(node);
+    if (value.kind !== "unavailable" && (inner === undefined || inner.kind === "unavailable" || inner.projection === undefined) &&
+      (flow?.kind === "source-union" || flow?.kind === "runtime-union")) {
+      const emission = program.records.flowReadEmission.get(flow)
+        ?? failTargetAnalysisInvariant("tsonic-rust", "A native union place requires its completed flow projection.", node);
+      if (emission.kind !== "union")
+        failTargetAnalysisInvariant("tsonic-rust", "A native union place requires its exact native projection payload.", node);
+      const use = program.ownership.uses.get(node);
+      value = flow.project === undefined && emission.projection.variant.kind === "payload" && !emission.projection.targetOptional &&
+        (use?.mode === "shared" || use?.mode === "mutable")
+        ? { ...value, projection: { emission: emission.projection, access: use.mode } } : { kind: "unavailable" };
     }
     active.delete(node);
     places.set(node, value);

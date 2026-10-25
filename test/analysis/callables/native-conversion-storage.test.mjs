@@ -14,6 +14,32 @@ import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equali
 import { rustProducerErrorReference } from "../../../dist/target-model/types/carriers/producer-errors.js";
 import { rustNativeErrorJoinReference } from "../../../dist/target-model/types/native-error-joins.js";
 import { rustCallableProtocol } from "../../../dist/target-model/types/carriers/callables.js";
+import { nativeClosureProducerFixture } from "../../helpers/native-closure-producers.mjs";
+import { createRustRecordFixture } from "../../helpers/records.mjs";
+
+test("native callable constructions use their sealed producer carrier rather than an unprepared storage query", () => {
+  const current = nativeClosureProducerFixture();
+  const { node, program } = current;
+  const source = program.records.targetOperation.get(node).resultCarrier;
+  const lambda = program.records.lambdaBody.get(node);
+  assert.equal(lambda?.construction, "native", "the original producer is a native construction");
+  assert.equal(lambda.protocol !== undefined, true, "the construction retains its checked runtime callable protocol");
+  assert.equal(lambda.physicalCarrier !== undefined, true, "the actual producer owns its complete native carrier");
+  const input = { records: program.records, storage: program.callableValues.nativeStorage,
+    producers: program.callableValues.nativeProducers, frames: program.callableValues.frames };
+  const physical = rustNativeCallableOperand(source, node, input);
+  assert.equal(physical !== undefined, true, "the constructed value retains its physical source signature");
+  assert.equal(rustTargetTypeRefEquals(physical.carrier, lambda.physicalCarrier), true,
+    "the conversion consumes the exact sealed construction carrier");
+  for (const [label, altered] of [
+    ["missing physical construction", { ...lambda, physicalCarrier: undefined }],
+    ["foreign logical construction", { ...lambda, constructionCarrier: { kind: "source-primitive", name: "float64" } }],
+  ]) {
+    const records = createRustRecordFixture({ lambdaBody: { get: subject => subject === node ? altered : program.records.lambdaBody.get(subject) } },
+      program.records);
+    assert.equal(rustNativeCallableOperand(source, node, { ...input, records }) === undefined, true, label);
+  }
+});
 
 function fixture(text) {
   const { program, requiredRecords } = analyzeRust({ captureRequiredRecords: true, surfaces: [], files: { "index.ts": text } });

@@ -373,7 +373,8 @@ export function analyzeRustAnalysisProgram(
   const retentionIssues = context.callableValues.validateStructuralRetention(declarationGenericRequirements.index, context.typeFamilies, classValues, errorTypes);
   const promiseResults = analyzeRustPromiseResults({ ast: context.ast, source: context.source, genericAdoption,
     storage: context.sourceStorage,
-    nodes: context.nativeNodes, records, uses: context.promiseResultUses, definitions: context.typeDefinitions,
+    nodes: context.nativeNodes, records, reads: ownership.ownership.reads,
+    uses: context.promiseResultUses, definitions: context.typeDefinitions,
     nativeStorage: context.callableValues.nativeStorage, native: context.callableValues.native,
     promiseBodies: context.promiseBodies.plan,
     nativeCaptures: context.callableValues.selected.nativeCaptures, errorTypes,

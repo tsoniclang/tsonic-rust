@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRust } from "../../helpers/rust-session.mjs";
 import { analyzeRustErrorEffects } from "../../helpers/rust-error-analysis.mjs";
+import { nativeClosureProducerFixture, nativeClosureProducerFailurePackage } from "../../helpers/native-closure-producers.mjs";
+import { rustNamedTargetType } from "../../../dist/target-model/types/carriers/native.js";
 
 
 
@@ -11,7 +13,7 @@ import { createRustSourceErrorEffectSelection } from "../../../dist/analysis/err
 import { rustProducerErrorReference } from "../../../dist/target-model/types/carriers/producer-errors.js";
 import { rustTargetGenericReferences } from "../../../dist/target-model/types/carriers/generic-references.js";
 import { rustJsRejectionErrorIdentity } from "../../../dist/target-model/records/error-effects.js";
-import { rustJsValueTargetType } from "../../../dist/target-model/types/carriers/js.js";
+import { rustJsErrorTargetType, rustJsValueTargetType } from "../../../dist/target-model/types/carriers/js.js";
 import { Node_Expression, Node_Initializer, TryStatement_TryBlock, TryStatement_CatchClause,
   CatchClause_Block, TryStatement_FinallyBlock } from "@tsonic/target-api/source";
 import { sourcePackageCallbackErrorFiles, sourcePackageCallbackErrorGraph }
@@ -57,6 +59,38 @@ function assertChannels(actual, expected, localErrors = false) {
     assert.equal(source !== undefined, true, "exact native channel identity");
     assert.equal(rustTargetTypeRefEquals(source.errorType, selected.errorType), true, "exact native channel carrier");
   }
+}
+
+for (const surfaces of [[], ["js"]]) {
+  test(`native provider invocation preserves its selected error channel (${surfaces[0] ?? "native"})`, () => {
+    const errorType = rustNamedTargetType("fixture:ProducerFailure", "ProducerFailure");
+    const current = nativeClosureProducerFixture({ surfaces,
+      packages: [nativeClosureProducerFailurePackage(errorType)],
+      source: `import { fail } from "test:producer";
+import type { int32 } from "@tsonic/core/types.js";
+export function create(): () => int32 { return (): int32 => fail(); }`,
+    });
+    const selected = [];
+    const visit = node => {
+      const operation = current.program.records.targetOperation.get(node);
+      if (operation?.kind === "provider-operation" && operation.abi.effects.errorBoundary === "provider-native")
+        selected.push({ node, operation });
+      current.program.source.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+    };
+    current.program.sourceFiles.forEach(visit);
+    assert.equal(selected.length, 1, "the original checked native provider invocation is selected once");
+    const { node, operation } = selected[0];
+    assert.equal(operation.abi.effects.invocation, "fallible");
+    assert.equal(operation.abi.effects.errorCarrier !== undefined, true, "selected native error evidence is required");
+    for (const subject of [node, current.node]) {
+      const effects = current.program.records.errorEffects.get(subject);
+      assert.equal(effects !== undefined, true, "the invocation and its producer both publish completed effects");
+      assert.equal(effects.localErrors, false, "native provider failure never becomes a package-local error");
+      assert.equal(effects.nativeErrors.length, 1, "one original native error channel remains");
+      assert.equal(rustTargetTypeRefEquals(effects.nativeErrors[0].errorType, operation.abi.effects.errorCarrier), true,
+        "the physical producer carries the exact selected provider error");
+    }
+  });
 }
 
 for (const surfaces of [[], ["js"]]) {
@@ -260,7 +294,19 @@ test("provider callback references remain pure evaluations without erasing invok
   assert.equal(current.program.records.errorEffects.get(callback) === undefined, true,
     "evaluating a reference does not manufacture its referenced body's errors");
   assertChannels(current.effects(current.initializer("callback")), [], true);
-  assertChannels(current.callable("register"), [], true);
+  const registered = current.callable("register");
+  assert.equal(registered.localErrors, false, "registration does not execute either throwing callback body");
+  assert.equal(registered.nativeErrors.length, 1, "both registrations preserve their one native scheduling error channel");
+  assert.equal(rustTargetTypeRefEquals(registered.nativeErrors[0].errorType, rustJsErrorTargetType()), true,
+    "the native scheduling API returns JsResult, not the callback's package-local error");
+  for (const invocation of current.calls("setTimeout")) {
+    const operation = current.program.records.targetOperation.get(invocation);
+    assert.equal(operation?.kind, "provider-operation");
+    assert.equal(operation.abi.effects.errorBoundary, "provider-native");
+    assert.equal(rustTargetTypeRefEquals(operation.abi.effects.errorCarrier, rustJsErrorTargetType()), true,
+      "the selected provider ABI retains the exact native scheduling error");
+    assertChannels(current.effects(invocation), registered.nativeErrors);
+  }
 });
 
 test("call edges rebind two same-signature formals to physical caller inputs without rebranding the callee trait", () => {
@@ -406,12 +452,21 @@ for (const surfaces of [[], ["js"]]) {
     const selected = current.program.records.sourceErrorEffects.get(call);
     const awaited = selected?.edges.find(edge => edge.kind === "await");
     assert.equal(awaited !== undefined, true);
-    assert.equal(awaited.effects.nativeErrors.length, surfaces.length === 0 ? 2 : 1,
-      "the public JS await owns its canonical rejection, while a native future keeps its exact rebound channels");
+    assert.equal(awaited.effects.nativeErrors.length, 2,
+      "the selected native async body retains both its invocation and deferred errors");
+    const input = current.program.callableValues.native.inputsFor(current.declaration("forward"))[0];
+    assert.equal(awaited.effects.nativeErrors.some(error => error.errorType.kind === "associated-type" &&
+      error.errorType.name === "InvocationError" && error.errorType.owner.identity === input.implementation.identity), true,
+    "the native body preserves its original caller-bound synchronous invocation failure");
     if (surfaces.length !== 0) {
-      assert.equal(awaited.effects.nativeErrors[0].identity === rustJsRejectionErrorIdentity &&
-        rustTargetTypeRefEquals(awaited.effects.nativeErrors[0].errorType, rustJsValueTargetType()), true,
-      "no native invocation channel leaks as a second public JS rejection");
+      const operation = current.program.records.targetOperation.get(call);
+      assert.equal(operation.kind, "source-call");
+      assert.equal(operation.asyncBody !== undefined, true, "the actual selected source call uses its native body");
+      assert.equal(operation.resultCarrier.id, "rust.core.Future", "the direct call does not allocate a public JsPromise");
+      const rejections = awaited.effects.nativeErrors.filter(error => error.identity === rustJsRejectionErrorIdentity);
+      assert.equal(rejections.length, 1, "the callback's public promise rejection retains one canonical channel");
+      assert.equal(rustTargetTypeRefEquals(rejections[0].errorType, rustJsValueTargetType()), true,
+        "the canonical JS rejection is distinct from the native body's invocation failure");
     }
     assertChannels(current.callable("forward"), awaited.effects.nativeErrors);
   });

@@ -6,6 +6,7 @@ import { analyzeSourceGenericAdoption, sourceGenericAdoptionDiagnosticCode, sour
   type SourceStorageBindings, type SourceStorageProjection, type SourceStorageQueries, type SourceStorageSubject } from "@tsonic/target-api/analysis";
 import { sourceEnclosingCallable, sourceExpressionResultDisposition, sourceCallableValueParameters, type TargetSourceProgram } from "@tsonic/target-api/source";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
+import type { RustOwnershipRecords } from "../../target-model/records/ownership.js";
 import type { RustPromiseResult, RustPromiseResults, RustPromiseResultUses } from "../../target-model/records/promise-results.js";
 import { mapRustAwaitSelection, rustAwaitSelectionLeaves } from "../../target-model/types/await.js";
 import { rustAwaitSelection } from "../../policy/operations/flow/await.js";
@@ -70,6 +71,7 @@ export function analyzeRustPromiseResults(input: {
   readonly storage: SourceStorageQueries;
   readonly nodes: readonly Node[];
   readonly records: RustProgramRecords;
+  readonly reads: RustOwnershipRecords["reads"];
   readonly uses: RustPromiseResultUses;
   readonly definitions: RustTypeDefinitions;
   readonly nativeStorage: RustNativeStoragePlan;
@@ -306,18 +308,54 @@ export function analyzeRustPromiseResults(input: {
       captureQueries.pop();
     }
   };
-  const retainedCarrierFor = (subject: SourceStorageSubject, bindings: SourceStorageBindings): TargetTypeRef | SourceOwnershipUnresolved => {
-    const carrier = carrierFor(subject, bindings);
-    if (carrier.kind === "unresolved") return carrier;
+  const retainedCarrierFor = (subject: SourceStorageSubject, bindings: SourceStorageBindings,
+    carrier: TargetTypeRef): TargetTypeRef | SourceOwnershipUnresolved => {
     const captures = captureStorageFor(subject, bindings, carrier);
     return captures.kind === "unresolved" ? captures
       : Object.freeze({ kind: "tuple", elements: Object.freeze([carrier, captures]) });
   };
-  const retentionFor: SourceOwnershipPremises["retentionFor"] = (value, bindings) => {
+  const classify = (carrier: TargetTypeRef, owner: Node | undefined, at: Node,
+    kind: "origin" | "read-value"): ReturnType<typeof classifyCarrierRequirements> => {
+    if (kind === "origin" && owner !== undefined && input.promiseBodies.declarations.has(owner) &&
+      !input.promiseBodies.objects.has(owner)) return { kind: "supported" };
+    const nativeEvidence = { ...input.evidence,
+      lifetimeContract: rustEnclosingStorageContract(owner ?? at, input.ast, input.sourceLifetimes) };
+    if (rustTargetTypeParameterIdentities(carrier).length === 0) return classifyCarrierRequirements(carrier, ["static"],
+      new Set<string>(), new Map<string, Set<RustGenericRequirement>>(), () => false, input.definitions, nativeEvidence);
+    const contract = input.requirements.kind === "resolved" && owner !== undefined
+      ? input.requirements.index.contractFor(owner) : undefined;
+    return contract === undefined ? { kind: "unresolved", reason: "Native generic retention requires its actual completed final contract." }
+      : rustFinalContractSupportsStatic(contract, carrier, input.families, input.definitions, nativeEvidence);
+  };
+  const retentionFor: SourceOwnershipPremises["retentionFor"] = request => {
+    const { value, bindings } = request;
     if (!budget.step()) return unresolved(value.node, budget.failure()!);
     const checked = input.storage.typeFor(value);
     if (checked.kind === "unresolved") return unresolved(value.node, checked.reason);
     const evidence = { value, contractDeclaration: value.node, checkedType: checked.type };
+    if (request.kind === "read-value") {
+      const read = input.reads.get(request.reference);
+      if (read === undefined || read.value.kind === "borrow") return undefined;
+      const projection = input.records.flowReadProjection.get(request.reference);
+      if (projection !== undefined && !rustTargetTypeRefEquals(projection.sourceCarrier, read.carrier)) return unresolved(value.node,
+        "A retained native read requires its identical selected source carrier before projection.");
+      const carrier = projection?.selectedCarrier ?? read.carrier;
+      const converted = rustEffectiveValueCarrier(input.records, request.reference);
+      if (converted === undefined) return undefined;
+      const owner = sourceEnclosingCallable(request.reference, input.ast);
+      const originalRequirement = classify(carrier, owner, request.reference, "read-value");
+      const convertedRequirement = classify(converted, owner, request.reference, "read-value");
+      if (originalRequirement.kind === "unresolved") return unresolved(value.node, originalRequirement.reason);
+      if (convertedRequirement.kind === "unresolved") return unresolved(value.node, convertedRequirement.reason);
+      if (originalRequirement.kind !== "supported" || convertedRequirement.kind !== "supported") return undefined;
+      const retained = retainedCarrierFor(value, bindings, carrier);
+      if (retained.kind === "unresolved") return retained;
+      const selected = classify(retained, owner, request.reference, "read-value");
+      if (selected.kind === "unresolved") return unresolved(value.node, selected.reason);
+      if (selected.kind !== "supported") return undefined;
+      return Object.freeze({ kind: "resolved", premises: Object.freeze([Object.freeze({ ...evidence,
+        kind: "retained", reason: "owned-value" })]) });
+    }
     const operation = value.projection.length === 0 ? input.records.targetOperation.get(value.node) : undefined;
     if (operation?.kind === "reference-operation" &&
       (operation.operation === "shared-reference" || operation.operation === "mutable-reference")) {
@@ -372,28 +410,15 @@ export function analyzeRustPromiseResults(input: {
       return unresolved(value.node, "The actual native reference has no corresponding checked formal region argument.");
     }
     const active = new Map<SourceStorageSubject, Set<SourceStorageBindings>>();
-    const classify = (carrier: TargetTypeRef, owner: Node | undefined): ReturnType<typeof classifyCarrierRequirements> => {
-      // A native Promise body with no Promise object facet runs only as a native future awaited by its callers: the
-      // value is moved into that future, whose storage has the caller's lifetime. Only a JS Promise object (or other
-      // erased storage) requires 'static (RULINGS 2026-10-22: an only-awaited Promise is a native future).
-      if (owner !== undefined && input.promiseBodies.declarations.has(owner) && !input.promiseBodies.objects.has(owner))
-        return { kind: "supported" };
-      const nativeEvidence = { ...input.evidence,
-        lifetimeContract: rustEnclosingStorageContract(owner ?? value.node, input.ast, input.sourceLifetimes) };
-      if (rustTargetTypeParameterIdentities(carrier).length === 0) return classifyCarrierRequirements(carrier, ["static"],
-        new Set<string>(), new Map<string, Set<RustGenericRequirement>>(), () => false, input.definitions, nativeEvidence);
-      const contract = input.requirements.kind === "resolved" && owner !== undefined
-        ? input.requirements.index.contractFor(owner) : undefined;
-      return contract === undefined ? { kind: "unresolved", reason: "Native generic retention requires its actual completed final contract." }
-        : rustFinalContractSupportsStatic(contract, carrier, input.families, input.definitions, nativeEvidence);
-    };
     const classifyExecution = (subject: SourceStorageSubject, bindings: SourceStorageBindings): ReturnType<typeof classify> => {
       if (!budget.step()) return { kind: "unresolved", reason: budget.failure()! };
-      const physical = retainedCarrierFor(subject, bindings);
+      const carrier = carrierFor(subject, bindings);
+      if (carrier.kind === "unresolved") return carrier;
+      const physical = retainedCarrierFor(subject, bindings, carrier);
       if (physical.kind === "unresolved") return physical;
       const executionOwner = subject.kind === "receiver" ? subject.node : subject.kind === "input"
         ? input.ast.parent(subject.node) : sourceEnclosingCallable(subject.node, input.ast);
-      const direct = classify(physical, executionOwner);
+      const direct = classify(physical, executionOwner, subject.node, "origin");
       if (direct.kind === "supported" || executionOwner === undefined || rustTargetTypeParameterIdentities(physical).length === 0) return direct;
       const inProgress = active.get(subject) ?? new Set<SourceStorageBindings>();
       if (inProgress.has(bindings)) return { kind: "unresolved",
@@ -409,10 +434,12 @@ export function analyzeRustPromiseResults(input: {
           if (!budget.step()) return { kind: "unresolved", reason: budget.failure()! };
           if (activation.declaration !== executionOwner) return { kind: "unresolved",
             reason: "A native result execution contract must belong to its exact checked declaration." };
-          const actual = retainedCarrierFor(subject, activation.bindings);
+          const carrier = carrierFor(subject, activation.bindings);
+          if (carrier.kind === "unresolved") return carrier;
+          const actual = retainedCarrierFor(subject, activation.bindings, carrier);
           if (actual.kind === "unresolved") return actual;
           const caller = activation.kind === "invocation" ? sourceEnclosingCallable(activation.invocation, input.ast) : executionOwner;
-          const selection = classify(actual, caller);
+          const selection = classify(actual, caller, subject.node, "origin");
           if (selection.kind === "supported") continue;
           if (activation.kind === "declaration" || rustTargetTypeParameterIdentities(actual).length === 0) return selection;
           const origins = input.storage.boundOriginsFor(subject, activation.bindings);

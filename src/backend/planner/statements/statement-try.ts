@@ -7,8 +7,9 @@ import {
 } from "@tsonic/target-api/source";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { collectRustCompletionDispatch, createRustCompletionBoundary, tailCompletionExits } from "./resource-management.js";
-import { registerAliasFromPath, rustCurrentErrorBoundary, rustActiveErrorType } from "../program/plan-context.js";
-import { rustPackageFallibleBoundary, rustLocalErrorOwner, rustInjectLocalError } from "../program/fallible-boundaries.js";
+import { registerAliasFromPath, rustActiveErrorType } from "../program/plan-context.js";
+import { rustLocalErrorOwner, rustInjectLocalError } from "../program/fallible-boundaries.js";
+import { planRustErrorRegion } from "../program/error-regions.js";
 import { failRustPlannerInvariant } from "../diagnostics.js";
 import { planBlockLike } from "./planning.js";
 import { planExpression } from "../expressions/index.js";
@@ -87,13 +88,11 @@ export function planTryStatement(node: Node, context: RustPlanContext): readonly
     return { kind: "let", name: binding.name, mutable: binding.mutable, type };
   });
   const errorType = rustActiveErrorType(context);
-  const bodyFallible = catchBlock !== undefined || outwardFallible;
-  const catchOwner = catchBlock === undefined ? undefined : rustCurrentErrorBoundary(context);
-  const bodyErrorBoundary = catchBlock === undefined ? context.fallibleBoundary
-    : catchOwner === undefined ? undefined : rustPackageFallibleBoundary(catchOwner);
-  if (bodyFallible && bodyErrorBoundary === undefined) {
-    failRustPlannerInvariant("An admitted throwing try body requires its exact source-package error ABI.", node);
-  }
+  const protectedRegion = catchBlock === undefined ? undefined : planRustErrorRegion(tryBlock, context);
+  if (catchBlock !== undefined && protectedRegion === undefined)
+    failRustPlannerInvariant("An admitted protected try body requires its exact sealed native error region.", tryBlock);
+  const bodyErrorBoundary = catchBlock === undefined ? context.fallibleBoundary : protectedRegion?.boundary;
+  const bodyFallible = bodyErrorBoundary !== undefined;
   const bodyBoundary = createRustCompletionBoundary(context, bodyFallible);
   const body = planBlockLike(tryBlock, {
     ...context,
@@ -103,7 +102,7 @@ export function planTryStatement(node: Node, context: RustPlanContext): readonly
 
   let plannedCatch: Extract<RustStmt, { readonly kind: "try-scope" }>["catchClause"];
   let catchBoundary: RustCompletionBoundary | undefined;
-  if (catchBlock !== undefined) {
+  if (catchBlock !== undefined && bodyErrorBoundary !== undefined) {
     catchBoundary = createRustCompletionBoundary(context, outwardFallible);
     const catchBody = planBlockLike(catchBlock, {
       ...context,

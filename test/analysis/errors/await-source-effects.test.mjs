@@ -21,8 +21,8 @@ import { asyncCallableInterfaceFiles } from "../../../../tsonic/test/fixtures/ca
 import { nativeAsyncCallableFiles } from "../../../../tsonic/test/fixtures/callable-interfaces.mjs";
 import { finiteCompletionSequencingSource } from "../../../../tsonic/test/fixtures/finite-completion-sequencing.mjs";
 
-function fixture(text, options) {
-  const context = analyzeRustErrorEffects(text, options);
+function fixture(text, options = {}) {
+  const context = analyzeRustErrorEffects(text, { surfaces: [], ...options });
   const ast = context.ast;
   const nodes = [];
   const visit = node => { nodes.push(node); ast.forEachChild(node, child => { if (child !== undefined) visit(child); }); };
