@@ -23,11 +23,11 @@ export function planRustUnionEquality(node: Node,
   if (names === undefined)
     failRustPlannerInvariant("An admitted union equality requires its source operands and native binding scope.", node);
   const bindings: RustValueBlockEntry[] = [];
-  const bindOperands = !emission.leftShared || !emission.rightShared;
+  const bindOperands = !emission.leftShared && !emission.rightShared;
   const operand = (subject: Node, shared: boolean, name: string): RustExpr => {
     const value = planExpression(subject, context, "value", shared ? "shared-reference" : "value")
       ?? failRustPlannerInvariant("An admitted union equality requires its native operand.", subject);
-    if (!bindOperands) return value;
+    if (!bindOperands) return shared ? value : { kind: "reference", expr: value };
     const binding = allocateRustSyntheticName(names, name);
     bindings.push({ name: binding, value });
     const captured: RustExpr = { kind: "path", path: binding };
