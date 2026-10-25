@@ -27,6 +27,8 @@ import { recordResourceManagementFacts } from "../control-flow/resource-manageme
 import { recordRustDeferredProducerEffects } from "../errors/deferred-producer-effects.js";
 import { resolveRustExternalProjectBase } from "../../policy/types/project/external-project-types.js";
 import { resolveRustTargetTypeRef } from "../source-evidence/types/resolution/source.js";
+import type { TargetTypeRef } from "../../target-model/types/model.js";
+import { rustFrameCallableValue } from "../../target-model/types/carriers/frame-callables.js";
 import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustAnalysisContext } from "./context.js";
 import type { RustFactWalk } from "./walk.js";
@@ -590,12 +592,23 @@ export function analyzeRustProgram(context: RustAnalysisContext, outputType: "bi
   recordRustLexicalValueEnvironments(walk, lexical);
   analyzeRustNativeHandlers(context.nativeNodes, context.records, { get: context.safetyApplications.operationForExpression },
     context.source.sourceFacts, context.requiredRecords);
+  const frameBindingCarriers = new Map<Node, TargetTypeRef>();
+  for (const activation of callableOwnership.activations) for (const declaration of activation.slotDeclarations) {
+    const carrier = context.records.runtimeCarrier.get(declaration)?.carrier;
+    if (carrier === undefined || rustFrameCallableValue(carrier) === undefined) {
+      appendRustDiagnostic(walk, "RUST_CALLABLE_VALUE_NOT_CLOSED",
+        "A native frame slot requires its completed physical carrier in its original checked declaration scope.",
+        declaration, ["target.capability=rust.callable-value.exact-implementation"]);
+    } else frameBindingCarriers.set(declaration, carrier);
+  }
+  if (context.diagnostics.length !== 0) return undefined;
   const callableValues = context.callableValues.initialize({ ast, sourceFiles: context.sourceFiles, records: context.records,
     flowApplications: context.records.genericFlowApplications,
     nativeNodes: context.nativeNodes, isNativeNode: context.isNativeNode,
     sourcePackages: context.sourcePackages,
     names: context.names, navigation: context.source.navigation, lifetimes: context.sourceLifetimes,
-    classValueAdapters: context.classValues.valueAdapters(), closedSourceFiles, ownership: callableOwnership, sourceStorage: context.sourceStorage,
+    classValueAdapters: context.classValues.valueAdapters(), closedSourceFiles, ownership: callableOwnership,
+    frameBindingCarriers, sourceStorage: context.sourceStorage,
     sourceTypes: walk.sourceTypes,
     projectTypes: context.projectTypes, objectRepresentations: context.objectRepresentations,
     frozenDataWrites: context.frozenDataWrites,

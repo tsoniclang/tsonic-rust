@@ -79,7 +79,7 @@ export interface RustNativeStorageConstruction extends RustNativeStoragePlan {
 export type RustNativeStorageQueries = Omit<RustNativeStorageConstruction, "parameterFor">;
 
 export function createRustNativeStorageQueries(input: {
-  readonly frames: Pick<RustFrameCallablePlan, "errorFor">;
+  readonly frames: Pick<RustFrameCallablePlan, "errorFor" | "bindingFor">;
   readonly ast: AstReader;
   readonly nativeNodes: readonly Node[];
   readonly storage: SourceStorageQueries;

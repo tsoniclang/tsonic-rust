@@ -34,6 +34,7 @@ import { closeRustSuspendedStorage } from "../../policy/types/storage/suspended-
 import { rustNativePropertyNameIssue } from "../objects/computed-field-names.js";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import { rustSourceStorageSubjectContext } from "../source-evidence/types/resolution/source-storage-projection.js";
+import { resolveRustTargetType } from "../source-evidence/types/resolution/target.js";
 
 export function recordMethodSelfModeFacts(walk: RustFactWalk, sourceFiles: readonly SourceFile[]): void {
   walk.context.records.assertOpen();
@@ -98,6 +99,9 @@ export function recordClassSignatureFacts(walk: RustFactWalk, declaration: Node)
     if (memberKind === "KindPropertyDeclaration" || sourceParameterIsProperty(ast, member)) {
       const fieldCarrier = sourceParameterIsProperty(ast, member)
         ? walk.context.records.runtimeCarrier.get(member)?.carrier
+        : walk.context.callableOwnership.componentForSlot(member) !== undefined
+          ? resolveRustTargetType(walk.context.semanticsFor(member).types.expressionType(member),
+            rustResolutionContext(walk, member), walk.operationOptions, new Set(), Node_Type(ast, member))
         : resolveRustTargetTypeRef(member, rustSourceStorageSubjectContext(
           rustOperationContext(walk, member), undefined), walk.operationOptions);
       if (fieldCarrier !== undefined) {

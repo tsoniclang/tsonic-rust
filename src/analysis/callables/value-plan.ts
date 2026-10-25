@@ -122,6 +122,7 @@ export interface RustCallableValuePlanInput {
   readonly classValueAdapters: readonly { readonly subject: Node; readonly adapter: RustCallableValueAdapter }[];
   readonly closedSourceFiles: ReadonlySet<SourceFile>;
   readonly ownership: RustCallableOwnershipPlan;
+  readonly frameBindingCarriers: ReadonlyMap<Node, TargetTypeRef>;
   readonly sourceStorage: SourceStorageQueries;
   readonly sourceTypes: Pick<RustSourceTypeRegistry, "structuralObjectForType">;
   readonly projectTypes: RustProjectTypePolicy;
