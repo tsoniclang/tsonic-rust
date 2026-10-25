@@ -24,7 +24,7 @@ class Derived<Part> extends Relay<Part> {
 class DefaultField { readonly value = 5 as int32; }
 class Bare { constructor(readonly value: int32) { return; } }
 class Same { constructor(readonly value: int32) { return this; } }
-class Alias { constructor(readonly value: int32) { const self = this; return self; } }
+class Alias { constructor(readonly value: int32) { const receiver = this; return receiver; } }
 class Borrowed<Region extends Life> {
   constructor(readonly value: Ref<int32, Region>) {}
   read(): int32 { return load(this.value); }

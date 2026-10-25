@@ -114,20 +114,21 @@ export function structuralDispatchSignature(definition: RustStructuralShapeDefin
 } | undefined {
   const members: RustConstructorShapeEmission["members"][number][] = [];
   const carriers: TargetTypeRef[] = [];
-  const callable = (name: string, carrier: TargetTypeRef, construction: boolean): boolean => {
+  const callable = (name: string, carrier: TargetTypeRef, construction: boolean,
+    field: RustConstructorShapeEmission["members"][number]["field"]): boolean => {
     const protocol = rustCallableProtocol(carrier);
     if (protocol === undefined) return false;
     members.push(Object.freeze({ name, parameters: protocol.parameters, result: protocol.result,
-      selfMode: construction || definition.construction === undefined ? "rc" : "ref", field: undefined }));
+      selfMode: construction || definition.construction === undefined ? "rc" : "ref", field }));
     carriers.push(...protocol.parameters, protocol.result);
     if (protocol.error !== undefined) carriers.push(protocol.error);
     return true;
   };
-  if (definition.construction !== undefined && !callable(definition.construction.targetName, definition.construction.carrier, true))
+  if (definition.construction !== undefined && !callable(definition.construction.targetName, definition.construction.carrier, true, undefined))
     return undefined;
   for (const [index, field] of definition.fields.entries()) {
     if (field.method) {
-      if (!callable(field.targetName, field.carrier, false)) return undefined;
+      if (!callable(field.targetName, field.carrier, false, Object.freeze({ index, role: "value" }))) return undefined;
     } else {
       if (field.property === undefined) return undefined;
       members.push(Object.freeze({ name: field.property.getterTargetName, parameters: Object.freeze([]), result: field.carrier,

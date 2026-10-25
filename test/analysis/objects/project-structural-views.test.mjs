@@ -18,6 +18,34 @@ import { selectRustCallableValueAdapter } from "../../../dist/policy/conversions
 import { selectRustStructuralDispatchArguments } from "../../../dist/policy/types/objects/structural-generics.js";
 
 const parameter = { kind: "type-parameter", identity: "source:Value", name: "Value" };
+
+test("native structural method emission preserves its canonical source field and sealed liveness owner", () => {
+  const { program } = analyzeRust({ surfaces: [], files: { "index.ts": `
+type View = { read(): number; readonly identity: (value: number) => number };
+class Box {
+  constructor(public value: number) {}
+  read(): number { return this.value; }
+  identity = (value: number): number => value;
+}
+function view(owner: Box): View { return owner; }
+export function run(): number { return view(new Box(7)).identity(3); }
+` } });
+  let checked = 0;
+  for (const definition of new Set([...program.structuralShapes.definitions, ...program.structuralShapes.instances])) {
+    const selected = program.records.structuralShapeEmission.get(definition)?.dispatch;
+    if (selected === undefined) continue;
+    for (const [index, field] of definition.fields.entries()) {
+      if (field.method !== true) continue;
+      const member = selected.members.find(member => member.name === field.targetName);
+      assert.equal(member?.field?.index === index && member.field.role === "value", true,
+        `${field.sourceName}: the native method retains its original structural value slot`);
+      assert.equal(program.records.structuralLiveness.get(definition.sourceCarriers, false)?.fields.has(index), true,
+        `${field.sourceName}: emission consumes the one existing sealed field-liveness owner`);
+      checked++;
+    }
+  }
+  assert.equal(checked > 0, true, "the original checked class and structural view exercise actual native method slots");
+});
 const otherParameter = { kind: "type-parameter", identity: "destination:Value", name: "Value" };
 const text = { kind: "target-named", id: "rust.std.String" };
 const number = { kind: "source-primitive", name: "float64" };

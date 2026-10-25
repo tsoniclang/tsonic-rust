@@ -5,6 +5,8 @@ import { compileRust } from "../../helpers/rust-session.mjs";
 
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 import { rustCallableProtocol } from "../../../dist/target-model/types/carriers/callables.js";
+import { rustStringTargetType } from "../../../dist/target-model/types/carriers/native.js";
+import { rustTargetGenericReferences } from "../../../dist/target-model/types/carriers/generic-references.js";
 
 function returned(context, name) {
   const declaration = context.sourceStorage.nodes.find(node => context.ast.is.IsFunctionDeclaration(node) &&
@@ -23,7 +25,7 @@ test("normal constructors retain their receiver storage without querying a calla
     class Derived<Part> extends Relay<Part> { constructor(value: Part) { super(value); } }
     class Bare<Part> { constructor(readonly value: Part) { return; } }
     class Same<Part> { constructor(readonly value: Part) { return this; } }
-    class Alias<Part> { constructor(readonly value: Part) { const self = this; return self; } }
+    class Alias<Part> { constructor(readonly value: Part) { const receiver = this; return receiver; } }
     class Borrowed<Region extends Life> { constructor(readonly value: Ref<int32, Region>) {} }
     class Default { value = 3 as int32; }
   `, { surfaces: [] });
@@ -79,7 +81,10 @@ test("annotated returned Promise storage preserves the selected invocation lifet
     const carrier = returned(context, name);
     assert.equal(carrier.kind, "target-named", name);
     assert.equal(carrier.id, "rust.js.JsPromise", name);
-    assert.deepEqual(carrier.genericArguments[0], { kind: "lifetime", lifetime: { kind: "static" } }, name);
+    assert.deepEqual(carrier.genericArguments, [{ kind: "type", type: rustStringTargetType() }],
+      `${name}: the native owned JsPromise<T> preserves its exact payload without an invented lifetime argument`);
+    assert.deepEqual(rustTargetGenericReferences(carrier).lifetimes, [],
+      `${name}: returned owned Promise storage has no borrowed native environment`);
   }
 });
 
@@ -91,7 +96,13 @@ test("unrelated parameter loans do not become returned owned Promise lifetimes",
       return callback();
     }
   `);
-  assert.deepEqual(returned(context, "unrelated").genericArguments[0], { kind: "lifetime", lifetime: { kind: "static" } });
+  const carrier = returned(context, "unrelated");
+  assert.equal(carrier.kind, "target-named");
+  assert.equal(carrier.id, "rust.js.JsPromise");
+  assert.deepEqual(carrier.genericArguments, [{ kind: "type", type: rustStringTargetType() }],
+    "the native owned Promise retains its exact payload rather than an unrelated source loan");
+  assert.deepEqual(rustTargetGenericReferences(carrier).lifetimes, [],
+    "the unrelated Region loan cannot become a native Promise lifetime");
 });
 
 test("return refinement preserves explicit native borrow lifetimes and declared numeric carriers", () => {
