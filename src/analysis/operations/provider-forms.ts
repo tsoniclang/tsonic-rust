@@ -72,11 +72,10 @@ export function analyzeRustProviderForms(program: Omit<RustAnalysisProgram, "rea
       const callbackFallible = callback.callbackEffects.invocationEffects.localErrors ||
         callback.callbackEffects.invocationEffects.nativeErrors.length !== 0;
       const helperError = abi.effects.errorCarrier;
-      if (abi.effects.errorBoundary === "provider-native" && helperError === undefined ||
-        !callbackFallible && abi.effects.errorBoundary !== "provider-native")
+      if (abi.effects.errorBoundary === "provider-native" && helperError === undefined)
         failTargetAnalysisInvariant("tsonic-rust", "An admitted intrinsic callback helper requires its exact selected native Result error carrier.", node);
-      const frame = helperError !== undefined || adapted !== undefined ? undefined : rustFrameCallableValue(physical.carrier);
-      const selected = frame === undefined ? selectRustErrorRegion(helperError !== undefined ? node
+      const frame = !callbackFallible || helperError !== undefined || adapted !== undefined ? undefined : rustFrameCallableValue(physical.carrier);
+      const selected = frame === undefined ? selectRustErrorRegion(!callbackFallible || helperError !== undefined ? node
         : callback.callbackEffects.invocationOwner, effects,
         { ast, records: program.records, producers: program.callableValues.nativeProducers,
           definitions: program.typeDefinitions, components: program.sourcePackageComponents, promiseBodies: program.promiseBodies }, false) : undefined;
