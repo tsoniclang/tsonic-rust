@@ -1,6 +1,7 @@
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
 import { failTargetAnalysisInvariant, rejectedTargetStage, resolvedTargetStage } from "@tsonic/target-api/artifacts";
-import { sourceEnclosingCallable } from "@tsonic/target-api/source";
+import { isSourceCallableBodyBoundary, sourceEnclosingCallable, TryStatement_CatchClause,
+  TryStatement_TryBlock } from "@tsonic/target-api/source";
 import type { TargetDiagnostic, TargetStageResult } from "@tsonic/target-api/artifacts";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { RustErrorJoinDeclaration, RustErrorRegionRecords, RustErrorRegionSelection,
@@ -212,6 +213,7 @@ export function analyzeRustErrorRegions(input: RustErrorTypeContext & {
   readonly binaryHooks: readonly RustBinaryHookPlan[];
 }): TargetStageResult<RustAnalyzedErrorRegions> {
   const regions = new Map<Node, RustErrorRegionSelection>();
+  const localSites = new Map<Node, Node[]>();
   const sourceRegions = new Map<RustSourceErrorEffectEdge, RustSourceErrorRegionSelection>();
   const declarations = new Map<string, readonly RustErrorJoinDeclaration[]>();
   const demandedArities = new Map<string, Set<number>>();
@@ -323,8 +325,13 @@ export function analyzeRustErrorRegions(input: RustErrorTypeContext & {
       if (adapter.kind === "conversion" && adapter.conversion.kind === "callable-adapter") registerConversion(node, adapter.conversion);
       else if (adapter.kind === "option-map" || adapter.kind === "option-some") registerAdapter(node, adapter.element, depth + 1);
     };
-    const visit = (node: Node): void => {
+    const visit = (node: Node, enclosingRegion: Node): void => {
       if (!input.isNativeNode(node)) return;
+      const localOwner = input.ast.is.IsSourceFile(node) || isSourceCallableBodyBoundary(input.ast, node)
+        ? node : enclosingRegion;
+      const sites = localSites.get(localOwner);
+      if (sites === undefined) localSites.set(localOwner, [node]);
+      else sites.push(node);
       for (const name of [input.names.nameForDeclaration(node), input.names.functionNameForDeclaration(node),
         input.names.callableValueNameForDeclaration(node)]) if (name !== undefined) usedNames.add(name);
       const effects = input.records.errorEffects.get(node);
@@ -360,9 +367,13 @@ export function analyzeRustErrorRegions(input: RustErrorTypeContext & {
           else if (parameter.kind === "rest") for (const segment of parameter.segments) registerAdapter(node, segment.adapter);
         }
       }
-      input.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+      const protectedBody = input.ast.is.IsTryStatement(node) && TryStatement_CatchClause(input.ast, node) !== undefined
+        ? TryStatement_TryBlock(input.ast, node) : undefined;
+      input.ast.forEachChild(node, child => {
+        if (child !== undefined) visit(child, child === protectedBody ? child : localOwner);
+      });
     };
-    visit(file);
+    visit(file, file);
     const producerArities = input.callables.nativeGenericProducers.errorAritiesFor(fileName);
     if (producerArities === undefined) reject(file, "Native generic producers have no sealed exact error channels.");
     else for (const arity of producerArities) arities.add(arity);
@@ -501,6 +512,19 @@ export function analyzeRustErrorRegions(input: RustErrorTypeContext & {
     complete(initialization: RustInitializationErrorRecords): RustErrorRegionRecords {
       if (closed || !lifecycleSelected) failTargetAnalysisInvariant("tsonic-rust", "The error catalog seals once after initialization and lifecycle composition.");
       closed = true;
+      const localRegions = new Map<Node, RustErrorRegionSelection>();
+      for (const [owner, sites] of localSites) {
+        const file = input.ast.is.IsSourceFile(owner) ? input.ast.getSourceFile(owner) : undefined;
+        const region = file === undefined ? regions.get(owner) : initialization.moduleFor(file)?.region ?? regions.get(owner);
+        if (region === undefined && !input.ast.is.IsSourceFile(owner) && !isSourceCallableBodyBoundary(input.ast, owner))
+          failTargetAnalysisInvariant("tsonic-rust", "A protected try body requires its completed local error-region evidence.", owner);
+        if (region === undefined) continue;
+        for (const node of sites) {
+          if (localRegions.has(node)) failTargetAnalysisInvariant("tsonic-rust", "One local error-region owner publishes each runtime source subject once.", node);
+          localRegions.set(node, region);
+        }
+      }
+      localSites.clear();
       for (const { fileName, usedNames, arities, clonedArities } of fileDemands) {
         for (const arity of demandedArities.get(fileName) ?? []) arities.add(arity);
         declarations.set(fileName, Object.freeze([...arities].sort((left, right) => left - right).map(arity =>
@@ -508,6 +532,7 @@ export function analyzeRustErrorRegions(input: RustErrorTypeContext & {
             clone: clonedArities.has(arity), runtimeErrorArm: runtimeErrorArms.get(fileName)?.get(arity) }))));
       }
       return Object.freeze({ ...reads, lifecycle, initialization,
+        localFor: (node: Node) => localRegions.get(node),
         declarationsFor: (fileName: string) => declarations.get(fileName) ?? empty });
     },
   }));
