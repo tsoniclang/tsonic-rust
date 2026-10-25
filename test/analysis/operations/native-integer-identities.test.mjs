@@ -26,7 +26,7 @@ function select(operator, first, second, resultCarrier, conversions = {}, effect
       targetOperation: { get: node => node === expression ? { kind: "operator-token", operator, resultCarrier, ...conversions } : undefined },
       valueRead: { get: () => ({ value: resultCarrier }) },
     }),
-  }, ownership: { reads: { get: () => undefined } },
+  }, ownership: { uses: new Map(), reads: { get: () => undefined } },
     safetyApplications: { operationForExpression: () => undefined } }, [expression], producer);
   return producer.records.nativeComparison.get(expression);
 }

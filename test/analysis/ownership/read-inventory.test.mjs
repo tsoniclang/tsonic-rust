@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createTargetSourceProgram } from "@tsonic/target-api/source";
+import { createTargetSourceProgram, sourceEnclosingCallable } from "@tsonic/target-api/source";
 import { createSourceStorageQuery } from "@tsonic/target-api/analysis";
 import { checkedSource } from "../../../../tsonic/test/fixtures/source-navigation.mjs";
 import { analyzeRustReadOwnership } from "../../../dist/analysis/ownership/reads.js";
@@ -21,6 +21,116 @@ function readBorrowEffectsInput(source, program, nodes, records) {
     projectTypes: program.projectTypes, objectRepresentations: program.objectRepresentations,
     structuralShapes: program.structuralShapes, frozenDataWrites: program.frozenDataWrites };
 }
+
+test("native place demands distinguish vector writes, shared interior writes and untouched reads", () => {
+  const sources = [
+    ["vector", `type Body = boolean | unknown[];
+export function inspect(value: Body): boolean {
+  if (typeof value === "boolean") return value;
+  value[0] = 2;
+  return value[0] === 2;
+}`],
+    ["interior", `class Box { count: number = 0; }
+type Body = boolean | Box;
+export function inspect(value: Body): boolean {
+  if (typeof value === "boolean") return value;
+  const alias = value;
+  value.count = 2;
+  return alias.count === 2;
+}`],
+    ["untouched", `type Body = boolean | unknown[];
+export function inspect(value: Body): boolean {
+  if (typeof value === "boolean") return value;
+  return value[0] === 2;
+}`],
+  ];
+  let observations = 0;
+  for (const [name, source] of sources) {
+    const { program } = analyzeRust({ files: { "index.ts": source } });
+    const { ast } = program.source;
+    const visit = node => {
+      const operation = program.records.targetOperation.get(node);
+      if (operation?.kind === "provider-operation" && operation.abi.target.form === "index" || operation?.kind === "source-field") {
+        const access = ast.is.IsElementAccessExpression(node) ? ast.as.AsElementAccessExpression(node)
+          : ast.is.IsPropertyAccessExpression(node) ? ast.as.AsPropertyAccessExpression(node) : undefined;
+        const receiver = access?.Expression;
+        if (receiver !== undefined && ast.is.IsIdentifier(receiver) && ["value", "alias"].includes(ast.text(receiver))) {
+          observations++;
+          const demand = program.ownership.uses.get(node);
+          const use = program.ownership.uses.get(receiver);
+          const vectorWrite = name === "vector" && demand?.mode === "mutable";
+          assert.equal(use?.mode, vectorWrite ? "mutable" : "shared", `${name}: the exact place consumer, not the getter's read ABI, determines native demand`);
+          if (vectorWrite) {
+            const index = ast.as.AsElementAccessExpression(node).ArgumentExpression;
+            const assignment = ast.as.AsBinaryExpression(ast.parent(node));
+            assert.equal(use.later[0] === index, true, "the original checked index precedes the right-hand value");
+            assert.equal(use.later[1] === assignment.Right, true, "the original write value remains inside the same conservative interval");
+            assert.equal(use.stableAcrossEffects, false, "a native write is not classified as an immutable observation");
+          }
+        }
+      }
+      ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+    };
+    program.sourceFiles.forEach(visit);
+  }
+  assert.equal(observations, 5, "all five original native receiver cases are covered");
+});
+
+test("fixed projection owners move only with exact final flow and owned storage evidence", () => {
+  const { program } = analyzeRust({ files: { "index.ts": `
+import type { FixedArray } from "@tsonic/core/types.js";
+export function retained(): boolean {
+  const values: FixedArray<string, 2> = ["first", "second"];
+  const first = values[0];
+  const same = values[0] === "first" && values[1] === "second";
+  values[1] = "changed";
+  return first === "first" && same && values[1] === "changed";
+}
+export function owned(): boolean {
+  const values: FixedArray<string, 2> = ["first", "second"];
+  return values[0] === "first";
+}
+export function aliased(): boolean {
+  const values: FixedArray<string, 2> = ["first", "second"];
+  const alias = values;
+  return values[0] === "first" && alias[0] === "first";
+}
+export function captured(): () => boolean {
+  const values: FixedArray<string, 2> = ["first", "second"];
+  return () => values[0] === "first";
+}
+export function shared(values: readonly string[]): boolean { return values[0]! === "first"; }
+export function mutable(values: string[]): boolean { values[0] = "changed"; return values[0]! === "changed"; }
+` } });
+  const { ast } = program.source;
+  const observed = new Map();
+  const visit = node => {
+    if (ast.is.IsElementAccessExpression(node)) {
+      const receiver = ast.as.AsElementAccessExpression(node).Expression;
+      if (ast.is.IsIdentifier(receiver) && ast.text(receiver) === "values") {
+        let callable = sourceEnclosingCallable(node, ast);
+        while (callable !== undefined && ast.name(callable) === undefined) callable = sourceEnclosingCallable(ast.parent(callable), ast);
+        const name = callable === undefined ? undefined : ast.text(ast.name(callable));
+        const read = program.ownership.reads.get(receiver);
+        const rows = observed.get(name) ?? [];
+        rows.push(read?.source.kind);
+        observed.set(name, rows);
+        if (name === "shared" || name === "mutable") {
+          const parameter = program.records.sourceParameterAbi.get(receiver);
+          assert.equal(parameter?.mode, name === "shared" ? "ref" : "mut-ref", "the actual native formal remains a reference");
+          assert.equal(read?.source.kind, "borrow", "an otherwise final formal read cannot move through its borrowed native ABI");
+        }
+      }
+    }
+    ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+  };
+  program.sourceFiles.forEach(visit);
+  for (const [name, expected] of [
+    ["retained", ["clone", "borrow", "borrow", "borrow", "move"]],
+    ["owned", ["move"]], ["aliased", ["borrow"]], ["captured", ["borrow"]],
+    ["shared", ["borrow"]], ["mutable", ["borrow", "borrow"]],
+  ]) assert.deepEqual(observed.get(name), expected, `${name}: native final-move evidence preserves retained, alias, capture and borrowed inverses`);
+});
 
 for (const projection of [false, true]) test(`owned native getter results remain distinct from stored element places (projection=${projection})`, async () => {
   for (const [sourceType, payload] of [["string", rustStringTargetType()], ["bigint", rustBigIntTargetType()]]) {
@@ -59,6 +169,7 @@ for (const projection of [false, true]) test(`owned native getter results remain
         capturesFor: () => undefined, invocationTransfersCapture: () => false,
       });
       assert.equal(selected.kind, "resolved", `${label}: the complete checked read inventory closes`);
+      assert.equal(selected.ownership.uses === uses, true, `${label}: read ownership publishes the identical native-use map without another collection`);
       const read = selected.ownership.reads.get(element);
       assert.equal(read?.readsStorage, !owned, `${label}: source element syntax does not override the existing native owned-result proof`);
       assert.equal(read?.value.kind, owned ? "move" : "borrow", `${label}: a fresh owned payload is not reborrowed or cloned`);

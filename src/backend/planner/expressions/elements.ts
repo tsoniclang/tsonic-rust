@@ -61,11 +61,9 @@ function planElementAccessInner(node: Node, context: RustPlanContext, access: Ru
 
 function planIndexedProjection(node: Node, receiverNode: Node, indexNode: Node, evaluateIndex: boolean,
   context: RustPlanContext, project: (receiver: RustExpr, borrowed: boolean) => RustExpr, access: RustExpressionAccess): RustExpr {
-  // A retained owner (its read would clone the whole tuple or array) is projected in place, and only the selected
-  // element is read with its own ownership (`pair.1.clone()`, `tuple.0`); a projection that is itself the receiver of a
-  // projection stays a place (`nested.1.0`).
+  const ownership = context.input.program.records.readOwnership.get(receiverNode)?.value;
   const inPlace = context.expressionOverrides?.has(receiverNode) !== true &&
-    context.input.program.records.readOwnership.get(receiverNode)?.value.kind === "clone";
+    (ownership?.kind === "clone" || ownership?.kind === "borrow");
   const receiver = (inPlace ? planExpression(receiverNode, context, "value", "shared-place") : planExpression(receiverNode, context))
     ?? failRustPlannerInvariant("An admitted fixed projection requires its rendered source receiver.", receiverNode);
   const borrowed = inPlace || expressionCarrier(receiverNode, context)?.kind === "reference" ||

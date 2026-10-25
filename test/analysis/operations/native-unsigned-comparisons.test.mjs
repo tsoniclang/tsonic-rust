@@ -25,7 +25,7 @@ function select(operator, reversed, value, name, abi) {
         : node === subject && abi !== undefined ? { kind: "provider-operation", abi } : undefined },
       valueRead: { get: () => ({ value: { kind: "source-primitive", name } }) },
     }),
-  }, ownership: { reads: { get: () => undefined } },
+  }, ownership: { uses: new Map(), reads: { get: () => undefined } },
     safetyApplications: { operationForExpression: () => undefined } }, [expression], producer);
   return { expression, selected: producer.records.nativeComparison.get(expression), records: producer.records };
 }
