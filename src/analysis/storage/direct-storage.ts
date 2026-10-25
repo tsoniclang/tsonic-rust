@@ -182,6 +182,7 @@ export function analyzeRustDirectStorage(program: Omit<RustAnalysisProgram, "rea
     producer.root(node, root);
     let field: RustUpdateProjectField | null = null;
     const arguments_: RustUpdateProjectionArgument[] = [];
+    const fieldCounts = new Map<Node, number>();
     const visited = new Set<Node>();
     let complete = true;
     while (current !== undefined && !visited.has(current)) {
@@ -189,7 +190,7 @@ export function analyzeRustDirectStorage(program: Omit<RustAnalysisProgram, "rea
       const fact = program.records.targetOperation.get(current);
       if (fact?.kind === "source-field" || fact?.kind === "source-union-field") {
         if (field === null) field = { expression: current, fact };
-        if (complete) producer.projection(node, current, [...arguments_].reverse());
+        if (complete) fieldCounts.set(current, arguments_.length);
       }
       if (!ast.is.IsPropertyAccessExpression(current) && !ast.is.IsElementAccessExpression(current) && !ast.is.IsParenthesizedExpression(current)) break;
       if (ast.is.IsElementAccessExpression(current)) {
@@ -203,6 +204,10 @@ export function analyzeRustDirectStorage(program: Omit<RustAnalysisProgram, "rea
       }
       current = Node_Expression(ast, current);
     }
+    if (fieldCounts.size !== 0 || select(node).kind !== "unavailable") producer.projection(node, {
+      arguments: [...arguments_].reverse(), complete,
+      fieldOffsets: new Map([...fieldCounts].map(([selected, count]) => [selected, arguments_.length - count])),
+    });
     producer.field(node, field);
   }
   for (const node of nodes) {
@@ -235,6 +240,16 @@ export function analyzeRustDirectStorage(program: Omit<RustAnalysisProgram, "rea
     const operator = program.records.targetOperation.get(node);
     const left = ast.is.IsBinaryExpression(node) ? BinaryExpression_Left(ast, node) : undefined;
     const right = ast.is.IsBinaryExpression(node) ? BinaryExpression_Right(ast, node) : undefined;
+    const write = program.records.compoundWrite.get(node);
+    if (write?.kind === "runtime-set") {
+      const setter = program.records.runtimeSetter.get(node);
+      const receiver = program.records.providerMutableOperands.get(node, write)?.find(input =>
+        input.key === "receiver" && input.storage.kind === "direct")?.node;
+      if (setter !== undefined && receiver !== undefined) {
+        admitPlace(receiver);
+        admit(receiver, setter.sourceArguments);
+      }
+    }
     if (left !== undefined && right !== undefined && (assignment !== undefined || operator?.kind === "nullish-assignment")) {
       admitPlace(left);
       const selected = program.records.accessorReceiver.get(left);

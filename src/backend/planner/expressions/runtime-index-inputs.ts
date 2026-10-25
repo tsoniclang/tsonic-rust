@@ -6,7 +6,7 @@ import type { RustPlanContext } from "../program/plan-context.js";
 import { failRustPlannerInvariant } from "../diagnostics.js";
 import { planExpression } from "./entry.js";
 import { effectivePlannedExpressionCarrier } from "./fundamentals.js";
-import { planRustDirectStorage } from "./update-target.js";
+import { planRustDirectStorage, planRustUpdateProjectionArguments } from "./update-target.js";
 
 export function planRustRuntimeWriteInputs(operation: RustEmissionProviderOperation,
   node: Node, prefix: string, context: RustPlanContext): {
@@ -28,16 +28,17 @@ export function planRustRuntimeWriteInputs(operation: RustEmissionProviderOperat
     if (carrier === undefined) failRustPlannerInvariant("An admitted runtime write requires its exact native operand carrier.", subject);
     const storage = mutable.find(input => input.key === slot.key)?.storage;
     if (receiver && storage?.kind === "direct") {
-      const place = planRustDirectStorage(subject, context)
-        ?? failRustPlannerInvariant("An admitted runtime write requires its exact native receiver storage.", subject);
-      if (!selected.effects.has(slot.key)) {
-        overrides.set(subject, { expression: place, carrier, valueForm: "storage", storageForm: "plain" });
-      } else {
-        const name = allocateRustSyntheticName(context.syntheticNames, `${prefix}_${suffix}`);
-        bindings.push({ name, value: { kind: "reference", expr: place, mutable: true } });
-        overrides.set(subject, { expression: { kind: "dereference", pointer: { kind: "path", path: name } },
-          carrier, valueForm: "storage", storageForm: "plain" });
+      const projection = selected.effects.has(slot.key)
+        ? planRustUpdateProjectionArguments(subject, undefined, { ...context, expressionOverrides: overrides }) : undefined;
+      if (selected.effects.has(slot.key) && projection === undefined)
+        failRustPlannerInvariant("An admitted runtime write requires its exact native receiver projection arguments.", subject);
+      if (projection !== undefined) {
+        bindings.push(...projection.bindings);
+        for (const override of projection.overrides) overrides.set(override.node, override.value);
       }
+      const place = planRustDirectStorage(subject, { ...context, expressionOverrides: overrides }, projection?.inputOverrides)
+        ?? failRustPlannerInvariant("An admitted runtime write requires its exact native receiver storage.", subject);
+      overrides.set(subject, { expression: place, carrier, valueForm: "storage", storageForm: "plain" });
       continue;
     }
     const borrowed = receiver && selected.indexReceiverBorrow;
