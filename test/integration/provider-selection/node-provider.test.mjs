@@ -381,7 +381,7 @@ main();
   assertNoTargetDiagnostics(result.diagnostics);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /JsValue::from\(label\.clone\(\)\)/u);
-  assert.match(text, /tsonic_rust_node::util::format\("%j", core::slice::from_ref\(&parsed\)\)\?/u);
+  assert.match(text, /tsonic_rust_node::util::format\(\s*"%j",\s*core::slice::from_ref\(&parsed\),?\s*\)\?/u);
   assert.match(text, /js_abi::json_stringify\(&parsed\)\?/u);
   const run = validateGeneratedProject("node-provider-bin", result.artifacts, { run: true });
   assert.equal(run.status, 0);
