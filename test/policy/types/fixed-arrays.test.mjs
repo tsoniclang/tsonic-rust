@@ -26,7 +26,7 @@ import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equali
 import { rustSpreadElementCarrier } from "../../../dist/target-model/operations/rest-assembly.js";
 import { rustTypeFromCarrier } from "../../../dist/backend/planner/types/carrier-syntax.js";
 import { printRustType } from "../../../dist/print/source/types.js";
-import { artifactText, compileRust } from "../../helpers/rust-session.mjs";
+import { acmePlatformPackage, acmeTestingPackage, artifactText, compileRust } from "../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 
 const element = Object.freeze({ kind: "source-primitive", name: "uint32" });
@@ -427,13 +427,12 @@ test("fixed-array ordinal validation rejects inconsistent and malformed checker 
   }
 });
 
-test("fixed-array literals reject out-of-range ordinals without enabling dynamic non-Copy reads", () => {
+test("fixed-array literals reject out-of-range ordinals and noninteger dynamic indices", () => {
   for (const [index, code] of [
     ["-1", "RUST_FIXED_ARRAY_INDEX_NOT_PROVEN"],
     ["2", "RUST_FIXED_ARRAY_INDEX_NOT_PROVEN"],
     ["9007199254740993", "RUST_FIXED_ARRAY_INDEX_NOT_PROVEN"],
-    ["index", "RUST_FIXED_ARRAY_DYNAMIC_INDEX_REQUIRES_COPY"],
-    ["1.5", "RUST_FIXED_ARRAY_DYNAMIC_INDEX_REQUIRES_COPY"],
+    ["1.5", "RUST_INTEGER_LITERAL_NOT_EXACT"],
   ]) {
     const { result } = compileRust({ files: { "index.ts": `
       import type { FixedArray, int32 } from "@tsonic/core/types.js";
@@ -446,6 +445,46 @@ test("fixed-array literals reject out-of-range ordinals without enabling dynamic
     assert.equal(result.artifacts.length, 0);
   }
 });
+
+for (const surfaces of [[], ["js"]]) {
+  const surface = surfaces[0] ?? "native";
+  test(`fixed-array dynamic String reads use their actual native Clone contract (${surface})`, () => {
+    const { result } = compileRust({ surfaces, packages: [acmeTestingPackage()],
+      target: { id: "rust", options: { outputType: "bin", crateName: "fixed_array_dynamic_string" } },
+      files: { "index.ts": `
+import type { FixedArray, int32 } from "@tsonic/core/types.js";
+import { check } from "@acme/testing";
+export function select(values: FixedArray<string, 2>, index: int32): string { return values[index]; }
+export function main(): void {
+  const values: FixedArray<string, 2> = ["first", "second"] as const;
+  check(select(values, 1 as int32) === "second");
+  check(select(values, 0 as int32) === "first");
+}
+main();
+` } });
+    assertNoTargetDiagnostics(result.diagnostics);
+    const generated = artifactText(result, "src/index.rs");
+    assert.match(generated, /fn select\(/u, "the actual dynamic native index callable is retained");
+    assert.match(generated, /\]\.clone\(\)/u, "an owned non-Copy String result uses its real native Clone operation");
+    assert.doesNotMatch(generated, /values\.clone\(\)|Box::|unsafe\s*\{/u,
+      "selecting one owned String never clones its whole array or invents a dynamic storage owner");
+    validateGeneratedProject(`fixed-array-dynamic-string-${surface}`, result.artifacts, { run: true });
+  });
+
+  test(`fixed-array dynamic owned reads retain the actual non-Clone refusal (${surface})`, () => {
+    const { result } = compileRust({ surfaces, packages: [acmePlatformPackage()], files: { "index.ts": `
+import type { FixedArray, int32 } from "@tsonic/core/types.js";
+import { Store } from "@acme/platform";
+export function select(values: FixedArray<Store, 2>, index: int32): Store { return values[index]; }
+` } });
+    assert.equal(result.diagnostics.some(diagnostic => diagnostic.code === "RUST_UNSUPPORTED_AST" &&
+      diagnostic.message === "A provider index read requires an exact Copy or Clone result-carrier contract. Node kind: KindElementAccessExpression." &&
+      diagnostic.evidence?.includes("target.capability=rust.backend.provider-index-read-ownership")), true,
+      result.diagnostics.slice(0, 4).map(diagnostic => `${diagnostic.code}: ${diagnostic.message}`).join("; "));
+    assert.equal(result.program === undefined && result.plan === undefined && result.artifacts.length === 0, true,
+      "a non-Clone native element cannot become an owned result through a borrowed array index");
+  });
+}
 
 for (const length of ["2n", "9007199254740993n"]) {
   for (const [name, expression] of [["direct", "values.length"], ["inferred", "inferred(values).length"]]) {
