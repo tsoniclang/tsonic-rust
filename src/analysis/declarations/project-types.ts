@@ -268,7 +268,8 @@ export function recordInterfaceFacts(walk: RustFactWalk, declaration: Node): voi
   for (const member of members) {
     const memberKind = ast.kindName(member);
     if (memberKind === "KindPropertySignature") {
-      const fieldCarrier = resolveRustTargetTypeRef(member, rustResolutionContext(walk, member), walk.operationOptions);
+      const fieldCarrier = resolveRustTargetTypeRef(member,
+        rustSourceStorageSubjectContext(rustResolutionContext(walk, member), undefined), walk.operationOptions);
       if (fieldCarrier !== undefined) {
         setCarrierFact(walk, member, fieldCarrier);
       }
