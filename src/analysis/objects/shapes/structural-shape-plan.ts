@@ -13,7 +13,7 @@ import { rustNativeMemoryLayoutsEqual } from "../../../target-model/operations/n
 import { rustTargetGenericArgumentEquals, rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { closedMetadataKey } from "../../../target-model/metadata/closed-data.js";
 
-import { rustStructuralObjectCarrierValue, rustTargetGenericReferences, rustOptionElementCarrier, rustCallableProtocol, rustProgramErrorTargetType } from "../../../target-model/types/index.js";
+import { rustStructuralObjectCarrierValue, rustTargetGenericReferences, rustOptionElementCarrier, rustCallableProtocol, rustProgramErrorTargetType, rustNamedTypeCarrierValue } from "../../../target-model/types/index.js";
 import { rustStructuralMethodStorageCarrier } from "../../../policy/types/objects/member-storage.js";
 import { rustRuntimeRecordFieldTargetType } from "../../../target-model/types/carriers/runtime-carriers.js";
 import { rustCallablePhysicalSignature } from "../../../target-model/conversions/callable-physical.js";
@@ -622,9 +622,8 @@ function createRustStructuralShapeConstruction(
                 "A completed structural data field cannot carry a method storage plan.");
               let boundStorage = field.boundStorage;
               if (boundStorage !== undefined) {
-                const bound = boundStorage.carrier;
-                const error = bound.kind === "target-named" && bound.id === "rust.runtime.RecordField"
-                  ? bound.genericArguments?.[1] : undefined;
+                const bound = rustNamedTypeCarrierValue(boundStorage.carrier);
+                const error = bound?.id === "rust.runtime.RecordField" ? bound.genericArguments[1] : undefined;
                 if (error?.kind !== "type") failTargetAnalysisInvariant("tsonic-rust",
                   "A completed bound structural field requires its original native error carrier.");
                 boundStorage = Object.freeze({ ...boundStorage,
