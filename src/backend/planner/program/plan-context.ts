@@ -4,6 +4,7 @@ import type { RustPlanningContext } from "../context.js";
 import type { RustGeneratorFact } from "../../../target-model/records/callables-and-resources.js";
 import type { RustSourceBindingFact } from "../../../target-model/records/value-projections.js";
 import type { RustConstructionLayer } from "../../../target-model/records/construction.js";
+import type { RustProviderFormEmission } from "../../../target-model/records/provider-forms.js";
 
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustSyntheticNameState } from "../names/synthetic.js";
@@ -117,6 +118,7 @@ export interface RustPlanContext {
   readonly asyncContext?: boolean;
   readonly explicitUnsafeContextDepth?: number;
   readonly fallibleBoundary?: RustFallibleBoundary;
+  readonly providerCallbackBody?: RustProviderFormEmission["callbackBody"];
   // Structured import requirements: runtime alias prefixes used by planned
   // operations and rendered types. Never inferred from printed text.
   readonly usedAliases?: Set<string>;

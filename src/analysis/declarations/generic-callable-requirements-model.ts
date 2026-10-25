@@ -33,6 +33,7 @@ import type { RustNativeStoragePlan } from "../callables/native-storage.js";
 
 export interface RustCallableRequirementInput {
   readonly ownershipFlow: RustOwnershipFlow;
+  readonly borrowFor: (node: Node) => "shared" | "mutable" | undefined;
   readonly isStoredValue: (node: Node) => boolean;
   readonly readsValue: (node: Node) => boolean;
   readonly typeDefinitions: RustTypeDefinitions;

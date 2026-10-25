@@ -234,6 +234,7 @@ export function rustTypeFromCarrier(
       : {
           kind: "named",
           path: namedType.path,
+          identity: namedType.id,
           ...(genericArguments.length === 0
             ? {}
             : { genericArguments }),

@@ -35,6 +35,7 @@ import { rustSourceErrorConstructorOperation, selectRustSourceErrorConstructor }
 import { selectRustProviderOperation } from "../../../../policy/operations/provider-selection.js";
 import { selectRustProviderPointerResult } from "../../pointers/provider-result.js";
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
+import { substituteRustTargetGenerics } from "../../../../target-model/types/carriers/substitution.js";
 import { sourceCallMarkerByIdentity } from "../../../../source/profiles/call-markers.js";
 import { mapSelectedStringRegExpProtocolCall } from "../regexp-protocols.js";
 
@@ -150,6 +151,11 @@ export function resolveRustCheckedCall(
           sourceArgumentIndex: selection.row.immediateCallback.sourceArgumentIndex,
           failure: {
             kind: "invocation",
+            resultError: selection.row.immediateCallback.resultError.kind === "callback"
+              ? selection.row.immediateCallback.resultError
+              : { kind: "native", carrier: substituteRustTargetGenerics(
+                selection.row.immediateCallback.resultError.carrier,
+                instantiation.substitutions.types, instantiation.substitutions.lifetimes, instantiation.substitutions.consts) },
             fallibleTarget: substituteProviderOperationForm(
               selection.row.immediateCallback.fallibleTarget,
               instantiation.substitutions,

@@ -94,6 +94,7 @@ export function analyzeRustDeclarationGenericRequirements(
   nativeStorage: RustNativeStoragePlan,
   classValues: RustClassValuePlan,
   errorTypes: RustErrorTypeContext,
+  borrowFor: (node: Node) => "shared" | "mutable" | undefined,
 ): AnalyzeRustDeclarationGenericRequirementsResult {
   const ast = source.ast;
   const diagnostics: TargetDiagnostic[] = [];
@@ -192,6 +193,7 @@ export function analyzeRustDeclarationGenericRequirements(
         structuralShapes: shapes,
         structuralViewsFor: (declaration: Node) => viewsByDeclaration.get(declaration) ?? [],
         ownershipFlow,
+        borrowFor,
         isStoredValue,
         readsValue(node) {
           const access = ast.is.IsElementAccessExpression(node)

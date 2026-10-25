@@ -2,6 +2,7 @@ import type { JsOperationRowData } from "./model.js";
 import { atomicOperationRows } from "./atomic-rows.js";
 import { rustJsTimerDispatchInput } from "../../../../providers/model/js-dispatch.js";
 import { rustJsValueTargetType, rustSourcePrimitiveTargetType, rustStringTargetType, rustJsTypedArrayTargetIds, rustJsPromiseTargetId, type RustJsTypedArrayName } from "../../../../target-model/types/index.js";
+import { rustRuntimeErrorTargetType } from "../../../../target-model/types/carriers/runtime-carriers.js";
 
 const falseArgument = { kind: "boolean", value: false } as const;
 
@@ -14,7 +15,7 @@ const symbolRows: readonly JsOperationRowData[] = [
 ];
 
 const weakCollectionRows: readonly JsOperationRowData[] = [
-  { owner: "WeakMap", member: "get", operationKind: "call", lane: "weak-map", requirements: [{ carrier: { ref: "weak-value" }, capability: "clone" }, { carrier: { ref: "weak-key" }, capability: "object-identity" }], shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "get", argModes: ["ref"] }, result: { ref: "option-of-weak-value" }, sourceResult: { ref: "weak-value" }, sourceAbsence: "undefined", params: [{ ref: "weak-key" }] } },
+  { owner: "WeakMap", member: "get", operationKind: "call", lane: "weak-map", requirements: [{ carrier: { ref: "weak-value" }, capability: "clone", source: { kind: "receiver", projection: [1] } }, { carrier: { ref: "weak-key" }, capability: "object-identity" }], shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "get", argModes: ["ref"] }, result: { ref: "option-of-weak-value" }, sourceResult: { ref: "weak-value" }, sourceAbsence: "undefined", params: [{ ref: "weak-key" }] } },
   { owner: "WeakMap", member: "has", operationKind: "call", lane: "weak-map", requirements: [{ carrier: { ref: "weak-key" }, capability: "object-identity" }], shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "has", argModes: ["ref"] }, result: { ref: "bool" }, params: [{ ref: "weak-key" }] } },
   { owner: "WeakMap", member: "delete", operationKind: "call", lane: "weak-map", requirements: [{ carrier: { ref: "weak-key" }, capability: "object-identity" }], shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "delete", argModes: ["ref"] }, result: { ref: "bool" }, params: [{ ref: "weak-key" }] } },
   { owner: "WeakMap", member: "set", operationKind: "call", lane: "weak-map", requirements: [{ carrier: { ref: "weak-key" }, capability: "object-identity" }], shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "set" }, result: { ref: "receiver" }, params: [{ ref: "weak-key" }, { ref: "weak-value" }] } },
@@ -136,7 +137,7 @@ const typedArrayRows: readonly JsOperationRowData[] = [
     { owner: "TypedArray", member, operationKind: "call", lane: "typed-array", variant: "start-end", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: `${member}_to` }, result: { ref: "receiver" }, params: [{ ref: "numeric-argument", index: 0 }, { ref: "numeric-argument", index: 1 }] } },
   ]),
   { owner: "TypedArray", member: "sort", operationKind: "call", lane: "typed-array", variant: "default", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "sort_default" }, result: { ref: "receiver" } } },
-  { owner: "TypedArray", member: "sort", operationKind: "call", lane: "typed-array", variant: "compare", callback: { shape: "direct", sourceArgumentIndex: 0, failure: { kind: "invocation", fallibleTarget: { form: "receiver-method", name: "try_sort_by" } } }, shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "sort_by" }, result: { ref: "receiver" }, params: [{ ref: "cb-array-comparator", arity: 2 }] } },
+  { owner: "TypedArray", member: "sort", operationKind: "call", lane: "typed-array", variant: "compare", callback: { shape: "direct", sourceArgumentIndex: 0, failure: { kind: "invocation", resultError: { kind: "native", carrier: rustRuntimeErrorTargetType() }, fallibleTarget: { form: "receiver-method", name: "try_sort_by" } } }, shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "sort_by" }, result: { ref: "receiver" }, params: [{ ref: "cb-array-comparator", arity: 2 }] } },
 ];
 
 const intlRows: readonly JsOperationRowData[] = [
@@ -271,7 +272,7 @@ const promiseRows: readonly JsOperationRowData[] = [
     member,
     operationKind: "call",
     lane: "promise",
-    requirements: [{ carrier: { ref: "promise-input-output" }, capability: "clone" }],
+    requirements: [{ carrier: { ref: "promise-input-output" }, capability: "clone", source: { kind: "argument", sourceIndex: 0, projection: [0, 0] } }],
     returnedFuture: { awaiting: "fallible", errorBoundary: "js-rejection" },
     shape: {
       op: "operation",
@@ -290,7 +291,7 @@ const promiseRows: readonly JsOperationRowData[] = [
     member: "all",
     operationKind: "call",
     lane: "promise",
-    requirements: [{ carrier: { ref: "promise-input-output" }, capability: "clone" }],
+    requirements: [{ carrier: { ref: "promise-input-output" }, capability: "clone", source: { kind: "argument", sourceIndex: 0, projection: [0, 0] } }],
     returnedFuture: { awaiting: "fallible", errorBoundary: "js-rejection" },
     shape: {
       op: "operation",
@@ -305,7 +306,7 @@ const promiseRows: readonly JsOperationRowData[] = [
     member: "allSettled",
     operationKind: "call",
     lane: "promise",
-    requirements: [{ carrier: { ref: "promise-input-output" }, capability: "clone" }],
+    requirements: [{ carrier: { ref: "promise-input-output" }, capability: "clone", source: { kind: "argument", sourceIndex: 0, projection: [0, 0] } }],
     returnedFuture: { awaiting: "infallible", errorBoundary: "none" },
     shape: {
       op: "operation",
@@ -321,7 +322,7 @@ const promiseRows: readonly JsOperationRowData[] = [
     operationKind: "call",
     lane: "promise",
     variant: "default",
-    requirements: [{ carrier: { ref: "promise-output" }, capability: "clone" }],
+    requirements: [{ carrier: { ref: "promise-output" }, capability: "clone", source: { kind: "receiver", projection: [0] } }],
     returnedFuture: { awaiting: "fallible", errorBoundary: "js-rejection" },
     shape: {
       op: "operation",
@@ -336,7 +337,7 @@ const promiseRows: readonly JsOperationRowData[] = [
     operationKind: "call",
     lane: "promise",
     variant: "callback",
-    requirements: [{ carrier: { ref: "promise-output" }, capability: "clone" }],
+    requirements: [{ carrier: { ref: "promise-output" }, capability: "clone", source: { kind: "receiver", projection: [0] } }],
     callback: {
       shape: "direct",
       sourceArgumentIndex: 0,
@@ -469,7 +470,7 @@ const jsonRows: readonly JsOperationRowData[] = ([
     callback: {
       shape: "direct",
       sourceArgumentIndex: 1,
-      failure: { kind: "invocation", fallibleTarget: { form: "call", path: "js_abi::json_try_stringify_with_replacer", argModes: ["ref", "value"] } },
+      failure: { kind: "invocation", resultError: { kind: "native", carrier: rustRuntimeErrorTargetType() }, fallibleTarget: { form: "call", path: "js_abi::json_try_stringify_with_replacer", argModes: ["ref", "value"] } },
     },
     shape: {
       op: "operation",
@@ -491,6 +492,7 @@ const jsonRows: readonly JsOperationRowData[] = ([
       sourceArgumentIndex: 1,
       failure: {
         kind: "invocation",
+        resultError: { kind: "native", carrier: rustRuntimeErrorTargetType() },
         fallibleTarget: {
           form: "call",
           path: space === "number"
@@ -529,7 +531,7 @@ const jsonRows: readonly JsOperationRowData[] = ([
     callback: {
       shape: "direct",
       sourceArgumentIndex: 1,
-      failure: { kind: "invocation", fallibleTarget: { form: "call", path: "js_abi::json_try_stringify_with_replacer", argModes: ["ref", "value"], argOrder: [0, 1] } },
+      failure: { kind: "invocation", resultError: { kind: "native", carrier: rustRuntimeErrorTargetType() }, fallibleTarget: { form: "call", path: "js_abi::json_try_stringify_with_replacer", argModes: ["ref", "value"], argOrder: [0, 1] } },
     },
     shape: {
       op: "operation",

@@ -188,7 +188,8 @@ export function validateOperationRows(
       ...operationFormCarriers(row.target),
       ...(row.immediateCallback === undefined
         ? []
-        : operationFormCarriers(row.immediateCallback.fallibleTarget)),
+        : [...operationFormCarriers(row.immediateCallback.fallibleTarget),
+          ...(row.immediateCallback.resultError.kind === "native" ? [row.immediateCallback.resultError.carrier] : [])]),
       ...(row.genericParameters ?? []).flatMap((parameter) =>
         parameter.kind === "lifetime" || parameter.defaultArgument === undefined
           ? []
@@ -317,7 +318,7 @@ function validateProviderCallback(
   }
   requireExactKeys(
     asRecord(callback),
-    ["sourceArgumentIndex", "fallibleTarget"],
+    ["sourceArgumentIndex", "fallibleTarget", "resultError"],
     `${label}.immediateCallback`,
     fail,
   );
@@ -331,6 +332,18 @@ function validateProviderCallback(
   const callbackCarrier = row.parameterCarriers?.[callback.sourceArgumentIndex];
   if (callbackCarrier?.kind !== "closure") {
     fail(`${label}.immediateCallback.sourceArgumentIndex must select one exact native closure carrier`);
+  }
+  if (callback.resultError === undefined || callback.resultError === null ||
+    typeof callback.resultError !== "object" || Array.isArray(callback.resultError)) {
+    fail(`${label}.immediateCallback.resultError requires its exact native Result error contract`);
+  }
+  if (callback.resultError.kind === "callback") {
+    requireExactKeys(asRecord(callback.resultError), ["kind"], `${label}.immediateCallback.resultError`, fail);
+  } else if (callback.resultError.kind === "native") {
+    requireExactKeys(asRecord(callback.resultError), ["kind", "carrier"], `${label}.immediateCallback.resultError`, fail);
+    validateCarrier(callback.resultError.carrier, definition, `${label}.immediateCallback.resultError.carrier`, fail);
+  } else {
+    fail(`${label}.immediateCallback.resultError requires a callback or native error contract`);
   }
   validateOperationForm(
     row.operationKind,
