@@ -484,6 +484,7 @@ export function analyzeRustAnalysisProgram(
   context.callableValues.publish();
   const finalFoundation = finalizeRustFoundation(program.foundation, context.records.minimumFoundation());
   if (finalFoundation.diagnostics.length !== 0) return rejectedTargetStage(finalFoundation.diagnostics);
+  context.sourceStorage.sealFormalMemberWriteDemands();
   context.records.seal(context.requiredRecords);
   return resolvedTargetStage(Object.freeze({
     ...program,
