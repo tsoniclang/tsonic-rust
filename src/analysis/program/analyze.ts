@@ -601,12 +601,6 @@ export function analyzeRustProgram(context: RustAnalysisContext, outputType: "bi
   const fallibility = recordFallibilityFacts(walk, projectSourceFiles, nativeTasks);
   if (fallibility === undefined || context.diagnostics.length !== selectedIssuePosition) return;
   recordResourceManagementFacts(walk);
-  recordFutureValueFacts(walk, fallibility.sourceErrors);
-  const nativeTaskCompletions = completeRustNativeTaskValues(walk, nativeTasks, fallibility.sourceErrors);
-  if (nativeTaskCompletions.kind === "rejected") {
-    context.diagnostics.push(...nativeTaskCompletions.diagnostics);
-    return;
-  }
   const sourcePackageComponents = analyzeRustSourcePackageComponents(context, outputType, fallibility.effectsFor);
   if (sourcePackageComponents.kind === "rejected") {
     context.diagnostics.push(...sourcePackageComponents.diagnostics);
@@ -622,6 +616,12 @@ export function analyzeRustProgram(context: RustAnalysisContext, outputType: "bi
   }
   physicalIssues.forEach(callableIssue);
   if (context.diagnostics.length !== selectedIssuePosition) return;
+  recordFutureValueFacts(walk, fallibility.sourceErrors);
+  const nativeTaskCompletions = completeRustNativeTaskValues(walk, nativeTasks, fallibility.sourceErrors);
+  if (nativeTaskCompletions.kind === "rejected") {
+    context.diagnostics.push(...nativeTaskCompletions.diagnostics);
+    return;
+  }
   recordRustDeferredProducerEffects(walk, fallibility.sourceErrors);
   const lexicalFunctions = finalizeRustLexicalFunctionQueries(lexical, context.source, context.records, context.sourceLifetimes,
     callableValues.nativeStorage, callableValues.native);

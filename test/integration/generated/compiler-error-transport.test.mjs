@@ -13,6 +13,10 @@ import { caughtErrorProofFiles } from "../../../../tsonic/test/fixtures/caught-e
 import { selectRustFlowReadProjection } from "../../../dist/policy/conversions/value-carrier-reconciliation.js";
 import { rustFlowReadProjectionMatches } from "../../../dist/analysis/control-flow/flow-read-projections.js";
 import { emptyRustTypeDefinitions } from "../../../dist/target-model/types/source-union-definitions.js";
+import { admitRustThrowCompletion } from "../../../dist/analysis/errors/throw-admission.js";
+import { rustProgramErrorConversionMatches, rustProgramErrorRuntimeRouteMatches } from "../../../dist/policy/conversions/program-error.js";
+import { rustSourceFilePlanContext } from "../../helpers/plan-context.mjs";
+import { planRustErrorRegion } from "../../../dist/backend/planner/program/error-regions.js";
 
 for (const surfaces of [[], ["js"]]) {
   test(`caught builtin Errors retain identity and stack in the ${surfaces.length === 0 ? "native" : "JS"} profile`, { timeout: 300_000 }, () => {
@@ -152,21 +156,43 @@ export function fail(error: Error): void { throw error; }
     "throw facts retain the exact original source expression");
   assert.deepEqual(fact.error.conversion.source, rustJsErrorTargetType());
   assert.ok(Object.isFrozen(fact));
-  for (const [error, message] of [
-    [{ ...fact.error, expression: declaration }, "Finalized throw fact conflicts with its exact source operand or native Error carrier."],
-    [{ ...fact.error, conversion: { ...fact.error.conversion, source: rustStringTargetType() } }, "Finalized throw fact conflicts with its exact source operand or native Error carrier."],
-    [{ ...fact.error, conversion: { ...fact.error.conversion, route: { kind: "runtime", boundary: "provider-native" } } }, "Program error construction requires an exact carrier and error domain."],
+  const completion = program.records.throwCompletion.get(statement);
+  const region = program.errorRegions.get(declaration);
+  assert.equal(completion?.operation === fact, true, "the completed throw retains its original selected source fact");
+  const selected = rustSourceFilePlanContext(program, statement);
+  const renderedRegion = planRustErrorRegion(declaration, selected);
+  assert.equal(renderedRegion !== undefined, true, "the checked throw has its actual sealed native error region");
+  const rendered = planThrowStatement(statement, { ...selected, callableDeclaration: declaration,
+    fallibleBoundary: renderedRegion.boundary });
+  assert.equal(rendered.length, 1, "one admitted throw produces one native throw");
+  assert.equal(rendered[0].kind, "throw");
+  assertNoTargetDiagnostics(selected.diagnostics);
+  const invariant = message => failure => failure?.diagnostic?.code === "TSONIC_INTERNAL_PLANNER_INVARIANT" &&
+    message.test(failure.diagnostic.message);
+  for (const [label, error, message] of [
+    ["wrong source operand", { ...fact.error, expression: declaration }, /exact selected source operation/u],
+    ["wrong native carrier", { ...fact.error, conversion: { ...fact.error.conversion, source: rustStringTargetType() } },
+      /exact selected native operand carrier/u],
+    ["wrong native error domain", { ...fact.error, conversion: { ...fact.error.conversion,
+      route: { kind: "runtime", boundary: "provider-native" } } }, undefined],
   ]) {
-    const diagnostics = [];
     const records = createRustRecordFixture({
 targetOperation: { get: (subject) => subject === statement
     ? { ...fact, error } : program.records.targetOperation.get(subject) }}, program.records);
-    assert.equal(planThrowStatement(statement, {
-      input: { program: { ...program, records } },
-      sourceFile: ast.getSourceFile(statement), diagnostics,
-      fallibleBoundary: { componentId: "source", errorDomain: "runtime", errorTypePath: "rt::TsonicError" },
-    }), undefined);
-    assert.equal(diagnostics.length, 1);
-    assert.equal(diagnostics[0].message, `${message} Node kind: KindIdentifier.`);
+    if (message !== undefined) {
+      let admitted;
+      assert.throws(() => {
+        admitted = admitRustThrowCompletion({ ast, records, region,
+          componentId: selected.sourcePackageComponentId }, statement);
+      }, invariant(message), label);
+      assert.equal(admitted === undefined, true, label + ": no malformed completion is returned for publication");
+    } else {
+      assert.equal(rustProgramErrorConversionMatches(error.conversion, fact.error.conversion.source,
+        fact.error.conversion.target, program.typeDefinitions), false, label);
+      assert.equal(rustProgramErrorRuntimeRouteMatches(error.conversion.route, error.conversion.source,
+        program.providerErrorCarriers), false, label + ": a builtin Error cannot impersonate a provider-native failure");
+    }
+    assert.equal(program.records.targetOperation.get(statement) === fact, true, label + ": original operation is unchanged");
+    assert.equal(program.records.throwCompletion.get(statement) === completion, true, label + ": invalid evidence cannot replace the admitted completion");
   }
 });

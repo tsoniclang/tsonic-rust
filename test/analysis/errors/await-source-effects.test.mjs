@@ -11,12 +11,15 @@ import { rustAwaitSelectionLeaves } from "../../../dist/target-model/types/await
 import { rustErrorEffectsEqual } from "../../../dist/analysis/errors/error-effects.js";
 import { rustProducerErrorReference } from "../../../dist/target-model/types/carriers/producer-errors.js";
 import { rustSourcePrimitiveTargetType } from "../../../dist/target-model/types/carriers/native.js";
+import { rustFutureTargetType } from "../../../dist/target-model/types/index.js";
 import { selectRustAwaitSourceErrors } from "../../../dist/analysis/errors/await-source-effects.js";
 import { createRustSourceErrorEffectSelection } from "../../../dist/analysis/errors/source-error-effects.js";
 import { createRustEffectsWorkBudget } from "../../../dist/analysis/errors/effects-work-budget.js";
 import { sourcePackageCallbackErrorFiles, sourcePackageCallbackErrorGraph }
   from "../../../../tsonic/test/fixtures/source-package-callback-errors.mjs";
 import { asyncCallableInterfaceFiles } from "../../../../tsonic/test/fixtures/callable-interfaces.mjs";
+import { nativeAsyncCallableFiles } from "../../../../tsonic/test/fixtures/callable-interfaces.mjs";
+import { finiteCompletionSequencingSource } from "../../../../tsonic/test/fixtures/finite-completion-sequencing.mjs";
 
 function fixture(text, options) {
   const context = analyzeRustErrorEffects(text, options);
@@ -130,8 +133,8 @@ test("await-source selection rejects an unrelated exact Future branch", () => {
   const selected = select([channel.carrier]);
   assert.equal(selected.kind, "resolved");
   assert.equal(selected.branches.length, 1);
-  const unrelated = { ...channel.carrier, genericArguments: channel.carrier.genericArguments.map((argument, index) =>
-    index === 1 ? { kind: "type", type: rustSourcePrimitiveTargetType("bool") } : argument) };
+  const unrelated = rustFutureTargetType(rustSourcePrimitiveTargetType("bool"));
+  assert.equal(rustTargetTypeRefEquals(unrelated, channel.carrier), false, "the inverse changes the actual native Future payload");
   assert.equal(select([unrelated]).kind, "rejected", "source error correspondence cannot attach to a different carrier");
 });
 
@@ -196,6 +199,31 @@ test("direct native callback awaits keep native identities and do not manufactur
   assert.equal(effects.nativeErrors.length, 1);
   assert.equal(effects.nativeErrors[0].identity, native.awaitErrorSources[0]);
 });
+
+for (const [name, files] of [
+  ["original finite lexical sequencing", { "index.ts": finiteCompletionSequencingSource }],
+  ["original closed native async callables", { ...nativeAsyncCallableFiles,
+    "index.ts": nativeAsyncCallableFiles["index.ts"] + '\nexport async function main(): Promise<void> { if (!await run()) throw new Error("native callable ownership"); }\nawait main();\n' }],
+]) {
+  test(`${name} publishes the identical completed native await error identity`, () => {
+    const current = fixture("", { files, surfaces: [] });
+    let channels = 0;
+    for (const expression of current.nodes.filter(node => current.ast.is.IsAwaitExpression(node))) {
+      const selected = current.context.records.awaitValue.get(expression);
+      assert.equal(selected !== undefined, true, name + ": every original await is admitted");
+      const effects = current.context.records.errorEffects.get(expression);
+      for (const leaf of rustAwaitSelectionLeaves(selected.selection)) {
+        const future = leaf.future;
+        if (future?.errorBoundary !== "source-native") continue;
+        channels += 1;
+        assert.equal(effects?.nativeErrors.some(error => error.identity === future.errorSource &&
+          rustTargetTypeRefEquals(error.errorType, future.errorCarrier)), true,
+        name + ": immutable await and completed source effects retain the same full native channel");
+      }
+    }
+    assert.equal(channels > 0, true, name + ": the actual native callable await channels are exercised");
+  });
+}
 
 for (const surfaces of [[], ["js"]]) {
   test(`the original async callable-interface fixture retains exact await errors on ${surfaces[0] ?? "native"}`, () => {
