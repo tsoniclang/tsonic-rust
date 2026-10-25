@@ -21,19 +21,19 @@ import type { RustCallableValueAdapter } from "../../target-model/records/callab
 import { BinaryExpression_Left, BinaryExpression_Right, Node_Expression, Node_Operand } from "@tsonic/target-api/source";
 import { rustUnionEntryTransferIssue } from "../../policy/conversions/union-injection.js";
 import type { RustValueReadOwnership } from "../../target-model/records/ownership.js";
+import type { RustProviderReadSelection } from "../operations/provider-forms.js";
 
 export function analyzeRustValueReads(program: Omit<RustAnalysisProgram, "reachability">, nodes: readonly Node[],
-  producer: RustValueReadProducer, projections: RustValueProjectionProducer, conversions: RustConversionEmissionProducer): readonly TargetDiagnostic[] {
+  providerReads: readonly RustProviderReadSelection[], producer: RustValueReadProducer,
+  projections: RustValueProjectionProducer, conversions: RustConversionEmissionProducer): readonly TargetDiagnostic[] {
   const issues: TargetDiagnostic[] = [];
   const refuse = (node: Node, capability: string, message: string): void => {
     issues.push({ code: "RUST_MISSING_TARGET_FACT", category: "error", source: "tsonic-rust", sourceNode: node,
       message: `${message} Node kind: ${program.source.ast.kindName(node)}.`, evidence: [`target.capability=${capability}`] });
   };
   const rejectedEntries = new Set<Node>();
-  const providerClones = new Set(program.physicalEmissionContexts.sourceOccurrences.filter(occurrence =>
-    [program.records.providerForm.get(occurrence.node, occurrence.operation.abi),
-      program.records.providerForm.get(occurrence.node, occurrence.operation.abi, true)].some(form => form?.read === "clone"))
-    .map(occurrence => occurrence.node));
+  const providerClones = new Set(providerReads.filter(selection => selection.bodies.some(context => context.read === "clone"))
+    .map(selection => selection.node));
   const entry = (node: Node, source: TargetTypeRef, target: TargetTypeRef,
     read: RustValueReadOwnership["kind"] | undefined): void => {
     if (rejectedEntries.has(node)) return;

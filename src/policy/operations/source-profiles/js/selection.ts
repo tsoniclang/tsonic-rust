@@ -281,7 +281,7 @@ function selectJsSurfaceOperationForDemand(
         failure: row.callback.failure.kind === "returned-future"
           ? row.callback.failure
           : {
-              kind: "invocation" as const,
+              ...row.callback.failure,
               fallibleTarget: materializeTarget(
                 row.callback.failure.fallibleTarget,
                 copyReference,
@@ -294,7 +294,7 @@ function selectJsSurfaceOperationForDemand(
       operationId,
       ...((row.requirements ?? []).some(requirement => requirement.capability === "numeric-parameter" ||
         requirement.capability === "number-parameter" ||
-        demand === "operation" && requirement.capability === "clone" && !rustCarrierSupportsClone(resolveCarrierRef(requirement.carrier, bindings), definitions))
+        demand === "operation" && requirement.capability === "clone")
         ? { carrierRequirements: Object.freeze((row.requirements ?? [])
             .filter(requirement => demand === "operation" && requirement.capability === "clone" || requirement.capability === "numeric-parameter" ||
               requirement.capability === "number-parameter")

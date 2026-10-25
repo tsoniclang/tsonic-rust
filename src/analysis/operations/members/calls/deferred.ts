@@ -57,6 +57,9 @@ export function prepareRustDeferredCheckedCall(
       "Selected RegExp replacement callback has no closed lane-specific argument-vector contract from exact callable evidence.",
     );
   }
+  const parameterTemplates = replacementEvidence === undefined ? deferred.parameterCarriers
+    : deferred.parameterCarriers.map((carrier, index) => index === deferred.callback.sourceArgumentIndex
+      ? replacementEvidence.sourceCarrier : carrier);
   if (arguments_.length > deferred.parameterCarriers.length ||
     deferred.parameterCarriers.slice(arguments_.length).some(carrier => rustOptionElementCarrier(carrier) === undefined)) {
     return rejectSelectedOperation(
@@ -82,7 +85,7 @@ export function prepareRustDeferredCheckedCall(
     }
     const accumulatorExpectation = accumulatorIndex === undefined
       ? undefined
-      : deferred.parameterCarriers[accumulatorIndex];
+      : parameterTemplates[accumulatorIndex];
     const accumulator = resolveArgument(
       accumulatorArgument,
       accumulatorExpectation,
@@ -97,7 +100,7 @@ export function prepareRustDeferredCheckedCall(
     }
     actual[accumulatorIndex!] = accumulator;
     const callbackArgument = arguments_[deferred.callback.sourceArgumentIndex];
-    const callbackTemplate = deferred.parameterCarriers[deferred.callback.sourceArgumentIndex];
+    const callbackTemplate = parameterTemplates[deferred.callback.sourceArgumentIndex];
     if (callbackArgument === undefined || callbackTemplate === undefined) {
       return rejectSelectedOperation(
         request.source.call,
@@ -113,12 +116,12 @@ export function prepareRustDeferredCheckedCall(
   } else if (deferred.callback.shape === "map") {
     const callbackIndex = deferred.callback.sourceArgumentIndex;
     const argument = arguments_[callbackIndex];
-    if (argument !== undefined) actual[callbackIndex] = resolveArgument(argument, deferred.parameterCarriers[callbackIndex]);
+    if (argument !== undefined) actual[callbackIndex] = resolveArgument(argument, parameterTemplates[callbackIndex]);
     const callback = rustCallbackProtocol(actual[callbackIndex]);
     if (callback !== undefined) {
       for (const [index, argument] of arguments_.entries()) {
         if (index === callbackIndex) continue;
-        const template = deferred.parameterCarriers[index];
+        const template = parameterTemplates[index];
         actual[index] = resolveArgument(argument, template === undefined ? undefined : replaceRustInferCarrier(template, callback.result));
       }
     }
@@ -126,7 +129,7 @@ export function prepareRustDeferredCheckedCall(
     for (const [index, argument] of arguments_.entries()) {
       actual[index] = resolveArgument(
         argument,
-        deferred.parameterCarriers[index],
+        parameterTemplates[index],
       );
     }
   }
@@ -140,7 +143,7 @@ export function prepareRustDeferredCheckedCall(
   }
   const finalized = finalizeRustCallbackOperation({
     fact: deferred.template,
-    parameterCarriers: deferred.parameterCarriers,
+    parameterCarriers: parameterTemplates,
     callback: deferred.callback,
   }, actual as TargetTypeRef[], (source, target) =>
     selectRustValueCarrierReconciliation(source, target, options.projectTypes, context.typeDefinitions).kind !== "incompatible");

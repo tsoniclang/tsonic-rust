@@ -2,6 +2,7 @@ import type { JsOperationRowData } from "./model.js";
 import { atomicOperationRows } from "./atomic-rows.js";
 import { rustJsTimerDispatchInput } from "../../../../providers/model/js-dispatch.js";
 import { rustJsValueTargetType, rustSourcePrimitiveTargetType, rustStringTargetType, rustJsTypedArrayTargetIds, rustJsPromiseTargetId, type RustJsTypedArrayName } from "../../../../target-model/types/index.js";
+import { rustRuntimeErrorTargetType } from "../../../../target-model/types/carriers/runtime-carriers.js";
 
 const falseArgument = { kind: "boolean", value: false } as const;
 
@@ -136,7 +137,7 @@ const typedArrayRows: readonly JsOperationRowData[] = [
     { owner: "TypedArray", member, operationKind: "call", lane: "typed-array", variant: "start-end", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: `${member}_to` }, result: { ref: "receiver" }, params: [{ ref: "numeric-argument", index: 0 }, { ref: "numeric-argument", index: 1 }] } },
   ]),
   { owner: "TypedArray", member: "sort", operationKind: "call", lane: "typed-array", variant: "default", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "sort_default" }, result: { ref: "receiver" } } },
-  { owner: "TypedArray", member: "sort", operationKind: "call", lane: "typed-array", variant: "compare", callback: { shape: "direct", sourceArgumentIndex: 0, failure: { kind: "invocation", fallibleTarget: { form: "receiver-method", name: "try_sort_by" } } }, shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "sort_by" }, result: { ref: "receiver" }, params: [{ ref: "cb-array-comparator", arity: 2 }] } },
+  { owner: "TypedArray", member: "sort", operationKind: "call", lane: "typed-array", variant: "compare", callback: { shape: "direct", sourceArgumentIndex: 0, failure: { kind: "invocation", resultError: { kind: "native", carrier: rustRuntimeErrorTargetType() }, fallibleTarget: { form: "receiver-method", name: "try_sort_by" } } }, shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "sort_by" }, result: { ref: "receiver" }, params: [{ ref: "cb-array-comparator", arity: 2 }] } },
 ];
 
 const intlRows: readonly JsOperationRowData[] = [
@@ -469,7 +470,7 @@ const jsonRows: readonly JsOperationRowData[] = ([
     callback: {
       shape: "direct",
       sourceArgumentIndex: 1,
-      failure: { kind: "invocation", fallibleTarget: { form: "call", path: "js_abi::json_try_stringify_with_replacer", argModes: ["ref", "value"] } },
+      failure: { kind: "invocation", resultError: { kind: "native", carrier: rustRuntimeErrorTargetType() }, fallibleTarget: { form: "call", path: "js_abi::json_try_stringify_with_replacer", argModes: ["ref", "value"] } },
     },
     shape: {
       op: "operation",
@@ -491,6 +492,7 @@ const jsonRows: readonly JsOperationRowData[] = ([
       sourceArgumentIndex: 1,
       failure: {
         kind: "invocation",
+        resultError: { kind: "native", carrier: rustRuntimeErrorTargetType() },
         fallibleTarget: {
           form: "call",
           path: space === "number"
@@ -529,7 +531,7 @@ const jsonRows: readonly JsOperationRowData[] = ([
     callback: {
       shape: "direct",
       sourceArgumentIndex: 1,
-      failure: { kind: "invocation", fallibleTarget: { form: "call", path: "js_abi::json_try_stringify_with_replacer", argModes: ["ref", "value"], argOrder: [0, 1] } },
+      failure: { kind: "invocation", resultError: { kind: "native", carrier: rustRuntimeErrorTargetType() }, fallibleTarget: { form: "call", path: "js_abi::json_try_stringify_with_replacer", argModes: ["ref", "value"], argOrder: [0, 1] } },
     },
     shape: {
       op: "operation",
