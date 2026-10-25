@@ -28,6 +28,10 @@ function inputRequirements(current, declaration) {
   const input = inputs[0];
   assert.equal(input.subject.node === current.ast.parameters(declaration)[0], true,
     "the native implementation retains the original value-parameter node");
+  return { input, requirements: nativeRequirementSets(current, declaration, input) };
+}
+
+function nativeRequirementSets(current, declaration, input) {
   const header = current.program.records.nativeGenerics.get(declaration);
   assert.equal(header !== undefined, true, "the original declaration has its completed native generic header");
   const contracts = [
@@ -36,12 +40,12 @@ function inputRequirements(current, declaration) {
     header.sourceRequirements,
     header.bodyRequirements,
   ];
-  return { input, requirements: contracts.map((contract, index) => {
+  return contracts.map((contract, index) => {
     assert.equal(contract !== undefined, true, `${index}: source/body/header contract is published`);
     const parameter = contract.nativeInputs.find(candidate => candidate.identity === input.implementation.identity);
     assert.equal(parameter !== undefined, true, `${index}: the exact native implementation identity is retained`);
     return parameter.requirements;
-  }) };
+  });
 }
 
 const forwarded = [
@@ -160,4 +164,78 @@ export function twice(value: int32): int32 { send(value); return value; }`, surf
       "the native Copy argument does not publish a clone requirement");
     assert.equal(current.program.ownership.reads.get(argument)?.value.kind, "copy", "the native read remains Copy");
   });
+
+  test(`projected tuple reads require Clone on each original native input in ${surface}`, () => {
+    const current = checked(`interface Callback { (): number; }
+export function tuple(callbacks: [Callback, Callback]): [Callback, Callback] {
+  const left = callbacks[0]; const right = callbacks[1]; return callbacks;
+}`, surfaces);
+    const owner = current.declaration("tuple");
+    const parameter = current.ast.parameters(owner)[0];
+    const inputs = current.program.callableValues.native.inputsFor(owner);
+    assert.equal(inputs.length, 2, "the original tuple has two distinct native implementation inputs");
+    const physical = current.program.callableValues.nativeStorage.parameterFor(parameter);
+    assert.equal(physical.kind === "selected" && physical.carrier.kind === "tuple", true,
+      "the original parameter has its completed physical tuple carrier");
+    for (const input of inputs) {
+      const projection = input.subject.projection[0];
+      assert.equal(input.subject.node === parameter && projection?.kind === "tuple-element", true,
+        "the implementation retains its original formal and tuple projection");
+      assert.equal(physical.carrier.elements[projection.index] === input.implementation, true,
+        `tuple component ${projection.index}: exact selected implementation identity`);
+      for (const [index, requirements] of nativeRequirementSets(current, owner, input).entries()) {
+        assert.equal(requirements.includes("clone"), true,
+          `${index}: tuple component ${projection.index} requires its actual native Clone bound`);
+      }
+    }
+    const reads = current.nodes.filter(node => current.ast.is.IsElementAccessExpression(node) &&
+      sourceEnclosingCallable(node, current.ast) === owner);
+    assert.equal(reads.length, 2, "both original tuple reads remain in the checked program");
+    for (const [index, node] of reads.entries()) {
+      const read = current.program.ownership.reads.get(node);
+      assert.equal(read?.source.kind === "clone" && read.value.kind === "clone", true,
+        `${index}: native bounds follow actual cloned reads, not a blanket callable requirement`);
+    }
+  });
+
+  test(`array input Clone follows its selected native storage in ${surface}`, () => {
+    const current = checked(`interface Callback { (): number; }
+export function array(callbacks: Callback[]): Callback[] {
+  const item = callbacks[0]; return callbacks;
+}`, surfaces);
+    const owner = current.declaration("array");
+    const inputs = current.program.callableValues.native.inputsFor(owner);
+    assert.equal(inputs.length, surfaces.length === 0 ? 0 : 1,
+      "native concrete array storage and JS generic element storage retain their actual distinct ABI");
+    for (const input of inputs) {
+      assert.equal(input.subject.node === current.ast.parameters(owner)[0] &&
+        input.subject.projection[0]?.kind === "array-element", true,
+      "the generic element retains its original array formal and projection");
+      for (const [index, requirements] of nativeRequirementSets(current, owner, input).entries()) {
+        assert.equal(requirements.includes("clone"), true,
+          `${index}: the provider's owned element read requires Clone on the actual implementation`);
+      }
+    }
+  });
+
+  for (const [name, body, resultType] of [
+    ["borrowed invocation", "return callbacks[0]() + callbacks[1]();", "number"],
+    ["whole tuple move", "return callbacks;", "[Callback, Callback]"],
+  ]) {
+    test(`projected native inputs retain no Clone bound for ${name} in ${surface}`, () => {
+      const current = checked(`interface Callback { (): number; }
+export function retain(callbacks: [Callback, Callback]): ${resultType} { ${body} }`, surfaces);
+      const owner = current.declaration("retain");
+      const inputs = current.program.callableValues.native.inputsFor(owner);
+      assert.equal(inputs.length, 2, "both original callable components retain distinct native inputs");
+      assert.equal(inputs[0].implementation.identity !== inputs[1].implementation.identity, true,
+        "the two projected native inputs are never conflated by their logical signature");
+      for (const [component, input] of inputs.entries()) {
+        for (const [index, requirements] of nativeRequirementSets(current, owner, input).entries()) {
+          assert.equal(requirements.includes("clone"), false,
+            `${index}: ${name} preserves non-Clone component ${component}`);
+        }
+      }
+    });
+  }
 }
