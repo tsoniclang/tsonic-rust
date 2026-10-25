@@ -485,7 +485,10 @@ export function update(): void {
 
 for (const surfaces of [[], ["js"]]) {
   const surface = surfaces[0] ?? "native";
-  test(`selected native compound and unary setters preserve values, storage and exact evaluation (${surface})`, { timeout: 300_000 }, () => {
+  for (const collection of ["tuple", "fixed-array"]) {
+  test(collection === "tuple"
+    ? `selected native compound and unary setters preserve values, storage and exact evaluation (${surface})`
+    : `dynamic fixed-array native update receivers retain exact non-Copy places (${surface})`, { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces, packages: [acmePlatformPackage({ includeSetters: true }), acmeTestingPackage()],
       target: { id: "rust", options: { outputType: "bin", crateName: `native_setter_updates_${surface}` } },
       files: { "index.ts": `
@@ -494,7 +497,9 @@ import { Store } from "@acme/platform";
 import { check } from "@acme/testing";
 let indexCalls: int32 = 0;
 let receiverCalls: int32 = 0;
+let placeCalls: int32 = 0;
 function index(): int32 { indexCalls += 1; return 1; }
+function placeIndex(): ${collection === "tuple" ? "1" : "int32"} { placeCalls += 1; return 1; }
 function fresh(): Store { receiverCalls += 1; return new Store("seed"); }
 class Holder {
   nested: Store;
@@ -519,16 +524,16 @@ export function main(): void {
   check(indexCalls === 1 && store[0] === 8);
   const temporaryNext = ++fresh()[index()];
   check(temporaryNext === 6 && receiverCalls === 1 && indexCalls === 2);
-  const stores: FixedArray<Store, 2> = [new Store("seed"), new Store("abc")];
-  stores[index()].count += stores[0].count;
-  check(stores[0].count === 4 && stores[1].count === 7 && indexCalls === 3);
-  const selectedPrevious = stores[index()].count++;
-  check(selectedPrevious === 7 && stores[1].count === 8 && indexCalls === 4);
-  stores[index()][index()] += stores[0][0];
-  check(stores[0][0] === 4 && stores[1][0] === 7 && indexCalls === 6);
-  const holders: FixedArray<Holder, 2> = [new Holder(new Store("seed")), new Holder(new Store("abc"))];
-  holders[index()].nested.count += holders[0].nested.count;
-  check(holders[0].nested.count === 4 && holders[1].nested.count === 7 && indexCalls === 7);
+  const stores: ${collection === "tuple" ? "[Store, Store]" : "FixedArray<Store, 2>"} = [new Store("seed"), new Store("abc")] as [Store, Store];
+  stores[placeIndex()].count += stores[1].count;
+  check(stores[0].count === 4 && stores[1].count === 6 && placeCalls === 1);
+  const selectedPrevious = stores[placeIndex()].count++;
+  check(selectedPrevious === 6 && stores[1].count === 7 && placeCalls === 2);
+  stores[placeIndex()][index()] += stores[1][0];
+  check(stores[0][0] === 4 && stores[1][0] === 6 && placeCalls === 3 && indexCalls === 3);
+  const holders: ${collection === "tuple" ? "[Holder, Holder]" : "FixedArray<Holder, 2>"} = [new Holder(new Store("seed")), new Holder(new Store("abc"))] as [Holder, Holder];
+  holders[placeIndex()].nested.count += holders[1].nested.count;
+  check(holders[0].nested.count === 4 && holders[1].nested.count === 6 && placeCalls === 4);
 }
 main();
 ` } });
@@ -562,6 +567,7 @@ main();
       "native update locations do not add copies, boxing or unsafe address reconstruction");
     validateGeneratedProject(`native-setter-updates-${surface}`, result.artifacts, { run: true });
   });
+  }
 
   test(`a native method index getter without a setter never becomes writable storage (${surface})`, () => {
     const { result } = compileRust({ surfaces, packages: [acmePlatformPackage()], files: { "index.ts": `
@@ -579,18 +585,18 @@ export function update(): void { const store = new Store("seed"); ++store[0]; }
     test(`native ${member} update refuses actual receiver rebinding across its RHS (${surface})`, () => {
       const { result } = compileRust({ surfaces, packages: [acmePlatformPackage({ includeSetters: true })],
         files: { "index.ts": `
-import type { FixedArray, int32 } from "@tsonic/core/types.js";
+import type { int32 } from "@tsonic/core/types.js";
 import { Store } from "@acme/platform";
-function index(): int32 { return 1; }
+function index(): 1 { return 1; }
 export function update(): void {
-  let stores: FixedArray<Store, 2> = [new Store("seed"), new Store("abc")];
-  const other: FixedArray<Store, 2> = [new Store("next"), new Store("last")];
+  let stores: [Store, Store] = [new Store("seed"), new Store("abc")];
+  const other: [Store, Store] = [new Store("next"), new Store("last")];
   stores[index()]${member === "count" ? ".count" : member} += (stores = other, 1 as int32);
 }
 ` } });
       assert.equal(result.diagnostics.some(diagnostic => diagnostic.code === "RUST_UNSUPPORTED_AST" &&
         diagnostic.message.startsWith("Writable projection cannot preserve source evaluation order when a later expression rebinds its selected storage.")), true,
-      "the existing native place owner rejects actual root rebinding before a selected place can be reused");
+      `the native place owner rejects actual root rebinding: ${result.diagnostics.slice(0, 3).map(diagnostic => `${diagnostic.code}: ${diagnostic.message}`).join("; ")}`);
       assert.equal(result.program === undefined && result.plan === undefined && result.artifacts.length === 0, true,
         "a rejected native storage interval cannot publish a program, plan or partial artifacts");
     });
