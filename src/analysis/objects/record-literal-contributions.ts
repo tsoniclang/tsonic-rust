@@ -259,12 +259,7 @@ export function collectRustRecordLiteralContributions(
             selectedElement.sourceSelectedSymbol,
           );
       if (storage === "structural-object") {
-        const methodProjection = selectedDeclaration === undefined
-          ? undefined
-          : walk.sourceTypes.structuralFieldProjectionForDeclaration(
-              selectedDeclaration,
-              resultCarrier,
-            );
+        const methodProjection = walk.sourceTypes.structuralFieldProjectionForDeclaration(property, resultCarrier);
         const targetField = selectedFields.find((field) =>
           field.method === true && field.sourceName === sourceName &&
           field.storageIndex === methodProjection?.field.storageIndex);

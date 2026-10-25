@@ -38,6 +38,7 @@ import { rustFoundationForCarrier } from "../foundation/requirements.js";
 import { maximumRustFoundation } from "../../target-model/foundation/model.js";
 import { analyzeRustProjectFlowReadSelections } from "../control-flow/project-flow-read-selections.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
+import { rustStructuralObjectCarrierValue } from "../../target-model/types/carriers/source-types.js";
 import { analyzeRustErrorRegions, completeRustErrorRegionRecords } from "../errors/regions.js";
 import type { RustErrorTypeContext } from "../errors/error-types.js";
 import { analyzeRustInitializationErrors } from "../errors/initialization.js";
@@ -53,6 +54,7 @@ import { analyzeRustGenericCallableErrors } from "../callables/generic-errors.js
 import { analyzeRustReadUses, rustNativeArgumentBorrowsRead } from "../ownership/uses.js";
 import { analyzeRustStatementCompletions } from "../control-flow/statement-completion.js";
 import { analyzeRustStatementExits } from "../control-flow/statement-exits.js";
+import { analyzeRustExpressionExits } from "../control-flow/expression-exits.js";
 import { eraseRustCompileTimeVariableStatements } from "../control-flow/compile-time-statements.js";
 import { analyzeRustResourceScopes } from "../control-flow/resource-scopes.js";
 import { rustReferentWriteRequiresMutableBinding } from "../ownership/source-writes.js";
@@ -221,7 +223,14 @@ export function analyzeRustAnalysisProgram(
       return { receivers: [], receiverFields: [], captures };
   };
   const readUses = analyzeRustReadUses(context.ast, context.nativeNodes, records, context.typeDefinitions,
-    projectConstructions.ownsExternalArgument, context.structuralShapes.completed);
+    projectConstructions.ownsExternalArgument, context.structuralShapes.completed, node => {
+      const field = records.targetOperation.get(node);
+      return field?.kind === "source-field" && (field.storage === "structural-object"
+        ? rustStructuralObjectCarrierValue(field.receiverCarrier)?.representation === "value"
+        : objectRepresentations.representationFor(context.projectTypes.definitionForCarrier(field.receiverCarrier))?.kind === "value") &&
+        (field.declaration === undefined || context.callableValues.frames.bindingFor(field.declaration) === undefined &&
+          records.capturedFieldStorage.get(field.declaration) === undefined);
+    });
   const ownershipFlow = analyzeRustOwnershipFlow({
     source: context.source,
     storage: context.sourceStorage,
@@ -382,7 +391,8 @@ export function analyzeRustAnalysisProgram(
     jsEnabled, asynchronous: sourceStage.nativeTaskCompletions.length !== 0 || initializationErrors.value.root.asynchronous ||
       initializationErrors.value.workers.some(worker => worker.initializer.asynchronous) });
   if (binaryExecution.kind === "rejected") return binaryExecution;
-  analyzeRustStatementExits({ ast: context.ast, nodes: context.nativeNodes, sourceFiles: context.sourceFiles, records,
+  analyzeRustExpressionExits({ source: context.source, records }, context.nativeNodes, context.records.expressionExitPlans);
+  analyzeRustStatementExits({ source: context.source, nodes: context.nativeNodes, sourceFiles: context.sourceFiles, records,
     producer: context.records.statementExits, required: context.requiredRecords });
   eraseRustCompileTimeVariableStatements({ ast: context.ast, nodes: context.nativeNodes, records,
     producer: context.records.compileTimeSources, required: context.requiredRecords });

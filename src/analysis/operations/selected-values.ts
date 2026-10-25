@@ -13,6 +13,7 @@ import { rustPolicyNode } from "../../policy/model/context.js";
 import { selectRustGuardedValueCarrier } from "./native-flow-refinement.js";
 import { rustSourceAbsenceReadCarrier } from "../../policy/operations/flow/absence-use.js";
 import { rustOptionElementCarrier, rustSourceOptionalElementCarrier } from "../../target-model/types/carriers/optional.js";
+import { rustSourceStorageSubjectContext } from "../source-evidence/types/resolution/source-storage-projection.js";
 
 export function selectedValueCarrier(
   expression: ExtensionFactSubject,
@@ -22,7 +23,7 @@ export function selectedValueCarrier(
 ): TargetTypeRef | undefined {
   const reference = rustPolicyNode(operationContext, expression);
   const storage = reference === undefined ? undefined : operationContext.sourceStorage.subjectFor(reference);
-  const context = { ...operationContext, sourceStorageSubject: storage?.kind === "resolved" ? storage.subject : undefined };
+  const context = rustSourceStorageSubjectContext(operationContext, storage);
   const stored = resolveRustTargetTypeRef(expression, context, options);
   const absenceUse = reference === undefined ? undefined : sourceAbsenceUse(reference, context);
   if (stored !== undefined && reference !== undefined &&

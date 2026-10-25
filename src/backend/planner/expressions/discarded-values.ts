@@ -18,6 +18,7 @@ export function planRustDiscardedValue(node: Node, context: RustPlanContext): Ru
   const borrowed = context.input.program.records.readOwnership.get(node)?.readsStorage === true;
   const expression = planExpression(node, context, borrowed ? "value" : "discarded", borrowed ? "shared-reference" : "value")
     ?? failRustPlannerInvariant("An admitted discarded expression requires its native effect.", node);
+  if (context.input.program.records.expressionExit.get(node) !== undefined) return { expression, discard: "unit" };
   // A discarded Promise is planned to its unit observation (planRustDiscardedPromise), so nothing remains to bind.
   if (!borrowed && context.input.program.records.promiseResult.get(node)?.discard !== undefined) return { expression, discard: "unit" };
   return borrowed ? { expression, discard: "value" } : discard === "drop"

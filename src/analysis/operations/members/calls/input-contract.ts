@@ -1,6 +1,7 @@
 import type { RustOperationAnalysisContext } from "../../../program/operation-context.js";
 import { isProjectSourceDeclaration, resolveSelectedSourceProfileMember } from "../../../../policy/identities/selected-source.js";
 import { resolveRustTypeComponentEvidence } from "../../../source-evidence/types/resolution/source-evidence.js";
+import { rustSourceStorageSubjectContext } from "../../../source-evidence/types/resolution/source-storage-projection.js";
 import { selectRustProviderOperation } from "../../../../policy/operations/provider-selection.js";
 import { selectJsSurfaceCallInputContract } from "../../../../policy/operations/source-profiles/js/selection.js";
 import { selectedCallProviderDeclaration } from "../../../../policy/identities/selected-source.js";
@@ -29,7 +30,7 @@ export function selectedRustCheckedCallInputCarrier(
       : resolveRustTypeComponentEvidence({ selectedType: parameter.selectedType,
           ...(parameter.parameterDeclaration === undefined ? {} : { declaration: parameter.parameterDeclaration }),
           ...(parameter.authoredTypeNode === undefined ? {} : { authoredTypeNode: parameter.authoredTypeNode }) },
-        { ...context, callableRepresentation: "signature", sourceStorageSubject: undefined }, options, new Set());
+        rustSourceStorageSubjectContext({ ...context, callableRepresentation: "signature" }, undefined), options, new Set());
   }
   const sourceMember = resolveSelectedSourceProfileMember(context, request.sourceSelectedDeclaration, options.sourceProfiles);
   if (sourceMember?.profile === "js") {

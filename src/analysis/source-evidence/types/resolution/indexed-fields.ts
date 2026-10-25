@@ -34,7 +34,7 @@ export function resolveRustIndexedField(
   }
   const member = selection.members.length === 1 ? selection.members[0] : undefined;
   if (member?.kind !== "property" || !context.currentSemantics.types.isStringLike(keyType)) return undefined;
-  return registerRustIndexedProperty(owner, member.property, ownerType, options);
+  return registerRustIndexedProperty(owner, member.property, ownerType, context, options);
 }
 
 export function resolveRustIndexedProperty(
@@ -50,7 +50,7 @@ export function resolveRustIndexedProperty(
   if (properties.length !== 1) return undefined;
   const property = properties[0]!;
   if (owner.kind !== "type-parameter") {
-    const selected = registerRustIndexedProperty(owner, property, ownerType, options);
+    const selected = registerRustIndexedProperty(owner, property, ownerType, context, options);
     return selected === undefined ? undefined : {
       ...selected, projection: rustIndexedFieldProjection(owner, selected.key),
     };
@@ -73,11 +73,13 @@ function registerRustIndexedPropertyKey(name: string, options: RustTargetTypeRes
 
 function registerRustIndexedProperty(
   owner: TargetTypeRef, property: TypePropertyInfo, ownerType: Type,
+  context: RustTargetTypeResolutionContext,
   options: RustTargetTypeResolutionOptions,
 ): RustIndexedFieldSelection | undefined {
   const registration = options.sourceTypes.structuralFieldProjectionForSymbol(property.symbol, owner);
   if (registration?.field.method === true) return undefined;
-  const selected = registration === undefined ? options.projectFieldProjection(property, owner, ownerType) : {
+  const selected = registration === undefined ? options.projectFieldProjection(property, owner, ownerType,
+    context.sourceStorageResolution) : {
     output: registration.field.resultCarrier,
     field: { storage: registration.shape.storage, storageIndex: registration.field.storageIndex,
       readonly: registration.field.readonly,
