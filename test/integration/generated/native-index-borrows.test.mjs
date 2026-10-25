@@ -56,7 +56,8 @@ fn shared_native_index_matches_direct_native_allocation_cost() {
     let values = vec![String::from("before")];
     let expected = String::from("before");
     for _ in 0..32 {
-        let (generated, generated_cost) = measure(|| index::observe(&values, 0.0, &expected).unwrap());
+        let (generated, generated_cost) =
+            measure(|| index::observe(&values, 0.0, &expected).unwrap());
         let (native, native_cost) = measure(|| values[0].as_str() == expected.as_str());
         assert_eq!(generated, native);
         assert!(generated);

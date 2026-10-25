@@ -68,6 +68,64 @@ function select(ast, node, operation) {
     arguments: undefined, address: undefined, location: undefined, guard: undefined, callableMode: undefined, structuralReceiverMode: "shared" });
 }
 
+for (const surfaces of [[], ["js"]]) {
+  test(`native operator inputs publish their selected value and shared demands on ${surfaces[0] ?? "native"}`, () => {
+    const { program } = analyzeRust({ surfaces, files: { "index.ts": `
+export function divide(left: bigint, right: bigint): bigint { return left / right; }
+export function remainder(left: bigint, right: bigint): bigint { return left % right; }
+export function equal(left: bigint, right: bigint): boolean { return left === right; }
+` } });
+    const { ast } = program.source;
+    let values = 0;
+    let shared = 0;
+    const visit = node => {
+      const operation = program.records.targetOperation.get(node);
+      if (ast.is.IsBinaryExpression(node) && (operation?.kind === "operator-call" || operation?.kind === "operator-token")) {
+        const binary = ast.as.AsBinaryExpression(node);
+        const selected = select(ast, node, operation);
+        for (const [index, operand] of [binary.Left, binary.Right].entries()) {
+          const mode = operation.operandModes[index];
+          const use = selected.get(operand);
+          assert.equal(use !== undefined, true, "every exact selected native operand has one read demand");
+          assert.equal(use.mode, mode === "ref" ? "shared" : mode === "mut-ref" ? "mutable" : "value",
+            "native consumption is taken from the selected operand contract, not source syntax");
+          assert.equal(use.mode === "move", false, "a native value demand does not itself authorize a final-use move");
+          assert.equal(Object.isFrozen(use), true, "the native input demand is immutable");
+          if (use.mode === "value") values += 1;
+          if (use.mode === "shared") shared += 1;
+        }
+      }
+      ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+    };
+    program.sourceFiles.forEach(visit);
+    assert.equal(values, 4, "both owned division and remainder inputs retain their native consumption");
+    assert.equal(shared, 2, "native equality still observes both operands through its original shared ABI");
+  });
+  test(`selected native projection observations retain their non-Copy receiver demand on ${surfaces[0] ?? "native"}`, () => {
+    const { program } = analyzeRust({ surfaces, files: { "index.ts": `
+import type { FixedArray } from "@tsonic/core/types.js";
+export function tuple(values: [string, string]): boolean { return ((values))[0] === ""; }
+export function fixed(values: FixedArray<string, 2>): boolean { return ((values))[0] === ""; }
+` } });
+    const { ast } = program.source;
+    let receivers = 0;
+    const visit = node => {
+      const operation = program.records.targetOperation.get(node);
+      if (operation?.kind === "tuple-index" || operation?.kind === "fixed-index") {
+        const receiver = Node_Expression(ast, node);
+        const read = program.records.readOwnership.get(receiver);
+        assert.equal(read?.source.kind, "borrow", "a selected projection observer never clones its tuple or fixed-array owner");
+        assert.equal(read.source.mutable, false, "a read-only native projection remains a shared native place");
+        assert.equal(read.value.kind, "borrow", "the same admitted native demand reaches the value read without a transfer override");
+        receivers += 1;
+      }
+      ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+    };
+    program.sourceFiles.forEach(visit);
+    assert.equal(receivers, 2, "both actual tuple and fixed-array projection receivers remain covered");
+  });
+}
+
 test("native runtime and static typeof categories share their actual storage operand without copying union payloads", () => {
   const { program } = analyzeRust({ files: { "index.ts": `
 type Body = boolean | unknown[];
@@ -412,9 +470,9 @@ test("operator ownership consumes selected operand modes instead of rediscoverin
   assert.equal(node !== undefined, true, "checked binary operands");
   const binary = source.ast.as.AsBinaryExpression(node);
   for (const [modes, expected] of [
-    [["value", "value"], [undefined, undefined]],
-    [["ref", "value"], ["shared", undefined]],
-    [["value", "ref"], [undefined, "shared"]],
+    [["value", "value"], ["value", "value"]],
+    [["ref", "value"], ["shared", "value"]],
+    [["value", "ref"], ["value", "shared"]],
     [["mut-ref", "ref"], ["mutable", "shared"]],
   ]) {
     const operation = { kind: "operator-token", operationId: "fixture-selected-native-operands",
@@ -554,7 +612,7 @@ test("native string append and arithmetic carry their exact operand contracts be
       operations.push(operation.operator);
       assert.deepEqual(operation.operandModes, operation.operator === "+=" ? ["mut-ref", "ref"] : ["value", "value"]);
       const uses = select(program.source.ast, node, operation);
-      assert.equal(uses.get(binary.Right)?.mode, operation.operator === "+=" ? "shared" : undefined);
+      assert.equal(uses.get(binary.Right)?.mode, operation.operator === "+=" ? "shared" : "value");
       if (operation.operator === "+=") assert.equal(program.ownership.reads.get(binary.Right)?.value.kind, "borrow");
     }
     program.source.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
