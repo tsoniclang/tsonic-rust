@@ -101,9 +101,11 @@ export function selectRustCallableLogicalReturn(
 ): RustInferredReturnSelection {
   const generator = walk.context.records.generator.get(declaration);
   const asynchronous = walk.context.records.asyncFunction.get(declaration);
+  const authoredReturn = Node_Type(walk.context.ast, declaration);
+  const context = rustResolutionContext(walk, declaration);
   const baseline = selectedCarrier ?? generator?.resultCarrier ?? asynchronous?.outputCarrier ?? resolveRustTargetTypeRef(
-    Node_Type(walk.context.ast, declaration) ?? selectedSourceCallableReturn(walk, declaration),
-    rustResolutionContext(walk, declaration), walk.operationOptions);
+    authoredReturn ?? selectedSourceCallableReturn(walk, declaration),
+    authoredReturn === undefined ? context : rustSourceStorageSubjectContext(context, undefined), walk.operationOptions);
   return selectedCarrier !== undefined || generator !== undefined || asynchronous !== undefined
     ? baseline === undefined ? { kind: "pending" as const } : { kind: "complete" as const, carrier: baseline }
     : selectRustInferredReturn(walk, declaration, baseline);
