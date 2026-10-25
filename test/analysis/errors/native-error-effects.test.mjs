@@ -452,12 +452,21 @@ for (const surfaces of [[], ["js"]]) {
     const selected = current.program.records.sourceErrorEffects.get(call);
     const awaited = selected?.edges.find(edge => edge.kind === "await");
     assert.equal(awaited !== undefined, true);
-    assert.equal(awaited.effects.nativeErrors.length, surfaces.length === 0 ? 2 : 1,
-      "the public JS await owns its canonical rejection, while a native future keeps its exact rebound channels");
+    assert.equal(awaited.effects.nativeErrors.length, 2,
+      "the selected native async body retains both its invocation and deferred errors");
+    const input = current.program.callableValues.native.inputsFor(current.declaration("forward"))[0];
+    assert.equal(awaited.effects.nativeErrors.some(error => error.errorType.kind === "associated-type" &&
+      error.errorType.name === "InvocationError" && error.errorType.owner.identity === input.implementation.identity), true,
+    "the native body preserves its original caller-bound synchronous invocation failure");
     if (surfaces.length !== 0) {
-      assert.equal(awaited.effects.nativeErrors[0].identity === rustJsRejectionErrorIdentity &&
-        rustTargetTypeRefEquals(awaited.effects.nativeErrors[0].errorType, rustJsValueTargetType()), true,
-      "no native invocation channel leaks as a second public JS rejection");
+      const operation = current.program.records.targetOperation.get(call);
+      assert.equal(operation.kind, "source-call");
+      assert.equal(operation.asyncBody !== undefined, true, "the actual selected source call uses its native body");
+      assert.equal(operation.resultCarrier.id, "rust.core.Future", "the direct call does not allocate a public JsPromise");
+      const rejections = awaited.effects.nativeErrors.filter(error => error.identity === rustJsRejectionErrorIdentity);
+      assert.equal(rejections.length, 1, "the callback's public promise rejection retains one canonical channel");
+      assert.equal(rustTargetTypeRefEquals(rejections[0].errorType, rustJsValueTargetType()), true,
+        "the canonical JS rejection is distinct from the native body's invocation failure");
     }
     assertChannels(current.callable("forward"), awaited.effects.nativeErrors);
   });
