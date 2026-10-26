@@ -131,14 +131,16 @@ export function planRustStructuralShapeModule(
     structs.push(...callableAliases, { kind: "struct", name: definition.targetName, visibility,
       ...(shapeDeadCode === undefined ? {} : { deadCode: shapeDeadCode }), attrs: rustDeriveAttributes(selected.derives), generics, fields });
     const constructor = definition.contextConstructor;
-    if (constructor !== undefined) {
+    if (constructor !== undefined && selected.contextConstructors.length !== 0) {
       const wrapper = rustTypeFromCarrierInContext(definition.carrier, definitionContext);
       const contextType = wrapper?.kind !== "named" || wrapper.genericArguments?.[1]?.kind !== "type" ? undefined : wrapper.genericArguments[1].type;
       if (contextType === undefined || wrapper === undefined)
         failRustPlannerInvariant("A native structural constructor requires its completed state and immutable context types.");
       const inputs = fields.filter(field => field.name !== marker?.name);
       const state: RustType = { kind: "named", path: definition.targetName, genericArguments: aliasGenericArguments };
-      structs.push({ kind: "impl", target: state, generics, members: [false, true].map((identity): RustImplFunction => ({ kind: "function", name: identity ? constructor.identityName : constructor.name,
+      structs.push({ kind: "impl", target: state, generics, members: selected.contextConstructors.map((mode): RustImplFunction => {
+        const identity = mode === "identity";
+        return { kind: "function", name: identity ? constructor.identityName : constructor.name,
         visibility: "public", generics: emptyRustGenerics,
         params: [{ name: constructor.contextParameter, type: contextType },
           ...(identity ? [{ name: constructor.identityParameter, type: { kind: "named" as const, path: "rt::ObjectIdentity" } }] : []),
@@ -150,7 +152,8 @@ export function planRustStructuralShapeModule(
             value: { kind: "path" as const, path: "core::marker::PhantomData" } }])] },
           { kind: "path", path: constructor.contextParameter },
           ...(identity ? [{ kind: "path" as const, path: constructor.identityParameter }] : []),
-        ] } }] } })) });
+        ] } }] } };
+      }) });
       usedAliases.add("rt");
     }
   }
