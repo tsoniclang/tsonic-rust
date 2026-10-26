@@ -4,7 +4,7 @@ import test from "node:test";
 import { rustJsValueTargetType, rustOptionTargetType, rustStringTargetType,
   rustSourcePrimitiveTargetType, rustTsValueTargetType } from "../../../dist/target-model/types/index.js";
 import { rustRecordTargetType } from "../../../dist/target-model/types/carriers/records.js";
-import { rustStructuralObjectTargetType } from "../../../dist/target-model/types/carriers/source-types.js";
+import { rustStructuralObjectTargetType, rustStructuralObjectCarrierValue } from "../../../dist/target-model/types/carriers/source-types.js";
 import { rustJsSharedObjectValueAdmission } from "../../../dist/policy/conversions/closed-record.js";
 import { emptyRustTypeDefinitions } from "../../../dist/target-model/types/source-union-definitions.js";
 import { selectRustSourceValueConversion } from "../../../dist/policy/conversions/selection.js";
@@ -20,6 +20,7 @@ import { materializeJsValueProjections } from "../../../dist/policy/operations/s
 import { rustCallableTargetType } from "../../../dist/target-model/types/index.js";
 import { createRustRecordFixture } from "../../helpers/records.mjs";
 import { createRustSyntheticNameState } from "../../../dist/backend/planner/names/synthetic.js";
+import { rustStaticLifetime } from "../../../dist/target-model/lifetimes/index.js";
 
 test("explicit property projection reads checked fields without selecting JSON behavior", () => {
   const result = rustStructuralObjectTargetType("/src/index.ts", [
@@ -29,7 +30,7 @@ test("explicit property projection reads checked fields without selecting JSON b
     { sourceName: "maximumFractionDigits", presence: "optional", readonly: false,
       type: rustOptionTargetType(rustSourcePrimitiveTargetType("uint64")) },
     { sourceName: "toJSON", method: true, presence: "required", readonly: false,
-      type: rustCallableTargetType([], result) },
+      type: rustCallableTargetType([], result, rustStaticLifetime) },
     { sourceName: "useGrouping", presence: "required", readonly: false, type: rustSourcePrimitiveTargetType("bool") },
   ]);
   const demand = carrier => ({ kind: "js-value-from-properties", source: carrier, fields: [
@@ -43,7 +44,13 @@ test("explicit property projection reads checked fields without selecting JSON b
   assert.equal(properties.kind, "js-value-from-properties");
   assert.deepEqual(properties.fields.map(field => field.sourceName), ["maximumFractionDigits", "useGrouping"]);
   assert.equal(selectRustProjectedValueConversion(source, "json").kind, "js-value-from-structural-to-json");
+  assert.equal(rustJsSharedObjectValueAdmission(source, emptyRustTypeDefinitions), true,
+    "the complete native callable lifetime permits owning shared-object admission");
   assert.equal(selectRustSourceValueConversion(source, rustJsValueTargetType()).kind, "js-value-from-closed-carrier");
+  const open = rustStructuralObjectTargetType("/src/index.ts", source.value.fields.map(field =>
+    field.method === true ? { ...field, type: rustCallableTargetType([], result) } : field));
+  assert.equal(rustJsSharedObjectValueAdmission(open, emptyRustTypeDefinitions), false,
+    "an unresolved callable lifetime cannot be erased into owning native value storage");
   for (const kind of ["json", "properties"]) {
     assert.ok(rustValueConversionContract(selectRustProjectedValueConversion(source, kind, emptyRustTypeDefinitions, demand)));
     const optional = selectRustProjectedValueConversion(rustOptionTargetType(source), kind, emptyRustTypeDefinitions, demand);
@@ -117,7 +124,13 @@ test("nested required and optional JSON fields consume their own sealed literal 
   const child = rustStructuralObjectTargetType("/src/index.ts", [field("a", integer), field("b", integer)], "value");
   for (const presence of ["required", "optional"]) {
     const parent = rustStructuralObjectTargetType("/src/index.ts", [field("a", integer),
-      field("b", presence === "optional" ? rustOptionTargetType(child) : child, presence)], "value");
+      field("b", presence === "optional" ? rustOptionTargetType(child) : child, presence)],
+    presence === "optional" ? "reference" : "value");
+    assert.equal(rustStructuralObjectCarrierValue(parent) !== undefined, true,
+      presence + ": the source uses an admitted native storage representation");
+    if (presence === "optional") assert.equal(rustStructuralObjectCarrierValue({ ...parent,
+      value: { ...parent.value, representation: "value" } }) === undefined, true,
+    "optional field metadata cannot fabricate a required-field-only native value shape");
     const parentNode = fakeStatement({ kindName: "ObjectLiteralExpression", pos: 0, end: 20 });
     const childNode = fakeStatement({ kindName: "ObjectLiteralExpression", pos: 5, end: 15 });
     const sourceFile = fakeSourceFile({ fileName: "/src/index.ts", text: "parent", statements: [parentNode, childNode] });
@@ -128,15 +141,16 @@ test("nested required and optional JSON fields consume their own sealed literal 
     })) });
     const shapes = new Map([[parent, shape(parent)], [child, shape(child)]]);
     const literals = new Map([
-      [parentNode, { kind: "structural", node: parentNode, selection: { carrier: parent },
+      [parentNode, { node: parentNode, carrier: parent, implementation: undefined,
         sourceFields: [{ storageIndex: 1, value: childNode }, { storageIndex: 0, value: undefined }] }],
-      [childNode, { kind: "structural", node: childNode, selection: { carrier: child },
+      [childNode, { node: childNode, carrier: child, implementation: undefined,
         sourceFields: [{ storageIndex: 0, value: undefined }, { storageIndex: 1, value: undefined }] }],
     ]);
     const records = createRustRecordFixture({
       structuralShape: { get: carrier => shapes.get(carrier) },
       structuralFieldStorage: { get: (carrier, index) => ({ field: shapes.get(carrier)?.fields[index] }) },
-      structuralObjectStorage: { get: carrier => shapes.has(carrier) ? { value: true } : undefined },
+      structuralObjectStorage: { get: carrier => shapes.has(carrier)
+        ? { value: carrier.value.representation === "value" } : undefined },
       carrierRead: { get: () => ({ copy: true, clone: true }) },
       objectLiteralEmission: { get: node => literals.get(node) },
     });

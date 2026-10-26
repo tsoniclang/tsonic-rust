@@ -6,7 +6,7 @@ import type { RustCaptureReadOwnership, RustOwnershipRecords, RustReadOwnershipF
 import type { RustAnalysisRecords } from "../../target-model/records/analysis.js";
 import type { RustClosureCaptureFact } from "../../target-model/records/operation-selections.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
-import { isRustStringCarrier, rustFixedArrayCarrierValue, rustLocationTargetType } from "../../target-model/types/index.js";
+import { isRustStringCarrier, rustLocationTargetType } from "../../target-model/types/index.js";
 import { isRustCopyCarrier, rustCarrierSupportsClone } from "../../policy/constraints/native-traits.js";
 import type { AnalyzeRustDeclarationGenericRequirementsResult, RustDeclarationGenericRequirementIndex } from "../declarations/generic-requirements.js";
 import type { RustGenericCallablePlan } from "../callables/generic-values.js";
@@ -175,20 +175,6 @@ export function prepareRustReadOwnership(input: {
         const projection = records.flowReadProjection.get(node);
         const storageRead = storageReads.get(node)!;
         const borrowed = borrowFor(node);
-        const operation = records.targetOperation.get(node);
-        const fixedIndex = operation?.kind === "provider-operation" && operation.abi.target.form === "index" &&
-          operation.abi.result.kind === "sync" && operation.abi.result.conversion.kind === "identity" &&
-          operation.abi.targetReceiver.kind === "input" && operation.abi.targetReceiver.input.source.kind === "receiver" &&
-          operation.abi.targetReceiver.input.conversion.kind === "identity"
-          ? rustFixedArrayCarrierValue(operation.abi.targetReceiver.input.sourceCarrier) : undefined;
-        if (fixedIndex !== undefined && !isRustCopyCarrier(projection?.selectedCarrier ?? carrier,
-          selected => input.genericCallables.definitionFor(selected)?.copy === true) && borrowed === undefined) {
-          return { kind: "rejected", diagnostics: [{
-            code: "RUST_FIXED_ARRAY_DYNAMIC_INDEX_REQUIRES_COPY", category: "error", source: "tsonic-rust", sourceNode: node,
-            message: "Dynamic fixed-array element access requires an exact Copy element carrier so a borrowed Rust index result can preserve source value semantics.",
-            evidence: ["target.capability=rust.analysis.ownership"],
-          }] };
-        }
         const sourceCopy = isRustCopyCarrier(carrier, selected => input.genericCallables.definitionFor(selected)?.copy === true);
         const sourceClone = rustCarrierSupportsClone(carrier, input.definitions) || declaration !== undefined &&
           genericRequirements.supportsClone(declaration, carrier);
@@ -198,8 +184,9 @@ export function prepareRustReadOwnership(input: {
         const projectBorrows = records.projectDowncast.get(node) !== undefined;
         const constructsContainer = records.optionProjection.get(node)?.kind === "some";
         const sourceRead = selectRustValueReadOwnership({ copy: sourceCopy, clone: sourceClone,
-          transfer: flow.movingReads.has(node) || !storageRead, borrowed: conversionBorrows || projectBorrows || storageRead && projection !== undefined && value?.kind !== "move"
+          transfer: flow.movingReads.has(node) || !storageRead, borrowed: conversionBorrows && borrowed !== undefined || projectBorrows || storageRead && projection !== undefined && value?.kind !== "move"
             ? "shared" : constructsContainer ? undefined : borrowed });
+        const operation = records.targetOperation.get(node);
         const binding = records.sourceBinding.get(node);
         const module = binding === undefined ? undefined : records.moduleBinding.get(binding.sourceDeclaration);
         const staticStringView = sourceRead?.kind === "borrow" && !sourceRead.mutable &&

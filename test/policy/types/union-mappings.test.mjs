@@ -31,6 +31,16 @@ test("union mappings require complete exact coverage and reject forged or numeri
     assert.equal(registry.registerSourceUnion({ carrier,
       variants: payloads.map((carrier, index) => ({ name: `Variant${index}`, carrier })) }, true), true);
   }
+  const source = 'import type { int64, float64 } from "@tsonic/core/types.js";\ntype Narrow = string | int64;\ntype Wide = int64 | boolean | string;\ntype Wrong = string | float64;\nexport function probe(): void {}\n';
+  const analyzed = rustProgramWithTypeEmissions([], { source });
+  for (const definition of analyzed.structuralShapes.unionDefinitions) {
+    for (const carrier of definition.sourceCarriers) {
+      const variants = analyzed.typeDefinitions.sourceUnionVariants(carrier);
+      assert.equal(variants !== undefined, true, "every checked generated union retains its actual payload definitions");
+      assert.equal(registry.registerSourceUnion({ carrier, variants }, false), true,
+        "the fixture retains the complete checked native union domain before sealing");
+    }
+  }
   const definitions = registry.seal();
   const widening = selectRustUnionArmMapping(narrow, wide, "source", definitions);
   const narrowing = selectRustUnionArmMapping(wide, narrow, "target", definitions);
@@ -70,7 +80,7 @@ test("union mappings require complete exact coverage and reject forged or numeri
   const node = fakeStatement({ kindName: "Identifier", pos: 0, end: 5 });
   const sourceFile = fakeSourceFile({ fileName: "/src/index.ts", text: "value", statements: [node] });
   const context = rustProgramPlanContext(rustProgramWithTypeEmissions([narrow, wide, wrong, string, integer, boolean], {
-    source: 'import type { int64, float64 } from "@tsonic/core/types.js";\ntype Narrow = string | int64;\ntype Wide = int64 | boolean | string;\ntype Wrong = string | float64;\nexport function probe(): void {}\n',
+    source,
     typeDefinitions: definitions,
   }), { sourceFile });
   const expression = { kind: "call", path: "next", args: [] };

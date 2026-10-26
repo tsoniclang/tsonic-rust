@@ -55,7 +55,7 @@ function planRustSelectedDirectStorage(operand: Node, selected: Exclude<RustDire
     if (selected.receiverInput !== undefined) {
       const receiver = selected.receiver ?? failRustPlannerInvariant("An admitted provider place requires its native receiver.", operand);
       const explicit = context.expressionOverrides?.get(receiver);
-      let storage = explicit?.valueForm === "storage" ? explicit.expression
+      const storage = explicit?.valueForm === "storage" ? explicit.expression
         : planRustDirectStorageCore(receiver, context, inputOverrides, planExpression, planProviderOperation);
       if (storage === undefined) return undefined;
       if (!directStorageRemainsSelected(receiver, selected.index === undefined ? [] : [selected.index], explicit?.valueForm === "storage", context))

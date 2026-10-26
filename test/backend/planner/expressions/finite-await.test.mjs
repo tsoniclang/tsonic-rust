@@ -72,14 +72,17 @@ export async function finish(value: Promise<void> | null | undefined): Promise<v
 `);
   assert.equal(fact.selection.kind, "optional");
   const selected = contextFor(program, node);
-  const result = planRustAwaitExpression(node, selected, () => ({ kind: "path", path: "value" }));
+  const operand = { kind: "call", path: "next", args: [] };
+  let evaluations = 0;
+  const result = planRustAwaitExpression(node, selected, () => { evaluations += 1; return operand; });
   assertNoTargetDiagnostics(selected.diagnostics);
-  assert.equal(result.kind, "match");
-  assert.equal(result.arms[0].pattern.path, "Some");
-  assert.equal(result.arms[0].expression.kind, "try");
-  assert.equal(result.arms[0].expression.expr.kind, "await");
-  assert.equal(result.arms[1].pattern.path, "None");
-  assert.deepEqual(result.arms[1].expression, { kind: "tuple-literal", elements: [] });
+  assert.equal(evaluations, 1);
+  assert.equal(result.kind, "if-let");
+  assert.equal(result.expression === operand, true, "the original operand is evaluated once");
+  assert.equal(result.pattern.path, "Some");
+  assert.equal(result.whenTrue.kind, "try");
+  assert.equal(result.whenTrue.expr.kind, "await");
+  assert.equal(result.whenFalse === undefined, true, "native unit absence performs no work");
   assert.doesNotMatch(JSON.stringify(result), /Undefined|Null|clone|Box|poll/u);
 });
 

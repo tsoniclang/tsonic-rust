@@ -78,16 +78,19 @@ export function planRustValueProjection(node: Node, expression: RustExpr, fact: 
     if (selected.custom) return planRustOptionalStorageOperation(fact.sourceCarrier, ownsValue ? "into_present" : "clone_present",
       [ownsValue ? expression : { kind: "reference", expr: expression }], context)
       ?? failRustPlannerInvariant("An admitted optional flow read requires its native presence operation.", node);
-    if (!ownsValue && !selected.reborrow && !borrowedResult && !rustCarrierHasCloneContract(fact.selectedCarrier, context))
+    if (ownsValue) return { kind: "method-call", receiver: expression, method: "unwrap_or_else", args: [{
+      kind: "closure", params: [], body: { kind: "unreachable", message: "checked flow selected a missing optional value" },
+    }] };
+    if (!selected.reborrow && !borrowedResult && !rustCarrierHasCloneContract(fact.selectedCarrier, context))
       failRustPlannerInvariant("An admitted optional flow read requires its native non-consuming payload contract.", node);
     const name = allocateRustSyntheticName(context.syntheticNames ?? createRustSyntheticNameState(context.input.program.source.ast, node, []), "flow_value");
-    const readonlyReference = !ownsValue && !selected.reborrow && !borrowedResult && selected.readonlyReference;
+    const readonlyReference = !selected.reborrow && !borrowedResult && selected.readonlyReference;
     const value: RustExpr = { kind: "path", path: name };
-    return bindSubject({ kind: "match", expression: ownsValue || readonlyReference ? expression : {
+    return bindSubject({ kind: "match", expression: readonlyReference ? expression : {
       kind: "method-call", receiver: expression, method: selected.reborrow ? "as_deref_mut" : "as_ref",
       receiverMode: selected.reborrow ? "mut-ref" : "ref", args: [] }, arms: [
         { pattern: { kind: "tuple-variant", path: "Some", elements: [{ kind: "binding", name }] },
-          expression: ownsValue || selected.reborrow || borrowedResult || readonlyReference ? value
+          expression: selected.reborrow || borrowedResult || readonlyReference ? value
             : rustCarrierHasCopyContract(fact.selectedCarrier, context) ? { kind: "dereference", pointer: value }
             : { kind: "method-call", receiver: value, method: "clone", args: [] } },
         { pattern: { kind: "path", path: "None" }, expression: { kind: "unreachable", message: "checked flow selected a missing optional value" } },

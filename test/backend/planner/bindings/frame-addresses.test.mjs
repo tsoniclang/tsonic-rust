@@ -10,15 +10,30 @@ import { createRustSyntheticNameState } from "../../../../dist/backend/planner/n
 
 test("dispatched field writes borrow their physical receiver instead of consuming or cloning it", () => {
   const owner = { kind: "path", path: "owner" };
-  for (const receiver of [owner, { kind: "reference", expr: owner }]) {
+  const effectfulOwner = { kind: "call", path: "select_owner", args: [] };
+  for (const receiver of [owner, { kind: "reference", expr: owner },
+    { kind: "reference", mutable: true, expr: owner }, effectfulOwner, { kind: "reference", expr: effectfulOwner }]) {
     for (const operator of ["=", "+="]) {
       const value = { kind: "int-literal", value: "7" };
       const write = writeRustProjectDispatchedField(receiver, "selected_owner", "read", "write", operator, value);
       const binding = write.body.statements[0];
       assert.equal(binding.name, "selected_owner");
       assert.equal(binding.init.kind, "reference");
-      assert.equal(binding.init.expr === owner, true, "repeatable native field operations retain the same owner");
+      const expectedOwner = receiver === owner || receiver.kind === "reference" && receiver.mutable !== true && receiver.expr === owner
+        ? owner : receiver.kind === "reference" && receiver.mutable !== true ? receiver.expr : receiver;
+      assert.equal(binding.init.expr === expectedOwner, true, "repeatable native field operations retain the same owner");
+      assert.equal(binding.init.mutable === true, false, "the selected owner is shared, never a moved mutable reference");
       assert.equal(write.body.statements.length, 2, "one receiver selection and one write expression");
+      const written = write.body.statements[1].expr;
+      assert.equal(written.receiver.receiver.path, "selected_owner", "the setter uses the selected owner");
+      assert.equal(written.receiverMode, "ref", "the setter borrows the selected physical owner");
+      if (operator === "=") {
+        assert.equal(written.args[0] === value, true, "the original right operand is passed once");
+      } else {
+        assert.equal(written.args[0].left.receiver.receiver.path, "selected_owner", "the getter uses the same selected owner");
+        assert.equal(written.args[0].left.receiverMode, "ref", "the getter borrows the same physical owner");
+        assert.equal(written.args[0].right === value, true, "the original right operand is evaluated after the getter");
+      }
     }
   }
 });

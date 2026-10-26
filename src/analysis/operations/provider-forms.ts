@@ -9,7 +9,7 @@ import { isRustFinalizedSourceInput } from "../../target-model/operations/finali
 import { rustGeneratorSourceInvocationKind } from "../../policy/operations/source-profiles/generator-source-profile.js";
 import type { RustOperationAttempt } from "../program/operation-attempts.js";
 import { materializeRustSourceErrorRegion } from "../errors/source-regions.js";
-import { rustFrameInvocationErrorOperand, selectRustErrorRegion } from "../errors/regions.js";
+import { rustErrorRegionCarrier, rustFrameInvocationErrorOperand, selectRustErrorRegion } from "../errors/regions.js";
 import { rustFrameCallableValue } from "../../target-model/types/carriers/frame-callables.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustUninhabitedError } from "../../policy/conversions/callable-physical.js";
@@ -19,10 +19,13 @@ import { rustValueCarrierBeforeContextualConversion } from "../conversions/value
 import { rustNativeErrorJoinTargetType } from "../../target-model/types/native-error-joins.js";
 import { rustProgramErrorTargetType } from "../../target-model/types/carriers/js.js";
 import type { RustFinalizedOperationAbi } from "../../target-model/records/finalized-operation.js";
+import type { RustValueConversionContract } from "../../target-model/conversions/contracts.js";
 import { rustRuntimeErrorTargetType } from "../../target-model/types/carriers/runtime-carriers.js";
 import { rustJsErrorTargetType } from "../../target-model/types/carriers/js.js";
-import { rustCallableInvocationErrorEffects } from "../errors/error-effects.js";
 import { rustCallbackProtocol } from "../../policy/operations/members/callbacks.js";
+import { selectRustSourceValueConversion } from "../../policy/conversions/selection.js";
+import { rustValueConversionContract } from "../../policy/conversions/contracts.js";
+import { rustCallableInvocationErrorEffects } from "../errors/error-effects.js";
 
 export interface RustProviderReadSelection {
   readonly node: Node;
@@ -103,6 +106,24 @@ export function analyzeRustProviderForms(program: Omit<RustAnalysisProgram, "rea
         continue;
       }
     }
+    if (nativeResult === undefined && abi.effects.invocation === "fallible" && abi.effects.errorBoundary === "provider-native") {
+      const error = abi.effects.errorCarrier;
+      if (error === undefined)
+        failTargetAnalysisInvariant("tsonic-rust", "An admitted native provider result requires its selected error carrier.", node);
+      const effects = rustCallableInvocationErrorEffects(error);
+      if (!effects.localErrors) {
+        const selected = selectRustErrorRegion(node, effects,
+          { ast, records: program.records, producers: program.callableValues.nativeProducers,
+            definitions: program.typeDefinitions, components: program.sourcePackageComponents, promiseBodies: program.promiseBodies }, false);
+        if (selected.kind === "rejected") {
+          issues.push(...selected.diagnostics);
+          continue;
+        }
+        nativeResult = materializeRustSourceErrorRegion(node, { operand: selected.value, local: undefined,
+          channels: selected.value.sources.map(source => ({ sourceIdentity: source.identity, targetIdentity: source.identity,
+            uninhabited: rustUninhabitedError(source.errorType) })) });
+      }
+    }
     const attempt = attempts.get(node);
     const callback = attempt?.kind === "checked-call" ? attempt.prepared : undefined;
     const vectorConversions = callback === undefined ? [] : abi.targetArguments.flatMap(input => {
@@ -155,11 +176,25 @@ export function analyzeRustProviderForms(program: Omit<RustAnalysisProgram, "rea
         operand.sources.length !== effects.nativeErrors.length || operand.sources.some(source =>
           !effects.nativeErrors.some(error => error.identity === source.identity && rustTargetTypeRefEquals(error.errorType, source.errorType))))
         failTargetAnalysisInvariant("tsonic-rust", "An admitted provider callback requires its exact selected physical error correspondence.", node);
-      const local = operand.localOwner === undefined ? undefined
-        : operand.localOwner.kind === "physical" && operand.localOwner.domain === "runtime"
-          ? rustRuntimeErrorTargetType() : rustProgramErrorTargetType(operand.localOwner);
-      const expected = helperError ?? rustNativeErrorJoinTargetType(
-        operand.fileName, [...(local === undefined ? [] : [local]), ...operand.sources.map(source => source.errorType)]);
+      const invocationSelection = frame === undefined
+        ? selectRustErrorRegion(callback.callbackEffects.invocationOwner, callback.callbackEffects.invocationEffects,
+          { ast, records: program.records, producers: program.callableValues.nativeProducers,
+            definitions: program.typeDefinitions, components: program.sourcePackageComponents, promiseBodies: program.promiseBodies }, false)
+        : undefined;
+      if (invocationSelection?.kind === "rejected") {
+        issues.push(...invocationSelection.diagnostics);
+        continue;
+      }
+      const invocationOperand = frame === undefined
+        ? invocationSelection?.kind === "resolved" ? invocationSelection.value : undefined : operand;
+      if (invocationOperand === undefined)
+        failTargetAnalysisInvariant("tsonic-rust", "A callback body requires its exact physical invocation error selection.", argument);
+      const invocationLocal = invocationOperand.localOwner === undefined ? undefined
+        : invocationOperand.localOwner.kind === "physical" && invocationOperand.localOwner.domain === "runtime"
+          ? rustRuntimeErrorTargetType() : rustProgramErrorTargetType(invocationOperand.localOwner);
+      const invocationError = rustNativeErrorJoinTargetType(invocationOperand.fileName,
+        [...(invocationLocal === undefined ? [] : [invocationLocal]), ...invocationOperand.sources.map(source => source.errorType)]);
+      const expected = helperError ?? invocationError;
       if (expected === undefined || callbackFallible && !rustTargetTypeRefEquals(signature.error, expected) &&
         !(helperError !== undefined && rustUninhabitedError(signature.error)))
         failTargetAnalysisInvariant("tsonic-rust", "An admitted provider Result requires its exact selected callback adapter error contract.", node);
@@ -174,35 +209,22 @@ export function analyzeRustProviderForms(program: Omit<RustAnalysisProgram, "rea
           failTargetAnalysisInvariant("tsonic-rust", "An argument-vector callback requires its actual source invocation form.", argument);
         const sourceResultFallible = adapted !== undefined || (lambda?.construction === "native" && lambda.nativeClosure !== undefined
           ? lambda.resultFallible : sourceProtocol.fallible);
-        const invocationSelection = frame === undefined
-          ? selectRustErrorRegion(callback.callbackEffects.invocationOwner, callback.callbackEffects.invocationEffects,
-            { ast, records: program.records, producers: program.callableValues.nativeProducers,
-              definitions: program.typeDefinitions, components: program.sourcePackageComponents, promiseBodies: program.promiseBodies }, false)
-          : undefined;
-        if (invocationSelection?.kind === "rejected") {
-          issues.push(...invocationSelection.diagnostics);
-          continue;
-        }
-        const invocationOperand = frame === undefined
-          ? invocationSelection?.kind === "resolved" ? invocationSelection.value : undefined : operand;
-        if (invocationOperand === undefined)
-          failTargetAnalysisInvariant("tsonic-rust", "A callback body requires its exact physical invocation error selection.", argument);
-        const invocationLocal = invocationOperand.localOwner === undefined ? undefined
-          : invocationOperand.localOwner.kind === "physical" && invocationOperand.localOwner.domain === "runtime"
-            ? rustRuntimeErrorTargetType() : rustProgramErrorTargetType(invocationOperand.localOwner);
-        const invocationError = rustNativeErrorJoinTargetType(invocationOperand.fileName,
-          [...(invocationLocal === undefined ? [] : [invocationLocal]), ...invocationOperand.sources.map(source => source.errorType)]);
         if (invocationError === undefined || !rustTargetTypeRefEquals(signature.error, invocationError) ||
           invocationOperand.localOwner !== undefined && operand.localOwner === undefined ||
           invocationOperand.sources.some(source => !operand.sources.some(target => source.identity === target.identity &&
             rustTargetTypeRefEquals(source.errorType, target.errorType))))
           failTargetAnalysisInvariant("tsonic-rust", "A callback body requires exact source-to-helper error correspondence.", argument);
-        const projectionError = vector.projections.includes("native-string")
-          ? rustCallableInvocationErrorEffects(rustJsErrorTargetType()).nativeErrors[0] : undefined;
-        const projection = projectionError === undefined ? undefined : operand.sources.find(source =>
-          source.identity === projectionError.identity && rustTargetTypeRefEquals(source.errorType, projectionError.errorType));
-        if (projectionError !== undefined && projection === undefined)
-          failTargetAnalysisInvariant("tsonic-rust", "A native callback projection requires its selected JsError channel.", argument);
+        let projection: RustValueConversionContract | undefined;
+        if (vector.projections.includes("native-string")) {
+          const source = rustJsErrorTargetType();
+          const target = rustErrorRegionCarrier(operand);
+          const conversion = target === undefined ? undefined : rustTargetTypeRefEquals(source, target)
+            ? { kind: "native-representation" as const, source, target }
+            : selectRustSourceValueConversion(source, target, program.typeDefinitions);
+          projection = conversion === undefined ? undefined : rustValueConversionContract(conversion, program.typeDefinitions);
+          if (projection === undefined || projection.fallible)
+            failTargetAnalysisInvariant("tsonic-rust", "A native callback projection requires its exact native error conversion.", argument);
+        }
         callbackBody = Object.freeze({ argument, region: operand, sourceResultFallible,
           targetResultFallible: vector.targetResultFallible,
           invocation: sourceResultFallible ? materializeRustSourceErrorRegion(argument, {
@@ -210,9 +232,7 @@ export function analyzeRustProviderForms(program: Omit<RustAnalysisProgram, "rea
             channels: invocationOperand.sources.map(source => ({ sourceIdentity: source.identity, targetIdentity: source.identity,
               uninhabited: rustUninhabitedError(source.errorType) })),
           }) : undefined,
-          projection: projection === undefined ? undefined : Object.freeze({
-            identity: projection.identity, errorType: projection.errorType,
-          }) });
+          projection });
       }
     }
     if (form.form === "source-module-construction") {

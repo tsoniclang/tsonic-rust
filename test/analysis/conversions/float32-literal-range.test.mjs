@@ -125,9 +125,8 @@ for (const [surface, selected] of surfaces) {
       const source = header + body;
       const { analysis, ast } = analyzeOnly(source, selected);
       assert.equal(analysis?.kind === "rejected", true, `${name}: source analysis rejects`);
-      const followers = name === "parenthesized negative overflow" ? ["RUST_INITIALIZER_CARRIER_MISMATCH"]
-        : name === "default argument" ? ["RUST_DEFAULT_PARAMETER_INITIALIZER_CARRIER_UNSUPPORTED"]
-          : name === "switch case" ? ["RUST_SWITCH_CASE_NOT_CLOSED"] : [];
+      const followers = name === "default argument" ? ["RUST_DEFAULT_PARAMETER_INITIALIZER_CARRIER_UNSUPPORTED"]
+        : name === "switch case" ? ["RUST_SWITCH_CASE_NOT_CLOSED"] : [];
       const leaders = surface === "js" && name === "element assignment" ? ["RUST_SELECTED_ASSIGNMENT_UNSUPPORTED"] : [];
       assert.deepEqual(analysis.diagnostics.map(issue => issue.code), [...leaders, rangeCode, ...followers],
         `${name}: complete ordered diagnostic list`);
@@ -162,6 +161,21 @@ for (const [surface, selected] of surfaces) {
     assert.deepEqual(analysis.diagnostics.map(issue => issue.code), ["RUST_RETURN_CARRIER_MISMATCH"],
       "the f64 literal remains valid; its result is refused by the return owner");
     assertNoArtifacts("wide result", source, selected, analysis.diagnostics);
+  });
+
+  test(`${surface}: a valid wide initializer retains its independent float32 mismatch`, () => {
+    const source = header + `function wide(value: number): number { return value; }
+export function read(): float32 { const value: float32 = wide(3.5e38); return value; }`;
+    const { analysis, ast } = analyzeOnly(source, selected);
+    assert.equal(analysis?.kind, "rejected", "a valid f64 source expression cannot initialize native f32 storage implicitly");
+    assert.deepEqual(analysis.diagnostics.map(issue => issue.code), ["RUST_INITIALIZER_CARRIER_MISMATCH"],
+      "the initializer owner refuses an admitted wide carrier, not an already refused numeric literal");
+    const [issue] = analysis.diagnostics;
+    assert.equal(issue.message, "The initializer cannot be represented by the declaration's exact Rust carrier.");
+    assert.equal(JSON.stringify(issue.evidence), '["target.capability=rust.initializer-carrier"]');
+    assert.equal(issue.source === "tsonic-rust" && issue.category === "error", true);
+    assertAnchored("wide initializer", issue, ast, source, "KindCallExpression", "wide(3.5e38)");
+    assertNoArtifacts("wide initializer", source, selected, analysis.diagnostics);
   });
 
   for (const value of ["3.5e38", "-3.5e38"]) {

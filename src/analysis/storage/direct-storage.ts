@@ -7,7 +7,6 @@ import type { RustDirectStorageProducer } from "../program/records/direct-storag
 import type { RustDirectStorageEmission, RustDirectStorageIdentity } from "../../target-model/records/direct-storage.js";
 import { rustTargetOperationIsDirectLocation } from "../../policy/operations/members/native-contracts.js";
 import { isRustFinalizedSourceInput } from "../../target-model/operations/finalized-inputs.js";
-import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import type { RustUpdateProjectField, RustUpdateProjectionArgument, RustUpdateMember, RustLocationStorageRoot } from "../../target-model/records/direct-storage.js";
 
 export function analyzeRustDirectStorage(program: Omit<RustAnalysisProgram, "reachability">,
@@ -104,21 +103,8 @@ export function analyzeRustDirectStorage(program: Omit<RustAnalysisProgram, "rea
           fact.abi.effects.invocation === "infallible" && (fact.abi.target.form === "field" || fact.abi.target.form === "index")) {
           const receiverInput = fact.abi.targetReceiver.kind === "input" && fact.abi.targetReceiver.input.source.kind === "receiver"
             ? fact.abi.targetReceiver.input : undefined;
-          if (receiverInput === undefined || receiverInput.conversion.kind === "identity" && receiver !== undefined) {
-            const flow = receiver === undefined ? undefined : program.records.flowReadProjection.get(receiver);
-            const emission = flow === undefined ? undefined : program.records.flowReadEmission.get(flow);
-            if (receiver !== undefined && receiverInput !== undefined && flow !== undefined && emission?.kind === "union") {
-              const use = program.ownership.uses.get(receiver);
-              if (!rustTargetTypeRefEquals(flow.selectedCarrier, receiverInput.sourceCarrier) ||
-                !rustTargetTypeRefEquals(emission.projection.carrier, flow.selectedCarrier) ||
-                emission.projection.targetOptional || emission.projection.variant.kind !== "payload" ||
-                use === undefined || use.mode !== "shared" && use.mode !== "mutable") {
-                refuse(receiver, "rust.backend.direct-storage-union", "RUST_MISSING_TARGET_FACT",
-                  "A native union place requires its exact selected payload, provider receiver and reference use.");
-              }
-            }
+          if (receiverInput === undefined || receiverInput.conversion.kind === "identity" && receiver !== undefined)
             value = { kind: "provider", operation: fact, receiver, index, receiverInput, projection: undefined };
-          }
         } else if ((fact?.kind === "tuple-index" || fact?.kind === "fixed-index") && receiver !== undefined && index !== undefined)
           value = { kind: fact.kind === "tuple-index" ? "tuple" : "fixed", receiver, index, position: fact.index,
             evaluateIndex: !ast.is.IsNumericLiteral(index), projection: undefined };

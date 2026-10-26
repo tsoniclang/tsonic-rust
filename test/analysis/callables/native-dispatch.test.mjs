@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { createCompilerSessionFromFiles } from "@tsonic/tsts";
+import { createTargetSourceProgram } from "@tsonic/target-api/source";
 import { createRustNativeCallableDispatchPlan } from "../../../dist/analysis/callables/native-dispatch.js";
 
 test("native dispatch preserves open and invoked protocols but omits closed forward-only slots", () => {
@@ -16,21 +18,34 @@ test("native dispatch preserves open and invoked protocols but omits closed forw
   assert.equal(plan.requiredFor({ ...closed }), true, "foreign evidence cannot remove dispatch");
 });
 
-test("implicit runtime invocation retains dispatch; only exact direct returns omit it", () => {
-  const reference = {};
-  const direct = { kind: "return", expression: reference };
-  const indirect = { kind: "return", expression: {} };
-  const parameter = {};
-  const protocol = { ownerFileName: "/closed.ts" };
-  const ast = { getFileName: file => file.fileName, parent: () => direct,
-    is: { IsExpressionStatement: () => false, IsReturnStatement: node => node.kind === "return" },
-    as: { AsReturnStatement: node => ({ Expression: node.expression }) } };
-  const input = { ast, closedSourceFiles: new Set([{ fileName: "/closed.ts" }]),
-    navigation: { declarationUses: subject => subject === parameter ? [{ reference }] : [] },
-    native: { protocols: [protocol], calls: [], inputs: [{ subject: { node: parameter }, protocol }] } };
-  assert.equal(createRustNativeCallableDispatchPlan(input).requiredFor(protocol), false, "exact forwarding only");
-  for (const parent of [undefined, { kind: "call" }, indirect]) {
-    const plan = createRustNativeCallableDispatchPlan({ ...input, ast: { ...ast, parent: () => parent } });
-    assert.equal(plan.requiredFor(protocol), true, "runtime, unresolved or indirect use retains its ABI");
+test("native dispatch separates discarded and forwarded values from actual runtime invocation", () => {
+  for (const [body, required] of [
+    ["return callback;", false],
+    ["return (callback);", false],
+    ["void callback;", false],
+    ["void (callback);", false],
+    ["callback;", false],
+    ["callback();", true],
+    ["void callback();", true],
+    ["return { callback };", true],
+    ["const alias = callback; return alias;", true],
+  ]) {
+    const checked = createCompilerSessionFromFiles({ currentDirectory: "/src", files: {
+      "/src/closed.ts": `export function use(callback: () => void) { ${body} }`,
+    }, compilerOptions: { strict: true, target: "es2022", module: "esnext" } }).checkSource();
+    assert.equal(checked.diagnostics.length, 0, "the invocation-demand fixture is valid source");
+    const source = createTargetSourceProgram(checked);
+    const file = checked.getSourceFile("/src/closed.ts");
+    assert.equal(file !== undefined, true, "the exact owned source file exists");
+    const declaration = source.ast.statements(file)[0];
+    const parameter = source.ast.parameters(declaration)[0];
+    assert.equal(parameter !== undefined, true, "the exact callback input exists");
+    const protocol = { ownerFileName: "/src/closed.ts" };
+    const input = { ast: source.ast, closedSourceFiles: new Set([file]), navigation: source.navigation,
+      native: { protocols: [protocol], calls: [], inputs: [{ subject: { node: parameter }, protocol }] } };
+    assert.equal(createRustNativeCallableDispatchPlan(input).requiredFor(protocol), required, body);
+    const unresolved = createRustNativeCallableDispatchPlan({ ...input,
+      navigation: { declarationUses: () => [{ reference: file }] } });
+    assert.equal(unresolved.requiredFor(protocol), true, "an unresolved use retains the native ABI");
   }
 });

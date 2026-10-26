@@ -3,7 +3,7 @@ import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { RustAnalysisProgram } from "../../program/model.js";
 import type { RustStringComparisonViewProducer } from "../../program/records/string-comparison-views.js";
 import type { RustStringComparisonView } from "../../../target-model/records/string-comparison-views.js";
-import { Node_Expression, BinaryExpression_Left, BinaryExpression_Right } from "@tsonic/target-api/source";
+import { BinaryExpression_Left, BinaryExpression_Right, sourceTransparentExpressionOperand } from "@tsonic/target-api/source";
 import { rustContextualRuntimeConversionContract } from "../../../policy/conversions/contextual.js";
 import { rustValueConversionContract } from "../../../policy/conversions/contracts.js";
 import { rustBorrowValueIsUnconverted, rustBorrowValueIsUnprojected } from "../../storage/borrowed-element-purity.js";
@@ -16,12 +16,18 @@ export function analyzeRustStringComparisonViews(program: Omit<RustAnalysisProgr
     if (rustProgramNodeIsOutsideNativeCode(program, node)) continue;
     let selected: RustStringComparisonView = { kind: "value" };
     let value = node;
-    while (program.source.ast.is.IsParenthesizedExpression(value)) {
-      const inner = Node_Expression(program.source.ast, value);
+    for (;;) {
+      const inner = sourceTransparentExpressionOperand(program.source.ast, value);
       if (inner === undefined) break;
+      if (program.records.sourceAssertion.get(value)?.conversion !== undefined ||
+        program.records.flowReadProjection.get(value) !== undefined ||
+        program.records.optionProjection.get(value) !== undefined) break;
       value = inner;
     }
     const literal = program.records.literalValue.get(value);
+    const contextual = program.records.contextualValueConversion.get(node);
+    const contextualContract = contextual === undefined ? undefined
+      : rustContextualRuntimeConversionContract(contextual.conversion, program.typeDefinitions);
     const parent = program.source.ast.parent(node);
     const operation = parent === undefined ? undefined : program.records.targetOperation.get(parent);
     // An optional equality operand is planned before its option projection and lifted into Some by the planner, so a
@@ -29,6 +35,7 @@ export function analyzeRustStringComparisonViews(program: Omit<RustAnalysisProgr
     const optionOperand = operation?.kind === "option-equality" && isRustStringCarrier(program.records.runtimeCarrier.get(node)?.carrier) &&
       rustBorrowValueIsUnconverted(node, program.records);
     if ((literal?.form === "string" || literal?.form === "template") && (optionOperand ||
+      contextualContract?.lowering === "borrowed-str-from-owned-string" ||
       isRustStringCarrier(program.records.valueRead.get(node)?.value) && rustBorrowValueIsUnprojected(node, program.records)))
       selected = { kind: "literal", value: literal.text };
     const field = program.records.errorFieldEmission.get(node);
@@ -36,8 +43,7 @@ export function analyzeRustStringComparisonViews(program: Omit<RustAnalysisProgr
     const source = program.records.sourceAssertion.get(node);
     if (source?.conversion !== undefined && rustValueConversionContract(source.conversion, program.typeDefinitions)?.lowering === "owned-string-from-borrowed-str")
       selected = { kind: "source", operand: source.operand };
-    const contextual = program.records.contextualValueConversion.get(node);
-    if (contextual !== undefined && rustContextualRuntimeConversionContract(contextual.conversion, program.typeDefinitions)?.lowering === "owned-string-from-borrowed-str")
+    if (contextualContract?.lowering === "owned-string-from-borrowed-str")
       selected = { kind: "contextual" };
     const carrier = program.records.valueRead.get(node)?.value;
     const referent = carrier?.kind === "reference" ? carrier.referent : carrier;

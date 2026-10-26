@@ -381,8 +381,41 @@ main();
   assertNoTargetDiagnostics(result.diagnostics);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /JsValue::from\(label\.clone\(\)\)/u);
-  assert.match(text, /tsonic_rust_node::util::format\(\s*"%j",\s*core::slice::from_ref\(&parsed\),?\s*\)\?/u);
-  assert.match(text, /js_abi::json_stringify\(&parsed\)\?/u);
+  const main = nativeFunction(result, "main");
+  const errorType = { kind: "named", path: "crate::index::NativeErrors3",
+    identity: "native-error-join:/src/index.ts:3", genericArguments: [
+      { kind: "type", type: { kind: "named", path: "rt::TsonicError", identity: "tsonic-rust-runtime:TsonicError" } },
+      { kind: "type", type: { kind: "named", path: "rt::JsError" } },
+      { kind: "type", type: { kind: "named", path: "tsonic_rust_node::NodeError", identity: "rust.node.NodeError" } },
+    ] };
+  assert.deepEqual(main.errorType, errorType, "the program retains every exact native error channel");
+  const formats = nativeCalls(main.body, "tsonic_rust_node::util::format");
+  assert.equal(formats.length, 5);
+  const borrowed = formats.filter(call => call.args[1]?.kind === "call" &&
+    call.args[1].path === "core::slice::from_ref");
+  assert.equal(borrowed.length, 1, "the single retained JsValue is borrowed without a temporary array or clone");
+  assert.deepEqual(borrowed[0].args, [{ kind: "str-literal", value: "%j" }, {
+    kind: "call", path: "core::slice::from_ref", args: [{ kind: "reference", expr: { kind: "path", path: "parsed" } }],
+  }]);
+  const propagated = nativeNodes(main.body, node => node.kind === "try" &&
+    node.expr.kind === "method-call" && node.expr.receiver === borrowed[0]);
+  assert.equal(propagated.length, 1, "the exact format Result propagates once");
+  const mapping = propagated[0].expr;
+  assert.equal(mapping.method, "map_err");
+  assert.deepEqual(mapping.genericArguments, [{ kind: "type", type: errorType }, { kind: "type", type: { kind: "infer" } }]);
+  assert.deepEqual(mapping.args, [{ kind: "associated-value", owner: errorType, name: "Error2" }],
+  "the selected NodeError enters its native arm directly, without a local TsonicError conversion");
+  assert.deepEqual(propagated[0].operandErrorType, errorType);
+  assert.deepEqual(propagated[0].resultErrorType, errorType);
+  const stringify = nativeCalls(main.body, "js_abi::json_stringify");
+  assert.equal(stringify.length, 1);
+  assert.deepEqual(stringify[0].args, [{ kind: "reference", expr: { kind: "path", path: "parsed" } }]);
+  const local = nativeNodes(main.body, node => node.kind === "try" &&
+    node.expr.kind === "method-call" && node.expr.receiver === stringify[0]);
+  assert.equal(local.length, 1);
+  assert.equal(local[0].expr.method, "map_err");
+  assert.deepEqual(local[0].expr.args, [{ kind: "associated-value", owner: errorType, name: "Error0" }]);
+  assert.deepEqual(local[0].resultErrorType, errorType);
   const run = validateGeneratedProject("node-provider-bin", result.artifacts, { run: true });
   assert.equal(run.status, 0);
 });

@@ -192,6 +192,17 @@ test("native callback Result contracts distinguish generic invocation errors fro
     assert.deepEqual(intrinsicEffects.nativeErrors[0].errorType, rustJsErrorTargetType());
     assert.equal(callbackFallibleTemplate(intrinsic, { ...effects, invocationEffects: pure }) === intrinsic.template, true,
       "the pure helper retains its original target and exact native error contract, independently of the try callback contract");
+    if (resultError.kind === "callback") {
+      const combined = rustPreparedCallbackResultEffects(intrinsic, invocationEffects);
+      assert.equal(combined === invocationEffects, true,
+        "the native helper's Result<T,E> carries callback E and converts intrinsic errors through its native From contract");
+      const local = rustPreparedCallbackResultEffects(intrinsic, { localErrors: true, nativeErrors: [] });
+      assert.equal(local.localErrors, true, "source throws retain their own local error owner");
+      assert.deepEqual(local.nativeErrors, [], "the actual selected Result<T,TsonicError> does not invent a second JsError arm");
+      assert.equal(rustPreparedCallbackResultEffects({ ...intrinsic,
+        template: { ...intrinsic.template, errorCarrier: undefined } }, invocationEffects) === undefined,
+      true, "a missing intrinsic native carrier cannot become a guessed local error");
+    }
   }
 });
 

@@ -119,7 +119,8 @@ export function createRustSharedReferenceArgument(
     }
   }
   if (node !== undefined && rustReadsReferenceParameter(node, context)) return argument;
-  return node === undefined ? { kind: "reference", expr: argument } : planRustSharedReceiver(node, argument, context);
+  return value.stage === "finalized" ? { kind: "reference", expr: argument }
+    : planRustSharedReceiver(value.node, argument, context);
 }
 
 export function rustSourceStorageView(

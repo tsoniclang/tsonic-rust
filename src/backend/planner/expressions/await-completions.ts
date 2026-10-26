@@ -87,8 +87,12 @@ export function planRustAwaitBranches(
     if (selection.kind === "optional") {
       const name = allocateRustSyntheticName(names, "future");
       const present = plan(selection.present, { kind: "path", path: name });
-      return present === undefined ? undefined : { kind: "match", expression: value, arms: [
-        { pattern: { kind: "tuple-variant", path: "Some", elements: [{ kind: "binding", name }] }, expression: present },
+      if (present === undefined) return undefined;
+      const pattern: RustPattern = { kind: "tuple-variant", path: "Some", elements: [{ kind: "binding", name }] };
+      if (resultCarrier === undefined || result?.completion === "unit")
+        return { kind: "if-let", expression: value, pattern, whenTrue: present };
+      return { kind: "match", expression: value, arms: [
+        { pattern, expression: present },
         { pattern: { kind: "path", path: "None" }, expression: absent() },
       ] };
     }

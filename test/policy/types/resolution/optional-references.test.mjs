@@ -60,11 +60,19 @@ test("optional exclusive-reference projection is a native reborrow, never a Clon
     const context = planContext(sealed.program, sourceFile, node);
     const projected = planRustFlowReadProjection(node, expression, selected.fact, context);
     assertNoTargetDiagnostics(context.diagnostics);
-    assert.equal(projected.kind, "match");
-    assert.deepEqual(projected.expression, canMove ? expression : {
-      kind: "method-call", receiver: expression, method: "as_deref_mut", receiverMode: "mut-ref", args: [],
-    });
-    assert.equal(projected.arms[0].expression.kind, "path");
+    if (canMove) {
+      assert.equal(projected.kind, "method-call");
+      assert.equal(projected.receiver === expression, true, "the owned native Option is evaluated once");
+      assert.equal(projected.method, "unwrap_or_else");
+      assert.deepEqual(projected.args, [{ kind: "closure", params: [],
+        body: { kind: "unreachable", message: "checked flow selected a missing optional value" } }]);
+    } else {
+      assert.equal(projected.kind, "match");
+      assert.deepEqual(projected.expression, {
+        kind: "method-call", receiver: expression, method: "as_deref_mut", receiverMode: "mut-ref", args: [],
+      });
+      assert.equal(projected.arms[0].expression.kind, "path");
+    }
   }
   // A reference projection that no longer matches its exact Option element is refused by the analysis owner and
   // never sealed, so the planner has no emission to render.
@@ -94,8 +102,16 @@ test("optional non-Clone payloads may move or borrow but cannot acquire a clone 
     const context = planContext(sealed.program, sourceFile, node);
     if (canMove || borrowed) {
       const projected = planRustFlowReadProjection(node, { kind: "path", path: "selected" }, selected.fact, context, borrowed);
-      assert.equal(projected.kind, "match");
-      assert.equal(projected.arms[0].expression.kind, "path");
+      if (canMove) {
+        assert.equal(projected.kind, "method-call");
+        assert.deepEqual(projected.receiver, { kind: "path", path: "selected" });
+        assert.equal(projected.method, "unwrap_or_else");
+        assert.deepEqual(projected.args, [{ kind: "closure", params: [],
+          body: { kind: "unreachable", message: "checked flow selected a missing optional value" } }]);
+      } else {
+        assert.equal(projected.kind, "match");
+        assert.equal(projected.arms[0].expression.kind, "path");
+      }
       assertNoTargetDiagnostics(context.diagnostics);
     } else {
       // A copy of a payload without a proven Clone guarantee is a corrupt record set at the planner boundary.

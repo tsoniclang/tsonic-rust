@@ -9,6 +9,7 @@ import { selectedRustRegExpReplacementCallbackEvidence } from "../regexp-replace
 import { applyRustRegExpReplacementCallbackConversion, finalizeRustRegExpReplacementCallbackContract } from "../../../../policy/operations/members/regexp-callbacks.js";
 import { rejectSelectedOperation } from "../result.js";
 import { resolveRustTargetTypeRef } from "../../../source-evidence/types/resolution/source.js";
+import { rustSourceStorageSubjectContext } from "../../../source-evidence/types/resolution/source-storage-projection.js";
 
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
 import { selectedCallArgumentNodes, selectedCallCalleeSymbol } from "../operators.js";
@@ -368,10 +369,11 @@ function mapRustDefaultValueCall(
   const sourceFact = marker === "field"
     ? context.source.sourceFacts.getFact(request.source.call, fieldFactKey)
     : context.source.sourceFacts.getFact(request.source.call, defaultValueFactKey);
-  const resultCarrier = resolveRustTargetTypeRef(sourceFact?.type, context, options);
+  const signatureContext = rustSourceStorageSubjectContext(context, undefined);
+  const resultCarrier = resolveRustTargetTypeRef(sourceFact?.type, signatureContext, options);
   const sourceTypeArguments = request.source.sourceSelectedMethodTypeArguments;
   const sourceParameters = rustSelectedCallTypeParameters(sourceTypeArguments ?? [], context);
-  const targetTypeArguments = mapSelectedTargetTypeArguments(request, context, options);
+  const targetTypeArguments = mapSelectedTargetTypeArguments(request, signatureContext, options);
   if (sourceArguments.length !== 0 || sourceFact === undefined || resultCarrier === undefined ||
     sourceTypeArguments?.length !== 1 || sourceParameters === undefined || sourceParameters.length !== 1 ||
     targetTypeArguments === undefined || targetTypeArguments.length !== 1 ||

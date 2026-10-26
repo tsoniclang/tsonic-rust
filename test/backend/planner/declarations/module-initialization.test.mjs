@@ -296,13 +296,13 @@ main();
   const moduleSource = artifactText(result, "src/index.rs");
   assert.match(
     moduleSource,
-    /pub fn module_init\(\) -> Result<\(\), rt::TsonicError>[\s\S]*?json_parse\("1"\)\?/u,
+    /pub fn module_init\(\) -> Result<\(\), rt::JsError>[\s\S]*?json_parse\("1"\)\?/u,
   );
   assert.match(moduleSource, /Ok\(\(\)\)/u);
   assert.doesNotMatch(moduleSource, /Ok::<\(\), rt::TsonicError>\(\(\)\)/u);
   assert.match(
     artifactText(result, "src/main.rs"),
-    /fallible_module_proof::initialize\(\)\?;/u,
+    /fallible_module_proof::initialize\(\)\.map_err\(\s*StartupErrors::<\s*tsonic_rust_runtime::TsonicError,\s*fallible_module_proof::InitializationError,\s*>::Initialization,\s*\)\?;/u,
   );
   validateGeneratedProject("fallible-module-proof", result.artifacts, { run: true });
 });
@@ -319,8 +319,9 @@ for (const [label, body] of [
     });
     assert.deepEqual(result.diagnostics, []);
     assert.match(artifactText(result, "src/index.rs"),
-      /pub fn module_init\(\) -> Result<\(\), rt::TsonicError>[\s\S]*?json_parse\("1"\)\?/u);
-    assert.match(artifactText(result, "src/main.rs"), /static_error_proof::initialize\(\)\?;/u);
+      /pub fn module_init\(\) -> Result<\(\), rt::JsError>[\s\S]*?json_parse\("1"\)\?/u);
+    assert.match(artifactText(result, "src/main.rs"),
+      /static_error_proof::initialize\(\)\.map_err\(\s*StartupErrors::<\s*tsonic_rust_runtime::TsonicError,\s*static_error_proof::InitializationError,\s*>::Initialization,\s*\)\?;/u);
     validateGeneratedProject(`static-${label}-errors`, result.artifacts, { run: true });
   });
 }

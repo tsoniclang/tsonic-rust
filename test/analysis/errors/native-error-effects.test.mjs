@@ -82,6 +82,19 @@ export function create(): () => int32 { return (): int32 => fail(); }`,
     const { node, operation } = selected[0];
     assert.equal(operation.abi.effects.invocation, "fallible");
     assert.equal(operation.abi.effects.errorCarrier !== undefined, true, "selected native error evidence is required");
+    const occurrence = current.program.physicalEmissionContexts.sourceOccurrences.find(occurrence => occurrence.node === node);
+    assert.equal(occurrence !== undefined, true, "the original provider invocation has one finalized native ABI");
+    const emission = current.program.records.providerForm.get(node, occurrence.operation.abi);
+    assert.equal(emission?.nativeResult !== undefined, true, "the provider form publishes its exact native Result transport before rendering");
+    const transport = emission.nativeResult;
+    assert.equal(transport.local === undefined && transport.operand.localOwner === undefined, true,
+      "a native provider error does not manufacture a package-local source channel");
+    assert.equal(transport.operand.sources.length, 1, "one selected native provider error remains");
+    const nativeSource = transport.operand.sources[0];
+    assert.equal(rustTargetTypeRefEquals(nativeSource.errorType, operation.abi.effects.errorCarrier), true,
+      "the provider Result keeps the exact selected native error carrier");
+    assert.equal(transport.channels.get(nativeSource.identity)?.targetIdentity === nativeSource.identity, true,
+      "the source and enclosing native region consume the identical selected channel");
     for (const subject of [node, current.node]) {
       const effects = current.program.records.errorEffects.get(subject);
       assert.equal(effects !== undefined, true, "the invocation and its producer both publish completed effects");
