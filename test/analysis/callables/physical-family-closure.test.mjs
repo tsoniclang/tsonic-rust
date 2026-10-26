@@ -5,7 +5,7 @@ import { createSourceStorageQuery } from "@tsonic/target-api/analysis";
 import { analyzeRust, compileRust } from "../../helpers/rust-session.mjs";
 import { analyzeRustCheckedContext } from "../../helpers/rust-session-analysis-context.mjs";
 import { createRustRecordFixture } from "../../helpers/records.mjs";
-import { compileRustTarget } from "../../../dist/backend/compile.js";
+import { compileRustAnalysisTarget } from "../../helpers/rust-session-compiler-session.mjs";
 import { prepareRustGenericCallableDispatchRequests } from "../../../dist/analysis/callables/generic-dispatch.js";
 import { createRustGenericCallablePlan, rustFixedStructuralMethodDeclarations } from "../../../dist/analysis/callables/generic-values.js";
 import { createRustNativeCallableInputPlan } from "../../../dist/analysis/callables/native-inputs.js";
@@ -65,7 +65,7 @@ function compileObserved(options) {
   let analyzed;
   let inventory;
   const { result } = compileRust({ ...options, compileTarget(request, observer) {
-    return compileRustTarget(request, {
+    return compileRustAnalysisTarget(request, {
       analyzed(program) {
         analyzed = program;
         inventory = program.callableValues.generic.physical.definitions();
@@ -697,7 +697,9 @@ test("a family requested after admission closes fails as an internal invariant o
   assert.equal(current.physical.plan.definitions() === inventory, true);
   current.physical.closeKeys();
   current.physical.publish();
-  assert.throws(() => current.queries.prepareReturn(make), failure => failure.diagnostic?.code === "TSONIC_INTERNAL_PLANNER_INVARIANT");
+  assert.throws(() => current.queries.prepareReturn(make), failure =>
+    failure.diagnostic?.code === "TSONIC_INTERNAL_ANALYSIS_INVARIANT" &&
+    /physical construction cannot run after key closure/u.test(failure.message));
   assert.throws(() => current.physical.closeAdmission(), /exactly once/u);
 });
 
