@@ -1,5 +1,5 @@
 import type { AstReader, Node } from "@tsonic/tsts";
-import { BinaryExpression_Left, BinaryExpression_Right, ElementAccessExpression_ArgumentExpression, Node_Expression, sourceTransparentExpressionOperand } from "@tsonic/target-api/source";
+import { BinaryExpression_Left, BinaryExpression_Right, ConditionalExpression_Condition, ElementAccessExpression_ArgumentExpression, ForStatement_Condition, Node_Expression, sourceTransparentExpressionOperand } from "@tsonic/target-api/source";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { RustAnalysisRecords } from "../../target-model/records/analysis.js";
 import { rustFinalizedSourceInputs } from "../../target-model/operations/finalized-inputs.js";
@@ -80,7 +80,12 @@ export function analyzeRustReadUses(ast: AstReader, nodes: readonly Node[], reco
     const computedMember = records.computedMember.get(node);
     const address = records.rawAddressPlan.get(node);
     const location = records.typedLocationPlan.get(node);
-    const guard = records.optionalChain.get(node)?.guard;
+    const condition = ast.is.IsConditionalExpression(node) ? ConditionalExpression_Condition(ast, node)
+      : ast.is.IsForStatement(node) ? ForStatement_Condition(ast, node)
+        : ast.is.IsIfStatement(node) || ast.is.IsWhileStatement(node) || ast.is.IsDoStatement(node) ? Node_Expression(ast, node)
+          : undefined;
+    const guard = condition !== undefined ? records.nativeGuardResult.get(condition) === undefined ? condition : undefined
+      : records.optionalChain.get(node)?.guard;
     if (operation === undefined && computedMember === undefined && address === undefined && location === undefined && guard === undefined) continue;
     const callable = operation?.kind === "source-call" && operation.target.form === "callable" ? operation.target.carrier : undefined;
     const callTrait = callable?.kind === "closure" ? callable.callTrait ?? "Fn" : undefined;
@@ -112,7 +117,8 @@ export function analyzeRustReadUses(ast: AstReader, nodes: readonly Node[], reco
       ? undefined : records.targetOperation.get(parent);
     const assignmentRight = parent !== undefined && (assignment?.kind === "nullish-assignment" ||
       (assignment?.kind === "operator-token" || assignment?.kind === "operator-call") &&
-      assignment.operator !== "=" && isRustAssignmentOperator(assignment.operator)) ? BinaryExpression_Right(ast, parent) : undefined;
+      (assignment.operator !== "=" || operation?.kind === "source-accessor" && operation.accessMode !== "read") &&
+      isRustAssignmentOperator(assignment.operator)) ? BinaryExpression_Right(ast, parent) : undefined;
     const receiver = Node_Expression(ast, node);
     const extendedUse = (subject: Node, use: RustReadUse): RustReadUse => subject !== receiver || assignmentRight === undefined ? use
       : Object.freeze({ ...use, later: Object.freeze([...use.later, assignmentRight]) });
@@ -121,12 +127,13 @@ export function analyzeRustReadUses(ast: AstReader, nodes: readonly Node[], reco
         ? Object.freeze({ ...use, mode: "value" as const, stableAcrossEffects: false }) : use;
       uses.set(subject, extendedUse(subject, sourceUse));
     }
-    // A getter read whose method borrows `self` shares its receiver, like a stored field read.
-    if (operation?.kind === "source-accessor" && operation.accessMode === "read" && operation.receiver.kind === "instance" &&
-      operation.read !== undefined && records.selfMode.get(operation.read.declaration)?.mode === "ref") {
+    if (operation?.kind === "source-accessor" && operation.receiver.kind === "instance") {
+      const accessors = operation.accessMode === "read" ? [operation.read]
+        : operation.accessMode === "write" ? [operation.write] : [operation.read, operation.write];
       const receiver = Node_Expression(ast, node);
       const key = ast.is.IsElementAccessExpression(node) ? ElementAccessExpression_ArgumentExpression(ast, node) : undefined;
-      if (receiver !== undefined && !uses.has(receiver))
+      if (receiver !== undefined && !uses.has(receiver) && accessors.every(accessor =>
+        accessor !== undefined && records.selfMode.get(accessor.declaration)?.mode === "ref"))
         uses.set(receiver, extendedUse(receiver, Object.freeze({ mode: "shared", later: Object.freeze(key === undefined ? [] : [key]), laterStart: 0,
           stableAcrossEffects: true })));
     }

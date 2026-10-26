@@ -16,6 +16,7 @@ test("stable-value queries follow exact transparent operands without admitting m
     files: { "index.ts": stableSource + guardedSource },
   });
   const decisions = new Map();
+  const acquisitions = new Map();
   const parameters = new Map();
   const visit = node => {
     if (source.ast.is.IsFunctionDeclaration(node)) {
@@ -33,6 +34,11 @@ test("stable-value queries follow exact transparent operands without admitting m
       const selected = decisions.get(name) ?? [];
       selected.push(program.ownership.reads.get(argument)?.stablePlace === true);
       decisions.set(name, selected);
+      const reads = acquisitions.get(name) ?? [];
+      const read = program.ownership.reads.get(argument);
+      assert.equal(read !== undefined, true, `${name}: the original source argument has its completed native read`);
+      reads.push({ source: read.source.kind, value: read.value.kind });
+      acquisitions.set(name, reads);
     }
     source.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
   };
@@ -44,6 +50,14 @@ test("stable-value queries follow exact transparent operands without admitting m
   assert.deepEqual(decisions.get("retained"), [false]);
   assert.deepEqual(decisions.get("ordered"), [false, false]);
   assert.deepEqual(decisions.get("produced"), [false]);
+  assert.deepEqual(acquisitions.get("retained"), [{ source: "clone", value: "clone" }],
+    "a repeatable capture retains its selected owned observation before the argument view");
+  assert.deepEqual(acquisitions.get("ordered")[0], { source: "clone", value: "clone" },
+    "the original source snapshot precedes the reentrant mutation, not merely the final str conversion");
+  assert.deepEqual(acquisitions.get("mutated"), [{ source: "move", value: "move" }],
+    "a genuinely transferable source retains its native move without an added clone");
+  assert.deepEqual(acquisitions.get("produced"), [{ source: "move", value: "move" }],
+    "a produced native owner is materialized once without a snapshot allocation");
   assert.equal(parameters.get("parenthesized"), "ref");
   assert.equal(parameters.get("typed"), "ref");
   for (const name of ["mutated", "retained", "ordered", "changed"]) assert.equal(parameters.get(name), "value", name);

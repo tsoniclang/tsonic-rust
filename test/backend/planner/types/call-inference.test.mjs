@@ -118,7 +118,7 @@ test("canonical physical union payloads retain enclosing anonymous type position
     const pointer = { kind: "function-pointer", args: [], result: physical };
     const program = rustProgramWithTypeEmissions([carrier, physical, pointer], {
       source: 'import type { nativeUint } from "@tsonic/core/types.js";\ntype Completion = nativeUint | Promise<nativeUint>;\nexport function probe(): void {}\n',
-      typeDefinitions: registry.seal(), structuralShapes: createRustStructuralShapePlan([], [], () => "owner", [], [], generated),
+      typeDefinitions: registry.seal(), structuralShapes: createRustStructuralShapePlan([], [], () => "owner", [], new Map(), [], generated),
     });
     const scope = rustProgramPlanContext(program, { moduleName: "owner", moduleNameByFileName: new Map([["/src/index.ts", "owner"]]) });
     assert.equal(rustUnionTypePathInContext(carrier, scope), origin === "authored" ? "Completion"
