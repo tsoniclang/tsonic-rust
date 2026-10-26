@@ -8,6 +8,31 @@ import { rustRetainedErrorTargetType, rustSourceErrorTargetType, rustWritableSou
 import { selectRustSourceValueConversion } from "../../../dist/policy/conversions/selection.js";
 import { rustCallableProtocol } from "../../../dist/target-model/types/carriers/callables.js";
 
+test("every authored formal including unused and default inputs consumes its exact early entry carrier", () => {
+  const { program } = analyzeRust({ files: { "index.ts": `
+    import type { int32 } from "@tsonic/core/types.js";
+    export function select(unused: () => int32, value: int32, fallback: int32 = 9): int32 { return value; }
+  ` } });
+  let declaration;
+  const visit = node => {
+    if (program.source.ast.is.IsFunctionDeclaration(node) && program.records.sourceName.get(node) === "select") declaration = node;
+    program.source.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+  };
+  program.sourceFiles.forEach(visit);
+  assert.equal(declaration !== undefined, true, "the original native declaration is present");
+  const parameters = program.source.ast.parameters(declaration);
+  const entry = program.records.callableLeading.get(declaration);
+  assert.equal(parameters.length, 3, "unused, ordinary and default source inputs remain in authored order");
+  assert.equal(entry?.sourceParameters.size, parameters.length, "the early physical inventory includes every incoming formal");
+  for (const parameter of parameters) {
+    const selected = entry.sourceParameters.get(parameter);
+    const emitted = program.records.callableParameter.get(parameter);
+    assert.equal(selected !== undefined && emitted !== undefined, true, "the original parameter owns both publication stages");
+    assert.equal(emitted.carrier === selected, true, "later default and body initialization do not reselect the native input carrier");
+    assert.equal(program.records.sourceParameterAbi.get(parameter) !== undefined, true, "each selected formal retains its original ABI evidence");
+  }
+});
+
 for (const [parameterForm, storage, ordering] of [
   ["aliased", "record", "direct"],
   ["annotated", "record", "captured"],

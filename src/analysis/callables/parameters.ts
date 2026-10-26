@@ -1,6 +1,4 @@
 import type { Node } from "@tsonic/tsts";
-import { closeRustRetainedCallableCarrier } from "../../policy/ownership/retained-storage.js";
-import { rustStaticLifetime } from "../../target-model/lifetimes/index.js";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustCallableParameterProducer } from "../program/records/parameter-emission.js";
@@ -15,14 +13,11 @@ import { isRustCopyCarrier } from "../../policy/constraints/native-traits.js";
 type RustParameterEmissionProgram = Pick<RustAnalysisProgram,
   "source" | "sourceNavigation" | "records" | "callableValues" | "projectTypes" | "objectRepresentations" | "names">;
 
-function rustParameterCarrier(program: RustParameterEmissionProgram, parameter: Node,
-  owner: Node, abi: RustSourceParameterAbiFact) {
-  const requiresImplementation = program.callableValues.native.inputsFor(owner).some(input => input.subject.node === parameter);
-  const physical = requiresImplementation ? program.callableValues.nativeStorage.parameterFor(parameter) : undefined;
-  if (physical?.kind === "unresolved") failTargetAnalysisInvariant("tsonic-rust",
-    "An admitted native parameter requires its finalized physical callable storage.", parameter);
-  return physical?.carrier ?? (program.callableValues.native.isNativeRetainedParameter(parameter)
-    ? closeRustRetainedCallableCarrier(abi.parameterCarrier, rustStaticLifetime) : abi.parameterCarrier);
+function readRustEntryParameterCarrier(program: RustParameterEmissionProgram, parameter: Node, owner: Node) {
+  const carrier = program.records.callableLeading.get(owner)?.sourceParameters.get(parameter);
+  if (carrier === undefined) failTargetAnalysisInvariant("tsonic-rust",
+    "An admitted native parameter requires its completed physical entry carrier.", parameter);
+  return carrier;
 }
 
 function rustParameterReturnInitialization(program: RustParameterEmissionProgram, parameter: Node,
@@ -73,7 +68,7 @@ function rustParameterReturnInitialization(program: RustParameterEmissionProgram
       (ast.is.IsObjectBindingPattern(name) || ast.is.IsArrayBindingPattern(name))) return binding;
     if (otherIndex > parameterIndex && (otherAbi.form === "default" || program.records.bindingStorage.get(other) !== undefined)) return binding;
     if (abi.form === "default" && (program.records.bindingStorage.get(other) !== undefined ||
-      !dropFree(rustParameterCarrier(program, other, owner, otherAbi)) || !dropFree(otherAbi.valueCarrier))) return binding;
+      !dropFree(readRustEntryParameterCarrier(program, other, owner)) || !dropFree(otherAbi.valueCarrier))) return binding;
   }
   if (abi.form === "default") {
     const lexical = program.records.lexicalFunction.get(owner);
@@ -109,7 +104,7 @@ export function analyzeRustCallableParameterEmission(input: {
     const pattern = nameNode !== undefined && (ast.is.IsObjectBindingPattern(nameNode) || ast.is.IsArrayBindingPattern(nameNode)) ? nameNode : undefined;
     const name = pattern === undefined ? program.names.nameForDeclaration(parameter) : undefined;
     if (pattern === undefined && (name === undefined || !isValidRustIdentifier(name))) failTargetAnalysisInvariant("tsonic-rust", "An admitted native parameter requires its exact native identifier.", parameter);
-    const carrier = rustParameterCarrier(program, parameter, owner, abi);
+    const carrier = readRustEntryParameterCarrier(program, parameter, owner);
     const sourceCarrier = program.records.runtimeCarrier.get(parameter)?.carrier;
     const storage = program.records.bindingStorage.get(parameter);
     if (pattern !== undefined && (sourceCarrier === undefined || !rustTargetTypeRefEquals(sourceCarrier, abi.valueCarrier) || storage !== undefined))

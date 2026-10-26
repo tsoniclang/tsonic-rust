@@ -19,6 +19,7 @@ export interface RustCallableReturnEmission {
 
 export interface RustCallableLeadingEmission {
   readonly genericHeader: RustNativeCallableGenericHeader | undefined;
+  readonly sourceParameters: ReadonlyMap<Node, TargetTypeRef>;
   readonly parameters: readonly {
     readonly kind: "this" | "receiver";
     readonly carrier: TargetTypeRef;

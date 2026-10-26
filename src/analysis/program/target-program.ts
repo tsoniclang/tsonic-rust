@@ -388,7 +388,7 @@ export function analyzeRustAnalysisProgram(
   analyzeRustLexicalFunctionEmission({ program: { records, lexicalFunctions, ownership: ownership.ownership,
     callableValues: context.callableValues }, nodes: context.nativeNodes, producer: context.records.lexicalFunctionPlans });
   const entryIssues = analyzeRustCallableEntryParameters({ source: context.source, nodes: context.nativeNodes, records,
-    lifetimes: context.sourceLifetimes, nativeStorage: context.callableValues.nativeStorage,
+    lifetimes: context.sourceLifetimes, nativeStorage: context.callableValues.nativeStorage, native: context.callableValues.native,
     nativeProducers: context.callableValues.nativeProducers,
     producer: context.records.declarationEmission, required: context.requiredRecords });
   if (entryIssues.length !== 0) return rejectedTargetStage(entryIssues);
