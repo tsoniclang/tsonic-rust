@@ -335,7 +335,12 @@ function classifyStaticCarrier(
           if (definition.storage === "program-error") {
             const errorOwner = rustProgramErrorOwner(value);
             return errorOwner?.kind === "physical" ? supported
-              : unresolved("A contextual program error requires its actual admitted native payload representation.");
+              : unresolved("A contextual program error requires its actual admitted native payload representation. " +
+                JSON.stringify({ predicate: "physical-program-error-owner", owner: errorOwner,
+                  rootKind: carrier.kind, rootId: carrier.kind === "target-named" ? carrier.id : undefined,
+                  value, errorTypeEvidence: evidence?.errorType !== undefined,
+                  frameEvidence: evidence?.frameCallables !== undefined,
+                  stack: new Error().stack?.slice(0, 2400) }).slice(0, 3500));
           }
           if (value.id === rustCallableTargetId && rustCallableProtocol(value) === undefined)
             return unresolved("A native callable requires its exact admitted storage protocol.");
