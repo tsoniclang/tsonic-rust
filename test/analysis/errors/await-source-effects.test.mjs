@@ -12,7 +12,7 @@ import { mergeRustErrorEffects, rustErrorEffectsEqual } from "../../../dist/anal
 import { rustJsRejectionErrorIdentity } from "../../../dist/target-model/records/error-effects.js";
 import { rustProducerErrorReference } from "../../../dist/target-model/types/carriers/producer-errors.js";
 import { rustSourcePrimitiveTargetType } from "../../../dist/target-model/types/carriers/native.js";
-import { rustFutureTargetType, rustJsPromiseTargetType, rustJsValueTargetType } from "../../../dist/target-model/types/index.js";
+import { isRustNativeFutureCarrier, rustFutureTargetType, rustJsPromiseTargetType, rustJsValueTargetType } from "../../../dist/target-model/types/index.js";
 import { selectRustAwaitSourceErrors } from "../../../dist/analysis/errors/await-source-effects.js";
 import { createRustSourceErrorEffectSelection } from "../../../dist/analysis/errors/source-error-effects.js";
 import { createRustEffectsWorkBudget } from "../../../dist/analysis/errors/effects-work-budget.js";
@@ -86,13 +86,13 @@ const nativeFutureFiles = { ...nativeAsyncCallableFiles,
     '\nexport async function main(): Promise<void> { if (!await run()) throw new Error("native callable ownership"); }\nawait main();\n',
 };
 
-function requireNativeFuture(current, name) {
+function requireNativeFuture(current, name, boundary) {
   const value = current.context.records.awaitValue.get(current.awaited(name));
   assert.equal(value !== undefined, true, name + ": the complete physical await is published");
   const leaves = rustAwaitSelectionLeaves(value.selection);
   assert.equal(leaves.length, 1, name + ": the witness has one actual pending native Future");
-  assert.equal(leaves[0].future?.errorBoundary, "source-native",
-    name + ": source-native assertions require the admitted native domain");
+  assert.equal(isRustNativeFutureCarrier(leaves[0].carrier), true, name + ": the selected physical carrier is the canonical native Future");
+  assert.equal(leaves[0].future?.errorBoundary, boundary, name + ": the exact admitted native error boundary is retained");
   return leaves[0];
 }
 
@@ -121,7 +121,7 @@ function assertUniformJsAwait(current, name) {
 
 test("await branches retain the exact original source edge instead of adding an ambient local channel", () => {
   const current = fixture(sourceAwaitProgram, { surfaces: [] });
-  requireNativeFuture(current, "consumer");
+  requireNativeFuture(current, "consumer", "source-program");
   const fact = current.fact("consumer");
   assert.equal(fact.branches.length, 1);
   const { carrier, edge } = fact.branches[0];
@@ -143,7 +143,7 @@ test("await branches retain the exact original source edge instead of adding an 
 
 test("stored async source results preserve original generic channels through synchronous return activations", () => {
   const current = fixture(genericReturnProgram, { surfaces: [] });
-  requireNativeFuture(current, "consumer");
+  requireNativeFuture(current, "consumer", "source-program");
   const edge = current.fact("consumer").branches[0].edge;
   assert.equal(edge.declaration === current.declaration("source"), true);
   assert.equal(edge.effects.localErrors, false);
@@ -159,7 +159,7 @@ test("stored async source results preserve original generic channels through syn
 
 test("stored source awaits rebind the original activation without overwriting the producer's lexical call facts", () => {
   const current = fixture(lexicalReturnProgram, { surfaces: [] });
-  requireNativeFuture(current, "consumer");
+  requireNativeFuture(current, "consumer", "source-program");
   const edge = current.fact("consumer").branches[0].edge;
   assert.equal(edge.declaration === current.declaration("source"), true);
   const input = current.context.callableValues.native.inputsFor(current.declaration("consumer"))[0];
@@ -244,7 +244,7 @@ test("pure source awaits stay pure while caught source errors retain inner corre
     { localErrors: false, nativeErrors: [] });
   assert.deepEqual(current.context.records.errorEffects.get(current.declaration("pure")),
     { localErrors: false, nativeErrors: [] });
-  requireNativeFuture(current, "caught");
+  requireNativeFuture(current, "caught", "source-program");
   assert.equal(current.fact("caught").branches[0].edge.nativeErrors.length, 2);
   assert.deepEqual(current.context.records.errorEffects.get(current.declaration("caught")),
     { localErrors: false, nativeErrors: [] });
@@ -253,7 +253,7 @@ test("pure source awaits stay pure while caught source errors retain inner corre
 
 test("awaiting a source package Future retains its actual RootFailure owner", () => {
   const current = fixture("", { files: rootFailureFiles, sourcePackages: sourcePackageCallbackErrorGraph, surfaces: [] });
-  requireNativeFuture(current, "rootConsumer");
+  requireNativeFuture(current, "rootConsumer", "source-native");
   assert.equal(current.fact("rootConsumer").branches.length, 0,
     "a callback input remains its selected native channel rather than acquiring a guessed source-program edge");
   const value = current.context.records.awaitValue.get(current.awaited("rootConsumer"));
