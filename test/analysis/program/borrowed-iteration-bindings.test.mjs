@@ -1,6 +1,8 @@
 import { createRustRecordFixture } from "../../helpers/records.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
+import { analyzeRust, artifactText, compileRust } from "../../helpers/rust-session.mjs";
+import { createTsonicPlugin } from "../../../../rust-nodejs/dist/index.js";
 import { selectRustBorrowedIterationBinding } from "../../../dist/analysis/storage/borrowed-iteration-bindings.js";
 import { finalizeRustProviderOperationAbi } from "../../../dist/policy/operations/members/abi/finalize.js";
 import { validateRustFinalizedOperationAbi } from "../../../dist/policy/operations/members/abi/validation.js";
@@ -74,6 +76,48 @@ runtimeCarrier: { get: (node) => { return { carrier: node === input ? inputCarri
     setSummary: value => { summary = { ...summary, ...value }; },
   };
 }
+
+test("completed borrowed iteration keeps native shared elements and leaves owned uses consuming", () => {
+  const code = `
+import type { IncomingMessage } from "node:http";
+type NativeHeaders = IncomingMessage["headersDistinct"];
+export function borrowed(headers: NativeHeaders, key: string): string {
+  const values = headers[key];
+  if (values === undefined) return "";
+  let result = "";
+  for (const value of values) result += value;
+  return result;
+}
+export function owned(headers: NativeHeaders, key: string): string[] {
+  const values = headers[key];
+  const result: string[] = [];
+  if (values !== undefined) for (const value of values) result.push(value);
+  return result;
+}
+`;
+  const { program } = analyzeRust({ surfaces: ["js"], capabilities: [createTsonicPlugin()], files: { "index.ts": code } });
+  const loops = [];
+  const visit = node => {
+    if (program.source.ast.is.IsForOfStatement(node)) loops.push(node);
+    program.source.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+  };
+  program.sourceFiles.forEach(visit);
+  assert.equal(loops.length, 2);
+  const selected = program.records.borrowedIterationBinding.get(loops[0]);
+  assert.equal(selected !== undefined, true, "the completed readonly append owns one native shared iteration lease");
+  assert.equal(selected.references.length, 1);
+  assert.equal(program.records.readOwnership.get(selected.references[0]).source.kind, "borrow");
+  assert.equal(program.records.borrowedIterationBinding.get(loops[1]) === undefined, true,
+    "an element stored in an owned collection still needs the existing consuming iteration");
+  const { result } = compileRust({ surfaces: ["js"], capabilities: [createTsonicPlugin()], files: { "index.ts": code } });
+  assert.equal(result.diagnostics.length, 0, result.diagnostics.map(({ code, message }) => `${code}: ${message}`).join("\n"));
+  const output = artifactText(result, "src/index.rs");
+  const borrowed = output.slice(output.indexOf("pub fn borrowed"), output.indexOf("pub fn owned"));
+  assert.match(borrowed, /\.iter\(\)/u);
+  assert.match(borrowed, /result\.push_str\(value\)/u);
+  assert.doesNotMatch(borrowed, /String::from\(value|clone\(|iter_cloned/u);
+  assert.match(output.slice(output.indexOf("pub fn owned")), /iter_cloned/u);
+});
 
 test("borrowed loop selection consumes exact readonly native slices and checked borrowed string uses", () => {
   const input = fixture();

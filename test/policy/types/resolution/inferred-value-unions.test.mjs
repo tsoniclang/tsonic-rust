@@ -8,14 +8,28 @@ import { compileRust, acmeTestingPackage } from "../../../helpers/rust-session.m
 import { validateGeneratedProject } from "../../../helpers/cargo-projects.mjs";
 import { selectRustFlowReadProjection } from "../../../../dist/policy/conversions/value-carrier-reconciliation.js";
 import { planRustFlowReadProjection } from "../../../../dist/backend/planner/expressions/flow-read-projections.js";
+import { analyzeRustFlowReadEmission } from "../../../../dist/analysis/control-flow/flow-read-emission.js";
+import { createRustFlowReadEmissionProducer } from "../../../../dist/analysis/program/records/flow-read-emission.js";
+import { rustProgramPlanContext, rustProgramWithTypeEmissions } from "../../../helpers/plan-context.mjs";
 
 import { createRustTypeDefinitionRegistry } from "../../../../dist/analysis/project-types/type-definitions.js";
 import { rustOptionTargetType, rustSourcePrimitiveTargetType, rustSourceUnionTargetType } from "../../../../dist/target-model/types/index.js";
-import { fakeAstReader, fakeSourceFile, fakeStatement } from "../../../helpers/fake-compile-input.mjs";
+
+function projectionContext(program, base, node, fact, ownership) {
+  const reads = createRustOwnershipFixture(node, fact.sourceCarrier, ownership);
+  const selected = { ...program, records: createRustRecordFixture({
+    flowReadProjection: { get: candidate => candidate === node ? fact : program.records.flowReadProjection.get(candidate) },
+    runtimeCarrier: { get: candidate => candidate === node ? { carrier: fact.sourceCarrier } : program.records.runtimeCarrier.get(candidate) },
+    readOwnership: { get: candidate => candidate === node ? reads.reads.get(node) : program.records.readOwnership.get(candidate) },
+    targetOperation: { get: candidate => candidate === node ? undefined : program.records.targetOperation.get(candidate) },
+  }, program.records) };
+  const producer = createRustFlowReadEmissionProducer(() => undefined);
+  const issues = analyzeRustFlowReadEmission(selected, [node], producer);
+  return { issues, producer, context: { ...base, diagnostics: [], input: { ...base.input, program: { ...base.input.program,
+    records: createRustRecordFixture(producer.records, selected.records) } } } };
+}
 
 test("union flow projections retain exact optional dispatch and reject altered evidence", () => {
-  const node = fakeStatement({ kindName: "Identifier", pos: 0, end: 8 });
-  const sourceFile = fakeSourceFile({ fileName: "/src/index.ts", text: "selected", statements: [node] });
   const integer = rustSourcePrimitiveTargetType("int32");
   const boolean = rustSourcePrimitiveTargetType("bool");
   const union = rustSourceUnionTargetType("/src/index.ts", "Value");
@@ -24,7 +38,14 @@ test("union flow projections retain exact optional dispatch and reject altered e
     { name: "Integer", carrier: integer }, { name: "Boolean", carrier: boolean },
   ] }, true), true);
   const definitions = registry.seal();
-  const projectTypes = { definitionForCarrier: () => undefined };
+  const program = rustProgramWithTypeEmissions([union, rustOptionTargetType(union),
+    integer, rustOptionTargetType(integer), boolean], {
+    source: "type Value = number;\nexport function probe(): void {}\n",
+    typeDefinitions: definitions,
+  });
+  const base = rustProgramPlanContext(program);
+  const node = base.input.program.source.ast.statements(base.sourceFile).at(-1);
+  const projectTypes = program.projectTypes;
   for (const [optional, retainedAbsence] of [[false, false], [true, false], [true, true]]) {
     const sourceCarrier = optional ? rustOptionTargetType(union) : union;
     const selectedCarrier = retainedAbsence ? rustOptionTargetType(integer) : integer;
@@ -33,15 +54,11 @@ test("union flow projections retain exact optional dispatch and reject altered e
     assert.deepEqual(selected.fact, { kind: "source-union", sourceCarrier,
       dispatchCarrier: union, selectedCarrier, variant: "Integer" });
     for (const canMove of [false, true]) {
-      const context = { input: { program: {
-        source: { ast: fakeAstReader([sourceFile]) },
-        records: createRustRecordFixture({runtimeCarrier: { get: () => ({ carrier: sourceCarrier }) }}),
-        names: { nameForSourceType: (_file, name) => name },
-        ownership: createRustOwnershipFixture(node, sourceCarrier, canMove ? "move" : "clone"),
-        projectTypes, typeDefinitions: definitions, configuration: { edition: "2024" },
-      } }, sourceFile, diagnostics: [], moduleName: "index",
-        moduleNameByFileName: new Map([["/src/index.ts", "index"]]),
-        externalCrateNameByFileName: new Map() };
+      const admitted = projectionContext(program, base, node, selected.fact, canMove ? "move" : "clone");
+      assertNoTargetDiagnostics(admitted.issues);
+      assert.equal(admitted.producer.records.flowReadEmission.get(selected.fact) !== undefined, true,
+        "the exact authored union projection is admitted before rendering");
+      const { context } = admitted;
       const input = { kind: "path", path: "selected" };
       const planned = planRustFlowReadProjection(node, input, selected.fact, context);
       assertNoTargetDiagnostics(context.diagnostics);
@@ -56,10 +73,15 @@ test("union flow projections retain exact optional dispatch and reject altered e
       for (const changed of [{ ...selected.fact, dispatchCarrier: sourceCarrier === union ? integer : sourceCarrier },
         { ...selected.fact, variant: "Missing" }, { ...selected.fact, selectedCarrier: boolean },
         ...(!optional ? [{ ...selected.fact, selectedCarrier: rustOptionTargetType(integer) }] : [])]) {
-        context.diagnostics.length = 0;
         assert.equal(rustFlowReadProjectionEquals(selected.fact, changed), false);
-        assert.equal(planRustFlowReadProjection(node, input, changed, context), undefined);
-        assert.equal(context.diagnostics.length, 1);
+        const rejected = projectionContext(program, base, node, changed, canMove ? "move" : "clone");
+        assert.equal(rejected.issues.length, 1, "altered authored union evidence is rejected at admission");
+        assert.equal(rejected.issues[0].code, "RUST_MISSING_TARGET_FACT");
+        assert.equal(rejected.producer.records.flowReadEmission.get(changed) === undefined, true,
+          "rejected authored union evidence cannot reach the renderer");
+        assert.throws(() => planRustFlowReadProjection(node, input, changed, rejected.context),
+          /requires its sealed native emission/u);
+        assert.equal(rejected.context.diagnostics.length, 0, "the renderer does not decide source rejection");
       }
     }
   }

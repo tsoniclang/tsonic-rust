@@ -17,6 +17,8 @@ import { rustTargetTypeChildren } from "../../../dist/target-model/types/carrier
 import { closedMetadataKey } from "../../../dist/target-model/metadata/closed-data.js";
 import { planRustOutput } from "../../../dist/backend/planner/program/index.js";
 import { createRustPlanningContext } from "../../../dist/backend/planner/context.js";
+import { rustSourceFilePlanContext } from "../../helpers/plan-context.mjs";
+import { rustTypeFromCarrierInContext } from "../../../dist/backend/planner/types/render.js";
 import { genericObjectMethodStorageSource } from "../../../../tsonic/test/fixtures/generic-object-methods.mjs";
 
 const identityDeclarations = `
@@ -194,15 +196,13 @@ function joinedCarrierIn(carrier, visited = new Set()) {
 }
 
 function recordingPhysicalReads(program, keys) {
-  const { generic } = program.callableValues;
-  const physical = generic.physical;
-  const record = read => (...carriers) => {
-    for (const carrier of carriers) keys.set(closedMetadataKey(carrier), carrier);
-    return read(...carriers);
-  };
-  const recorded = Object.freeze({ ...physical, definitionFor: record(physical.definitionFor), argumentsFor: record(physical.argumentsFor),
-    conversionFor: record(physical.conversionFor), existingSelectionFor: record(physical.existingSelectionFor) });
-  return { ...program, callableValues: { ...program.callableValues, generic: { ...generic, physical: recorded } } };
+  return { ...program, records: { ...program.records,
+    typeEmission: { get(carrier) {
+      if (rustGenericCallableValue(carrier)?.physical !== undefined) keys.set(closedMetadataKey(carrier), carrier);
+      const selected = program.records.typeEmission.get(carrier);
+      return selected;
+    } },
+  } };
 }
 
 function storedKeys(program, keys) {
@@ -222,6 +222,17 @@ function invariantCode(attempt) {
     return failure.diagnostic?.code;
   }
   return undefined;
+}
+
+function requiredGenericTypeCode(program, unprepared) {
+  const definition = program.callableValues.generic.physical.definitions().find(candidate => candidate.members.length === 2);
+  assert.equal(definition !== undefined, true, "the source has its real admitted joined family");
+  const context = rustSourceFilePlanContext(program, definition.members[0].implementation.declaration);
+  assert.equal(rustTypeFromCarrierInContext(definition.carrier, context) !== undefined, true,
+    "the same native context renders the exact admitted physical type");
+  assert.equal(program.records.typeEmission.get(unprepared) === undefined, true,
+    "the unprepared key has no sealed native type record");
+  return invariantCode(() => rustTypeFromCarrierInContext(unprepared, context));
 }
 
 const factorySource = `
@@ -447,7 +458,7 @@ test("two backend plans over a published program read completed callable stores 
   const late = concreteKey(joined.carrier);
   const unstored = () => {
     assert.equal(generic.physical.existingSelectionFor(late) === undefined, true, "a fabricated unprepared key remains absent");
-    assert.equal(invariantCode(() => generic.physical.argumentsFor(late)), "TSONIC_INTERNAL_PLANNER_INVARIANT",
+    assert.equal(requiredGenericTypeCode(program, late), "TSONIC_INTERNAL_PLANNER_INVARIANT",
       "required unprepared keys fail without computing or storing a selection");
   };
   const before = snapshot();
@@ -508,6 +519,11 @@ test("published physical reads return stored keys and reject required unprepared
   const joined = inventory.find(definition => definition.members.length === 2);
   assert.equal(joined !== undefined, true);
   const canonical = physical.argumentsFor(joined.carrier);
+  const recorded = new Map();
+  const context = rustSourceFilePlanContext(recordingPhysicalReads(program, recorded), joined.members[0].implementation.declaration);
+  assert.equal(rustTypeFromCarrierInContext(joined.carrier, context) !== undefined && recorded.size > 0, true,
+    "the current native type consumer reads the real sealed physical carrier");
+  assert.equal(storedKeys(program, recorded).length, recorded.size, "every recorded native type key was already stored");
   assert.equal(sameMetadata(canonical, joined.parameters), true, "the canonical key links the family's own parameters");
   assert.equal(physical.definitionFor(joined.carrier) === joined, true, "the canonical self-carrier links to its own family");
   for (let count = 0; count < 4; count += 1) {
@@ -516,15 +532,19 @@ test("published physical reads return stored keys and reject required unprepared
   assert.equal(physical.conversionFor(joined.carrier, joined.carrier)?.kind, "identity");
   const late = concreteKey(joined.carrier);
   for (const read of [() => physical.argumentsFor(late), () => physical.definitionFor(late)]) {
-    assert.equal(invariantCode(read), "TSONIC_INTERNAL_PLANNER_INVARIANT", "unprepared required keys do not recompute their selection");
+    assert.equal(read() === undefined, true, "an optional immutable physical lookup does not compute an unprepared key");
   }
+  assert.equal(requiredGenericTypeCode(program, late), "TSONIC_INTERNAL_PLANNER_INVARIANT",
+    "unprepared required keys fail at the actual native type consumer without selecting or storing a family");
   assert.equal(physical.existingSelectionFor(late) === undefined, true, "a missing optional key is not admitted by a read");
   const value = rustGenericCallableValue(joined.carrier);
   const reordered = reorderedKey(joined.carrier);
   for (const read of [() => physical.definitionFor(reordered), () => physical.argumentsFor(reordered),
     () => physical.conversionFor(reordered, joined.carrier)]) {
-    assert.equal(invariantCode(read), "TSONIC_INTERNAL_PLANNER_INVARIANT", "a required read of a valid unrooted shape after publication is a planner invariant");
+    assert.equal(read() === undefined, true, "optional reads of a valid unrooted shape remain absent after publication");
   }
+  assert.equal(requiredGenericTypeCode(program, reordered), "TSONIC_INTERNAL_PLANNER_INVARIANT",
+    "the native consumer refuses the same valid but unrooted physical shape after publication");
   assert.equal(physical.existingSelectionFor(reordered) === undefined, true, "an optional read of a valid unrooted shape stays absent");
   const logical = rustGenericCallableCarrier({ origin: value.origin, signature: value.signature, environment: value.environment });
   assert.equal(physical.definitionFor(logical) === undefined, true, "a logical carrier is not a physical storage key");

@@ -9,8 +9,55 @@ import {
   acmeTestingPackage,
   artifactText,
   compileRust,
+  analyzeRust,
 } from "../../../helpers/rust-session.mjs";
-import { validateGeneratedProject } from "../../../helpers/cargo-projects.mjs";
+import { runCargo, validateGeneratedProject, writeGeneratedProject } from "../../../helpers/cargo-projects.mjs";
+import { createTsonicPlugin } from "../../../../../rust-nodejs/dist/index.js";
+
+test("optional native slice indexing keeps fallible input conversion in the enclosing result", { timeout: 300_000 }, () => {
+  const files = { "index.ts": `
+import type { IncomingMessage } from "node:http";
+import type { int32 } from "@tsonic/core/types.js";
+type Values = NonNullable<IncomingMessage["headersDistinct"][string]>;
+export function read(values: Values | undefined, index: int32): string | undefined {
+  return values?.[index];
+}
+` };
+  const options = { files, capabilities: [createTsonicPlugin()],
+    target: { id: "rust", options: { outputType: "lib", crateName: "optional_native_slice" } } };
+  const { program } = analyzeRust(options);
+  const chains = [];
+  const visit = node => {
+    const chain = program.records.optionalChainEmission.get(node);
+    if (chain !== undefined) chains.push(chain);
+    program.source.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+  };
+  program.sourceFiles.forEach(visit);
+  assert.equal(chains.length, 1);
+  assert.equal(chains[0].closure, undefined, "the actual checked integer conversion cannot propagate errors from an Option closure");
+  const { result } = compileRust(options);
+  assertNoTargetDiagnostics(result.diagnostics);
+  const output = artifactText(result, "src/index.rs");
+  assert.match(output, /checked_integer::<usize>\(index\)/u);
+  assert.match(output, /match values\.as_ref\(\)/u);
+  assert.doesNotMatch(output, /\.map\(\|optional_receiver|\.and_then\(\|optional_receiver/u);
+  const root = writeGeneratedProject("optional-native-slice", [...result.artifacts, { path: "tests/selection.rs", text: `
+use optional_native_slice::read;
+#[test]
+fn absence_is_lazy_and_present_indices_keep_native_conversion() {
+    assert_eq!(read(None, -1).unwrap(), None);
+    let values = vec!["native".to_owned()];
+    assert_eq!(read(Some(&values), 0).unwrap(), Some("native".to_owned()));
+    assert!(read(Some(&values), -1).is_err());
+}
+` }]);
+  runCargo(root, ["generate-lockfile", "--offline"]);
+  runCargo(root, ["fmt"]);
+  runCargo(root, ["fmt", "--check"]);
+  runCargo(root, ["check", "--all-targets", "--locked", "--offline"]);
+  runCargo(root, ["clippy", "--all-targets", "--locked", "--offline", "--", "-D", "warnings"]);
+  runCargo(root, ["test", "--locked", "--offline"]);
+});
 
 test("optional property reads lower through exact selected receiver and result carriers", { timeout: 300_000 }, () => {
   const { result } = compileRust({
