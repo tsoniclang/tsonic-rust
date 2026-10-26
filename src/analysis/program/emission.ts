@@ -6,6 +6,7 @@ import type { SourceLiteralIndex } from "@tsonic/target-api/source";
 import type { RustAnalysisRecords } from "../../target-model/records/analysis.js";
 
 import type { RustAnalysisProgram } from "./model.js";
+import type { RustCallableEntryConstruction } from "../callables/entry-parameters.js";
 
 import { analyzeRustLocationStorage } from "../storage/location-storage.js";
 
@@ -138,6 +139,7 @@ export function finalizeRustNativeEmission(
   context: RustAnalysisContext, genericCallableErrors: RustGenericCallableErrorIndex,
   flow: RustOwnershipFlow,
   operationAttempts: Pick<WeakMap<Node, RustOperationAttempt>, "get">,
+  callableEntries: Pick<RustCallableEntryConstruction, "get">,
 ): TargetStageResult<RustNativeEmissionResult> {
   const { projectTypes, objectRepresentations, typeDefinitions } = program;
   const records = context.records.readers;
@@ -152,7 +154,7 @@ export function finalizeRustNativeEmission(
     producer: context.records.declarationEmission, required: context.requiredRecords });
   if (declarationEmissionIssues.length !== 0) return rejectedTargetStage(declarationEmissionIssues);
   analyzeRustLexicalValues({ program, nodes: context.nativeNodes, producer: context.records.lexicalValuePlans });
-  analyzeRustCallableParameterEmission({ program, nodes: context.nativeNodes, producer: context.records.callableParameterPlans, required: context.requiredRecords });
+  analyzeRustCallableParameterEmission({ program, callableEntries, nodes: context.nativeNodes, producer: context.records.callableParameterPlans, required: context.requiredRecords });
   const classInitializationIssues = analyzeRustClassInitialization({ program, nodes: context.nativeNodes, producer: context.records.classInitializationPlans });
   if (classInitializationIssues.length !== 0) return rejectedTargetStage(classInitializationIssues);
   const nativeProtocolIssues = analyzeRustNativeProtocolEmission({ program, sourceFiles: context.sourceFiles, producer: context.records.nativeProtocolPlans });
@@ -162,7 +164,7 @@ export function finalizeRustNativeEmission(
     producer: context.records.errorEmissionPlans });
   const sourceCallableEmission = analyzeRustSourceCallableEmission(program, context.nativeNodes, context.records.sourceCallableEmissionPlans);
   if (sourceCallableEmission.issues.length !== 0) return rejectedTargetStage(sourceCallableEmission.issues);
-  analyzeRustGenericEmission({ program, source: context.source, sourceFiles: context.sourceFiles, nodes: context.nativeNodes,
+  analyzeRustGenericEmission({ program, callableEntries, source: context.source, sourceFiles: context.sourceFiles, nodes: context.nativeNodes,
     producer: context.records.genericEmissionPlans, sourceValues: sourceCallableEmission.values });
   const nativeDeclarations = analyzeRustNativeDeclarationForms({ ast: context.ast, sourceFiles: context.sourceFiles,
     semanticsFor: context.semanticsFor,
@@ -210,10 +212,10 @@ export function finalizeRustNativeEmission(
   const indexedRecordIssues = analyzeRustIndexedRecords(program, context.nativeNodes, context.records.indexedRecordPlans);
   if (indexedRecordIssues.length !== 0) return rejectedTargetStage(indexedRecordIssues);
   analyzeRustObjectProjections(program, context.nativeNodes, context.records.objectProjectionPlans);
-  const callableDeclarationIssues = analyzeRustCallableDeclarationEmission({ program, source: context.source, reachability, nodes: context.nativeNodes,
+  const callableDeclarationIssues = analyzeRustCallableDeclarationEmission({ program, callableEntries, source: context.source, reachability, nodes: context.nativeNodes,
     producer: context.records.callableDeclarationPlans });
   if (callableDeclarationIssues.length !== 0) return rejectedTargetStage(callableDeclarationIssues);
-  const methodEmissionIssues = analyzeRustMethodEmission({ program, nodes: context.nativeNodes, producer: context.records.methodEmissionPlans });
+  const methodEmissionIssues = analyzeRustMethodEmission({ program, callableEntries, nodes: context.nativeNodes, producer: context.records.methodEmissionPlans });
   if (methodEmissionIssues.length !== 0) return rejectedTargetStage(methodEmissionIssues);
   analyzeRustFrameEmission({ program, sourceFiles: context.sourceFiles, nodes: context.nativeNodes, producer: context.records.frameEmissionPlans,
     nativeTypeFor: carrier => context.callableValues.frames.nativeTypeFor(carrier, program.classValues) });

@@ -9,8 +9,10 @@ import type { RustMethodEmissionVariant } from "../../../target-model/records/me
 import { instantiateRustProjectMethodDispatchArguments } from "../../project-types/method-dispatch.js";
 import { rustSourceItemIdentity } from "../../../target-model/names/source-output-identities.js";
 import { isValidRustIdentifier } from "../../../target-model/names/identifiers.js";
+import type { RustCallableEntryConstruction } from "../../callables/entry-parameters.js";
 
 export function analyzeRustMethodEmission(input: {
+  readonly callableEntries: Pick<RustCallableEntryConstruction, "get">;
   readonly program: Omit<RustAnalysisProgram, "reachability">;
   readonly nodes: readonly Node[];
   readonly producer: RustMethodEmissionProducer;
@@ -48,7 +50,7 @@ export function analyzeRustMethodEmission(input: {
     }
     const isStatic = ast.hasModifierKind(member, "static");
     const staticSlot = program.projectTypes.memberSlotName(member, "static");
-    const environment = program.records.callableLeading.get(member)?.nativeEntry.direct?.body.slots
+    const environment = input.callableEntries.get(member)?.nativeEntry.direct?.body.slots
       .find(slot => slot.kind === "class-environment");
     const visibility = ast.hasModifierKind(member, "private") || ast.hasModifierKind(member, "protected") ? "private" as const : "public" as const;
     const nativeBody = program.promiseBodies.declarations.get(member);

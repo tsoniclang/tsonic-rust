@@ -24,7 +24,7 @@ import { createRustRetainedEnvironmentQueries } from "../../../dist/analysis/cal
 import { compileRust } from "../../helpers/rust-session.mjs";
 import { analyzeRustCheckedContext } from "../../helpers/rust-session-analysis-context.mjs";
 import { analyzeRustAnalysisProgram } from "../../../dist/analysis/program/target-program.js";
-import { analyzeRustCallableEntryParameters } from "../../../dist/analysis/callables/entry-parameters.js";
+import { prepareRustCallableEntryParameters } from "../../../dist/analysis/callables/entry-parameters.js";
 import { analyzeRustLexicalFunctionEmission } from "../../../dist/analysis/callables/lexical-emission.js";
 
 
@@ -263,14 +263,15 @@ function physicalLifecycleInputs({ beforeInitialize, afterInitialize }) {
         analyzeRustLexicalFunctionEmission({ program: { records: context.records,
           lexicalFunctions: program.lexicalFunctions, ownership: program.ownership, callableValues: registry },
           nodes: context.nativeNodes, producer: context.records.lexicalFunctionPlans });
-        const entryIssues = analyzeRustCallableEntryParameters({ source: context.source, nodes: context.nativeNodes,
+        const entryResult = prepareRustCallableEntryParameters({ source: context.source, nodes: context.nativeNodes,
           records: context.records, lifetimes: context.sourceLifetimes, nativeStorage: registry.nativeStorage,
           native: registry.native, nativeProducers: registry.nativeProducers, generic: registry.generic,
           frames: registry.frames, classValues, projectTypes: context.projectTypes,
           structuralShapes: context.structuralShapes.completed,
           producer: context.records.declarationEmission, required: context.requiredRecords });
-        assert.equal(entryIssues.length, 0, "the original lifecycle completes its canonical early native entry owner before sealing");
-        sealInput = Object.freeze({ nativeGenerics: context.records.nativeGenericPlans,
+        assert.equal(entryResult.kind, "resolved", "the original lifecycle completes its canonical early native entry owner before sealing");
+        assert.equal(entryResult.diagnostics.length, 0, "the original early native entry phase has no issues");
+        sealInput = Object.freeze({ callableEntries: entryResult.value, nativeGenerics: context.records.nativeGenericPlans,
           retainedCallableInputs: program.retainedCallableInputs,
           declarationGenericRequirements: program.declarationGenericRequirements,
           genericErrors: program.genericCallableErrors,
@@ -328,8 +329,23 @@ test("callable value plans seal only after adapter classification and cannot be 
   registry.initializeCompletions({ ast: planInput.ast, sourceLifetimes: planInput.lifetimes,
     records: planInput.records, physical: registry.generic.physical, producers: registry.nativeProducers,
     definitions: planInput.typeDefinitions, components });
+  const preparedEntries = new Map(registry.nativeProducers.producers.map(({ declaration }) => {
+    const entry = sealInput.callableEntries.get(declaration);
+    assert.equal(entry?.genericHeader !== undefined, true, "analysis consumes its exact prepared native header before record publication");
+    assert.equal(planInput.records.callableLeading.get(declaration), undefined, "entry construction never publishes a partial context inventory");
+    return [declaration, entry];
+  }));
+  assert.equal(preparedEntries.size > 0, true, "the real source callable exercises the open entry owner");
   const sealed = registry.seal(sealInput);
   assert.equal(sealed.kind, "resolved", "the original callable lifecycle seals using complete native facts");
+  sealInput.callableEntries.seal();
+  sealInput.callableEntries.seal();
+  for (const [declaration, entry] of preparedEntries) {
+    assert.equal(planInput.records.callableLeading.get(declaration) === entry, true, "final publication writes the identical prepared native entry once");
+    assert.equal(sealInput.callableEntries.get(declaration) === entry, true, "the closed owner remains an identical data lookup without recomputation");
+    assert.equal(entry.sourceParameters.set === undefined && entry.genericEntries.set === undefined && entry.frameEntries.set === undefined,
+      true, "neither prepared nor published entry maps expose mutation authority");
+  }
   const plan = sealed.value;
   registry.publish();
   assert.equal(registry.selected === selected, true, "the finalized analysis selection cannot be replaced by publication");

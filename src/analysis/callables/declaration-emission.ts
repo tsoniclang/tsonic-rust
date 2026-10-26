@@ -12,8 +12,10 @@ import { rustUnitTargetType } from "../../target-model/types/index.js";
 import { rustNodeIsOutsideNativeCode } from "../control-flow/compile-time-statements.js";
 import { type TargetSourceProgram } from "@tsonic/target-api/source";
 import { createRustSourceCallableContract } from "./source-callable-abi.js";
+import type { RustCallableEntryConstruction } from "./entry-parameters.js";
 
 export function analyzeRustCallableDeclarationEmission(input: {
+  readonly callableEntries: Pick<RustCallableEntryConstruction, "get">;
   readonly program: Omit<RustAnalysisProgram, "reachability">;
   readonly source: TargetSourceProgram;
   readonly nodes: readonly Node[];
@@ -85,7 +87,7 @@ export function analyzeRustCallableDeclarationEmission(input: {
     const resultCarrier = objectPromise ? program.records.callableReturn.get(declaration)?.invocation
       : isRustUnitCarrier(carrier) ? rustUnitTargetType() : program.records.callableReturn.get(declaration)?.outward;
     if (resultCarrier === undefined) failTargetAnalysisInvariant("tsonic-rust", "An admitted callable requires its selected physical native result.", declaration);
-    const leading = program.records.callableLeading.get(declaration);
+    const leading = input.callableEntries.get(declaration);
     if (leading === undefined) failTargetAnalysisInvariant("tsonic-rust", "An admitted callable requires its exact leading parameter ABI.", declaration);
     const parameterCarriers: TargetTypeRef[] = [...leading.parameters.map(parameter => parameter.carrier)];
     const contract = createRustSourceCallableContract({ source: input.source, records: program.records,

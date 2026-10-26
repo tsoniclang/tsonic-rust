@@ -1,6 +1,7 @@
 import type { Node } from "@tsonic/tsts";
+import { snapshotTargetReadonlyMap } from "@tsonic/target-api/analysis";
 import type { TargetSourceProgram } from "@tsonic/target-api/source";
-import { failTargetAnalysisInvariant, type TargetDiagnostic } from "@tsonic/target-api/artifacts";
+import { failTargetAnalysisInvariant, rejectedTargetStage, resolvedTargetStage, type TargetDiagnostic, type TargetStageResult } from "@tsonic/target-api/artifacts";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { RustLifetimeIndex } from "../../target-model/lifetimes/index.js";
 import type { RustNativeCallableProducerPlan } from "../../target-model/records/native-producers.js";
@@ -23,11 +24,17 @@ import type { RustFrameCallablePlanRegistry } from "./frame-values.js";
 import type { RustClassValuePlan } from "../../target-model/records/class-values.js";
 import type { RustFrameCallableImplementation } from "../../target-model/records/frame-callables.js";
 import type { RustNativeFrameEntry } from "../../target-model/records/declaration-emission.js";
+import type { RustCallableLeadingEmission } from "../../target-model/records/declaration-emission.js";
 import { createRustNativeEntryLayouts } from "./entry-layout.js";
 import type { RustProjectTypePolicy } from "../project-types/index.js";
 import type { RustStructuralShapePlan } from "../objects/shapes/structural-shape-plan.js";
 
-export function analyzeRustCallableEntryParameters(input: {
+export interface RustCallableEntryConstruction {
+  get(declaration: Node): RustCallableLeadingEmission | undefined;
+  seal(): void;
+}
+
+export function prepareRustCallableEntryParameters(input: {
   readonly source: TargetSourceProgram;
   readonly nodes: readonly Node[];
   readonly records: RustProgramRecords;
@@ -42,7 +49,7 @@ export function analyzeRustCallableEntryParameters(input: {
   readonly structuralShapes: RustStructuralShapePlan;
   readonly producer: RustDeclarationEmissionProducer;
   readonly required: RustRequiredRecord[];
-}): readonly TargetDiagnostic[] {
+}): TargetStageResult<RustCallableEntryConstruction> {
   const { ast } = input.source;
   const issues: TargetDiagnostic[] = [];
   const headers = new Map<Node, RustNativeCallableGenericHeader>();
@@ -109,8 +116,9 @@ export function analyzeRustCallableEntryParameters(input: {
     if (selected.kind === "rejected") issues.push(...selected.diagnostics);
     else headers.set(declaration, selected.value);
   }
-  if (issues.length !== 0) return Object.freeze(issues);
+  if (issues.length !== 0) return rejectedTargetStage(Object.freeze(issues));
   const entryFor = createRustNativeEntryLayouts(input);
+  const entries = new Map<Node, RustCallableLeadingEmission>();
   for (const node of declarations) {
     const operation = input.records.targetOperation.get(node);
     const leading = operation?.kind === "closure" ? operation.leadingParameters ?? [] : [];
@@ -133,12 +141,19 @@ export function analyzeRustCallableEntryParameters(input: {
     });
     const selectedParameters = sourceParameters.get(node) ?? new Map<Node, TargetTypeRef>();
     const genericHeader = headers.get(node);
-    input.producer.leading(node, { parameters: Object.freeze(parameters), genericHeader,
+    entries.set(node, Object.freeze({ parameters: Object.freeze(parameters), genericHeader,
       nativeEntry: entryFor(node, parameters, selectedParameters, genericHeader),
-      genericEntries: genericEntries.get(node) ?? new Map<RustGenericCallableImplementation, RustNativeGenericEntry>(),
-      frameEntries: frameEntries.get(node) ?? new Map<RustFrameCallableImplementation, RustNativeFrameEntry>(),
-      sourceParameters: selectedParameters });
-    requireRustRecord(input.required, "callableLeading", node, "native callable entry parameters", "analyzeRustCallableEntryParameters");
+      genericEntries: snapshotTargetReadonlyMap(genericEntries.get(node) ?? []),
+      frameEntries: snapshotTargetReadonlyMap(frameEntries.get(node) ?? []),
+      sourceParameters: snapshotTargetReadonlyMap(selectedParameters) }));
   }
-  return Object.freeze(issues);
+  let sealed = false;
+  return resolvedTargetStage(Object.freeze({ get: (declaration: Node) => entries.get(declaration), seal() {
+    if (sealed) return;
+    for (const [declaration, entry] of entries) {
+      input.producer.leading(declaration, entry);
+      requireRustRecord(input.required, "callableLeading", declaration, "native callable entry parameters", "prepareRustCallableEntryParameters");
+    }
+    sealed = true;
+  } }));
 }

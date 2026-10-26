@@ -79,7 +79,7 @@ runtimeCarrier: { get: (subject) => subject === parameter
   const producer = createRustCallableParameterProducer(() => {});
   const required = [];
   assert.throws(() => analyzeRustCallableParameterEmission({ program: { ...program, records }, nodes: [parameter],
-    producer, required }), error => {
+    callableEntries: program.records.callableLeading, producer, required }), error => {
     assert.equal(error.diagnostic?.code, "TSONIC_INTERNAL_ANALYSIS_INVARIANT");
     assert.equal(error.message, "Binding-pattern parameters require their exact Rust source value and selected native entry carrier.");
     assert.equal(error.diagnostic.source, "tsonic-rust");

@@ -39,6 +39,7 @@ import type { RustNativeCallableGenericContext, RustNativeCallableGenericInput }
 import type { RustNativeGenericProducer } from "../program/records/native-generics.js";
 import { rustNodeInCatchingTryBody } from "../errors/catching-try.js";
 import { rustProgramErrorTargetType } from "../../target-model/types/carriers/js.js";
+import type { RustCallableEntryConstruction } from "./entry-parameters.js";
 import type { RustProjectTypePolicy } from "../../target-model/types/project-types.js";
 
 export type RustNativeCallableOrigins =
@@ -315,6 +316,7 @@ export function createRustNativeCallableInputPlan(input: {
 }
 
 export function analyzeRustNativeCallableGenerics(input: {
+  readonly callableEntries: Pick<RustCallableEntryConstruction, "get">;
   readonly producer: RustNativeGenericProducer;
   readonly ast: AstReader;
   readonly records: RustProgramRecords;
@@ -329,7 +331,7 @@ export function analyzeRustNativeCallableGenerics(input: {
   const diagnostics: TargetDiagnostic[] = [];
   for (const { declaration } of input.nativeProducers.producers) {
     if (contexts.has(declaration)) continue;
-    const header = input.records.callableLeading.get(declaration)?.genericHeader;
+    const header = input.callableEntries.get(declaration)?.genericHeader;
     if (header === undefined) failTargetAnalysisInvariant("tsonic-rust",
       "An admitted native callable requires its completed early generic header.", declaration);
     const { sourceContract, implicitLifetimes, retention, callableInputs, inputs } = header;

@@ -15,8 +15,10 @@ import { rustProgramNodeIsOutsideNativeCode } from "../control-flow/compile-time
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
 import { rustStructuralObjectCarrierValue } from "../../target-model/types/carriers/source-types.js";
 import { substituteRustTargetGenerics } from "../../target-model/types/carriers/substitution.js";
+import type { RustCallableEntryConstruction } from "./entry-parameters.js";
 
 export function analyzeRustGenericEmission(input: {
+  readonly callableEntries: Pick<RustCallableEntryConstruction, "get">;
   readonly program: Omit<RustAnalysisProgram, "reachability">;
   readonly source: TargetSourceProgram;
   readonly sourceFiles: readonly SourceFile[];
@@ -44,7 +46,7 @@ export function analyzeRustGenericEmission(input: {
   for (const definition of generic.definitions) for (const implementation of definition.implementations) {
     if (implementations.has(implementation)) continue;
     implementations.add(implementation);
-    const entry = program.records.callableLeading.get(implementation.declaration)?.genericEntries.get(implementation);
+    const entry = input.callableEntries.get(implementation.declaration)?.genericEntries.get(implementation);
     const requirements = program.declarationGenericRequirements.contractFor(implementation.declaration);
     if (entry?.implementation !== implementation || requirements === undefined) failTargetAnalysisInvariant("tsonic-rust",
       "An admitted generic implementation requires its finalized physical environment and generic contract.", implementation.declaration);

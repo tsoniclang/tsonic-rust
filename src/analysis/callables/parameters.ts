@@ -9,18 +9,19 @@ import { selectRustOptionalDefaultStorage } from "../../policy/conversions/optio
 import type { RustSourceParameterAbiFact } from "../../target-model/records/callables-and-resources.js";
 import type { RustCallableParameterInitialization } from "../../target-model/records/parameter-emission.js";
 import { isRustCopyCarrier } from "../../policy/constraints/native-traits.js";
+import type { RustCallableEntryConstruction } from "./entry-parameters.js";
 
 type RustParameterEmissionProgram = Pick<RustAnalysisProgram,
   "source" | "sourceNavigation" | "records" | "callableValues" | "projectTypes" | "objectRepresentations" | "names">;
 
-function readRustEntryParameterCarrier(program: RustParameterEmissionProgram, parameter: Node, owner: Node) {
-  const carrier = program.records.callableLeading.get(owner)?.sourceParameters.get(parameter);
+function readRustEntryParameterCarrier(entries: Pick<RustCallableEntryConstruction, "get">, parameter: Node, owner: Node) {
+  const carrier = entries.get(owner)?.sourceParameters.get(parameter);
   if (carrier === undefined) failTargetAnalysisInvariant("tsonic-rust",
     "An admitted native parameter requires its completed physical entry carrier.", parameter);
   return carrier;
 }
 
-function rustParameterReturnInitialization(program: RustParameterEmissionProgram, parameter: Node,
+function rustParameterReturnInitialization(program: RustParameterEmissionProgram, entries: Pick<RustCallableEntryConstruction, "get">, parameter: Node,
   owner: Node, abi: RustSourceParameterAbiFact, eligible: boolean): RustCallableParameterInitialization {
   const binding = Object.freeze({ kind: "binding" as const });
   const { ast } = program.source;
@@ -68,7 +69,7 @@ function rustParameterReturnInitialization(program: RustParameterEmissionProgram
       (ast.is.IsObjectBindingPattern(name) || ast.is.IsArrayBindingPattern(name))) return binding;
     if (otherIndex > parameterIndex && (otherAbi.form === "default" || program.records.bindingStorage.get(other) !== undefined)) return binding;
     if (abi.form === "default" && (program.records.bindingStorage.get(other) !== undefined ||
-      !dropFree(readRustEntryParameterCarrier(program, other, owner)) || !dropFree(otherAbi.valueCarrier))) return binding;
+      !dropFree(readRustEntryParameterCarrier(entries, other, owner)) || !dropFree(otherAbi.valueCarrier))) return binding;
   }
   if (abi.form === "default") {
     const lexical = program.records.lexicalFunction.get(owner);
@@ -87,6 +88,7 @@ function rustParameterReturnInitialization(program: RustParameterEmissionProgram
 }
 
 export function analyzeRustCallableParameterEmission(input: {
+  readonly callableEntries: Pick<RustCallableEntryConstruction, "get">;
   readonly program: RustParameterEmissionProgram;
   readonly nodes: readonly Node[];
   readonly producer: RustCallableParameterProducer;
@@ -104,7 +106,7 @@ export function analyzeRustCallableParameterEmission(input: {
     const pattern = nameNode !== undefined && (ast.is.IsObjectBindingPattern(nameNode) || ast.is.IsArrayBindingPattern(nameNode)) ? nameNode : undefined;
     const name = pattern === undefined ? program.names.nameForDeclaration(parameter) : undefined;
     if (pattern === undefined && (name === undefined || !isValidRustIdentifier(name))) failTargetAnalysisInvariant("tsonic-rust", "An admitted native parameter requires its exact native identifier.", parameter);
-    const carrier = readRustEntryParameterCarrier(program, parameter, owner);
+    const carrier = readRustEntryParameterCarrier(input.callableEntries, parameter, owner);
     const sourceCarrier = program.records.runtimeCarrier.get(parameter)?.carrier;
     const storage = program.records.bindingStorage.get(parameter);
     if (pattern !== undefined && (sourceCarrier === undefined || !rustTargetTypeRefEquals(sourceCarrier, abi.valueCarrier) || storage !== undefined))
@@ -118,7 +120,7 @@ export function analyzeRustCallableParameterEmission(input: {
     if (abi.form === "default" && initializer === undefined) failTargetAnalysisInvariant("tsonic-rust", "A native default-parameter ABI requires its exact authored initializer.", parameter);
     input.producer.parameter(parameter, { carrier, name, pattern, sourceCarrier, storage, mutable,
       parameterMutable: abi.form !== "default" && abi.entryConversion === undefined && mutable,
-      initialization: rustParameterReturnInitialization(program, parameter, owner, abi,
+      initialization: rustParameterReturnInitialization(program, input.callableEntries, parameter, owner, abi,
         pattern === undefined && storage === undefined && !mutable && abi.entryConversion === undefined),
       default: initializer === undefined ? undefined : Object.freeze({ initializer, valueCarrier: abi.valueCarrier,
         retainStorage: selectRustOptionalDefaultStorage(Object.freeze({ storage: carrier, result: abi.valueCarrier })) }),

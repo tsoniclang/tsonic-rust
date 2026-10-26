@@ -72,6 +72,7 @@ import { prepareRustProviderSourceOccurrences } from "../operations/provider-sou
 import { prepareRustPhysicalEmissionContexts } from "../program/physical-emission-contexts.js";
 import { prepareRustPhysicalCallableEmissionRequests } from "./emission-requests.js";
 import type { SourceNativeTaskGraph } from "@tsonic/target-api/analysis";
+import type { RustCallableEntryConstruction } from "./entry-parameters.js";
 
 import { analyzeRustNativeCallableGenerics } from "./native-inputs.js";
 import type { RustNativeGenericProducer } from "../program/records/native-generics.js";
@@ -104,6 +105,7 @@ export type RustCallableValueSelection = Omit<RustCallableValuePlan, "native" | 
 };
 
 export interface RustCallableValueSealInput {
+  readonly callableEntries: Pick<RustCallableEntryConstruction, "get">;
   readonly nativeGenerics: RustNativeGenericProducer;
   readonly retainedCallableInputs: RustRetainedCallableInputPlan;
   readonly declarationGenericRequirements: RustDeclarationGenericRequirementIndex;
@@ -508,6 +510,7 @@ function createRustCallableValueLifecycle(input: RustCallableValuePlanInput,
       }
       const frames = frameConstruction.sealCounters(late.constructions);
       const nativeGenericContexts = analyzeRustNativeCallableGenerics({
+        callableEntries: late.callableEntries,
         ast: input.ast, records: input.records, producer: late.nativeGenerics,
         native, nativeStorage: publication.value.nativeStorage, nativeProducers: publication.value.nativeProducers,
         nativeGenericProducers: selectedPlan.nativeGenericProducers, retainedCallableInputs: late.retainedCallableInputs,

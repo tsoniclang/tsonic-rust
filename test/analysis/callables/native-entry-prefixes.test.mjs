@@ -17,6 +17,7 @@ class Box<Value> {
 export function read(): number { return new Box<number>(1).read(); }
 ` } });
   const nodes = [];
+  assert.equal("callableEntries" in program, false, "private native entry construction authority is absent from the published analysis program");
   const visit = node => {
     nodes.push(node);
     program.source.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });

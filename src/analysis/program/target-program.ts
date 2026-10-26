@@ -15,7 +15,7 @@ import { analyzeRustCaptureStorage } from "../storage/capture-storage.js";
 import { analyzeRustGenericAdoption, analyzeRustPromiseResults } from "../callables/promise-results.js";
 import { publishRustNativeTaskUses } from "../callables/native-task-uses.js";
 import { analyzeRustLexicalFunctionEmission } from "../callables/lexical-emission.js";
-import { analyzeRustCallableEntryParameters } from "../callables/entry-parameters.js";
+import { prepareRustCallableEntryParameters } from "../callables/entry-parameters.js";
 import { analyzeRustClassImplementationContexts } from "../objects/class-implementation-contexts.js";
 import { createRustModuleInitializationPlan } from "../module-initialization/analyze.js";
 import { analyzeRustProviderErrorCarriers } from "./provider-errors.js";
@@ -390,14 +390,14 @@ export function analyzeRustAnalysisProgram(
   if (ownership.kind === "rejected") return rejectedTargetStage(ownership.diagnostics);
   analyzeRustLexicalFunctionEmission({ program: { records, lexicalFunctions, ownership: ownership.ownership,
     callableValues: context.callableValues }, nodes: context.nativeNodes, producer: context.records.lexicalFunctionPlans });
-  const entryIssues = analyzeRustCallableEntryParameters({ source: context.source, nodes: context.nativeNodes, records,
+  const callableEntries = prepareRustCallableEntryParameters({ source: context.source, nodes: context.nativeNodes, records,
     lifetimes: context.sourceLifetimes, nativeStorage: context.callableValues.nativeStorage, native: context.callableValues.native,
     nativeProducers: context.callableValues.nativeProducers,
     generic: context.callableValues.generic,
     frames: context.callableValues.frames, classValues,
     projectTypes: context.projectTypes, structuralShapes: context.structuralShapes.completed,
     producer: context.records.declarationEmission, required: context.requiredRecords });
-  if (entryIssues.length !== 0) return rejectedTargetStage(entryIssues);
+  if (callableEntries.kind === "rejected") return callableEntries;
   analyzeRustBorrowedInitializers(context.ast, context.nativeNodes, records, ownership.ownership.reads, context.records.borrowedInitializers);
   const retentionIssues = context.callableValues.validateStructuralRetention(declarationGenericRequirements.index, context.typeFamilies, classValues, errorTypes);
   const promiseResults = promiseResultsFor(retentionIssues.length === 0);
@@ -423,6 +423,7 @@ export function analyzeRustAnalysisProgram(
   const projectFlowReadSelections = analyzeRustProjectFlowReadSelections({ ast: context.ast, sourceFiles: context.sourceFiles,
     isNativeNode: context.isNativeNode, records });
   const callableValues = context.callableValues.seal({
+    callableEntries: callableEntries.value,
     nativeGenerics: context.records.nativeGenericPlans,
     declarationGenericRequirements: declarationGenericRequirements.index, genericErrors: genericCallableErrors.value,
     retainedCallableInputs: retainedCallableInputs.value,
@@ -512,12 +513,14 @@ export function analyzeRustAnalysisProgram(
     borrowedElementReads,
     genericCallableErrors: genericCallableErrors.value,
   };
-  const emission = finalizeRustNativeEmission(program, context, genericCallableErrors.value, ownershipFlow.flow, sourceStage.operationAttempts);
+  const emission = finalizeRustNativeEmission(program, context, genericCallableErrors.value, ownershipFlow.flow,
+    sourceStage.operationAttempts, callableEntries.value);
   if (emission.kind === "rejected") return emission;
   context.callableValues.publish();
   const finalFoundation = finalizeRustFoundation(program.foundation, context.records.minimumFoundation());
   if (finalFoundation.diagnostics.length !== 0) return rejectedTargetStage(finalFoundation.diagnostics);
   context.sourceStorage.sealFormalMemberWriteDemands();
+  callableEntries.value.seal();
   context.records.seal(context.requiredRecords);
   return resolvedTargetStage(Object.freeze({
     ...program,

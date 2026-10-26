@@ -1,7 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import type { RustDeclarationEmissionRecords, RustClassDeclarationEmission, RustCallableReturnEmission, RustCallableLeadingEmission } from "../../../target-model/records/declaration-emission.js";
 import { createRustRecordFamily } from "./family.js";
-import { snapshotTargetReadonlyMap } from "@tsonic/target-api/analysis";
 
 export interface RustDeclarationEmissionProducer {
   readonly records: RustDeclarationEmissionRecords;
@@ -19,9 +18,7 @@ export function createRustDeclarationEmissionProducer(assertOpen: () => void): R
   return Object.freeze({ records: Object.freeze({ classDeclaration: classes.reader, callableReturn: returns.reader, callableLeading: leading.reader, sourceTypeScopes: scopes.reader }),
     classDeclaration: (subject: Node, value: RustClassDeclarationEmission): void => classes.writer.set(subject, Object.freeze(value)),
     callable: (subject: Node, value: RustCallableReturnEmission): void => returns.writer.set(subject, Object.freeze(value)),
-    leading: (subject: Node, value: RustCallableLeadingEmission): void => leading.writer.set(subject, Object.freeze({ ...value,
-      sourceParameters: snapshotTargetReadonlyMap(value.sourceParameters), genericEntries: snapshotTargetReadonlyMap(value.genericEntries),
-      frameEntries: snapshotTargetReadonlyMap(value.frameEntries) })),
+    leading: (subject: Node, value: RustCallableLeadingEmission): void => leading.writer.set(subject, Object.freeze(value)),
     sourceFile: (subject: Node, value: readonly string[]): void => scopes.writer.set(subject, Object.freeze(value)),
   });
 }
