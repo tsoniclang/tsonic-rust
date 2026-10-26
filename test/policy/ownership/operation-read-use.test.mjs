@@ -8,6 +8,7 @@ import { selectRustOperationReadUses } from "../../../dist/policy/ownership/read
 import { finalizeRustProviderOperationAbi } from "../../../dist/policy/operations/members/abi/finalize.js";
 import { rustStringTargetType } from "../../../dist/target-model/types/index.js";
 import { createRustRecordFixture } from "../../helpers/records.mjs";
+import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 import { getRustTypeofRuntimeKind } from "../../../dist/policy/operations/syntax/runtime-kind.js";
 import { rustNativeIndexStorageProjection, rustNativeStoragePathsDisjoint, rustNativeStorageProjections,
   rustNativeStorageRoot } from "../../../dist/analysis/storage/native-paths.js";
@@ -38,6 +39,105 @@ test("borrowed converted comparisons retain the actual owning source demand", ()
     program.sourceFiles.forEach(visit);
     assert.equal(observations, expected, "the actual checked original fixtures retain every converted comparison occurrence");
   }
+});
+
+test("project accessor uses retain their selected native self contract and complete operand interval", () => {
+  const { program } = analyzeRust({ files: { "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+export class Counter {
+  stored: int32 = 0;
+  get count(): int32 { return this.stored; }
+  set count(value: int32) { this.stored = value; }
+}
+function next(): int32 { return 2; }
+export function inspect(value: Counter): int32 {
+  const first = value.count;
+  value.count = 2;
+  (((value["count"]))) += next();
+  value.count++;
+  return first + value.count;
+}
+` } });
+  const { ast } = program.source;
+  const accesses = [];
+  const visit = node => {
+    const operation = program.records.targetOperation.get(node);
+    if (operation?.kind === "source-accessor") accesses.push([node, operation]);
+    ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+  };
+  program.sourceFiles.forEach(visit);
+  assert.equal(accesses.length, 5, "read, plain write, wrapped compound, unary and final read retain their actual selected accessors");
+  for (const [node, operation] of accesses) {
+    const receiver = Node_Expression(ast, node);
+    const declarations = operation.accessMode === "read" ? [operation.read]
+      : operation.accessMode === "write" ? [operation.write] : [operation.read, operation.write];
+    assert.equal(declarations.every(accessor => accessor !== undefined &&
+      program.records.selfMode.get(accessor.declaration)?.mode === "ref"), true,
+    "the actual selected getter and setter already borrow native self");
+    const use = program.ownership.uses.get(receiver);
+    assert.equal(use?.mode, "shared", "all invoked shared native accessor halves retain their actual nonconsuming receiver");
+    const key = ast.is.IsElementAccessExpression(node) ? ast.as.AsElementAccessExpression(node).ArgumentExpression : undefined;
+    let source = node;
+    while (ast.is.IsParenthesizedExpression(ast.parent(source))) source = ast.parent(source);
+    const parent = ast.parent(source);
+    const right = operation.accessMode !== "read" && ast.is.IsBinaryExpression(parent) &&
+      ast.as.AsBinaryExpression(parent).Left === source ? ast.as.AsBinaryExpression(parent).Right : undefined;
+    const expected = [...(key === undefined ? [] : [key]), ...(right === undefined ? [] : [right])];
+    const read = program.ownership.reads.get(receiver);
+    if (right === undefined || ast.is.IsNumericLiteral(right))
+      assert.equal(read?.source.kind, "borrow", "a receiver with no later replacement/effect needs no native owner snapshot");
+    else assert.equal(read?.source.kind === "borrow", expected.every(operand => read.borrowedAcross.has(operand)),
+      "borrowing through a later call requires its actual completed relationship; missing proof retains the native snapshot");
+    assert.equal(use.later.length, expected.length, "computed key and complete plain/compound RHS participate exactly once");
+    for (const [index, operand] of expected.entries())
+      assert.equal(use.later[index] === operand, true, "native receiver borrowing preserves original source operand identity and order");
+    assert.equal(Object.isFrozen(use.later), true, "the final receiver interval is immutable");
+    for (const mode of [undefined, "mut-ref"]) {
+      const records = createRustRecordFixture({ targetOperation: program.records.targetOperation,
+        selfMode: { get: () => mode === undefined ? undefined : { mode } } });
+      const inverse = analyzeRustReadUses(ast, [node], records, program.typeDefinitions,
+        () => false, program.structuralShapes, () => false);
+      assert.equal(inverse.has(receiver), false, "missing and mutable native self contracts never become shared by default");
+    }
+    if (operation.accessMode === "read-write") {
+      const records = createRustRecordFixture({ targetOperation: program.records.targetOperation,
+        selfMode: { get: declaration => ({ mode: declaration === operation.read.declaration ? "ref" : "mut-ref" }) } });
+      const inverse = analyzeRustReadUses(ast, [node], records, program.typeDefinitions,
+        () => false, program.structuralShapes, () => false);
+      assert.equal(inverse.has(receiver), false, "a borrowed getter cannot override a mutable setter in one read-modify-write");
+    }
+  }
+});
+
+test("project accessor assignment snapshots a replaced receiver before its RHS exactly once", { timeout: 300_000 }, () => {
+  const { result } = compileRust({ target: { id: "rust", options: { outputType: "bin", crateName: "accessor_receiver_order" } },
+    files: { "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+export class Counter {
+  stored: int32;
+  constructor(value: int32) { this.stored = value; }
+  get count(): int32 { return this.stored; }
+  set count(value: int32) { this.stored = value; }
+}
+export function update(): int32 {
+  let selected = new Counter(1);
+  const original = selected;
+  let calls: int32 = 0;
+  function replace(): int32 {
+    calls++;
+    selected = new Counter(9);
+    return 7;
+  }
+  selected.count = replace();
+  return original.count * 100 + selected.count * 10 + calls;
+}
+export function main(): void {
+  if (update() !== 791) throw new Error("accessor receiver/RHS order changed");
+}
+main();
+` } });
+  assert.equal(result.diagnostics.length, 0, result.diagnostics.map(diagnostic => diagnostic.code).join(","));
+  validateGeneratedProject("accessor-receiver-rhs-order", result.artifacts, { run: true });
 });
 
 test("a native compound receiver keeps its complete getter-index and RHS interval through transparent wrappers", async () => {
