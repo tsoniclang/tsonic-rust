@@ -49,15 +49,17 @@ export function selectRustNativeConversionBoundaries(input: RustNativeStorageSou
     const value = operation?.kind === "source-field" ? callableValueCarrier(operation.resultCarrier) : undefined;
     const getter = operation?.kind === "source-field" && field?.storage === "property" && field.method !== true &&
       value !== undefined && rustCallableProtocol(value) !== undefined;
+    const boundMethod = operation?.kind === "source-method-property" &&
+      (operation.accessMode === "read" || operation.accessMode === "read-write");
     const adapter = input.records.contextualValueConversion.get(node)?.conversion.kind === "callable-adapter";
-    if (!getter && !adapter) continue;
+    if (!getter && !boundMethod && !adapter) continue;
     const selected = input.storage.subject(node, "value");
     if (selected.kind === "unresolved") { failure ??= selected.reason; continue; }
     const declaration = input.ast.is.IsIdentifier(node)
       ? input.storage.source.navigation.sourceReferenceFor(node)?.declaration : undefined;
     // A reference to a native callable input is transported as the input itself and is never on a frontier; any other
     // adapted reference (a local binding read) is a frontier stop of the storage it is written into.
-    if (getter || declaration === undefined || !input.native.isConcreteCallableParameter(declaration) &&
+    if (getter || boundMethod || declaration === undefined || !input.native.isConcreteCallableParameter(declaration) &&
       !input.native.inputs.some(candidate => candidate.subject.node === declaration)) {
       conversionBoundaries.push(selected.subject);
       continue;

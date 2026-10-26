@@ -13,22 +13,30 @@ import { rustHigherRankedNativeFunctionCarrier } from "./higher-ranked-function.
 import { rustResolutionContext } from "../program/walk.js";
 import { resolveRustCallableStorageCarrier } from "../source-evidence/types/resolution/source-evidence.js";
 import { rustRetainedValueLifetime } from "./retained-values.js";
+import { rustFrameCallableValue } from "../../target-model/types/carriers/frame-callables.js";
 
 export function rustSourceClosureValueCarrier(
   walk: RustFactWalk, declaration: Node, selected: TargetTypeRef, captures?: readonly TargetTypeRef[],
 ): TargetTypeRef | undefined {
+  if (walk.context.ast.body(declaration) === undefined ||
+    walk.context.callableOwnership.failureReason() !== undefined) return undefined;
+  const lexical = walk.context.retainedEnvironments.lexicalFor(declaration);
+  if (lexical.kind === "unresolved") return undefined;
   const context = rustResolutionContext(walk, declaration, "value");
   const protocol = rustCallableProtocol(selected);
   const construction = rustCallableInputProtocol(selected) === undefined ? selected : protocol === undefined ? undefined
     : rustCallableTargetType(protocol.parameters, protocol.result, undefined, protocol.error);
-  const storage = resolveRustCallableStorageCarrier(construction, context, walk.operationOptions, new Set());
+  const storage = resolveRustCallableStorageCarrier(construction, { ...context, callableRepresentation: "construction" },
+    walk.operationOptions, new Set());
   const stored = rustCallableProtocol(storage);
-  if (storage === undefined || stored?.lifetime === undefined) return storage;
+  if (storage === undefined || rustFrameCallableValue(storage) !== undefined) return storage;
   // A recursive closure reads its own unwritten binding through its recursion slot, not its environment (as captures do).
   const self = rustCallableExpressionValueDeclaration(declaration, walk.context.ast);
   const excluded = self !== undefined && !walk.context.source.navigation.declarationUseSummary(self).bindingWritten ? new Set([self]) : new Set<Node>();
   const environment = captures ?? resolveRustCallableEnvironment(declaration, context, walk.operationOptions, new Set(), excluded);
-  const lifetime = environment === undefined ? undefined : rustRetainedValueLifetime(declaration, environment, walk);
+  if (environment === undefined) return undefined;
+  if (stored?.lifetime === undefined) return storage;
+  const lifetime = rustRetainedValueLifetime(declaration, environment, walk);
   return lifetime === undefined ? undefined : rustCallableTargetType(stored.parameters, stored.result, lifetime, stored.error);
 }
 

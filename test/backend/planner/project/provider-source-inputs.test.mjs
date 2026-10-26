@@ -94,6 +94,7 @@ test("source projection uses exact admitted occurrence and row identities with i
     targetReceiver: Object.freeze({ kind: "none" }), targetArguments: Object.freeze([]) });
   const argument = Object.freeze({ name: "source-only" });
   const current = prepared(abi, undefined, [argument]);
+  assert.equal(current.occurrence.receiverProjection.kind, "source", "ordinary occurrences retain their direct source selection");
   assert.equal(current.occurrence.slots[0].source.row === row, true, "the actual source ABI row is retained");
   assert.equal(current.occurrence.slots[0].node === argument, true, "the actual source-only occurrence is retained");
   assert.equal(Object.isFrozen(current.occurrence) && Object.isFrozen(current.occurrence.slots) && Object.isFrozen(current.occurrence.slots[0]), true);

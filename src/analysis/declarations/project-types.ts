@@ -9,7 +9,7 @@ import {
   sourceParameterIsProperty,
 } from "@tsonic/target-api/source";
 
-import { appendRustDiagnostic, rustResolutionContext } from "../program/walk.js";
+import { appendRustDiagnostic, rustOperationContext, rustResolutionContext } from "../program/walk.js";
 import { resolveRustTargetTypeRef } from "../source-evidence/types/resolution/source.js";
 import { selectRustCapturedFieldStorage } from "../../policy/ownership/captured-field-storage.js";
 
@@ -33,6 +33,8 @@ import { rustSourceTypeDeclarations } from "../project-types/source-declarations
 import { closeRustSuspendedStorage } from "../../policy/types/storage/suspended-storage.js";
 import { rustNativePropertyNameIssue } from "../objects/computed-field-names.js";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
+import { rustSourceStorageSubjectContext } from "../source-evidence/types/resolution/source-storage-projection.js";
+import { resolveRustTargetType } from "../source-evidence/types/resolution/target.js";
 
 export function recordMethodSelfModeFacts(walk: RustFactWalk, sourceFiles: readonly SourceFile[]): void {
   walk.context.records.assertOpen();
@@ -97,7 +99,11 @@ export function recordClassSignatureFacts(walk: RustFactWalk, declaration: Node)
     if (memberKind === "KindPropertyDeclaration" || sourceParameterIsProperty(ast, member)) {
       const fieldCarrier = sourceParameterIsProperty(ast, member)
         ? walk.context.records.runtimeCarrier.get(member)?.carrier
-        : resolveRustTargetTypeRef(member, rustResolutionContext(walk, member), walk.operationOptions);
+        : walk.context.callableOwnership.componentForSlot(member) !== undefined
+          ? resolveRustTargetType(walk.context.semanticsFor(member).types.expressionType(member),
+            rustResolutionContext(walk, member), walk.operationOptions, new Set(), Node_Type(ast, member))
+        : resolveRustTargetTypeRef(member, rustSourceStorageSubjectContext(
+          rustOperationContext(walk, member), undefined), walk.operationOptions);
       if (fieldCarrier !== undefined) {
         const storage = closeRustSuspendedStorage(fieldCarrier, "field");
         if (storage === undefined) {
@@ -262,7 +268,8 @@ export function recordInterfaceFacts(walk: RustFactWalk, declaration: Node): voi
   for (const member of members) {
     const memberKind = ast.kindName(member);
     if (memberKind === "KindPropertySignature") {
-      const fieldCarrier = resolveRustTargetTypeRef(member, rustResolutionContext(walk, member), walk.operationOptions);
+      const fieldCarrier = resolveRustTargetTypeRef(member,
+        rustSourceStorageSubjectContext(rustResolutionContext(walk, member), undefined), walk.operationOptions);
       if (fieldCarrier !== undefined) {
         setCarrierFact(walk, member, fieldCarrier);
       }

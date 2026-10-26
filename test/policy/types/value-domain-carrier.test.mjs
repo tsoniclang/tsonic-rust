@@ -57,9 +57,15 @@ function domain(input, carrier, projection, root = "first", selected = "selected
   const typed = input.storage.typeFor(origin.subject);
   assert.equal(typed.kind, "resolved", "exact projection has checked selected field type");
   const expression = Node_Initializer(input.source.ast, input.nodes.get(selected));
+  const scope = input.storage.bindingsForLexicalOwner(expression);
+  assert.equal(scope.kind, "resolved", "the original use owns its checked storage binding");
   const host = {
     sourceStorage: { ...input.storage,
-      closedOriginsFor: () => ({ kind: "complete", origins: [{ subject: origin.subject, type: typed.type, sourceFile: typed.sourceFile }] }),
+      storageProducersFor: (subject, bindings) => {
+        assert.equal(bindings === scope.bindings, true, "the domain query consumes the original use's binding");
+        return { kind: "complete", producers: [{ subject: origin.subject, type: typed.type,
+          sourceFile: typed.sourceFile, bindings }] };
+      },
     },
     semantics: file => input.source.semantics.forFile(file),
     types: { resolveNode(selectedNode, file) {
@@ -67,7 +73,7 @@ function domain(input, carrier, projection, root = "first", selected = "selected
       return carrier;
     } },
   };
-  return { host, expression, origin: origin.subject };
+  return { host, expression, origin: origin.subject, bindings: scope.bindings };
 }
 
 const member = input => ({ kind: "member", declaration: input.members.get("value").declarations[0] });
@@ -94,12 +100,14 @@ test("member origins use exact physical declarations, not equal source types or 
     const selected = domain(input, shape.carrier, [member(input)]);
     Object.assign(selected.host, { sourceTypes: shape.registry,
       projectFieldProjection: () => { assert.fail("registered physical fields do not use source-only substitution"); } });
-    assert.equal(rustValueDomainHasTargetType(selected.host, selected.expression, exact), actual === exact);
+    assert.equal(rustValueDomainHasTargetType(selected.host, selected.expression, exact, selected.bindings), actual === exact);
   }
   const shape = structural(input, exact, "value", { declarations: [input.members.get("other").declarations[0]], symbols: [] });
   const selected = domain(input, shape.carrier, [member(input)]);
   Object.assign(selected.host, { sourceTypes: shape.registry, projectFieldProjection: () => undefined });
-  assert.equal(rustValueDomainHasTargetType(selected.host, selected.expression, exact), false, "same spelling cannot replace declaration identity");
+  assert.equal(rustValueDomainHasTargetType(selected.host, selected.expression, exact, selected.bindings), false, "same spelling cannot replace declaration identity");
+  assert.equal(rustValueDomainHasTargetType(selected.host, selected.expression, exact), false,
+    "the removed unbound call cannot trigger an implicit global domain query");
 });
 
 test("member projection composes with exact array and tuple physical owners", () => {
@@ -112,7 +120,7 @@ test("member projection composes with exact array and tuple physical owners", ()
   ]) {
     const selected = domain(input, carrier, [prefix, member(input)], root);
     Object.assign(selected.host, { sourceTypes: shape.registry, projectFieldProjection: () => undefined });
-    assert.equal(rustValueDomainHasTargetType(selected.host, selected.expression, exact), true, root);
+    assert.equal(rustValueDomainHasTargetType(selected.host, selected.expression, exact, selected.bindings), true, root);
   }
 });
 
@@ -124,8 +132,8 @@ test("optional physical fields retain their native absence carrier", () => {
   const projection = [{ kind: "member", declaration: input.members.get("optional").declarations[0] }];
   const selected = domain(input, shape.carrier, projection, "first", "optional");
   Object.assign(selected.host, { sourceTypes: shape.registry, projectFieldProjection: () => undefined });
-  assert.equal(rustValueDomainHasTargetType(selected.host, selected.expression, exact), false, "no erasure of optional field storage");
-  assert.equal(rustValueDomainHasTargetType(selected.host, selected.expression, absent), true);
+  assert.equal(rustValueDomainHasTargetType(selected.host, selected.expression, exact, selected.bindings), false, "no erasure of optional field storage");
+  assert.equal(rustValueDomainHasTargetType(selected.host, selected.expression, absent, selected.bindings), true);
 });
 
 test("nominal generic fields use the physical instantiation and exact checked property", () => {
@@ -140,14 +148,16 @@ test("nominal generic fields use the physical instantiation and exact checked pr
       const selected = domain(input, carrier, [...prefix, member(input)], root);
       let calls = 0;
       Object.assign(selected.host, { sourceTypes: createRustSourceTypeRegistry(),
-        projectFieldProjection(property, actualOwner, ownerType) {
+        projectFieldProjection(property, actualOwner, ownerType, source) {
           calls += 1;
           assert.equal(property.symbol === input.members.get("value").property.symbol, true, "selected property symbol, not text");
           assert.equal(property.type === input.members.get("value").property.type, true, "instantiated checked field type");
           assert.equal(ownerType === input.firstType && actualOwner === owner, true, "exact prefix owner type and physical generic instance");
+          assert.equal(source.kind, "resolved", "physical field projection has its actual source scope");
+          assert.equal(source.bindings === selected.bindings, true, "the exact original use binding reaches the field owner");
           return { output: substituteRustTargetTypeParameters(parameter, new Map([[parameter.identity, physical]])), field: {} };
         } });
-      assert.equal(rustValueDomainHasTargetType(selected.host, selected.expression, exact), physical === exact);
+      assert.equal(rustValueDomainHasTargetType(selected.host, selected.expression, exact, selected.bindings), physical === exact);
       assert.equal(calls, 1, "one nominal projection, not a second type resolver");
     }
   }
@@ -164,7 +174,7 @@ test("member proofs fail closed for unavailable, accessor and exhausted evidence
     if (control === "missing" || control === "prefix") selected.host.sourceTypes = createRustSourceTypeRegistry();
     if (control === "prefix") selected.host.sourceStorage.typeFor = () => ({ kind: "unresolved", reason: "missing prefix" });
     if (control === "budget") selected.host.sourceStorage.failureReason = () => "bounded failure";
-    if (control === "open") selected.host.sourceStorage.closedOriginsFor = () => ({ kind: "open", origins: [] });
-    assert.equal(rustValueDomainHasTargetType(selected.host, selected.expression, exact), false, control);
+    if (control === "open") selected.host.sourceStorage.storageProducersFor = () => ({ kind: "open", producers: [] });
+    assert.equal(rustValueDomainHasTargetType(selected.host, selected.expression, exact, selected.bindings), false, control);
   }
 });

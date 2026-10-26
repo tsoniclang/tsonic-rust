@@ -12,7 +12,7 @@ import type { RustRetainedEnvironmentQueries } from "../../target-model/records/
 
 export interface RustSourcePolicyContext {
   readonly integerRanges: import("../../target-model/records/integer-ranges.js").RustIntegerRangeIndex;
-  readonly callableRepresentation: "signature" | "storage";
+  readonly callableRepresentation: "signature" | "storage" | "construction";
   readonly typeDefinitions: RustTypeDefinitions;
   readonly source: TargetSourceProgram;
   readonly sourceStorage: SourceStorageQueries;

@@ -79,7 +79,7 @@ export interface RustNativeStorageConstruction extends RustNativeStoragePlan {
 export type RustNativeStorageQueries = Omit<RustNativeStorageConstruction, "parameterFor">;
 
 export function createRustNativeStorageQueries(input: {
-  readonly frames: Pick<RustFrameCallablePlan, "errorFor">;
+  readonly frames: Pick<RustFrameCallablePlan, "errorFor" | "bindingFor">;
   readonly ast: AstReader;
   readonly nativeNodes: readonly Node[];
   readonly storage: SourceStorageQueries;
@@ -128,7 +128,7 @@ export function createRustNativeStorageQueries(input: {
       : input.records.runtimeCarrier.get(subject.node)?.carrier;
     const method = subject.projection.some(component => component.kind === "method-value");
     const carrier = subject.projection.length === 0 ? root : method ? inputs.get(subject)?.carrier
-      : rustSourceStorageProjectedCarrier(input.carrierHost, subject, root);
+      : rustSourceStorageProjectedCarrier(input.carrierHost, { subject, bindings }, root);
     const owner = subject.kind === "return" ? subject.node : subject.kind === "input" ? input.ast.parent(subject.node)
       : sourceEnclosingCallable(input.ast.body(subject.node) === undefined ? subject.node : input.ast.parent(subject.node), input.ast);
     const generic = owner === undefined ? undefined : selectRustNativeStorageGenericBindings({ ...input,

@@ -211,6 +211,33 @@ main();
   );
 });
 
+test("absent ordinary fields preserve a real callable field's captured native implementation", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "mixed_optional_callable_fields" } },
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+import { check } from "@acme/testing";
+
+export function main(): void {
+  let calls: int32 = 0;
+  const value: { ordinary?: int32; callback: () => int32 } = {
+    callback: (): int32 => { calls += 1; return calls; },
+  };
+  check(value.ordinary === undefined);
+  check(value.callback() === 1);
+  check(value.callback() === 2);
+  check(calls === 2);
+}
+main();
+`,
+    },
+  });
+  assert.deepEqual(result.diagnostics, []);
+  assert.equal(validateGeneratedProject("mixed-optional-callable-fields", result.artifacts, { run: true }).status, 0);
+});
+
 test("structural object-literal accessors reject incomplete native contracts", () => {
   const setterOnly = compileRust({
     files: {
