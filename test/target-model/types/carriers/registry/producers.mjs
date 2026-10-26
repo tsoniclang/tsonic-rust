@@ -57,6 +57,13 @@ export const producersCarrierRegistry = Object.freeze([
     frozen: false,
   },
   {
+    id: "src/analysis/objects/shapes/physical-destinations.ts#selectRustStructuralPhysicalDestinations",
+    kinds: ["array", "associated-type", "closure", "function-pointer", "impl-trait", "opaque", "pointer", "reference", "slice", "source-primitive", "target-named", "target-specific", "trait-object", "trait-ref", "tuple", "type-parameter"],
+    declaration: { module: "src/analysis/objects/shapes/physical-destinations.ts", symbol: "selectRustStructuralPhysicalDestinations" },
+    responsibility: "producers/resolve-structural-object-type",
+    frozen: false,
+  },
+  {
     id: "src/analysis/source-evidence/types/resolution/project.ts#resolveProjectSourceCarrier",
     kinds: ["array", "associated-type", "closure", "function-pointer", "impl-trait", "opaque", "pointer", "reference", "slice", "source-primitive", "target-named", "target-specific", "trait-object", "trait-ref", "tuple", "type-parameter"],
     declaration: { module: "src/analysis/source-evidence/types/resolution/project.ts", symbol: "resolveProjectSourceCarrier" },
@@ -92,17 +99,17 @@ export const producersCarrierRegistry = Object.freeze([
     frozen: false,
   },
   {
+    id: "src/analysis/source-evidence/types/source-carriers.ts#resolveTypeNodeContract",
+    kinds: ["array", "associated-type", "closure", "function-pointer", "impl-trait", "opaque", "pointer", "reference", "slice", "source-primitive", "target-named", "target-specific", "trait-object", "trait-ref", "tuple", "type-parameter"],
+    declaration: { module: "src/analysis/source-evidence/types/source-carriers.ts", symbol: "resolveTypeNodeContract" },
+    responsibility: "producers/resolve-node",
+    frozen: false,
+  },
+  {
     id: "src/analysis/source-evidence/types/resolution/target.ts#resolveRustTargetType",
     kinds: ["array", "associated-type", "closure", "function-pointer", "impl-trait", "opaque", "pointer", "reference", "slice", "source-primitive", "target-named", "target-specific", "trait-object", "trait-ref", "tuple", "type-parameter"],
     declaration: { module: "src/analysis/source-evidence/types/resolution/target.ts", symbol: "resolveRustTargetType" },
     responsibility: "producers/resolve-type",
-    frozen: false,
-  },
-  {
-    id: "src/analysis/declarations/binding-storage.ts#selectRustDeclaredBinding",
-    kinds: ["array", "associated-type", "closure", "function-pointer", "impl-trait", "opaque", "pointer", "reference", "slice", "source-primitive", "target-named", "target-specific", "trait-object", "trait-ref", "tuple", "type-parameter"],
-    declaration: { module: "src/analysis/declarations/binding-storage.ts", symbol: "selectRustDeclaredBinding" },
-    responsibility: "producers/resolve-storage",
     frozen: false,
   },
   {

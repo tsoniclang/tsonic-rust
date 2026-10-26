@@ -22,6 +22,13 @@ export const jsCarrierRegistry = Object.freeze([
     frozen: false,
   },
   {
+    id: "src/analysis/source-evidence/types/resolution/markers.ts#resolveRustJsStringCarrier",
+    kinds: ["target-named"],
+    declaration: { module: "src/analysis/source-evidence/types/resolution/markers.ts", symbol: "resolveRustJsStringCarrier" },
+    responsibility: "js/resolve-source-profile-type",
+    frozen: false,
+  },
+  {
     id: "src/target-model/types/carriers/js.ts#rustJsErrorTargetType",
     kinds: ["target-named"],
     declaration: { module: "src/target-model/types/carriers/js.ts", symbol: "rustJsErrorTargetType" },
