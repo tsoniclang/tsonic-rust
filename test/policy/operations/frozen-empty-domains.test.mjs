@@ -1,8 +1,5 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createCompilerSessionFromFiles } from "@tsonic/tsts";
-import { createSourceStorageQuery } from "@tsonic/target-api/analysis";
-import { createTargetSourceProgram } from "@tsonic/target-api/source";
 import { selectJsSurfaceOperation } from "../../../dist/policy/operations/source-profiles/js/selection.js";
 import { rustValueDomainHasTargetType } from "../../../dist/analysis/objects/value-domain-carriers.js";
 import { rustEmptyObjectTargetType, rustFixedArrayTargetType, rustJsArrayTargetType, rustJsValueTargetType, rustTsValueTargetType } from "../../../dist/target-model/types/index.js";
@@ -50,23 +47,12 @@ test("typed EmptyObject freeze retains the original native path without broad ev
 function domainHost({ selection = "complete", carriers = [rustEmptyObjectTargetType()],
   projection = [], absent = false, admitsAbsence = false, failure, lateFailure = false,
   subjectKind = "value", missingSelectedType = false } = {}) {
-  const checked = createCompilerSessionFromFiles({ currentDirectory: "/domain", files: {
-    "/domain/index.ts": "const value = {};",
-  }, compilerOptions: { strict: true, target: "es2022", module: "esnext" } }).checkSource();
-  assert.equal(checked.diagnostics.length, 0);
-  const source = createTargetSourceProgram(checked);
-  const file = checked.getSourceFile("/domain/index.ts");
-  assert.equal(file !== undefined, true);
-  const storage = createSourceStorageQuery(source, [file]);
-  const value = storage.nodes.find(candidate => source.ast.is.IsVariableDeclaration(candidate));
-  const scope = storage.bindingsForLexicalOwner(value);
-  assert.equal(scope.kind, "resolved", "the query receives a real canonical checked storage binding");
   const node = {};
   const sourceFile = {};
   const selectedType = {};
   const absentType = {};
   const origins = carriers.map((carrier, index) => ({ sourceFile, type: absent && index === 0 ? absentType : {},
-    subject: { kind: subjectKind, node: { carrier }, projection }, bindings: scope.bindings }));
+    subject: { kind: subjectKind, node: { carrier }, projection } }));
   let resolved = false;
   const semantics = { types: {
     expressionType: () => missingSelectedType ? undefined : selectedType,
@@ -74,16 +60,12 @@ function domainHost({ selection = "complete", carriers = [rustEmptyObjectTargetT
     unionOrIntersectionTypes: () => [selectedType, absentType],
     isNullish: type => type === absentType,
   } };
-  return { node, bindings: scope.bindings, host: {
+  return { node, host: {
     sourceStorage: {
       source: { ast: { getSourceFile: () => sourceFile }, semantics: { includes: () => true } },
       failureReason: () => failure ?? (lateFailure && resolved ? "budget exhausted" : undefined),
       subjectFor: () => ({ kind: "resolved", subject: {} }),
-      storageProducersFor: (subject, bindings) => {
-        assert.equal(bindings === scope.bindings, true, "no global or empty-binding fallback");
-        return selection === "unresolved" ? { kind: "unresolved", reason: "exact fixture refusal" }
-          : { kind: selection, producers: origins };
-      },
+      closedOriginsFor: () => ({ kind: selection, origins }),
     },
     semantics: () => semantics,
     types: { resolveNode: subject => { resolved = true; return subject.carrier; } },
@@ -96,13 +78,13 @@ test("domain carrier proof fails closed for open, empty, unsupported and exhaust
     { failure: "budget exhausted" }, { lateFailure: true }, { subjectKind: "storage" },
     { missingSelectedType: true }, { carriers: [undefined] },
   ]) {
-    const { node, host, bindings } = domainHost(options);
-    assert.equal(rustValueDomainHasTargetType(host, node, rustEmptyObjectTargetType(), bindings), false,
+    const { node, host } = domainHost(options);
+    assert.equal(rustValueDomainHasTargetType(host, node, rustEmptyObjectTargetType()), false,
       "every present origin must retain the exact selected target carrier");
   }
-  const { node, host, bindings } = domainHost();
-  assert.equal(rustValueDomainHasTargetType(host, node, rustEmptyObjectTargetType(), bindings), true);
-  assert.equal(rustValueDomainHasTargetType({ ...host, sourceStorage: undefined }, node, rustEmptyObjectTargetType(), bindings), false);
+  const { node, host } = domainHost();
+  assert.equal(rustValueDomainHasTargetType(host, node, rustEmptyObjectTargetType()), true);
+  assert.equal(rustValueDomainHasTargetType({ ...host, sourceStorage: undefined }, node, rustEmptyObjectTargetType()), false);
 });
 
 test("domain absence proof follows checked refinement and requires a present origin", () => {
@@ -111,8 +93,8 @@ test("domain absence proof follows checked refinement and requires a present ori
     [{ absent: true, admitsAbsence: true, carriers: [undefined, rustEmptyObjectTargetType()] }, false],
     [{ absent: true, carriers: [undefined] }, false],
   ]) {
-    const { node, host, bindings } = domainHost(options);
-    assert.equal(rustValueDomainHasTargetType(host, node, rustEmptyObjectTargetType(), bindings), expected);
+    const { node, host } = domainHost(options);
+    assert.equal(rustValueDomainHasTargetType(host, node, rustEmptyObjectTargetType()), expected);
   }
 });
 
@@ -126,7 +108,7 @@ test("domain projection retains exact array and tuple element carriers without w
     [{ kind: "tuple", elements: [rustEmptyObjectTargetType()] }, [{ kind: "tuple-element", index: 1 }], false],
     [{ kind: "array", element: rustJsValueTargetType() }, [{ kind: "array-element" }], false],
   ]) {
-    const { node, host, bindings } = domainHost({ carriers: [carrier], projection });
-    assert.equal(rustValueDomainHasTargetType(host, node, rustEmptyObjectTargetType(), bindings), expected);
+    const { node, host } = domainHost({ carriers: [carrier], projection });
+    assert.equal(rustValueDomainHasTargetType(host, node, rustEmptyObjectTargetType()), expected);
   }
 });

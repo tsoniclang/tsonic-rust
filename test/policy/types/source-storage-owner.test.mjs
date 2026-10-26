@@ -35,20 +35,9 @@ for (const expression of ["callback", "holder.callback", "callbacks[0]", '(() =>
     assert.equal(enclosing.kind, "resolved");
     assert.equal(expected.kind, "resolved");
     assert.equal(expected.subject === enclosing.subject, false, "callee and result are different physical values");
-    const scope = storage.bindingsForLexicalOwner(operand);
-    assert.equal(scope.kind, "resolved", "the checked original call owns its actual binding");
     const carrier = rustCallableTargetType([], rustStringTargetType());
-    let producerQueries = 0;
     const context = {
-      ast: source.ast, source, sourceStorage: { ...storage,
-        storageProducersFor(subject, bindings) {
-          producerQueries += 1;
-          assert.equal(subject === expected.subject && bindings === scope.bindings, true,
-            "one canonical query uses the actual operand and original binding");
-          return storage.storageProducersFor(subject, bindings);
-        },
-      },
-      sourceStorageResolution: { kind: "resolved", subject: enclosing.subject, bindings: scope.bindings },
+      ast: source.ast, source, sourceStorage: storage, sourceStorageSubject: enclosing.subject,
       currentSourceFile: file, currentSemantics: source.semantics.forFile(file),
       semantics: selected => source.semantics.forFile(selected),
       semanticsFor: node => source.semantics.forNode(node),
@@ -64,19 +53,14 @@ for (const expression of ["callback", "holder.callback", "callbacks[0]", '(() =>
       projectTypes: {}, jsEnabled: false, providerTypes: [],
       sourceProfiles: { profileForNode: () => undefined },
       sourceTypes: { structuralObjectForType: () => undefined, carrierForDeclaration: () => undefined },
-      callableStorageCarrier(selected, selection) {
+      callableStorageCarrier(subject) {
         selections += 1;
-        assert.equal(selected.subject === expected.subject, true, "checked type and stored operand share the exact value owner");
-        assert.equal(selected.bindings === scope.bindings, true, "the operand retains its original use's exact binding");
-        assert.equal(selection.kind, "storage", "a stored operand retains its actual selection purpose");
-        assert.equal(selection.producers.kind, "complete", "the same canonical preseal producer query is passed to ownership");
+        assert.equal(subject === expected.subject, true, "checked type and stored operand share the exact value owner");
         return carrier;
       },
     };
     assert.equal(selectedValueCarrier(operand, call.sourceCallee.type, context, options) === carrier, true);
     assert.equal(selections, 1, "a stored carrier does not excuse misattributing the checked type");
-    assert.equal(producerQueries, 1, "ownership and any frame selection reuse the same producer result");
-    assert.equal(context.sourceStorageResolution.subject === enclosing.subject &&
-      context.sourceStorageResolution.bindings === scope.bindings, true, "the enclosing operation is immutable");
+    assert.equal(context.sourceStorageSubject === enclosing.subject, true, "the enclosing operation is immutable");
   });
 }

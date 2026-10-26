@@ -1,7 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import type { SourceFileSemantics } from "@tsonic/target-api/source";
 import type { RustFactWalk } from "../program/walk.js";
-import { rustSourceStorageSubjectContext } from "../source-evidence/types/resolution/source-storage-projection.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustTargetTypeResolutionContext } from "../source-evidence/types/resolution/model.js";
 import { sourceEnclosingCallable, sourceExpressionCallArgument } from "@tsonic/target-api/source";
@@ -79,7 +78,7 @@ function arrayStorageDemandContext(
   context: RustTargetTypeResolutionContext,
 ): RustTargetTypeResolutionContext | undefined {
   const selection = walk.context.sourceStorage.storageSubjectFor(authoredTypeNode);
-  return selection.kind === "resolved" ? rustSourceStorageSubjectContext(context, selection) : undefined;
+  return selection.kind === "resolved" ? { ...context, sourceStorageSubject: selection.subject } : undefined;
 }
 
 function arrayStorageCallContext(

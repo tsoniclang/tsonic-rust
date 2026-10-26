@@ -5,7 +5,6 @@ import { resolveRustTargetType } from "./target.js";
 import { rustSourceTypeParameter } from "../../../../source/extension/type-parameters.js";
 import { substituteRustTargetTypeParameters } from "../../../../target-model/types/carriers/substitution.js";
 import { rustSourceStorageProjectedCarrier } from "../../../objects/value-domain-carriers.js";
-import { rustSourceStorageSubjectContext } from "./source-storage-projection.js";
 
 export function resolveRustCallableEnvironment(
   declaration: Node | undefined,
@@ -37,9 +36,6 @@ export function resolveRustCallableEnvironment(
     const selected = context.ast.is.IsParameterDeclaration(capturedDeclaration)
       ? context.sourceStorage.subject(capturedDeclaration, "input") : context.sourceStorage.subjectFor(reference);
     if (selected.kind === "unresolved") return undefined;
-    const selectedContext = rustSourceStorageSubjectContext(context, selected);
-    const scope = selectedContext.sourceStorageResolution;
-    if (scope?.kind !== "resolved") return undefined;
     let carrier: TargetTypeRef | undefined;
     if (selected.subject.kind === "input") {
       const owner = context.ast.parent(selected.subject.node);
@@ -50,11 +46,12 @@ export function resolveRustCallableEnvironment(
         sourceTypes: options.sourceTypes, projectFieldProjection: options.projectFieldProjection,
         types: { resolveNode: node => context.records.runtimeCarrier.get(node)?.carrier },
         semantics: context.semantics,
-      }, { subject: selected.subject, bindings: scope.bindings }, abi.valueCarrier);
+      }, selected.subject, abi.valueCarrier);
     } else {
       const storageCarrier = selected.subject.kind === "value" && selected.subject.projection.length === 0
         ? context.records.runtimeCarrier.get(selected.subject.node)?.carrier : undefined;
-      carrier = storageCarrier ?? resolveRustTargetType(type, { ...selectedContext, currentSemantics: semantics,
+      carrier = storageCarrier ?? resolveRustTargetType(type, { ...context, currentSemantics: semantics,
+        sourceStorageSubject: selected.subject,
         sourceTypeParameterSubstitutions: new Map() }, options, resolving);
     }
     if (carrier === undefined) return undefined;

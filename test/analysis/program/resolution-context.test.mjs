@@ -1,67 +1,42 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createCompilerSessionFromFiles } from "@tsonic/tsts";
-import { createSourceStorageQuery } from "@tsonic/target-api/analysis";
-import { createTargetSourceProgram } from "@tsonic/target-api/source";
 import { rustOperationContext, rustResolutionContext } from "../../../dist/analysis/program/walk.js";
 
 function fixture() {
-  const checked = createCompilerSessionFromFiles({ currentDirectory: "/src", files: { "/src/index.ts": `
-    class Box {
-      value = 1;
-      run(argument: number): number { const selected = argument; return selected; }
-    }
-  ` }, compilerOptions: { strict: true, target: "es2022", module: "esnext" } }).checkSource();
-  assert.equal(checked.diagnostics.length, 0, "the original body and members are checked");
-  const source = createTargetSourceProgram(checked);
-  const file = checked.getSourceFile("/src/index.ts");
-  const nodes = new Map();
-  const visit = node => {
-    const name = source.ast.name(node);
-    if (name !== undefined && source.ast.is.IsIdentifier(name)) nodes.set(source.ast.text(name), node);
-    source.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
-  };
-  visit(file);
-  const storage = createSourceStorageQuery(source, [file]);
+  const node = {};
+  const semantics = { sourceFile: {} };
   const selected = [];
-  const currentCallableDeclaration = nodes.get("run");
-  const scope = storage.bindingsForDeclaration(currentCallableDeclaration);
-  assert.equal(scope.kind, "resolved", "the original callable owns the actual checked binding");
+  const subject = Object.freeze({ kind: "value", node, projection: [] });
   const context = {
-    records: {}, ast: source.ast,
-    sourceStorage: { ...storage,
-      storageSubjectFor(node) { selected.push("inferred"); return storage.storageSubjectFor(node); },
-      subject(node, kind, projection) { selected.push(kind); return storage.subject(node, kind, projection); },
+    records: {},
+    ast: { is: { IsTypeAliasDeclaration: () => false, IsInterfaceDeclaration: () => false,
+      IsTypeParameterDeclaration: () => false } },
+    sourceStorage: {
+      storageSubjectFor(owner) { assert.equal(owner === node, true); selected.push("inferred"); return { kind: "resolved", subject }; },
+      subject(owner, kind) { assert.equal(owner === node, true); selected.push(kind); return { kind: "resolved", subject: { ...subject, kind } }; },
     },
-    semanticsFor: source.semantics.forNode,
+    semanticsFor(owner) { assert.equal(owner === node, true); return semantics; },
   };
-  return { nodes, selected, scope, source, file, walk: { context, currentCallableDeclaration } };
+  return { node, semantics, selected, subject, walk: { context } };
 }
 
 test("operation contexts carry checked scope without leaking their result's physical storage into operands", () => {
   const input = fixture();
-  const context = rustOperationContext(input.walk, input.nodes.get("selected"));
-  assert.equal(context.currentSemantics === input.source.semantics.forFile(input.file) && context.currentSourceFile === input.file, true);
+  const context = rustOperationContext(input.walk, input.node);
+  assert.equal(context.currentSemantics === input.semantics && context.currentSourceFile === input.semantics.sourceFile, true);
   assert.equal(context.records === input.walk.context.records, true);
   assert.equal(context.extensionId, "tsonic.rust.policy");
-  assert.equal(context.sourceStorageResolution.kind, "resolved", "the exact original scope is retained");
-  assert.equal(context.sourceStorageResolution.bindings === input.scope.bindings, true);
-  assert.equal(context.sourceStorageResolution.subject === undefined, true, "each selected operand owns its physical storage");
-  assert.equal(Object.hasOwn(context, "sourceStorageSubject"), false, "the removed unbound API is not published");
+  assert.equal(Object.hasOwn(context, "sourceStorageSubject"), false, "each selected operand owns its physical storage");
   assert.deepEqual(input.selected, [], "scope selection must not launch a result storage query");
 });
 
 test("storage resolution still retains its exact inferred or explicitly selected role", () => {
-  for (const [kind, name] of [[undefined, "selected"], ["value", "selected"], ["input", "argument"],
-    ["return", "run"], ["member", "value"], ["receiver", "Box"]]) {
+  for (const kind of [undefined, "value", "input", "return", "member", "receiver"]) {
     const input = fixture();
-    const node = input.nodes.get(name);
-    const context = rustResolutionContext(input.walk, node, kind);
-    assert.equal(context.currentSemantics === input.source.semantics.forFile(input.file) && context.currentSourceFile === input.file, true);
-    assert.equal(context.sourceStorageResolution.kind, "resolved", "the actual source subject and binding are selected together");
-    assert.equal(context.sourceStorageResolution.subject.node === node, true);
-    assert.equal(context.sourceStorageResolution.subject.kind, kind ?? "value");
-    assert.equal(context.sourceStorageResolution.bindings === input.scope.bindings, true);
+    const context = rustResolutionContext(input.walk, input.node, kind);
+    assert.equal(context.currentSemantics === input.semantics && context.currentSourceFile === input.semantics.sourceFile, true);
+    assert.equal(context.sourceStorageSubject.node === input.node, true);
+    assert.equal(context.sourceStorageSubject.kind, kind ?? "value");
     assert.deepEqual(input.selected, [kind ?? "inferred"]);
   }
 });

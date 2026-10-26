@@ -28,7 +28,6 @@ import type { ExtensionFactSubject, Node, ProviderDeclarationIdentity } from "@t
 import type { RustOperationsProviderOptions } from "./model.js";
 
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
-import { rustSourceStorageSubjectContext } from "../../source-evidence/types/resolution/source-storage-projection.js";
 
 function memberReceiverSourceCarrier(
   request: RustCheckedPropertySelectionInput,
@@ -130,7 +129,7 @@ export function selectedMemberReceiverCarrier(
   const receiverStorage = context.sourceStorage.subjectFor(receiver);
   const selectedCarrier = resolveRustTargetTypeRef(
     request.sourceReceiverType,
-    rustSourceStorageSubjectContext(context, receiverStorage),
+    { ...context, sourceStorageSubject: receiverStorage.kind === "resolved" ? receiverStorage.subject : undefined },
     options,
   );
   const selectedOwner = options.projectTypes.definitionContainingDeclaration(

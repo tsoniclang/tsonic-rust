@@ -1,7 +1,7 @@
 import type { RustOperationAnalysisContext } from "./operation-context.js";
 import { requireRustRecord } from "./records/required-records.js";
 import { rustPostCheckOperationKind } from "../../target-model/operations/model.js";
-import { rustSourceStorageScope, rustSourceStorageSubjectContext } from "../source-evidence/types/resolution/source-storage-projection.js";
+import { rustSourceStorageContext } from "../source-evidence/types/resolution/source-storage-projection.js";
 import { BinaryExpression_Left, BinaryExpression_Right, Node_Operand, KindBinaryExpression, KindCallExpression, KindDeleteExpression, KindElementAccessExpression, KindIdentifier, KindNewExpression, KindPostfixUnaryExpression, KindPrefixUnaryExpression, KindPropertyAccessExpression, Node_Expression, Node_Type, ForInOrOfStatement_Initializer, VariableDeclarationList_Declarations, selectSourceNativeValueGuard } from "@tsonic/target-api/source";
 import { selectRustCheckedCall, selectRustCheckedConversion, selectRustCheckedElementAccess, selectRustCheckedOperator, selectRustCheckedPropertyAccess, selectRustCheckedValue } from "../operations/members/index.js";
 import { selectRustCheckedDelete } from "../operations/member-access.js";
@@ -80,8 +80,7 @@ export const boolCarrier = rustSourcePrimitiveTargetType("bool");
 
 function rustScopedContext(walk: RustFactWalk, node: Node) {
   const semantics = walk.context.semanticsFor(node);
-  return { ...walk.context, currentSourceFile: semantics.sourceFile, currentSemantics: semantics,
-    sourceStorageResolution: rustSourceStorageScope(walk.context, node, walk.currentCallableDeclaration) };
+  return { ...walk.context, currentSourceFile: semantics.sourceFile, currentSemantics: semantics };
 }
 
 export function rustResolutionContext(
@@ -91,7 +90,10 @@ export function rustResolutionContext(
 ): RustTargetTypeResolutionContext {
   const selection = kind === undefined ? walk.context.sourceStorage.storageSubjectFor(node)
     : walk.context.sourceStorage.subject(node, kind);
-  return rustSourceStorageSubjectContext(rustScopedContext(walk, node), selection);
+  return rustSourceStorageContext({
+    ...rustScopedContext(walk, node),
+    sourceStorageSubject: selection.kind === "resolved" ? selection.subject : undefined,
+  });
 }
 
 export function appendRustDiagnostic(

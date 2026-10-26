@@ -2,7 +2,6 @@ import type { RustOperationAnalysisContext } from "../../program/operation-conte
 import type { RustProjectFieldSelection } from "../../../target-model/records/project-fields.js";
 import type { Node, Type } from "@tsonic/tsts";
 import { resolveRustTargetTypeRef } from "../../source-evidence/types/resolution/source.js";
-import { rustSourceStorageSubjectContext } from "../../source-evidence/types/resolution/source-storage-projection.js";
 
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
@@ -20,8 +19,7 @@ export function resolveRustProjectField(
 ): RustProjectFieldSelection | undefined {
   const field = rustProjectObjectField(declaration, options.projectTypes);
   const declared = context.records.runtimeCarrier.get(declaration)?.carrier ??
-    resolveRustTargetTypeRef(declaration, rustSourceStorageSubjectContext(context,
-      context.sourceStorage.memberSubjectFor(declaration)), options);
+    resolveRustTargetTypeRef(declaration, context, options);
   const resultCarrier = declared === undefined ? undefined : instantiateRustSelectedMemberCarrier(
     declaration, receiverCarrier, receiverType, declared, context, options);
   const owner = options.projectTypes.definitionContainingDeclaration(declaration);

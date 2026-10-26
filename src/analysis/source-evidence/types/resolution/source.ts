@@ -33,7 +33,7 @@ import { selectRustConditionalNumericCarrier } from "../../../../policy/types/co
 import { resolveRustProviderIndexedAccess } from "./indexed-access.js";
 import { resolveRustSourceDeclarationArguments } from "./generic-arguments.js";
 
-import { rustSourceStorageComponentContext, rustSourceStorageContext, rustSourceStorageSubjectContext } from "./source-storage-projection.js";
+import { rustSourceStorageComponentContext, rustSourceStorageContext } from "./source-storage-projection.js";
 import { resolveRustSelectedSourceCallResult } from "./call-results.js";
 import { resolveRustContextualLiteralCarrier } from "../../../../policy/types/collections/literal-construction.js";
 
@@ -394,7 +394,7 @@ export function resolveRustTargetTypeSyntax(
       }
     }
     const semanticMembers = members.filter((child) => ast.kindName(child) !== "KindBarToken");
-    const typeContext = rustSourceStorageSubjectContext(context, undefined);
+    const typeContext = { ...context, sourceStorageSubject: undefined };
     const selectedCarriers = semanticMembers.map(member => resolveRustAuthoredTargetType(member, typeContext, options, resolving));
     if (selectedCarriers.every(carrier => carrier !== undefined)) {
       const selected = resolveRustSourceUnionCarrier(selectedCarriers as TargetTypeRef[], values => resolveRustUnionValueCarrier(values, options, () => {
@@ -504,8 +504,7 @@ export function resolveRustTargetTypeSyntax(
     return resolveSourceProfileCarrierFromArguments(sourceProfileName, typeArguments as TargetTypeRef[], {
       jsEnabled: options.jsEnabled,
       sourceErrorCarrier: rustSourceProfileErrorCarrierNeeded(sourceProfileName, options.jsEnabled)
-        ? options.sourceErrorCarrier(context.sourceStorageResolution?.kind === "resolved"
-          ? context.sourceStorageResolution.subject : undefined) : undefined,
+        ? options.sourceErrorCarrier(context.sourceStorageSubject) : undefined,
     });
   }
   const sourceType = resolveProjectSourceCarrier(

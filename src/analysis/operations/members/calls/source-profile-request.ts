@@ -81,8 +81,7 @@ export function createRustJsCallRequest(
     carrierSupportsProjectIdentity: options.projectCarrierSupportsObjectIdentity,
     argumentValueDomainHasTargetType: (index, expected) => {
       const argument = selectedCallArgumentNodes(request)[index];
-      const source = context.sourceStorageResolution;
-      return argument !== undefined && source.kind === "resolved" && rustValueDomainHasTargetType({
+      return argument !== undefined && rustValueDomainHasTargetType({
         sourceStorage: context.sourceStorage,
         sourceTypes: options.sourceTypes,
         projectFieldProjection: options.projectFieldProjection,
@@ -90,7 +89,7 @@ export function createRustJsCallRequest(
         types: { resolveNode: (node, sourceFile) => resolveRustTargetTypeRef(node, {
           ...context, currentSourceFile: sourceFile, currentSemantics: context.semantics(sourceFile),
         }, options) },
-      }, argument, expected, source.bindings);
+      }, argument, expected);
     },
     canRequireClone: carrier => canRequireSourceClone(carrier, request.source.call, context, options.sourceTypes.typeFamilies),
     numericParameterArgument: (index, carrier, domain) => {
