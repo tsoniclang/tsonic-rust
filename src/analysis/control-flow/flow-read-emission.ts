@@ -12,6 +12,7 @@ import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { isRustClosedValueCarrier } from "../../target-model/types/carriers/closed-value-kind.js";
 import { isRustSourceErrorCarrier, isRustRetainedErrorCarrier, isRustWritableSourceErrorCarrier,
   isRustWritableRetainedErrorCarrier, isRustMutableJsErrorCarrier } from "../../target-model/types/carriers/source-error.js";
+import { rustCaughtErrorReadCarrier } from "../errors/catching-try.js";
 
 export function analyzeRustFlowReadEmission(program: Omit<RustAnalysisProgram, "reachability">,
   nodes: readonly Node[], producer: RustFlowReadEmissionProducer): readonly TargetDiagnostic[] {
@@ -46,6 +47,12 @@ export function analyzeRustFlowReadEmission(program: Omit<RustAnalysisProgram, "
       producer.publish(node, fact, { kind: "option", custom: rustOptionalStorageValue(fact.sourceCarrier) !== undefined,
         reborrow: fact.kind === "option-reference", readonlyReference: fact.selectedCarrier.kind === "reference" && !fact.selectedCarrier.mutable });
     } else if (fact.kind === "builtin-error") {
+      const physical = isRustProgramErrorCarrier(fact.sourceCarrier)
+        ? rustCaughtErrorReadCarrier(program.source.ast, program.records, node) : undefined;
+      if (physical !== undefined && rustTargetTypeRefEquals(physical, fact.selectedCarrier)) {
+        producer.publish(node, fact, { kind: "identity" });
+        return;
+      }
       producer.publish(node, fact, { kind: "builtin-error",
         source: isRustClosedValueCarrier(fact.sourceCarrier) ? "closed" : isRustProgramErrorCarrier(fact.sourceCarrier) ? "program"
           : isRustSourceErrorCarrier(fact.sourceCarrier) ? "source" : isRustRetainedErrorCarrier(fact.sourceCarrier) ? "retained" : "native",

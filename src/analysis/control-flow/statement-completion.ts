@@ -4,7 +4,8 @@ import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import {
   Node_Expression, Node_Operand, BinaryExpression_Left, BinaryExpression_Right,
   sourceControlTransferTarget, sourceEnclosingCallable, sourceTransparentExpressionOperand,
-  sourceLabeledStatementTarget, type SourceLabeledStatementTarget,
+  sourceLabeledStatementTarget, type SourceLabeledStatementTarget, sourceExpressionResultDisposition,
+  TryStatement_TryBlock,
   IterationStatement_Statement, LabeledStatement_Statement,
   type TargetSourceProgram,
 } from "@tsonic/target-api/source";
@@ -18,7 +19,7 @@ import type {
   RustIterationCompletion, RustRuntimeSetterCompletion, RustStatementCompletionRecords,
 } from "../../target-model/records/statement-completion.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
-import { isRustBoolCarrier, isRustStringCarrier, isRustUnitCarrier } from "../../target-model/types/index.js";
+import { isRustBoolCarrier, isRustStringCarrier, isRustUnitCarrier, isRustProgramErrorCarrier, rustProgramErrorTargetType } from "../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustRecordCarrierValue } from "../../target-model/types/carriers/records.js";
 import { isRustAssignmentOperator } from "../../target-model/syntax/tokens.js";
@@ -44,6 +45,9 @@ import { selectRustAssignmentValue } from "../../policy/operations/operators/ass
 import type { RustOwnershipRecords } from "../../target-model/records/ownership.js";
 import type { RustProjectTypePolicy } from "../../target-model/types/project-types.js";
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
+import { rustErrorRegionCarrier } from "../errors/regions.js";
+import { rustCarrierProvidesErrorObservation } from "../../policy/constraints/error-protocols.js";
+import { selectRustPhysicalProgramErrorOwner } from "../errors/error-types.js";
 
 export interface RustStatementCompletionInput {
   readonly structuralShapes: Parameters<typeof analyzeRustOptionalChainBodyFallibility>[0]["structural"];
@@ -216,10 +220,34 @@ export function analyzeRustStatementCompletions(input: RustStatementCompletionIn
       const declaration = ast.as.AsCatchClause(node)?.VariableDeclaration;
       const name = declaration === undefined ? "_" : input.names.nameForDeclaration(declaration);
       if (name === undefined) failTargetAnalysisInvariant("tsonic-rust", "An admitted catch binding requires its authored native name.", node);
-      const used = declaration !== undefined && input.source.navigation.declarationUseSummary(declaration).uses.some(use =>
+      const uses = declaration === undefined ? [] : input.source.navigation.declarationUseSummary(declaration).uses.filter(use =>
         input.isNativeNode(use.reference) && records.nativeUnreachable.get(use.reference) !== true &&
         records.compileTimeSource.get(use.reference) === undefined && records.nativeParticipation.get(use.reference) !== "erased");
-      publish(catches, node, Object.freeze({ name, used }));
+      const statement = ast.parent(node);
+      const body = statement === undefined ? undefined : TryStatement_TryBlock(ast, statement);
+      const region = body === undefined ? undefined : input.errorRegions.get(body);
+      const inputCarrier = region === undefined ? undefined : rustErrorRegionCarrier(region);
+      if (inputCarrier === undefined)
+        failTargetAnalysisInvariant("tsonic-rust", "An admitted catch binding requires its completed protected error region.", node);
+      const observes = uses.some(use => {
+        const disposition = sourceExpressionResultDisposition(ast, use.reference);
+        if (disposition.kind === "discarded") return false;
+        let value = use.reference;
+        for (let parent = ast.parent(value); parent !== undefined && sourceTransparentExpressionOperand(ast, parent) === value;
+          parent = ast.parent(value)) value = parent;
+        const parent = ast.parent(value);
+        return parent === undefined || !ast.is.IsThrowStatement(parent) || Node_Expression(ast, parent) !== value;
+      });
+      const owner = sourceEnclosingCallable(node, ast);
+      const caught = owner === undefined ? undefined : records.nativeGenerics.get(owner)?.inputs
+        .find(parameter => parameter.caught !== undefined && rustTargetTypeRefEquals(parameter.caught.error, inputCarrier))?.caught;
+      const physicalOwner = caught === undefined ? undefined : selectRustPhysicalProgramErrorOwner(node, { ast, components: input.components });
+      const conversionTarget = observes && !isRustProgramErrorCarrier(inputCarrier) &&
+        !rustCarrierProvidesErrorObservation(inputCarrier, input.typeDefinitions) && physicalOwner !== undefined &&
+        caught !== undefined && rustTargetTypeRefEquals(caught.target, rustProgramErrorTargetType())
+        ? rustProgramErrorTargetType(physicalOwner) : undefined;
+      publish(catches, node, Object.freeze({ name, used: uses.length !== 0, inputCarrier,
+        readCarrier: conversionTarget ?? inputCarrier, conversionTarget }));
     }
   };
   const iteration = (node: Node): void => {

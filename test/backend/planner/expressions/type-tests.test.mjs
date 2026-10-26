@@ -9,6 +9,10 @@ import { rustSourcePrimitiveTargetType } from "../../../../dist/target-model/typ
 import { analyzeRustClosedTypeTests } from "../../../../dist/analysis/operations/type-test-emission.js";
 import { createRustClosedTypeTestProducer } from "../../../../dist/analysis/program/records/type-tests.js";
 import { localProtectedIntrinsicSource } from "../../../../../tsonic/test/fixtures/local-protected-error-regions.mjs";
+import { nativeErrorCatchSource } from "../../../../../tsonic/test/fixtures/native-error-catch.mjs";
+import { bigintTruncationSource } from "../../../../../tsonic/test/fixtures/bigint-truncation.mjs";
+import { rustTargetTypeRefEquals } from "../../../../dist/target-model/types/equality.js";
+import { rustJsErrorTargetType } from "../../../../dist/target-model/types/index.js";
 
 for (const kind of ["nominal", "array", "error"]) test(`closed ${kind} tests reject missing, forged and reordered test evidence`, () => {
   const operation = kind === "array" ? "Array.isArray(value)" : kind === "error" ? "value instanceof TypeError" : "value instanceof RegExp";
@@ -91,7 +95,78 @@ for (const transparent of [false, true]) test(`caught native error predicates us
   assert.equal(emission.test.kind === "error" && emission.test.lowering === "native-error" && emission.test.errorKind === "TypeError",
     true, "the native JsError binding is observed through its existing ErrorObject contract, not a package-only method");
   const producer = createRustClosedTypeTestProducer(() => undefined);
-  const missing = { ...program, errorRegions: { ...program.errorRegions, get: () => undefined } };
+  const missing = { ...program, records: { ...program.records, catchBinding: { get: () => undefined } } };
   assert.throws(() => analyzeRustClosedTypeTests(missing, [node], producer),
     /requires its completed protected error region/u, "a missing actual binding region never falls back to a logical Error recipe");
+});
+
+test("caught generic error observations publish one admitted native input conversion", () => {
+  const { program } = analyzeRust({ files: { "index.ts": nativeErrorCatchSource } });
+  const ast = program.source.ast;
+  const catches = [];
+  const visit = node => {
+    if (ast.is.IsCatchClause(node)) catches.push(node);
+    ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+  };
+  for (const file of program.sourceFiles) visit(file);
+  assert.equal(catches.length, 1, "the actual callback fixture owns exactly one catch");
+  const selected = program.records.catchBinding.get(catches[0]);
+  assert.equal(selected?.inputCarrier.kind, "associated-type", "the callback error retains its actual associated input");
+  assert.equal(selected?.conversionTarget !== undefined && rustTargetTypeRefEquals(selected.readCarrier, selected.conversionTarget), true,
+    "all observations share the one admitted caught destination rather than converting individual reads");
+  assert.equal(selected.readCarrier.errorOwner?.kind === "physical" && selected.readCarrier.errorOwner.domain === "runtime", true,
+    "the existing native input Into bound supplies its exact physical runtime error owner");
+});
+
+test("unused and rethrown native input errors retain their original physical channel", () => {
+  const { program } = analyzeRust({ files: { "index.ts": `
+    export function ignored(callback: () => void): void {
+      try { callback(); } catch (error) { void error; }
+    }
+    export function rethrown(callback: () => void): void {
+      try { callback(); } catch (error) { throw error; }
+    }
+  ` } });
+  const ast = program.source.ast;
+  let count = 0;
+  const visit = node => {
+    if (ast.is.IsCatchClause(node)) {
+      count += 1;
+      const selected = program.records.catchBinding.get(node);
+      assert.equal(selected?.inputCarrier.kind, "associated-type", "the original input keeps its exact native error");
+      assert.equal(selected.conversionTarget, undefined, "discarding or rethrowing alone introduces no conversion");
+      assert.equal(rustTargetTypeRefEquals(selected.inputCarrier, selected.readCarrier), true,
+        "the catch's source and read stay identical without an observation demand");
+    }
+    ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+  };
+  for (const file of program.sourceFiles) visit(file);
+  assert.equal(count, 2, "both native input catch controls are present");
+});
+
+test("concrete native Error catch projections preserve their exact payload carrier", () => {
+  const { program } = analyzeRust({ surfaces: ["js"], files: { "index.ts": bigintTruncationSource.replace(
+    "rejected = error instanceof RangeError;", "rejected = error instanceof Error && error.message.length > 0;") } });
+  const ast = program.source.ast;
+  let catches = 0;
+  let projections = 0;
+  const visit = node => {
+    if (ast.is.IsCatchClause(node)) {
+      catches += 1;
+      const selected = program.records.catchBinding.get(node);
+      assert.equal(selected?.conversionTarget, undefined, "native ErrorObject observation needs no program-error conversion");
+      assert.equal(rustTargetTypeRefEquals(selected.readCarrier, rustJsErrorTargetType()), true,
+        "the actual protected intrinsic's JsError remains its native read payload");
+    }
+    const projection = program.records.flowReadProjection.get(node);
+    if (projection?.kind === "builtin-error") {
+      projections += 1;
+      assert.equal(program.records.flowReadEmission.get(projection)?.kind, "identity",
+        "narrowing an already-native Error keeps the payload rather than invoking a package projection");
+    }
+    ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+  };
+  for (const file of program.sourceFiles) visit(file);
+  assert.equal(catches, 1, "the exact intrinsic fixture contains its original catch");
+  assert.equal(projections, 1, "the actual checked Error member access uses its sole admitted payload projection");
 });

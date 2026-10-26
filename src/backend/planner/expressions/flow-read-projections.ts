@@ -34,6 +34,8 @@ export function planRustValueProjection(node: Node, expression: RustExpr, fact: 
     ?? failRustPlannerInvariant("An admitted value projection requires its sealed native emission.", node);
   const ownsValue = ownership === "move";
   const borrowedResult = ownership === "borrow";
+  if (selected.kind === "identity") return ownsValue || borrowedResult ? expression
+    : { kind: "method-call", receiver: expression, method: "clone", args: [] };
   if (selected.kind === "builtin-error") {
     if (selected.source === "closed") {
       const native: RustExpr = ownsValue ? { kind: "method-call", receiver: { kind: "method-call", receiver: expression, method: "into_error", args: [] },

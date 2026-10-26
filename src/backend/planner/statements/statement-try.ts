@@ -104,7 +104,7 @@ export function planTryStatement(node: Node, context: RustPlanContext): readonly
   let catchBoundary: RustCompletionBoundary | undefined;
   if (catchBlock !== undefined && bodyErrorBoundary !== undefined) {
     catchBoundary = createRustCompletionBoundary(context, outwardFallible);
-    const catchBody = planBlockLike(catchBlock, {
+    let catchBody = planBlockLike(catchBlock, {
       ...context,
       completionBoundary: catchBoundary,
       ...(context.fallibleBoundary === undefined
@@ -113,6 +113,13 @@ export function planTryStatement(node: Node, context: RustPlanContext): readonly
     });
     const binding = context.input.program.records.catchBinding.get(catchClause);
     if (binding === undefined) failRustPlannerInvariant("An admitted catch requires its exact native binding plan.", catchClause);
+    if (binding.conversionTarget !== undefined) {
+      const type = rustTypeFromCarrierInContext(binding.conversionTarget, context)
+        ?? failRustPlannerInvariant("An admitted caught conversion requires its native destination.", catchClause);
+      catchBody = { ...catchBody, statements: [{ kind: "let", name: binding.name, mutable: false, type,
+        init: { kind: "method-call", receiver: { kind: "path", path: binding.name }, method: "into", args: [] } },
+        ...catchBody.statements] };
+    }
     const terminates = statementExits(catchBlock, context);
     plannedCatch = {
       bindings: normalBindings.filter((_binding, index) => completionBindings[index]!.catch === "entry"),

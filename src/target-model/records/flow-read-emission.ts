@@ -2,6 +2,7 @@ import type { RustFlowReadProjectionFact } from "./value-projections.js";
 import type { RustUnionMappingEmission, RustUnionProjectionEmission } from "./union-mappings.js";
 
 export type RustFlowReadEmission =
+  | { readonly kind: "identity" }
   | { readonly kind: "builtin-error"; readonly source: "closed" | "program" | "source" | "retained" | "native";
       readonly target: "source" | "retained" | "native"; readonly writable: boolean; readonly mutable: boolean; readonly runtimeReadonly: boolean }
   | { readonly kind: "union-map"; readonly mapping: RustUnionMappingEmission }

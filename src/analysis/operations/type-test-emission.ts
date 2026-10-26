@@ -10,6 +10,9 @@ import { rustClosedTypeTestConstant } from "../../target-model/operations/type-t
 import { rustClosedTypeTestMatches } from "./type-tests.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustProgramNodeIsOutsideNativeCode } from "../control-flow/compile-time-statements.js";
+import { rustCaughtErrorReadCarrier } from "../errors/catching-try.js";
+import { selectRustClosedTypeTestPlan } from "../../policy/operations/operators/type-tests.js";
+import { isRustProgramErrorCarrier } from "../../target-model/types/index.js";
 
 export function analyzeRustClosedTypeTests(program: Omit<RustAnalysisProgram, "reachability">, nodes: readonly Node[], producer: RustClosedTypeTestProducer): void {
   const select = (carrier: TargetTypeRef, test: RustClosedTypeTestPlan, predicate: RustClosedTypePredicate, node: Node): RustClosedTypeTestEmission => {
@@ -47,6 +50,13 @@ export function analyzeRustClosedTypeTests(program: Omit<RustAnalysisProgram, "r
       !rustClosedTypeTestMatches(fact, program.projectTypes, program.typeDefinitions) ||
       !rustTargetTypeRefEquals(program.records.valueRead.get(operand)?.value, fact.sourceCarrier))
       failTargetAnalysisInvariant("tsonic-rust", "Type predicate requires its exact selected operation, carrier and retained test plan.", node);
-    producer.publish(node, { operand, test: select(fact.sourceCarrier, fact.test, fact.predicate, node) });
+    const physical = isRustProgramErrorCarrier(fact.sourceCarrier)
+      ? rustCaughtErrorReadCarrier(ast, program.records, operand) : undefined;
+    const carrier = physical ?? fact.sourceCarrier;
+    const test = physical === undefined ? fact.test
+      : selectRustClosedTypeTestPlan(carrier, fact.predicate, program.projectTypes, program.typeDefinitions);
+    if (test === undefined)
+      failTargetAnalysisInvariant("tsonic-rust", "An admitted caught predicate requires its exact physical error observation.", node);
+    producer.publish(node, { operand, test: select(carrier, test, fact.predicate, node) });
   }
 }

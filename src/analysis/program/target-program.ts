@@ -407,6 +407,16 @@ export function analyzeRustAnalysisProgram(
   const completedErrorRegions = completeRustErrorRegionRecords(errorRegions.value, initializationErrors.value);
   const projectFlowReadSelections = analyzeRustProjectFlowReadSelections({ ast: context.ast, sourceFiles: context.sourceFiles,
     isNativeNode: context.isNativeNode, records });
+  const callableValues = context.callableValues.seal({
+    nativeGenerics: context.records.nativeGenericPlans,
+    declarationGenericRequirements: declarationGenericRequirements.index, genericErrors: genericCallableErrors.value,
+    retainedCallableInputs: retainedCallableInputs.value,
+    errorRegions: completedErrorRegions, initialization: initializationErrors.value,
+    constructions: context.projectTypes.definitions.flatMap(definition => {
+      const plan = projectConstructions.forDefinition(definition);
+      return plan === undefined ? [] : [plan];
+    }) });
+  if (callableValues.kind === "rejected") return callableValues;
   const statementCompletions = analyzeRustStatementCompletions({ source: context.source, sourceFiles: context.sourceFiles,
     isNativeNode: context.isNativeNode,
     records, names: context.names, typeDefinitions, errorRegions: completedErrorRegions, projectFlowReadSelections,
@@ -418,16 +428,6 @@ export function analyzeRustAnalysisProgram(
     countedLoops: analyzeRustCountedLoopRepresentations({ ast: context.ast, nativeNodes: context.nativeNodes,
       navigation: context.source.navigation, records: finalRecords, borrowedElementReads }) });
   if (statementCompletions.kind === "rejected") return rejectedTargetStage(statementCompletions.diagnostics);
-  const callableValues = context.callableValues.seal({
-    nativeGenerics: context.records.nativeGenericPlans,
-    declarationGenericRequirements: declarationGenericRequirements.index, genericErrors: genericCallableErrors.value,
-    retainedCallableInputs: retainedCallableInputs.value,
-    errorRegions: completedErrorRegions, initialization: initializationErrors.value,
-    constructions: context.projectTypes.definitions.flatMap(definition => {
-      const plan = projectConstructions.forDefinition(definition);
-      return plan === undefined ? [] : [plan];
-    }) });
-  if (callableValues.kind === "rejected") return callableValues;
   for (const occurrence of callableValues.value.emissionContexts.sourceOccurrences)
     context.records.providerEvaluationPlans.occurrence(occurrence);
   const localStorageAliases = analyzeRustLocalStorageAliases({ ast: context.ast,
