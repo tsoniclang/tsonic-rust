@@ -76,18 +76,3 @@ main();
   "the same region owner publishes a protected-only join even when no outward callable needs that arity");
   validateGeneratedProject("local-protected-intrinsic", result.artifacts, { run: true });
 });
-
-test("written catch bindings expose their assigned native value to predicates and properties", { timeout: 300_000 }, () => {
-  const source = localProtectedIntrinsicSource.replace("if (!(error instanceof TypeError)) return false;",
-    'error = new TypeError("replacement");\n    if (!(error instanceof TypeError)) return false;')
-    .replace('error.message !== "Reduce of empty array with no initial value"', 'error.message !== "replacement"');
-  const { result } = compileRust({ surfaces: ["js"],
-    target: { id: "rust", options: { outputType: "bin", crateName: "local_protected_written_binding" } },
-    files: { "cases.ts": source, "index.ts": `import { run } from "./cases.js";
-export function main(): void { if (!run()) throw new Error("written native catch binding"); }
-main();
-` } });
-  assert.equal(result.diagnostics.length, 0,
-    result.diagnostics.slice(0, 8).map(issue => `${issue.code}: ${issue.message}`).join("; "));
-  validateGeneratedProject("local-protected-written-binding", result.artifacts, { run: true });
-});

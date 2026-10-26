@@ -537,8 +537,9 @@ function collectFallibilityFacts(
       intrinsicEffects.set(subject, effects);
     }
   }
-  const publication = createRustIntrinsicErrorEffectsPublication({ walk, budget, selectSourceErrors, effectsByDeclaration,
-    effectsByModule, effectsByRegion, effectsByExpression, intrinsicEffects, genericInvocations, completedInvocations,
-    sourceErrorEdges, awaitSourceEdges, mergeEffects });
-  return Object.freeze({ sourceErrors: selectSourceErrors, effectsFor: publication.effectsFor, complete: publication.publish });
+  return Object.freeze({ sourceErrors: selectSourceErrors, effectsFor: (subject: Node) => intrinsicEffects.get(subject),
+    complete: createRustIntrinsicErrorEffectsPublication({ walk, budget, selectSourceErrors, effectsByDeclaration,
+      effectsByModule, effectsByRegion, effectsByExpression, genericInvocations, completedInvocations,
+      sourceErrorEdges, awaitSourceEdges, mergeEffects }),
+  });
 }

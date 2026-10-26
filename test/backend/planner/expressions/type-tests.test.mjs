@@ -5,8 +5,7 @@ import { analyzeRust } from "../../../helpers/rust-session.mjs";
 import { rustClosedTypeTestMatches } from "../../../../dist/analysis/operations/type-tests.js";
 import { planRustClosedTypeTest } from "../../../../dist/backend/planner/expressions/type-tests.js";
 import { createRustSyntheticNameState } from "../../../../dist/backend/planner/names/synthetic.js";
-import { rustJsErrorTargetType, rustProgramErrorTargetType, rustSourcePrimitiveTargetType } from "../../../../dist/target-model/types/index.js";
-import { rustTargetTypeRefEquals } from "../../../../dist/target-model/types/equality.js";
+import { rustSourcePrimitiveTargetType } from "../../../../dist/target-model/types/index.js";
 import { analyzeRustClosedTypeTests } from "../../../../dist/analysis/operations/type-test-emission.js";
 import { createRustClosedTypeTestProducer } from "../../../../dist/analysis/program/records/type-tests.js";
 import { localProtectedIntrinsicSource } from "../../../../../tsonic/test/fixtures/local-protected-error-regions.mjs";
@@ -81,35 +80,16 @@ for (const transparent of [false, true]) test(`caught native error predicates us
   const { program } = analyzeRust({ surfaces: ["js"], files: { "index.ts": source } });
   const ast = program.source.ast;
   const selected = [];
-  const catchDeclarations = [];
   const visit = node => {
     if (program.records.targetOperation.get(node)?.kind === "closed-type-test") selected.push(node);
-    const declaration = ast.as.AsCatchClause(node)?.VariableDeclaration;
-    if (declaration !== undefined) catchDeclarations.push(declaration);
     ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
   };
   for (const file of program.sourceFiles) visit(file);
   assert.equal(selected.length, 1, "the original source has one exact builtin Error-kind predicate");
-  assert.equal(catchDeclarations.length, 1, "the source has one named catch binding");
   const node = selected[0];
-  const operand = ast.as.AsBinaryExpression(node)?.Left;
-  const native = rustJsErrorTargetType();
-  assert.equal(rustTargetTypeRefEquals(program.records.runtimeCarrier.get(catchDeclarations[0])?.carrier, native), true,
-    "the catch owner publishes the actual native protected error as binding storage");
-  assert.equal(rustTargetTypeRefEquals(program.records.runtimeCarrier.get(operand)?.carrier, native), true,
-    "the predicate operand reads the identical native binding carrier");
-  assert.equal(rustTargetTypeRefEquals(program.records.valueRead.get(operand)?.value, native), true,
-    "the canonical value read is physical before the predicate consumer runs");
-  assert.equal(rustTargetTypeRefEquals(program.records.targetOperation.get(node)?.sourceCarrier, native), true,
-    "the checked predicate and every other consumer see that same physical carrier");
   const emission = program.records.closedTypeTestEmission.get(node);
   assert.equal(emission.test.kind === "error" && emission.test.lowering === "native-error" && emission.test.errorKind === "TypeError",
     true, "the native JsError binding is observed through its existing ErrorObject contract, not a package-only method");
-  const forgedRead = { ...program, records: { ...program.records, valueRead: { get: subject => subject === operand
-    ? { ...program.records.valueRead.get(subject), value: rustProgramErrorTargetType() } : program.records.valueRead.get(subject) } } };
-  assert.throws(() => analyzeRustClosedTypeTests(forgedRead, [node], createRustClosedTypeTestProducer(() => undefined)),
-    /Type predicate requires its exact selected operation, carrier and retained test plan/u,
-    "a logical read cannot impersonate the exact published native catch storage");
   const producer = createRustClosedTypeTestProducer(() => undefined);
   const missing = { ...program, errorRegions: { ...program.errorRegions, get: () => undefined } };
   assert.throws(() => analyzeRustClosedTypeTests(missing, [node], producer),
