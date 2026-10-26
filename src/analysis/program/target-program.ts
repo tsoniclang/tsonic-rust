@@ -391,6 +391,7 @@ export function analyzeRustAnalysisProgram(
     lifetimes: context.sourceLifetimes, nativeStorage: context.callableValues.nativeStorage, native: context.callableValues.native,
     nativeProducers: context.callableValues.nativeProducers,
     generic: context.callableValues.generic,
+    frames: context.callableValues.frames, classValues,
     producer: context.records.declarationEmission, required: context.requiredRecords });
   if (entryIssues.length !== 0) return rejectedTargetStage(entryIssues);
   analyzeRustBorrowedInitializers(context.ast, context.nativeNodes, records, ownership.ownership.reads, context.records.borrowedInitializers);

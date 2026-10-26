@@ -4,6 +4,7 @@ import type { RustTargetGenericBindings } from "../../../target-model/types/carr
 import { rustTargetGenericBindingsForArguments } from "../../../target-model/types/generic-arguments.js";
 
 import { snapshotClosedMetadata } from "../../../target-model/metadata/closed-data.js";
+import { snapshotTargetReadonlyMap } from "@tsonic/target-api/analysis";
 
 export function rustGenericCallablePhysicalBindings(
   parameters: readonly RustTargetGenericArgument[], arguments_: readonly RustTargetGenericArgument[],
@@ -27,19 +28,5 @@ export function snapshotRustCallableBindings(bindings: RustTargetGenericBindings
 }
 
 function readonlyMap<Key, Value>(entries: ReadonlyMap<Key, Value>): ReadonlyMap<Key, Value> {
-  const values = new Map([...entries].map(([key, value]) => [key, snapshotClosedMetadata(value)]));
-  const view: ReadonlyMap<Key, Value> = Object.freeze({
-    size: values.size,
-    get: (key: Key) => values.get(key),
-    has: (key: Key) => values.has(key),
-    entries: () => values.entries(),
-    keys: () => values.keys(),
-    values: () => values.values(),
-    [Symbol.iterator]: () => values[Symbol.iterator](),
-    [Symbol.toStringTag]: "ReadonlyMap",
-    forEach(callback: (value: Value, key: Key, map: ReadonlyMap<Key, Value>) => void, thisArg?: unknown) {
-      values.forEach((value, key) => callback.call(thisArg, value, key, view));
-    },
-  });
-  return view;
+  return snapshotTargetReadonlyMap([...entries].map(([key, value]) => [key, snapshotClosedMetadata(value)] as const));
 }

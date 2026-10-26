@@ -4,6 +4,8 @@ import type { Node } from "@tsonic/tsts";
 import type { RustNativeCallableGenericHeader } from "./native-generics.js";
 import type { RustGenericCallableEnvironment, RustGenericCallableImplementation } from "./generic-callables.js";
 import type { RustTargetGenericArgument } from "../types/model.js";
+import type { RustFrameCallableImplementation } from "./frame-callables.js";
+import type { RustFrameNativeType } from "./frame-emission.js";
 
 export interface RustNativeGenericEntry {
   readonly implementation: RustGenericCallableImplementation;
@@ -11,6 +13,15 @@ export interface RustNativeGenericEntry {
   readonly arguments: readonly RustTargetGenericArgument[];
   readonly suspended: boolean;
   readonly helper: boolean;
+  readonly statePassing: "value" | "rc" | "shared-reference" | undefined;
+}
+
+export interface RustNativeFrameEntry {
+  readonly implementation: RustFrameCallableImplementation;
+  readonly type: RustFrameNativeType;
+  readonly arguments: readonly RustTargetGenericArgument[];
+  readonly suspended: boolean;
+  readonly ownerPassing: "rc" | "shared-reference-to-rc";
   readonly statePassing: "value" | "rc" | "shared-reference" | undefined;
 }
 
@@ -31,6 +42,7 @@ export interface RustCallableReturnEmission {
 export interface RustCallableLeadingEmission {
   readonly genericHeader: RustNativeCallableGenericHeader | undefined;
   readonly genericEntries: ReadonlyMap<RustGenericCallableImplementation, RustNativeGenericEntry>;
+  readonly frameEntries: ReadonlyMap<RustFrameCallableImplementation, RustNativeFrameEntry>;
   readonly sourceParameters: ReadonlyMap<Node, TargetTypeRef>;
   readonly parameters: readonly {
     readonly kind: "this" | "receiver";

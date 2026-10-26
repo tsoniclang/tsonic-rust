@@ -6,13 +6,16 @@ import type { TargetTypeRef } from "../types/model.js";
 import type { RustFrameCallableEntryDefinition } from "./frame-callables.js";
 import type { RustObjectRepresentation } from "./object-representation.js";
 
-export interface RustFrameTypeEmission {
-  readonly error: TargetTypeRef;
-  readonly independentCarrier: TargetTypeRef | undefined;
+export interface RustFrameNativeType {
   readonly definition: RustFrameCallableDefinition;
   readonly entry: RustFrameCallableEntryDefinition;
   readonly environment: readonly TargetTypeRef[];
   readonly owner: { readonly instance: TargetTypeRef; readonly representation: RustObjectRepresentation; readonly environment: boolean } | undefined;
+}
+
+export interface RustFrameTypeEmission extends RustFrameNativeType {
+  readonly error: TargetTypeRef;
+  readonly independentCarrier: TargetTypeRef | undefined;
 }
 
 export interface RustClassFrameFieldEmission {

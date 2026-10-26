@@ -215,7 +215,8 @@ export function finalizeRustNativeEmission(
   if (callableDeclarationIssues.length !== 0) return rejectedTargetStage(callableDeclarationIssues);
   const methodEmissionIssues = analyzeRustMethodEmission({ program, nodes: context.nativeNodes, producer: context.records.methodEmissionPlans });
   if (methodEmissionIssues.length !== 0) return rejectedTargetStage(methodEmissionIssues);
-  analyzeRustFrameEmission({ program, sourceFiles: context.sourceFiles, nodes: context.nativeNodes, producer: context.records.frameEmissionPlans });
+  analyzeRustFrameEmission({ program, sourceFiles: context.sourceFiles, nodes: context.nativeNodes, producer: context.records.frameEmissionPlans,
+    nativeTypeFor: carrier => context.callableValues.frames.nativeTypeFor(carrier, program.classValues) });
   analyzeRustSuspendedCallableEmission({ program, sourceFiles: context.sourceFiles, producer: context.records.suspendedCallablePlans });
   const constructionEmissionIssues = analyzeRustConstructionEmission({ program, producer: context.records.constructionPlans });
   if (constructionEmissionIssues.length !== 0) return rejectedTargetStage(constructionEmissionIssues);

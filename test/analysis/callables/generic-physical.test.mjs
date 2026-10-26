@@ -67,6 +67,8 @@ test("generic native helper prefixes consume one early selected physical capture
     const entry = entries?.get(implementation);
     assert.equal(entry?.implementation === implementation, true, "the early entry belongs to the exact admitted implementation");
     assert.equal(entries.get({ ...implementation }) === undefined, true, "a declaration-shaped foreign implementation cannot select an entry variant");
+    assert.equal(Object.isFrozen(entries) && entries.set === undefined && entries.clear === undefined, true,
+      "publication retains exact implementation identities without exposing map mutation");
     assert.equal(entry.environment === program.callableValues.generic.physical.environmentFor(implementation), true,
       "the entry consumes the canonical physical environment completed before capture publication");
     assert.equal(entry.environment.captures.length, 1, "each helper retains only its own callback input");

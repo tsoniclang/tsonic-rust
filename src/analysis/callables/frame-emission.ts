@@ -12,13 +12,13 @@ import { rustFrameCallableValue } from "../../target-model/types/carriers/frame-
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
 import { rustPhysicalEmissionRecordCarriers } from "./emission-contexts.js";
 import { rustProgramNodeIsOutsideNativeCode } from "../control-flow/compile-time-statements.js";
-import { rustFrameCallableEnvironmentBindings } from "./frame-values.js";
 
 export function analyzeRustFrameEmission(input: {
   readonly program: Omit<RustAnalysisProgram, "reachability">;
   readonly sourceFiles: readonly SourceFile[];
   readonly nodes: readonly Node[];
   readonly producer: RustFrameEmissionProducer;
+  readonly nativeTypeFor: (carrier: TargetTypeRef) => import("../../target-model/records/frame-emission.js").RustFrameNativeType | undefined;
 }): void {
   const { program } = input;
   const frames = program.callableValues.frames;
@@ -121,34 +121,14 @@ export function analyzeRustFrameEmission(input: {
     pending.push(...rustTargetTypeChildren(carrier));
     const value = rustFrameCallableValue(carrier);
     if (value === undefined) continue;
-    const definition = frames.definitionFor(carrier);
-    const entry = frames.entryFor(carrier);
-    if (definition === undefined || entry === undefined || value.environment.length !== entry.environmentIndexes.length)
+    const selected = input.nativeTypeFor(carrier);
+    if (selected === undefined)
       failTargetAnalysisInvariant("tsonic-rust", "An admitted native frame requires its exact physical entry and environment correspondence.");
-    const bindings = rustFrameCallableEnvironmentBindings(definition, entry, value.environment);
-    if (bindings === undefined)
-      failTargetAnalysisInvariant("tsonic-rust", "An admitted native frame requires its exact environment parameter positions.");
-    const environment = definition.environmentParameters.map(parameter => bindings.get(parameter.identity));
-    if (environment.some(parameter => parameter === undefined))
-      failTargetAnalysisInvariant("tsonic-rust", "An admitted native frame requires its complete environment parameter inventory.");
-    let owner: import("../../target-model/records/frame-emission.js").RustFrameTypeEmission["owner"];
-    if (definition.storage.kind !== "standalone") {
-      if (value.owner.kind !== "class" || definition.activation.kind !== "class")
-        failTargetAnalysisInvariant("tsonic-rust", "An admitted object frame requires its checked class activation.");
-      const instance = value.owner.instance;
-      const selected = program.projectTypes.definitionForCarrier(instance);
-      const representation = program.objectRepresentations.representationFor(selected);
-      if (selected?.kind !== "class" || selected.declaration !== definition.activation.ownerDeclaration || representation === undefined)
-        failTargetAnalysisInvariant("tsonic-rust", "An admitted object frame requires its exact native class owner and representation.");
-      owner = Object.freeze({ instance, representation,
-        environment: program.classValues.forDeclaration(selected.declaration)?.environment?.instancesUseEnvironment === true });
-    }
     const independentCarrier = frames.independentCarrierFor(carrier);
-    if (entry.hasIndependent && independentCarrier === undefined)
+    if (selected.entry.hasIndependent && independentCarrier === undefined)
       failTargetAnalysisInvariant("tsonic-rust", "An admitted independent frame entry requires its completed native construction carrier.");
     const error = frames.errorFor(carrier);
     if (error === undefined) failTargetAnalysisInvariant("tsonic-rust", "An admitted native frame requires its completed invocation error carrier.");
-    input.producer.type(carrier, { definition, entry, environment: Object.freeze(environment as TargetTypeRef[]), owner, error,
-      independentCarrier });
+    input.producer.type(carrier, { ...selected, error, independentCarrier });
   }
 }

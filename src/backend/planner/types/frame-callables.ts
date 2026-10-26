@@ -7,6 +7,7 @@ import { rustProjectStateType } from "../objects/polymorphism/names.js";
 import { rustProjectObjectSharedStateType } from "../objects/project-objects.js";
 import { rustClassEnvironmentHandleType } from "../objects/class-environment-types.js";
 import { failRustPlannerInvariant } from "../diagnostics.js";
+import type { RustFrameNativeType } from "../../../target-model/records/frame-emission.js";
 
 export interface RustFrameCallableTypes {
   readonly definition: RustFrameCallableDefinition;
@@ -22,6 +23,13 @@ export function rustFrameCallableTypes(
 ): RustFrameCallableTypes {
   const selected = context.input.program.records.frameType.get(carrier);
   if (selected === undefined) failRustPlannerInvariant("An admitted native frame requires its sealed physical type and environment.");
+  return renderRustFrameNativeType(selected, context, position);
+}
+
+export function renderRustFrameNativeType(
+  selected: RustFrameNativeType, context: RustTypeRenderingContext,
+  position: "general" | "parameter" | "return" = "general",
+): RustFrameCallableTypes {
   const { definition, entry } = selected;
   const module = context.moduleNameByFileName.get(definition.ownerFileName);
   if (module === undefined) failRustPlannerInvariant("An admitted native frame requires its emitted source module.");

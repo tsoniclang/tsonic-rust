@@ -24,6 +24,8 @@ test("every authored formal including unused and default inputs consumes its exa
   const entry = program.records.callableLeading.get(declaration);
   assert.equal(parameters.length, 3, "unused, ordinary and default source inputs remain in authored order");
   assert.equal(entry?.sourceParameters.size, parameters.length, "the early physical inventory includes every incoming formal");
+  assert.equal(Object.isFrozen(entry.sourceParameters) && entry.sourceParameters.set === undefined && entry.sourceParameters.clear === undefined,
+    true, "the published formal inventory has no mutation route after the seal");
   for (const parameter of parameters) {
     const selected = entry.sourceParameters.get(parameter);
     const emitted = program.records.callableParameter.get(parameter);

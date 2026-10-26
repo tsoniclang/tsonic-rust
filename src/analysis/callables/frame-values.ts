@@ -28,8 +28,11 @@ import type { RustFrameCallableImplementation, RustFrameCallableEntryDefinition,
 import { substituteRustTargetGenerics } from "../../target-model/types/carriers/substitution.js";
 import { rustCallableProtocol, rustCallableTargetType } from "../../target-model/types/carriers/callables.js";
 import { rustStaticLifetime } from "../../target-model/lifetimes/index.js";
+import type { RustFrameNativeType } from "../../target-model/records/frame-emission.js";
+import type { RustClassValuePlan } from "../../target-model/records/class-values.js";
 
 export interface RustFrameCallablePlanRegistry extends RustFrameCallablePlan {
+  nativeTypeFor(carrier: TargetTypeRef, classValues: Pick<RustClassValuePlan, "forDeclaration">): RustFrameNativeType | undefined;
   completeErrors(select: (definition: RustFrameCallableDefinition,
     entry: RustFrameCallableEntryDefinition) => TargetStageResult<RustFrameEntryErrorSelection>): readonly RustSourceCallableSpecializationIssue[];
   sealCounters(constructions: readonly RustProjectConstructionPlan[]): RustFrameCallablePlan;
@@ -366,7 +369,40 @@ export function createRustFrameCallablePlan(input: {
       return substituteRustTargetGenerics(entryErrors(entry).carrier, bindings, new Map());
     },
   });
+  const nativeTypes = new Map<string, RustFrameNativeType>();
   return Object.freeze({ ...producer.records,
+    nativeTypeFor(carrier: TargetTypeRef, classValues: Pick<RustClassValuePlan, "forDeclaration">): RustFrameNativeType | undefined {
+      const key = closedMetadataKey(carrier);
+      const existing = nativeTypes.get(key);
+      if (existing !== undefined) return existing;
+      const value = rustFrameCallableValue(carrier);
+      const definition = producer.records.definitionFor(carrier);
+      const entry = producer.records.entryFor(carrier);
+      if (value === undefined || definition === undefined || entry === undefined ||
+        value.environment.length !== entry.environmentIndexes.length) return undefined;
+      const bindings = rustFrameCallableEnvironmentBindings(definition, entry, value.environment);
+      if (bindings === undefined) return undefined;
+      const environment: TargetTypeRef[] = [];
+      for (const parameter of definition.environmentParameters) {
+        const selected = bindings.get(parameter.identity);
+        if (selected === undefined) return undefined;
+        environment.push(selected);
+      }
+      let owner: RustFrameNativeType["owner"];
+      if (definition.storage.kind !== "standalone") {
+        if (value.owner.kind !== "class" || definition.activation.kind !== "class") return undefined;
+        const instance = value.owner.instance;
+        const selected = input.projectTypes.definitionForCarrier(instance);
+        const representation = input.objectRepresentations.representationFor(selected);
+        if (selected?.kind !== "class" || selected.declaration !== definition.activation.ownerDeclaration || representation === undefined)
+          return undefined;
+        owner = Object.freeze({ instance, representation,
+          environment: classValues.forDeclaration(selected.declaration)?.environment?.instancesUseEnvironment === true });
+      }
+      const selected = Object.freeze({ definition, entry, environment: Object.freeze(environment), owner });
+      nativeTypes.set(key, selected);
+      return selected;
+    },
     completeErrors(select: Parameters<RustFrameCallablePlanRegistry["completeErrors"]>[0]) {
       if (errors !== undefined) failTargetAnalysisInvariant("tsonic-rust", "Native frame entry errors complete exactly once.");
       const selections = new Map<RustFrameCallableEntryDefinition, RustFrameEntryErrorSelection>();

@@ -9,7 +9,7 @@ import { planRustSelectedErrorRegion } from "../../program/error-regions.js";
 import { planRustSelectedSourceErrorPropagation } from "../../expressions/calls/source-errors.js";
 import { failRustPlannerInvariant } from "../../diagnostics.js";
 import { rustGeneratedTypeParameterContext } from "../../names/type-parameters.js";
-import { rustFrameCallableTypes } from "../../types/frame-callables.js";
+import { rustFrameCallableTypes, renderRustFrameNativeType } from "../../types/frame-callables.js";
 import { rustTypeFromCarrierInContext } from "../../types/render.js";
 import { isRustUnitCarrier } from "../../../../target-model/types/carriers/js.js";
 import { rustCallablePayloadContext, rustCallablePayloadTypes } from "../../expressions/capture-payloads.js";
@@ -143,8 +143,11 @@ function planFrameEntry(
     if (implementation.independent) continue;
     const callable = context.input.program.records.callableDeclaration.get(implementation.declaration);
     if (callable === undefined || callable.nativeAsync) failRustPlannerInvariant("An admitted frame entry requires its synchronous native invocation contract.", implementation.declaration);
-    const suspended = context.input.program.records.asyncFunction.get(implementation.declaration) !== undefined ||
-      context.input.program.records.generator.get(implementation.declaration) !== undefined;
+    const nativeEntry = context.input.program.records.callableLeading.get(implementation.declaration)?.frameEntries.get(implementation);
+    if (nativeEntry?.type.definition !== definition || nativeEntry.type.entry !== entry)
+      failRustPlannerInvariant("An admitted native frame helper requires its exact early physical entry.", implementation.declaration);
+    const suspended = nativeEntry.suspended;
+    const nativeTypes = renderRustFrameNativeType(nativeEntry.type, context);
     const state = stateType(implementation, generics);
     const captures = rustCallablePayloadTypes(implementation, context);
     if (captures === undefined) failRustPlannerInvariant("An admitted native frame requires its complete storage and callable syntax.", definition.activation.ownerDeclaration);
@@ -176,10 +179,10 @@ function planFrameEntry(
     ] };
     resultType ??= output;
     items.push(...helpers.map((helper): RustItem => ({ ...helper, generics, params: [
-      { name: frameName, type: suspended ? shared(types.frameType)
-        : { kind: "reference", referent: shared(types.frameType), mutable: false } },
-      ...(captures.length === 0 ? [] : [{ name: stateName, type: suspended ? implementation.copy ? state : shared(state)
-        : { kind: "reference" as const, referent: state, mutable: false } }]),
+      { name: frameName, type: nativeEntry.ownerPassing === "rc" ? shared(nativeTypes.frameType)
+        : { kind: "reference", referent: shared(nativeTypes.frameType), mutable: false } },
+      ...(nativeEntry.statePassing === undefined ? [] : [{ name: stateName, type: nativeEntry.statePassing === "value" ? state
+        : nativeEntry.statePassing === "rc" ? shared(state) : { kind: "reference" as const, referent: state, mutable: false } }]),
       ...helper.params,
     ] })));
     variants.push({ name: implementation.variantName, fields: [{ kind: "primitive", name: "usize" },

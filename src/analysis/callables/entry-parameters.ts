@@ -18,6 +18,11 @@ import type { RustGenericCallablePlan } from "./generic-values.js";
 import type { RustNativeGenericEntry } from "../../target-model/records/declaration-emission.js";
 import type { RustGenericCallableImplementation } from "../../target-model/records/generic-callables.js";
 import { rustGenericCallableStorageArguments } from "../../target-model/types/carriers/generic-callable-storage.js";
+import { selectRustNativeHelperStatePassing, selectRustNativeFrameOwnerPassing } from "../../policy/ownership/generic-callables.js";
+import type { RustFrameCallablePlanRegistry } from "./frame-values.js";
+import type { RustClassValuePlan } from "../../target-model/records/class-values.js";
+import type { RustFrameCallableImplementation } from "../../target-model/records/frame-callables.js";
+import type { RustNativeFrameEntry } from "../../target-model/records/declaration-emission.js";
 
 export function analyzeRustCallableEntryParameters(input: {
   readonly source: TargetSourceProgram;
@@ -28,6 +33,8 @@ export function analyzeRustCallableEntryParameters(input: {
   readonly native: Pick<RustNativeCallableInputPlan, "inputsFor" | "isNativeRetainedParameter">;
   readonly nativeProducers: RustNativeCallableProducerPlan;
   readonly generic: RustGenericCallablePlan;
+  readonly frames: Pick<RustFrameCallablePlanRegistry, "nativeTypeFor" | "definitions">;
+  readonly classValues: RustClassValuePlan;
   readonly producer: RustDeclarationEmissionProducer;
   readonly required: RustRequiredRecord[];
 }): readonly TargetDiagnostic[] {
@@ -45,8 +52,8 @@ export function analyzeRustCallableEntryParameters(input: {
       input.records.generator.get(implementation.declaration) !== undefined;
     const helper = implementation.creation === "activation";
     const captures = environment.captures.length + environment.receiverFields.length + environment.receivers.length;
-    const statePassing = !helper || captures === 0 ? undefined : !suspended ? "shared-reference" as const
-      : implementation.storage === "shared" ? "rc" as const : "value" as const;
+    const statePassing = selectRustNativeHelperStatePassing({ suspended, storage: implementation.storage,
+      hasPayload: helper && captures !== 0 });
     entries.set(implementation, Object.freeze({ implementation, environment, suspended, helper, statePassing,
       arguments: rustGenericCallableStorageArguments(definition.signature.environmentParameters, environment.parameters) }));
     genericEntries.set(implementation.declaration, entries);
@@ -56,6 +63,24 @@ export function analyzeRustCallableEntryParameters(input: {
     ast.is.IsGetAccessorDeclaration(node) || ast.is.IsSetAccessorDeclaration(node)));
   const sourceParameters = new Map<Node, Map<Node, TargetTypeRef>>();
   for (const declaration of genericEntries.keys()) declarations.add(declaration);
+  const frameEntries = new Map<Node, Map<RustFrameCallableImplementation, RustNativeFrameEntry>>();
+  for (const definition of input.frames.definitions) for (const entry of definition.entries) for (const implementation of entry.implementations) {
+    if (implementation.independent) continue;
+    const entries = frameEntries.get(implementation.declaration) ?? new Map<RustFrameCallableImplementation, RustNativeFrameEntry>();
+    if (entries.has(implementation)) continue;
+    const type = input.frames.nativeTypeFor(implementation.carrier, input.classValues);
+    if (type?.definition !== definition || type.entry !== entry) failTargetAnalysisInvariant("tsonic-rust",
+      "An admitted frame helper requires its exact physical native entry and owner.", implementation.declaration);
+    const suspended = input.records.asyncFunction.get(implementation.declaration) !== undefined ||
+      input.records.generator.get(implementation.declaration) !== undefined;
+    const captures = implementation.captures.length + implementation.receiverFields.length + implementation.receivers.length;
+    entries.set(implementation, Object.freeze({ implementation, type, suspended,
+      ownerPassing: selectRustNativeFrameOwnerPassing(suspended),
+      statePassing: selectRustNativeHelperStatePassing({ suspended, storage: implementation.copy ? "value" : "shared", hasPayload: captures !== 0 }),
+      arguments: Object.freeze(type.environment.map(type => Object.freeze({ kind: "type" as const, type }))) }));
+    frameEntries.set(implementation.declaration, entries);
+    declarations.add(implementation.declaration);
+  }
   for (const parameter of input.nodes) {
     if (!ast.is.IsParameterDeclaration(parameter)) continue;
     const abi = input.records.sourceParameterAbi.get(parameter);
@@ -102,6 +127,7 @@ export function analyzeRustCallableEntryParameters(input: {
     });
     input.producer.leading(node, { parameters: Object.freeze(parameters), genericHeader: headers.get(node),
       genericEntries: genericEntries.get(node) ?? new Map<RustGenericCallableImplementation, RustNativeGenericEntry>(),
+      frameEntries: frameEntries.get(node) ?? new Map<RustFrameCallableImplementation, RustNativeFrameEntry>(),
       sourceParameters: sourceParameters.get(node) ?? new Map<Node, TargetTypeRef>() });
     requireRustRecord(input.required, "callableLeading", node, "native callable entry parameters", "analyzeRustCallableEntryParameters");
   }
