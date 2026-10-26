@@ -76,6 +76,7 @@ import type { RustNativeGenericProducer } from "../program/records/native-generi
 import type { RustRetainedCallableInputPlan } from "../../target-model/records/retained-inputs.js";
 import type { RustPromiseBodies } from "../../target-model/records/callables-and-resources.js";
 import { selectRustFrameEntryErrors } from "../errors/regions.js";
+import type { RustProjectStructuralView } from "../../target-model/records/project-structural-views.js";
 
 export interface RustCallableValuePlan {
   readonly emissionContexts: RustCallableEmissionContexts;
@@ -123,6 +124,7 @@ export interface RustCallableValuePlanInput {
   readonly navigation: SourceProgramNavigation;
   readonly lifetimes: RustLifetimeIndex;
   readonly classValueAdapters: readonly { readonly subject: Node; readonly adapter: RustCallableValueAdapter }[];
+  readonly structuralViews: readonly RustProjectStructuralView[];
   readonly closedSourceFiles: ReadonlySet<SourceFile>;
   readonly ownership: RustCallableOwnershipPlan;
   readonly frameBindingCarriers: ReadonlyMap<Node, TargetTypeRef>;
@@ -402,6 +404,11 @@ function createRustCallableValueLifecycle(input: RustCallableValuePlanInput,
       if (frameIssues.length !== 0) return frameIssues;
       const constructorIssues = structuralMethodStorage.prepareConstructors(components, effectsFor, nativeProducers);
       if (constructorIssues.length !== 0) return constructorIssues;
+      projectFieldStorage = prepareRustProjectCallableFieldStorage({ ast: input.ast, records: input.records,
+        storage: input.sourceStorage, projectTypes: input.projectTypes },
+      (subject, carrier) => nativeStorageQueries.subjectFor(subject, carrier));
+      const fieldIssues = projectFieldStorage.completeViews(input.structuralViews, input.structuralShapes);
+      if (fieldIssues.length !== 0) return fieldIssues;
       const storageIssues = structuralMethodStorage.complete(producerErrors, fileName => {
         const owner = selectRustPhysicalProgramErrorOwnerForFile(fileName, components);
         return owner === undefined ? undefined : rustProgramErrorTargetType(owner);
@@ -409,9 +416,6 @@ function createRustCallableValueLifecycle(input: RustCallableValuePlanInput,
       if (storageIssues.length !== 0) return storageIssues;
       parameterStorage = finalizeRustNativeParameterStorage({ ast: input.ast, storage: input.sourceStorage,
         nativeNodes: input.nativeNodes, records: input.records }, nativeStorageQueries);
-      projectFieldStorage = prepareRustProjectCallableFieldStorage({ ast: input.ast, records: input.records,
-        storage: input.sourceStorage, projectTypes: input.projectTypes },
-      (subject, carrier) => nativeStorageQueries.subjectFor(subject, carrier));
       return Object.freeze([]);
     },
     finalizeSelected() {

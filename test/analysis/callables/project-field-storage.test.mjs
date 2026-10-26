@@ -7,6 +7,9 @@ import { rustGenericCallableTargetType, rustGenericCallableValue } from "../../.
 import { rustFrameCallableTargetType } from "../../../dist/target-model/types/carriers/frame-callables.js";
 import { rustCallableInputTargetType, rustCallableTargetType } from "../../../dist/target-model/types/carriers/callables.js";
 import { receiverFieldCaptureEdges } from "../../../../tsonic/test/fixtures/receiver-field-capture-edges.mjs";
+import { rustStructuralObjectTargetType, rustStructuralObjectCarrierValue } from "../../../dist/target-model/types/carriers/source-types.js";
+import { rustCallableProtocol } from "../../../dist/target-model/types/carriers/callables.js";
+import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 
 const bool = { kind: "source-primitive", name: "bool" };
 const parameter = { kind: "type-parameter", identity: "Value", name: "Value" };
@@ -14,6 +17,48 @@ const origin = { fileName: "/source.ts", declarationIdentity: "/source.ts:1" };
 const generic = rustGenericCallableTargetType([parameter], [parameter], parameter, origin);
 const frame = rustFrameCallableTargetType([bool], bool, { kind: "lexical", origin });
 const ordinary = rustCallableTargetType([bool], bool);
+
+test("physical member selection completes structural getter storage once without rewriting input lifetimes", () => {
+  const declaration = Object.freeze({ field: "read" });
+  const owner = Object.freeze({ class: "Owner", genericParameters: [] });
+  const inputLifetime = { kind: "parameter", identity: "read:input", name: "input" };
+  const reference = { kind: "reference", referent: bool, mutable: false, lifetime: inputLifetime };
+  const logical = rustCallableTargetType([reference], reference);
+  const physical = rustCallableTargetType([reference], reference, { kind: "static" });
+  const target = rustStructuralObjectTargetType("/source.ts", [
+    { sourceName: "read", type: logical, presence: "required", readonly: true },
+  ], "reference");
+  const subject = Object.freeze({ node: declaration, kind: "member", projection: [] });
+  let queries = 0;
+  const construction = prepareRustProjectCallableFieldStorage({ ast: {},
+    records: createRustRecordFixture({ runtimeCarrier: { get: node => node === declaration ? { carrier: logical } : undefined } }),
+    projectTypes: { definitions: [owner], objectLayoutForDefinition: () => ({ fields: [{ declaration }] }),
+      instantiateMemberCarrier: (selected, receiver, carrier) => selected === declaration && receiver === bool ? carrier : undefined },
+    storage: { subject: () => ({ kind: "resolved", subject }), failureReason: () => undefined },
+  }, (selected, carrier) => {
+    assert.equal(selected === subject && carrier === logical, true, "the original member owns the one exact native storage request");
+    queries++;
+    return { kind: "selected", carrier: physical, sources: [], inputs: [] };
+  });
+  const views = [{ declaration: owner, sourceCarrier: bool, targetCarrier: target,
+    fields: [{ declaration, storageIndex: 0, field: { resultCarrier: logical } }] }];
+  let completed;
+  const issues = construction.completeViews(views, { completePhysicalCarrier(source, selected) {
+    assert.equal(source === target, true, "the original structural contract retains its owner identity");
+    completed = selected;
+    return { kind: "resolved", carrier: selected };
+  } });
+  assert.equal(issues.length, 0, "physical field evidence is available before canonical structural close");
+  const protocol = rustCallableProtocol(rustStructuralObjectCarrierValue(completed)?.fields[0].type);
+  assert.equal(protocol?.lifetime.kind, "static", "the destination receives the actually selected native environment");
+  assert.equal(protocol.parameters[0] === reference && protocol.result === reference, true,
+    "signature-only borrowed input and result lifetimes are never rewritten as owned storage");
+  assert.equal(rustTargetTypeRefEquals(protocol.error, rustCallableProtocol(logical).error), true,
+    "the getter's separate declared error channel is not taken from its stored callable");
+  assert.equal(construction.get(declaration) === physical, true, "the field reader publishes the original physical selection by identity");
+  assert.equal(construction.seal().kind, "resolved", "the completed physical field closes through the same owner");
+  assert.equal(queries, 1, "preclose completion and sealing share one native field query");
+});
 
 for (const [label, carrier, required] of [
   ["ordinary callable", ordinary, true],

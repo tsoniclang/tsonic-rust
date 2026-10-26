@@ -1,35 +1,32 @@
 import type { AstReader, Node } from "@tsonic/tsts";
 import type { SourceStorageQueries } from "@tsonic/target-api/analysis";
-import { rejectedTargetStage, resolvedTargetStage, type TargetDiagnostic, type TargetStageResult } from "@tsonic/target-api/artifacts";
+import { failTargetAnalysisInvariant, rejectedTargetStage, resolvedTargetStage, type TargetDiagnostic, type TargetStageResult } from "@tsonic/target-api/artifacts";
 import { Node_Type } from "@tsonic/target-api/source";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { RustNativeStorageSelection } from "../../target-model/records/native-storage.js";
 import { rustCallableProtocol } from "../../target-model/types/carriers/callables.js";
 import { rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
-import { rustTargetGenericReferences } from "../../target-model/types/carriers/generic-references.js";
-import { substituteRustTargetGenerics } from "../../target-model/types/carriers/substitution.js";
-import { substituteElidedLifetime } from "../../target-model/types/carriers/lifetime-elision.js";
-import { rustLifetimeKey, rustStaticLifetime } from "../../target-model/lifetimes/index.js";
 import type { RustProjectTypePolicy } from "../project-types/index.js";
 import { rustOwnedStorageChildren } from "../../policy/types/storage/owned-storage.js";
+import type { RustProjectStructuralView } from "../../target-model/records/project-structural-views.js";
+import type { RustStructuralShapePlanRegistry } from "../objects/shapes/structural-shape-plan.js";
+import type { RustSourceCallableSpecializationIssue } from "../../target-model/records/callable-issues.js";
+import { rustCallableTargetForSourceLifetime } from "../../policy/conversions/value-carrier-reconciliation.js";
+import { rustStructuralObjectCarrierValue, rustStructuralObjectTargetType } from "../../target-model/types/carriers/source-types.js";
+import { rustOptionElementCarrier } from "../../target-model/types/carriers/optional.js";
 
 const containsCallableStorage = (carrier: TargetTypeRef): boolean => carrier.kind !== "function-pointer" && carrier.kind !== "closure" &&
   (rustCallableProtocol(carrier) !== undefined || rustGenericCallableValue(carrier) !== undefined ||
     rustOwnedStorageChildren(carrier).some(containsCallableStorage));
-
-const ownedLifetimes = (carrier: TargetTypeRef): TargetTypeRef => {
-  const references = rustTargetGenericReferences(carrier);
-  const lifetimes = new Map([...references.lifetimes, ...references.callScopedElisions, ...references.elisionInputs]
-    .filter(lifetime => lifetime.kind !== "static").map(lifetime => [rustLifetimeKey(lifetime), rustStaticLifetime] as const));
-  return substituteElidedLifetime(substituteRustTargetGenerics(carrier, new Map(), lifetimes, new Map()), rustStaticLifetime);
-};
 
 export interface RustProjectCallableFieldStorage {
   get(declaration: Node): TargetTypeRef | undefined;
 }
 
 export interface RustProjectCallableFieldStorageConstruction extends RustProjectCallableFieldStorage {
+  completeViews(views: readonly RustProjectStructuralView[], shapes: Pick<RustStructuralShapePlanRegistry, "completePhysicalCarrier">):
+    readonly RustSourceCallableSpecializationIssue[];
   seal(): TargetStageResult<RustProjectCallableFieldStorage>;
 }
 
@@ -40,11 +37,10 @@ export function prepareRustProjectCallableFieldStorage(input: {
   readonly projectTypes: RustProjectTypePolicy;
 }, subjectFor: (subject: Extract<ReturnType<SourceStorageQueries["subject"]>, { readonly kind: "resolved" }>["subject"],
   carrier: TargetTypeRef) => RustNativeStorageSelection): RustProjectCallableFieldStorageConstruction {
-  const fields = new Map<Node, { readonly owned: boolean }>();
+  const fields = new Set<Node>();
   for (const definition of input.projectTypes.definitions) {
-    const owned = !definition.genericParameters.some(parameter => parameter.kind === "lifetime");
     for (const field of input.projectTypes.objectLayoutForDefinition(definition)?.fields ?? []) {
-      fields.set(field.declaration, { owned });
+      fields.add(field.declaration);
     }
   }
   const selected = new Map<Node, TargetTypeRef>();
@@ -54,20 +50,59 @@ export function prepareRustProjectCallableFieldStorage(input: {
   const select = (declaration: Node): TargetTypeRef | undefined => {
     const existing = selected.get(declaration);
     if (existing !== undefined) return existing;
-    const field = fields.get(declaration);
-    const declared = field === undefined ? undefined : input.records.runtimeCarrier.get(declaration)?.carrier ??
+    const field = fields.has(declaration);
+    const declared = !field ? undefined : input.records.runtimeCarrier.get(declaration)?.carrier ??
       input.records.runtimeCarrier.get(Node_Type(input.ast, declaration))?.carrier;
-    if (field === undefined || declared === undefined || !containsCallableStorage(declared)) return undefined;
+    if (!field || declared === undefined || !containsCallableStorage(declared)) return undefined;
     const subject = input.storage.subject(declaration, "member");
     if (subject.kind === "unresolved") { failures.set(declaration, subject.reason); return undefined; }
     const selection = subjectFor(subject.subject, declared);
     if (selection.kind === "unresolved") { failures.set(declaration, selection.reason); return undefined; }
-    const carrier = field.owned ? ownedLifetimes(selection.carrier) : selection.carrier;
+    const carrier = selection.carrier;
     selected.set(declaration, carrier);
     failures.delete(declaration);
     return carrier;
   };
   return Object.freeze({ get: (declaration: Node) => closed ? selected.get(declaration) : select(declaration),
+    completeViews(views: readonly RustProjectStructuralView[], shapes: Pick<RustStructuralShapePlanRegistry, "completePhysicalCarrier">) {
+      if (closed) failTargetAnalysisInvariant("tsonic-rust", "Structural field views complete while their original physical member owner is open.");
+      const issues: RustSourceCallableSpecializationIssue[] = [];
+      for (const view of views) {
+        const shape = rustStructuralObjectCarrierValue(view.targetCarrier);
+        if (shape === undefined) {
+          issues.push({ subject: view.declaration, message: "A physical field view requires its exact original structural destination." });
+          continue;
+        }
+        let changed = false;
+        let demanded = false;
+        let unavailable = false;
+        const members = new Map(view.fields.map(member => [member.storageIndex, member]));
+        const completed = shape.fields.map((field, index) => {
+          const member = members.get(index);
+          if (member?.field === undefined || rustCallableProtocol(rustOptionElementCarrier(member.field.resultCarrier) ??
+            member.field.resultCarrier) === undefined) return field;
+          demanded = true;
+          const stored = select(member.declaration);
+          const physical = stored === undefined ? undefined
+            : input.projectTypes.instantiateMemberCarrier(member.declaration, view.sourceCarrier, stored);
+          if (physical === undefined) {
+            unavailable = true;
+            issues.push({ subject: member.declaration, message: failures.get(member.declaration) ??
+              "A physical field view requires its exact instantiated native member storage before structural completion." });
+            return field;
+          }
+          const type = rustCallableTargetForSourceLifetime(physical, field.type);
+          changed ||= type !== field.type;
+          return type === field.type ? field : Object.freeze({ ...field, type });
+        });
+        if (!demanded || unavailable) continue;
+        const physical = changed ? rustStructuralObjectTargetType(shape.ownerFileName, Object.freeze(completed), shape.representation,
+          shape.construction, shape.bases, shape.implementation) : view.targetCarrier;
+        const selected = shapes.completePhysicalCarrier(view.targetCarrier, physical);
+        if (selected.kind === "unresolved") issues.push({ subject: view.declaration, message: selected.reason });
+      }
+      return Object.freeze(issues);
+    },
     seal(): TargetStageResult<RustProjectCallableFieldStorage> {
       if (closed) return resolvedTargetStage(published);
       const issues: TargetDiagnostic[] = [];

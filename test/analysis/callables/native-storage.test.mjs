@@ -292,6 +292,7 @@ for (const genericParameters of [[], [{ kind: "lifetime" }]]) {
     const lifetime = { kind: "parameter", identity: "field:environment", name: "environment" };
     const integer = rustSourcePrimitiveTargetType("int32");
     const declared = rustCallableTargetType([integer], integer, lifetime);
+    const physical = genericParameters.length === 0 ? rustCallableTargetType([integer], integer, { kind: "static" }) : declared;
     const subjects = new Map([declaration, unrequested].map(node => [node, { node, kind: "member", projection: [] }]));
     let queries = 0;
     let selections = 0;
@@ -314,10 +315,11 @@ for (const genericParameters of [[], [{ kind: "lifetime" }]]) {
       assert.equal(open && subjects.get(selected.node) === selected && carrier === declared, true,
         "physical selection keeps the exact declared member correspondence");
       selections += 1;
-      return { kind: "identity", carrier };
+      return { kind: "identity", carrier: physical };
     });
     const carrier = fields.get(declaration);
     const protocol = rustCallableProtocol(carrier);
+    assert.equal(carrier === physical, true, "the field owner publishes the native selector's exact physical carrier without lifetime retagging");
     assert.equal(protocol !== undefined, true, "an uninitialized callable field still has a physical slot");
     assert.equal(protocol.lifetime.kind, genericParameters.length === 0 ? "static" : "parameter",
       "only an actually owning native class closes its field storage lifetime");
@@ -367,6 +369,7 @@ for (const [name, wrap, unwrap] of [
       const integer = rustSourcePrimitiveTargetType("int32");
       const lifetime = { kind: "parameter", identity: "nested-field:environment", name: "environment" };
       const declared = wrap(rustCallableTargetType([integer], integer, lifetime));
+      const physical = ownsStorage ? wrap(rustCallableTargetType([integer], integer, { kind: "static" })) : declared;
       let open = true;
       let calls = 0;
       const fields = prepareRustProjectCallableFieldStorage({ ast: {},
@@ -383,13 +386,14 @@ for (const [name, wrap, unwrap] of [
       }, (_subject, carrier) => {
         calls += 1;
         assert.equal(carrier === declared, true, "the native storage selector receives the complete nested declared carrier");
-        return { kind: "identity", carrier };
+        return { kind: "identity", carrier: physical };
       });
       const selected = fields.seal();
       assert.equal(selected.kind, "resolved", "every unrequested nested callable field closes before publication");
       open = false;
       const carrier = selected.value.get(declaration);
       assert.equal(carrier !== undefined, true, "nested callable storage is not skipped by a direct-callable-only guard");
+      assert.equal(carrier === physical, true, "the entire selected nested carrier is published without rewriting its native lifetimes");
       assert.equal(rustCallableProtocol(unwrap(carrier))?.lifetime.kind, ownsStorage ? "static" : "parameter",
         "the enclosing native field owns storage or retains its actual authored lifetime");
       assert.equal(calls, 1, "one native field selection covers the entire nested shape");
