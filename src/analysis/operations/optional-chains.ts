@@ -9,6 +9,7 @@ import { requireRustRecord, type RustRequiredRecord } from "../program/records/r
 import { isRustUnitCarrier, rustOptionElementCarrier, rustOptionNestingDepth, rustStructuralMethodCallableCarrier } from "../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustSourceOptionalTargetType } from "../../target-model/types/projections.js";
+import { analyzeRustOptionalChainBodyFallibility } from "../errors/optional-chains.js";
 
 export function analyzeRustOptionalChainEmission(program: Omit<RustAnalysisProgram, "reachability">,
   nodes: readonly Node[], producer: RustOptionalChainEmissionProducer, required: RustRequiredRecord[]): readonly TargetDiagnostic[] {
@@ -73,13 +74,13 @@ export function analyzeRustOptionalChainEmission(program: Omit<RustAnalysisProgr
   // The present branch (everything the chain evaluates after its guard) can run inside a closure when no node in it
   // suspends, yields or carries error effects. Error effects are recorded on the calls and awaits that carry them.
   function presentBranchIsPure(root: Node, guard: Node): boolean {
+    if (analyzeRustOptionalChainBodyFallibility({ ast, records: program.records, structural: program.structuralShapes,
+      dispatch: program.projectFieldDispatch, frozen: program.frozenDataWrites, definitions: program.typeDefinitions }, root, guard)) return false;
     const pending = [root];
     for (let index = 0; index < pending.length; index++) {
       if (index > 4096) return false;
       const current = pending[index]!;
       if (ast.is.IsAwaitExpression(current) || ast.is.IsYieldExpression(current)) return false;
-      const effects = program.records.errorEffects.get(current);
-      if (effects !== undefined && (effects.localErrors || effects.nativeErrors.length !== 0)) return false;
       ast.forEachChild(current, child => { if (child !== undefined && child !== guard) pending.push(child); });
     }
     return true;
