@@ -12,40 +12,20 @@ import { rustLifetimeKey } from "../../target-model/lifetimes/index.js";
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
 import { rustCallableProtocol, rustSourceTypeCarrierValue, rustTargetGenericReferences, substituteRustTargetGenerics, rustOptionElementCarrier } from "../../target-model/types/index.js";
 import { rustClassConstructorTargetType } from "../../target-model/types/carriers/class-constructors.js";
-import { authoredTypeParameterNames, generatedTypeParameterNames } from "@tsonic/target-api/source";
 import { rustTypeParameterFromSourceContract } from "../../target-model/types/carriers/generic-references.js";
-import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
 import { mapRustTargetTypes } from "../../target-model/types/carriers/substitution.js";
 import { rustProducerErrorReference } from "../../target-model/types/carriers/producer-errors.js";
 import { selectRustCallableValueAdapter } from "../../policy/conversions/callable-adapters.js";
 import { structuralDispatchSignature } from "../../policy/types/objects/structural-emission.js";
 
 export function analyzeRustClassImplementations(
-  program: Omit<RustAnalysisProgram, "reachability">, producer: RustClassEmissionProducer, nodes: readonly Node[],
+  program: Omit<RustAnalysisProgram, "reachability">, producer: RustClassEmissionProducer,
 ): void {
-  const contexts = new WeakMap<Node, Map<string, RustClassImplementationContext>>();
   const genericCarriers = new Set<string>();
   const contextFor = (definition: RustProjectTypeDefinition, carrier: TargetTypeRef): RustClassImplementationContext => {
-    let instances = contexts.get(definition.declaration);
-    if (instances === undefined) { instances = new Map(); contexts.set(definition.declaration, instances); }
-    const key = closedMetadataKey(carrier);
-    const existing = instances.get(key);
-    if (existing !== undefined) return existing;
-    const arguments_ = rustSourceTypeCarrierValue(carrier)?.genericArguments;
-    if (arguments_ === undefined || arguments_.length !== definition.genericParameters.length)
-      failTargetAnalysisInvariant("tsonic-rust", "An admitted class implementation requires its exact native generic correspondence.", definition.declaration);
-    const types = new Map<string, TargetTypeRef>();
-    const lifetimes = new Map<string, RustLifetimeRef>();
-    for (const [index, parameter] of definition.genericParameters.entries()) {
-      const argument = arguments_[index];
-      if (parameter.kind === "type" && argument?.kind === "type") types.set(parameter.identity, argument.type);
-      else if (parameter.kind === "lifetime" && argument?.kind === "lifetime") lifetimes.set(rustLifetimeKey(parameter.lifetime), argument.lifetime);
-      else failTargetAnalysisInvariant("tsonic-rust", "An admitted class implementation requires exact native generic argument kinds.", definition.declaration);
-    }
-    const value = Object.freeze({ types, lifetimes, names: generatedTypeParameterNames(rustTargetGenericReferences(carrier).typeParameters,
-      authoredTypeParameterNames(definition.declaration, program.source.ast, new Set(definition.typeParameterIdentities))) });
-    instances.set(key, value);
-    producer.implementationContext(definition.declaration, carrier, value);
+    const value = program.records.classImplementationContext.get(definition.declaration, carrier);
+    if (value === undefined) failTargetAnalysisInvariant("tsonic-rust",
+      "An admitted class implementation requires its completed early native generic correspondence.", definition.declaration);
     return value;
   };
   const genericsFor = (carrier: TargetTypeRef, selected: RustProjectGenericEmission, context: RustClassImplementationContext, declaration: Node): void => {
@@ -186,23 +166,4 @@ export function analyzeRustClassImplementations(
     genericsFor(view.sourceCarrier, selected, contextFor(definition, view.sourceCarrier), view.declaration);
   }
   for (const [declaration, files] of instances) for (const [file, views] of files) producer.instanceViews(declaration, file, views);
-  const pending = [...program.projectTypes.definitions.map(definition => program.projectTypes.openCarrier(definition)),
-    ...program.classValues.instanceViewImplementations.map(view => view.sourceCarrier),
-    ...program.classValues.constructorViewImplementations.map(view => view.sourceCarrier)];
-  for (const node of nodes) {
-    const carrier = program.records.runtimeCarrier.get(node)?.carrier;
-    if (carrier !== undefined) pending.push(carrier);
-  }
-  const seen = new Set<string>();
-  for (let index = 0; index < pending.length; index++) {
-    const carrier = pending[index]!;
-    const key = closedMetadataKey(carrier);
-    if (seen.has(key)) continue;
-    seen.add(key);
-    pending.push(...rustTargetTypeChildren(carrier));
-    const definition = program.projectTypes.definitionForCarrier(carrier);
-    if (definition === undefined) continue;
-    contextFor(definition, carrier);
-    pending.push(...program.projectTypes.directSupertypes(carrier) ?? []);
-  }
 }

@@ -16,6 +16,7 @@ import { analyzeRustGenericAdoption, analyzeRustPromiseResults } from "../callab
 import { publishRustNativeTaskUses } from "../callables/native-task-uses.js";
 import { analyzeRustLexicalFunctionEmission } from "../callables/lexical-emission.js";
 import { analyzeRustCallableEntryParameters } from "../callables/entry-parameters.js";
+import { analyzeRustClassImplementationContexts } from "../objects/class-implementation-contexts.js";
 import { createRustModuleInitializationPlan } from "../module-initialization/analyze.js";
 import { analyzeRustProviderErrorCarriers } from "./provider-errors.js";
 import { analyzeRustDeclarationGenericRequirements } from "../declarations/generic-requirements.js";
@@ -145,6 +146,8 @@ export function analyzeRustAnalysisProgram(
   context.structuralShapes.initializeUnions(context.typeDefinitions.generatedUnions());
 
   const classValues = context.classValues.seal(context);
+  analyzeRustClassImplementationContexts({ source: context.source, records: context.records, projectTypes: context.projectTypes, classValues },
+    context.records.classEmissionPlans, context.nativeNodes);
   const moduleInitialization = createRustModuleInitializationPlan(context, classValues, {
     outputType: configuration.outputType,
     projectRoot: input.paths.projectRoot,

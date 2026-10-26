@@ -199,7 +199,7 @@ export function finalizeRustNativeEmission(
     context.records.errorTransportEmissionPlans, context.records.conversionEmissionPlans);
   if (closedErrorValueIssues.length !== 0) return rejectedTargetStage(closedErrorValueIssues);
   analyzeRustProjectEmission({ program, nodes: context.nativeNodes, producer: context.records.projectEmissionPlans });
-  analyzeRustClassImplementations(program, context.records.classEmissionPlans, context.nativeNodes);
+  analyzeRustClassImplementations(program, context.records.classEmissionPlans);
   context.structuralShapes.seal();
   analyzeRustOptionalStorageCallEmission(program, context.nativeNodes, context.records.projectEmissionPlans);
   analyzeRustStoredFields(program, context.nativeNodes, context.records.storedFieldPlans);

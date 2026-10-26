@@ -2,7 +2,49 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRust } from "../../helpers/rust-session.mjs";
 import { selectRustNativeHelperStatePassing, selectRustNativeFrameOwnerPassing, selectRustNativeStructuralReceiverPassing } from "../../../dist/policy/ownership/generic-callables.js";
-import { rustTargetGenericArgumentEquals } from "../../../dist/target-model/types/equality.js";
+import { rustTargetGenericArgumentEquals, rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
+import { analyzeRustClassImplementationContexts } from "../../../dist/analysis/objects/class-implementation-contexts.js";
+import { rustLifetimeKey } from "../../../dist/target-model/lifetimes/index.js";
+import { closedMetadataKey } from "../../../dist/target-model/metadata/closed-data.js";
+
+test("native class entry contexts preserve the exact original owner bindings before header selection", () => {
+  const { program } = analyzeRust({ surfaces: [], files: { "index.ts": `
+class Box<Value> {
+  value: Value;
+  constructor(value: Value) { this.value = value; }
+  read(): Value { return this.value; }
+}
+export function read(): number { return new Box<number>(1).read(); }
+` } });
+  const nodes = [];
+  const visit = node => {
+    nodes.push(node);
+    program.source.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+  };
+  program.sourceFiles.forEach(visit);
+  const observed = new Map();
+  let count = 0;
+  analyzeRustClassImplementationContexts(program, { implementationContext(declaration, carrier, selected) {
+    const keys = observed.get(declaration) ?? new Set();
+    const key = closedMetadataKey(carrier);
+    assert.equal(keys.has(key), false, "an exact original owner and instance are published only once");
+    keys.add(key);
+    observed.set(declaration, keys);
+    const prior = program.records.classImplementationContext.get(declaration, carrier);
+    assert.equal(prior !== undefined, true, "the same owner inventory supplies the real completed program context");
+    assert.equal(selected.types.size === prior.types.size && [...selected.types].every(([identity, type]) =>
+      rustTargetTypeRefEquals(type, prior.types.get(identity))), true, "original-to-native type substitutions are unchanged");
+    assert.equal(selected.lifetimes.size === prior.lifetimes.size && [...selected.lifetimes].every(([identity, lifetime]) =>
+      prior.lifetimes.has(identity) && rustLifetimeKey(lifetime) === rustLifetimeKey(prior.lifetimes.get(identity))), true,
+    "original-to-native lifetime substitutions are unchanged");
+    assert.equal(selected.names.size === prior.names.size && [...selected.names].every(([identity, name]) => prior.names.get(identity) === name),
+      true, "the original hygienic native binder names are preserved");
+    assert.equal(selected.types.set === undefined && selected.lifetimes.set === undefined && selected.names.set === undefined,
+      true, "published original-owner correspondence exposes no mutation route");
+    count++;
+  } }, nodes);
+  assert.equal(count > 0, true, "the real generic native class exercises owner-context publication");
+});
 
 test("native async entry captures retain authored phantom type identities even without a stored value", () => {
   const { program } = analyzeRust({ surfaces: [], files: { "index.ts": `
