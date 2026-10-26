@@ -5,6 +5,7 @@ import { sourceDeclarationIsModuleScoped } from "@tsonic/target-api/source";
 import { failTargetAnalysisInvariant, rejectedTargetStage, resolvedTargetStage, type TargetStageResult } from "@tsonic/target-api/artifacts";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { RustOperationAttempt } from "../program/operation-attempts.js";
+import type { RustRuntimeValueUsePlan } from "../program/runtime-value-uses.js";
 import type { RustNamePlan } from "../../target-model/names/model.js";
 import type { RustLifetimeIndex } from "../../target-model/lifetimes/index.js";
 import type { RustGenericCallableConversion } from "../../target-model/conversions/generic-callable.js";
@@ -123,6 +124,7 @@ export interface RustCallableValuePlanInput {
   readonly operationAttempts: Pick<WeakMap<Node, RustOperationAttempt>, "get">;
   readonly names: RustNamePlan;
   readonly navigation: SourceProgramNavigation;
+  readonly isRuntimeReference: RustRuntimeValueUsePlan["isRuntimeReference"];
   readonly lifetimes: RustLifetimeIndex;
   readonly classValueAdapters: readonly { readonly subject: Node; readonly adapter: RustCallableValueAdapter }[];
   readonly structuralViews: readonly RustProjectStructuralView[];
@@ -450,16 +452,18 @@ function createRustCallableValueLifecycle(input: RustCallableValuePlanInput,
       const identityRequests = prepareRustGenericCallableIdentityRequests({ sources: identitySources, nativeStorage: physicalLifecycle.prepared });
       const dispatchRequests = prepareRustGenericCallableDispatchRequests({ ...input, nodes: input.nativeNodes, generic,
         nativeStorage: physicalLifecycle.prepared });
-      for (const node of input.nativeNodes) {
-        if (!input.isNativeNode(node) || input.records.compileTimeSource.get(node) === true ||
-          input.records.nativeUnreachable.get(node) === true || input.records.nativeParticipation.get(node) === "erased") continue;
-        const declaration = input.records.sourceBinding.get(node)?.sourceDeclaration;
-        if (declaration === undefined || !input.ast.is.IsFunctionDeclaration(declaration) ||
+      for (const declaration of input.nativeNodes) {
+        if (!input.ast.is.IsFunctionDeclaration(declaration) ||
           input.ast.body(declaration) === undefined || !input.isNativeNode(declaration) ||
           !sourceDeclarationIsModuleScoped(declaration, input.ast)) continue;
         const capture = input.records.closureCapture.get(declaration);
         if (capture !== undefined && capture.captures.length === 0 &&
-          capture.receiverFields.length === 0 && capture.receivers.length === 0) captures.require(declaration);
+          capture.receiverFields.length === 0 && capture.receivers.length === 0 &&
+          input.navigation.declarationUseSummary(declaration).uses.some(use =>
+            (use.kind === "direct-call" || use.kind === "first-class") && input.isNativeNode(use.reference) &&
+            input.isRuntimeReference(declaration, use.reference) && input.records.compileTimeSource.get(use.reference) !== true &&
+            input.records.nativeUnreachable.get(use.reference) !== true && input.records.nativeParticipation.get(use.reference) !== "erased"))
+          captures.require(declaration);
       }
       physical.closeAdmission();
       const nativeCaptures = captures.complete();

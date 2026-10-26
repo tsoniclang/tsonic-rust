@@ -144,7 +144,7 @@ closureCapture: { get: (node) => {
   const planInput = { ast, sourceFiles: files, sourcePackages: fakeSourcePackageGraph(
     files.map(file => ({ fileName: file.name })),
   ), records, names, navigation: currentSource.navigation, lifetimes: emptyRustLifetimeIndex,
-    classValueAdapters: [], structuralViews: [], closedSourceFiles: new Set(),
+    classValueAdapters: [], structuralViews: [], closedSourceFiles: new Set(), isRuntimeReference: () => true,
     ownership: { components: [], activations: [], failureReason: () => undefined,
       instanceReceiverOwner(node) {
         assert.equal(files.some(file => file === node || file.nodes.includes(node)), true,

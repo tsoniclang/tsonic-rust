@@ -28,6 +28,7 @@ test("used module declarations publish their explicit empty native environment b
   const current = fixture(`
     function selected(): number { return 7; }
     export function unused(): number { return 9; }
+    type Unused = typeof unused;
     export function read(): number { return selected(); }
   `);
   const declaration = current.declaration("selected");
