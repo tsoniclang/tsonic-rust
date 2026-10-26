@@ -9,6 +9,7 @@ import { rustCallableTargetType, rustFixedArrayTargetType, rustNamedTargetType, 
 import { rustNativeFutureOutputType } from "../../../dist/target-model/types/callable-completions.js";
 import { rustNativeErrorJoinTargetType } from "../../../dist/target-model/types/native-error-joins.js";
 import { rustFrameCallableTargetType } from "../../../dist/target-model/types/carriers/frame-callables.js";
+import { rustRuntimeCallableTargetType } from "../../../dist/target-model/types/carriers/runtime-carriers.js";
 import { rustClassConstructorTargetType } from "../../../dist/target-model/types/carriers/class-constructors.js";
 import { rustInfallibleTargetId, rustOptionTargetId, rustCallableTargetId } from "../../../dist/target-model/types/carriers/source-types.js";
 import { substituteRustTargetTypeParameters } from "../../../dist/target-model/types/carriers/substitution.js";
@@ -195,6 +196,9 @@ test("native static field validation consumes selected storage without closing b
   const carrier = rustSourceTypeCarrier("/source.ts", "Owner", "object", []);
   const field = {};
   const logical = rustCallableTargetType([], number);
+  const completion = rustNamedTargetType("rust.core.Result", "core::result::Result", [
+    { kind: "type", type: number }, { kind: "type", type: rustNamedTargetType(rustInfallibleTargetId, "core::convert::Infallible") },
+  ]);
   const run = physical => selected(carrier, { evidence: evidence({
     projectTypes: { definitionForCarrier: () => definition,
       objectLayoutForDefinition: () => ({ fields: [{ declaration: field }], indexSignatures: [] }),
@@ -203,8 +207,8 @@ test("native static field validation consumes selected storage without closing b
     records: { runtimeCarrier: { get: node => node === field ? { carrier: logical } : undefined } },
     projectFieldStorage: { get: node => node === field ? physical : undefined },
   }) });
-  assert.equal(run(rustCallableTargetType([], number, staticLifetime)).kind, "supported", "the actual selected owned field is static");
-  assert.equal(run(rustCallableTargetType([], number, scopedLifetime)).kind, "unsatisfied", "a selected concrete borrow is not retagged from its class header");
+  assert.equal(run(rustRuntimeCallableTargetType(staticLifetime, [], completion)).kind, "supported", "the actual selected owned field is static");
+  assert.equal(run(rustRuntimeCallableTargetType(scopedLifetime, [], completion)).kind, "unsatisfied", "a selected concrete borrow is not retagged from its class header");
   assert.equal(run(undefined).kind, "unresolved", "an unselected logical callable field is not physical static evidence");
 });
 
