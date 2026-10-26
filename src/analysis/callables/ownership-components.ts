@@ -277,14 +277,16 @@ export function createRustCallableOwnershipComponentQueries(input: {
         const receiver = unwrap(info?.receiver.expression);
         const currentOwner = receiver === undefined ? undefined : receiverOwner(receiver);
         if (info?.selectedDeclaration !== capture.declaration || !isField(capture.declaration) ||
-          !isField(slot) || owner === undefined || receiver === undefined || currentOwner !== owner ||
-          classOwner(declaration) !== owner || !receiverReferences.has(receiver)) {
+          !isField(slot) || owner === undefined || receiver === undefined || currentOwner === undefined ||
+          classOwner(declaration) !== currentOwner || !receiverReferences.has(receiver) ||
+          !receiverCaptures.hasStoredField(currentOwner, capture.declaration) ||
+          !receiverCaptures.hasStoredField(currentOwner, slot)) {
           issue(declaration, "A captured field requires an exact same-instance receiver and canonical stored-field declaration.");
           continue;
         }
         consumedReceivers.add(receiver);
         selectedRelations.push(Object.freeze({ callable: declaration, selectedDeclaration: capture.declaration,
-          storageDeclaration: slot, access, receiver, receiverOwner: owner }));
+          storageDeclaration: slot, access, receiver, receiverOwner: currentOwner }));
       }
       if (selectedRelations.length !== capture.references.length || selectedRelations.length === 0 ||
         capture.reference !== capture.references[0] || capture.receiver !== selectedRelations[0]!.receiver) {
