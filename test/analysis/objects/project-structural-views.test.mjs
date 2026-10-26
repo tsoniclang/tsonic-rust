@@ -7,6 +7,7 @@ import { createSourceStorageQuery } from "@tsonic/target-api/analysis";
 import { analyzeRust } from "../../helpers/rust-session.mjs";
 import { receiverFieldStorageCases } from "../../../../tsonic/test/fixtures/receiver-field-storage-cases.mjs";
 import { genericCallableOwnershipCases } from "../../../../tsonic/test/fixtures/generic-callable-ownership.mjs";
+import { sourcePackageGraphFixture } from "../../../../tsonic/test/fixtures/source-package-graph.mjs";
 import { generalizeRustProjectStructuralView } from "../../../dist/analysis/objects/project-structural-views-generics.js";
 import { selectRustProjectStructuralViewFields, selectRustProjectStructuralViewSources } from "../../../dist/analysis/objects/project-structural-views-members.js";
 import { rustProjectViewMatches } from "../../../dist/policy/types/objects/project-view-bindings.js";
@@ -16,6 +17,8 @@ import { rustTargetGenericReferences } from "../../../dist/target-model/types/ca
 import { rustStringTargetType } from "../../../dist/target-model/types/carriers/native.js";
 import { rustSourceOptionalTargetType } from "../../../dist/target-model/types/projections.js";
 import { rustCallableProtocol, rustCallableTargetType } from "../../../dist/target-model/types/carriers/callables.js";
+import { rustProgramErrorOwner } from "../../../dist/target-model/types/carriers/program-errors.js";
+import { selectRustPhysicalProgramErrorOwner } from "../../../dist/analysis/errors/error-types.js";
 import { substituteRustTargetGenerics, substituteRustTargetTypeParameters } from "../../../dist/target-model/types/carriers/substitution.js";
 import { emptyRustTypeDefinitions } from "../../../dist/target-model/types/source-union-definitions.js";
 import { selectRustCallableValueAdapter } from "../../../dist/policy/conversions/callable-adapters.js";
@@ -634,6 +637,12 @@ export function main(): string { return view(new Box<string>("value")).identity(
       const originalProtocol = rustCallableProtocol(original.type);
       const nativeProtocol = rustCallableProtocol(native.carrier);
       const adapterProtocol = rustCallableProtocol(member.readAdapter.targetCarrier);
+      const errorOwner = rustProgramErrorOwner(adapterProtocol.error);
+      assert.equal(errorOwner?.kind, "physical", `${name}: the fixed getter uses its actual native error owner`);
+      assert.equal(member.readAdapter.kind === "conversion" && member.readAdapter.conversion.kind === "callable-adapter", true,
+        `${name}: infallible stored callables are admitted through the exact fixed getter adapter`);
+      const contract = program.records.callableContract.get(member.declaration, member.readAdapter.conversion);
+      assert.equal(contract?.physical.eliminatedInvokeError, true, `${name}: the existing adapter eliminates the impossible stored error`);
       assert.equal(originalProtocol.lifetime.kind, "parameter", `${name}: exported view has an actual retained environment parameter`);
       assert.deepEqual(nativeProtocol.lifetime, originalProtocol.lifetime, `${name}: native getters preserve the selected retained lifetime identity`);
       assert.equal(rustTargetTypeRefEquals(native.carrier, rustCallableTargetType(adapterProtocol.parameters,
@@ -679,3 +688,47 @@ export function main(): string { return view(new Box<string>("value")).identity(
       "closed requests share one native generic implementation");
   });
 }
+
+test("fixed structural callable getters retain the destination component's physical error owner", () => {
+  const dependencyFile = "node_modules/@acme/views/index.ts";
+  const { program } = analyzeRust({ sourcePackages: sourcePackageGraphFixture(["index.ts"], {
+    "@acme/views": { files: ["index.ts"], dependencies: [] },
+  }), files: {
+    "node_modules/@acme/views/package.json": JSON.stringify({ name: "@acme/views", version: "1.0.0", type: "module",
+      exports: { ".": "./index.ts" } }),
+    [dependencyFile]: `
+      export type View = { readonly identity: (value: string) => string };
+      export class ViewFailure extends Error {}
+      export function rejectView(): void { throw new ViewFailure("view"); }
+    `,
+    "index.ts": `
+      import type { View } from "@acme/views";
+      export class RootFailure extends Error {}
+      export function rejectRoot(): void { throw new RootFailure("root"); }
+      export class Box { identity = (value: string): string => value; }
+      export function view(owner: Box): View { return owner; }
+    `,
+  } });
+  const definition = program.projectTypes.definitions.find(definition => definition.sourceName === "Box");
+  assert.equal(definition !== undefined, true, "the implementing class belongs to the root component");
+  const logical = program.classValues.instanceViewImplementations.find(view => view.declaration === definition.declaration);
+  assert.equal(logical !== undefined, true, "the checked imported structural destination is retained");
+  const selected = program.records.structuralViewImplementations.get(definition.declaration, logical.ownerFileName);
+  assert.equal(selected?.length, 1, "one complete physical implementation is published");
+  const shape = program.structuralShapes.definitionForCarrier(selected[0].nativeTargetCarrier);
+  assert.equal(shape !== undefined && shape.componentId !== program.sourcePackageComponents.rootComponentId, true,
+    "the getter contract is owned by the dependency, not by its implementing class");
+  const ownerFile = program.sourceFiles.find(file => program.source.ast.getFileName(file) === shape.ownerFileName);
+  assert.equal(ownerFile !== undefined, true, "the exact authored destination owner is present");
+  const owner = selectRustPhysicalProgramErrorOwner(ownerFile, { ast: program.source.ast, components: program.sourcePackageComponents });
+  assert.equal(owner?.kind === "physical" && owner.domain === "project" && owner.componentId === shape.componentId, true,
+    "the dependency retains its independent native error domain");
+  const member = selected[0].fields.find(field => field.readAdapter !== undefined);
+  assert.equal(member !== undefined, true, "the stored callable has one selected getter adapter");
+  const error = rustProgramErrorOwner(rustCallableProtocol(member.readAdapter.targetCarrier)?.error);
+  assert.equal(error?.kind === "physical" && error.domain === "project" && error.componentId === owner.componentId, true,
+    "the adapter uses the destination's physical owner without forwarding to the root");
+  const physical = rustProgramErrorOwner(rustCallableProtocol(shape.fields[member.storageIndex].carrier)?.error);
+  assert.equal(physical?.kind === "physical" && physical.domain === "project" && physical.componentId === error.componentId, true,
+    "the physical trait getter and its adapter publish the identical error owner");
+});

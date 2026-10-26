@@ -21,6 +21,9 @@ import { selectRustCallableValueAdapter } from "../../policy/conversions/callabl
 import { rustCallableTargetForSourceLifetime } from "../../policy/conversions/value-carrier-reconciliation.js";
 import type { RustStructuralShapePlanRegistry } from "./shapes/structural-shape-plan.js";
 import { structuralDispatchSignature } from "../../policy/types/objects/structural-emission.js";
+import { rustProgramErrorOwner } from "../../target-model/types/carriers/program-errors.js";
+import { rustProgramErrorTargetType } from "../../target-model/types/carriers/js.js";
+import { selectRustPhysicalProgramErrorOwner } from "../errors/error-types.js";
 
 export function analyzeRustClassImplementations(
   program: Omit<RustAnalysisProgram, "reachability">, producer: RustClassEmissionProducer, nodes: readonly Node[],
@@ -106,6 +109,30 @@ export function analyzeRustClassImplementations(
   for (const view of program.classValues.instanceViewImplementations) {
     const requirements = program.declarationGenericRequirements.contractForStructuralView(view);
     if (requirements === undefined) failTargetAnalysisInvariant("tsonic-rust", "An admitted structural view requires its sealed native generic requirements.", view.declaration);
+    const logical = rustStructuralObjectCarrierValue(view.targetCarrier);
+    const template = program.structuralShapes.templateForCarrier(view.targetCarrier);
+    if (logical === undefined || template === undefined)
+      failTargetAnalysisInvariant("tsonic-rust", "An admitted structural view requires its exact logical member contract.", view.declaration);
+    const ownerFile = program.sourceFiles.find(file => program.source.ast.getFileName(file) === template.ownerFileName);
+    const owner = ownerFile === undefined ? undefined : selectRustPhysicalProgramErrorOwner(ownerFile,
+      { ast: program.source.ast, components: program.sourcePackageComponents });
+    const physicalDestination = (type: TargetTypeRef): TargetTypeRef => mapRustTargetTypes(type, carrier => {
+      if (rustProgramErrorOwner(carrier)?.kind === "logical") {
+        if (owner === undefined)
+          failTargetAnalysisInvariant("tsonic-rust", "An admitted structural getter requires its exact component-owned error carrier.", view.declaration);
+        return rustProgramErrorTargetType(owner);
+      }
+      const reference = rustProducerErrorReference(carrier);
+      if (reference === undefined) return carrier;
+      const error = program.errorRegions.producerError(reference);
+      if (error === undefined)
+        failTargetAnalysisInvariant("tsonic-rust", "An admitted structural getter requires its completed producer error carrier.", view.declaration);
+      return error;
+    });
+    const nativeHeader = rustStructuralObjectCarrierValue(physicalDestination(
+      rustCallableTargetForSourceLifetime(template.carrier, view.targetCarrier)));
+    if (nativeHeader === undefined)
+      failTargetAnalysisInvariant("tsonic-rust", "An admitted structural view requires its canonical native member lifetime inventory.", view.declaration);
     const fields = view.fields.map(member => {
       if (member.field === undefined || member.readAdapter === undefined ||
         rustCallableProtocol(rustOptionElementCarrier(member.field.resultCarrier) ?? member.field.resultCarrier) === undefined) return member;
@@ -122,19 +149,16 @@ export function analyzeRustClassImplementations(
           failTargetAnalysisInvariant("tsonic-rust", "An admitted callable field view requires its closed producer error.", member.declaration);
         return error;
       });
-      const readAdapter = selectRustCallableValueAdapter(physical, member.readAdapter.targetCarrier,
+      const native = nativeHeader.fields[member.storageIndex];
+      if (native === undefined)
+        failTargetAnalysisInvariant("tsonic-rust", "An admitted callable getter requires its canonical native destination.", member.declaration);
+      const target = native.readonly ? native.type : physicalDestination(member.readAdapter.targetCarrier);
+      const readAdapter = selectRustCallableValueAdapter(physical, target,
         program.projectTypes, program.typeDefinitions);
       if (readAdapter === undefined)
         failTargetAnalysisInvariant("tsonic-rust", "An admitted callable field view requires its exact physical-to-getter adaptation.", member.declaration);
       return Object.freeze({ ...member, readAdapter });
     });
-    const logical = rustStructuralObjectCarrierValue(view.targetCarrier);
-    const template = program.structuralShapes.templateForCarrier(view.targetCarrier);
-    if (logical === undefined || template === undefined)
-      failTargetAnalysisInvariant("tsonic-rust", "An admitted structural view requires its exact logical member contract.", view.declaration);
-    const nativeHeader = rustStructuralObjectCarrierValue(rustCallableTargetForSourceLifetime(template.carrier, view.targetCarrier));
-    if (nativeHeader === undefined)
-      failTargetAnalysisInvariant("tsonic-rust", "An admitted structural view requires its canonical native member lifetime inventory.", view.declaration);
     const nativeTargetCarrier = rustStructuralObjectTargetType(logical.ownerFileName,
       logical.fields.map((field, storageIndex) => {
         const member = fields.find(member => member.storageIndex === storageIndex);
