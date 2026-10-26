@@ -16,6 +16,7 @@ export interface RustReceiverFieldCaptureQueries {
   isCaptured(declaration: Node): boolean;
   isDeferred(declaration: Node): boolean;
   storageDeclaration(declaration: Node): Node;
+  hasStoredField(receiverOwner: Node, declaration: Node): boolean;
   storageReadonly(declaration: Node): boolean;
   storageImmutable(declaration: Node): boolean;
 }
@@ -298,6 +299,13 @@ export function analyzeRustReceiverFieldCaptures(input: {
     isCaptured: (declaration: Node) => fields.has(declaration),
     isDeferred: (declaration: Node) => deferredStorage.has(declaration),
     storageDeclaration: (declaration: Node) => storageDeclarations.get(declaration) ?? declaration,
+    hasStoredField(receiverOwner: Node, declaration: Node): boolean {
+      const receiver = input.projectTypes.definitionForDeclaration(receiverOwner);
+      const owner = input.projectTypes.definitionContainingDeclaration(declaration);
+      return receiver !== undefined && owner !== undefined && input.isStoredField(declaration) &&
+        rustProjectObjectField(declaration, input.projectTypes) !== undefined &&
+        input.projectTypes.classLineage(receiver)?.includes(owner) === true;
+    },
     storageReadonly: (declaration: Node) => readonlyStorage.has(declaration),
     storageImmutable: (declaration: Node) => immutableStorage.has(declaration),
   });

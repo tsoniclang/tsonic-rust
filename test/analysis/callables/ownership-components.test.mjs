@@ -20,6 +20,7 @@ import { rustCallableTargetType, rustCallableProtocol } from "../../../dist/targ
 import { rustFrameCallableValue } from "../../../dist/target-model/types/carriers/frame-callables.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 import { rustTargetTypeParameterIdentities } from "../../../dist/target-model/types/carriers/generic-references.js";
+import { analyzeRustErrorEffects } from "../../helpers/rust-error-analysis.mjs";
 import { analyzeRustOperations } from "../../helpers/rust-operation-analysis.mjs";
 import { resolveRustCallableStorageCarrier } from "../../../dist/analysis/source-evidence/types/resolution/source-evidence.js";
 import { rustResolutionContext } from "../../../dist/analysis/program/walk.js";
@@ -638,6 +639,35 @@ test("identically named fields in unrelated classes retain different canonical o
   assert.equal(first !== undefined && second !== undefined, true);
   assert.equal(first !== second, true);
   assert.equal(first.ownerDeclaration !== second.ownerDeclaration, true);
+});
+
+test("inherited field captures retain the derived receiver and exact native base storage", () => {
+  const context = analyzeRustErrorEffects(`
+class Base<Item> { constructor(readonly seed: Item) {} }
+class Derived extends Base<number> { read = (): number => this.seed + 1; }
+class Other { constructor(readonly seed: number) {} }
+`, { surfaces: [] });
+  const { ast, sourceStorage, nativeNodes } = context;
+  const captures = context.objectRepresentations.receiverCaptures;
+  const named = (name, kind) => sourceStorage.nodes.filter(node => ast.kindName(node) === kind &&
+    ast.name(node) !== undefined && ast.text(ast.name(node)) === name);
+  const queries = context.callableOwnership;
+  const derived = named("Derived", "KindClassDeclaration")[0];
+  const other = named("Other", "KindClassDeclaration")[0];
+  const seeds = named("seed", "KindParameter");
+  assert.equal(queries.failureReason(), undefined, "the native ownership analysis completes");
+  assert.equal(queries.issues.length, 0, "the checked inherited field does not change the receiver identity");
+  assert.equal(captures.hasStoredField(derived, seeds[0]), true, "the native lineage contains the exact base field");
+  assert.equal(captures.hasStoredField(derived, seeds[1]), false, "same spelling never admits an unrelated native field");
+  assert.equal(captures.hasStoredField(other, seeds[0]), false, "the unrelated receiver cannot own the base field");
+  const capture = captures.capturesFor(sourceStorage.nodes.find(node => ast.is.IsArrowFunction(node)))[0];
+  assert.equal(capture.declaration === seeds[0], true, "the selected declaration remains the original generic base field");
+  assert.equal(captures.storageDeclaration(capture.declaration) === seeds[0], true,
+    "the stored field keeps its canonical native owner");
+  assert.equal(captures.storageReadonly(capture.declaration), true, "native readonly storage is retained");
+  const forged = createRustCallableOwnershipComponentQueries({ storage: sourceStorage, nativeNodes, receiverCaptures: { ...captures,
+    storageDeclaration: declaration => declaration === seeds[0] ? seeds[1] : declaration } });
+  assert.equal(forged.issues.length > 0, true, "a foreign canonical storage field is still refused");
 });
 
 test("mutual readonly fields close one component without treating immutability as fixed self", () => {
