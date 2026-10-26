@@ -73,7 +73,9 @@ for (const expression of ["callback", "holder.callback", "callbacks[0]", '(() =>
         return carrier;
       },
     };
-    assert.equal(selectedValueCarrier(operand, call.sourceCallee.type, context, options) === carrier, true);
+    const selected = selectedValueCarrier(operand, call.sourceCallee.type, context, options);
+    assert.equal(selected === carrier, true,
+      JSON.stringify({ expression, carrierKind: selected?.kind, selections, producerQueries }));
     assert.equal(selections, 1, "a stored carrier does not excuse misattributing the checked type");
     assert.equal(producerQueries, 1, "ownership and any frame selection reuse the same producer result");
     assert.equal(context.sourceStorageResolution.subject === enclosing.subject &&
