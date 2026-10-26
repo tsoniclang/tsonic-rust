@@ -83,8 +83,7 @@ export function createRustDirectErrorEffects(
         budget.expansion(carrierWork, replacementWork);
       }
       const bindings = source.nativeErrors.length === 0 ? undefined : selectSourceErrors.bindingsFor(
-        invocation, declaration, source.nativeErrors.filter(error => !selectSourceErrors.substitutesOnCompletion(error.identity))
-          .map(error => error.errorType));
+        invocation, declaration, source.nativeErrors.map(error => error.errorType));
       const edge = selectSourceErrors.edgeFor(declaration, kind, source, bindings);
       if (edge === undefined) {
         appendRustDiagnostic(walk, "RUST_NATIVE_ERROR_REBINDING_MISSING",
@@ -106,11 +105,15 @@ export function createRustDirectErrorEffects(
     const invokedError = nativeInput === undefined && frame === undefined
       ? rustCallableProtocol(rustSourceCallCallableStorageCarrier(operation, walk.context.structuralShapes))?.error : undefined;
     const invocationEffects = invokedError === undefined ? undefined : rustCallableInvocationErrorEffects(invokedError);
+    const providerError = operation?.kind === "provider-operation" && operation.abi.effects.invocation === "fallible" &&
+      operation.abi.effects.errorBoundary === "provider-native" ? operation.abi.effects.errorCarrier : undefined;
+    const providerEffects = providerError === undefined ? undefined : rustCallableInvocationErrorEffects(providerError);
     if (kind === "KindThrowStatement" || kind === "KindRegularExpressionLiteral" ||
-      operationIsFallible(node, invokedError !== undefined || frame !== undefined)) selected.push(rustLocalErrorEffects);
+      operationIsFallible(node, invokedError !== undefined || frame !== undefined || providerEffects !== undefined))
+      selected.push(rustLocalErrorEffects);
     const callbackEffects = preparedCallbackOperationEffects(node);
     if (callbackEffects === undefined) return undefined;
-    for (const effects of [invocationEffects, callbackEffects]) {
+    for (const effects of [invocationEffects, providerEffects, callbackEffects]) {
       if (effects === undefined) continue;
       budget.metadata(effects);
       if (!selectSourceErrors.register(effects.nativeErrors)) {

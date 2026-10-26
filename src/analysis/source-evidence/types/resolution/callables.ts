@@ -1,6 +1,7 @@
 import { resolveRustSourceUnionCarrier, resolveRustUnionValueCarrier } from "./source-unions.js";
 import { asNode } from "../../../../policy/identities/selected-source.js";
 import { denseDefined } from "./project.js";
+import { rustSourceStorageSubjectContext } from "./source-storage-projection.js";
 import { resolveRustCallableEvidence } from "./source-evidence.js";
 import { resolveRustTargetType } from "./target.js";
 import { resolveRustInferredUnion } from "./inferred-unions.js";
@@ -122,7 +123,7 @@ export function resolveUnion(
   const absent = (member: Type): boolean => context.currentSemantics.types.isNullish(member) || context.currentSemantics.types.isVoidLike(member);
   const valueMembers = members.filter(member => !absent(member));
   const nullishMembers = members.filter(absent);
-  const typeContext = { ...context, sourceStorageSubject: undefined };
+  const typeContext = rustSourceStorageSubjectContext(context, undefined);
   const valueCarriers = valueMembers.map((member) =>
     resolveRustTargetType(member, typeContext, options, resolving));
   if (valueCarriers.some((carrier) => carrier === undefined)) {

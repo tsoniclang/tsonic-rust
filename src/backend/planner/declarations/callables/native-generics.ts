@@ -5,6 +5,7 @@ import type { RustPlanContext } from "../../program/plan-context.js";
 import { rustTypeFromCarrierInContext } from "../../types/render.js";
 import type { RustCallableGenericPlan } from "./generics.js";
 import { rustGenericRequirementBounds, rustGenericsWithAssociatedBounds } from "../../types/generic-bounds.js";
+import { rustAssociatedPredicates } from "../../types/associated-bounds.js";
 import { failRustPlannerInvariant } from "../../diagnostics.js";
 
 export function planRustNativeCallableGenerics(
@@ -15,7 +16,10 @@ export function planRustNativeCallableGenerics(
   if (selected === undefined) failRustPlannerInvariant(
     "An emitted native callable requires its exact original pre-seal generic context.", declaration);
   const { inputs } = selected;
-  if (inputs.length === 0) return source;
+  const requirements = source.context.promiseBody === true ? selected.bodyRequirements : selected.sourceRequirements;
+  if (inputs.length === 0 && requirements === undefined) return source;
+  if (requirements === undefined) failRustPlannerInvariant(
+    "An emitted native callable generic context requires its finalized declaration requirements.", declaration);
   const sourceGenerics = source.finalizeGenerics();
   const typeParameterNames = new Map(source.context.typeParameterNames);
   const usedNames = new Set([...typeParameterNames.values(), ...sourceGenerics.parameters.map(parameter => parameter.name)]);
@@ -26,10 +30,8 @@ export function planRustNativeCallableGenerics(
   const context: RustPlanContext = { ...source.context, typeParameterNames };
   const parameters: RustGenericParameter[] = [];
   const parameterSlots = new Map(source.parameterSlots);
-  const predicates: RustWherePredicate[] = [...sourceGenerics.wherePredicates];
-  const requirements = context.promiseBody === true ? selected.bodyRequirements : selected.sourceRequirements;
-  if (requirements === undefined) failRustPlannerInvariant(
-    "An emitted native callable generic context requires its finalized declaration requirements.", declaration);
+  const predicates: RustWherePredicate[] = [...sourceGenerics.wherePredicates,
+    ...rustAssociatedPredicates(requirements.associatedTypes, context)];
   for (const input of inputs) {
     const traits = input.traits.map(trait => rustTypeFromCarrierInContext(trait, context));
     if (traits.some(trait => trait === undefined)) failRustPlannerInvariant("An admitted native generic input requires its renderable trait bounds.", declaration);

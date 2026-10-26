@@ -48,3 +48,34 @@ test("canonical opaque carrier rendering preserves an explicitly empty capture s
   assert.equal(Object.hasOwn(rendered, "captures"), true, "empty captures must not become implicit lifetime capture");
   assert.match(printRustType(rendered), / \+ use<>$/u);
 });
+
+test("nested native argument types omit only return-position precise captures", () => {
+  const integer = rustSourcePrimitiveTargetType("int32");
+  const lifetime = { kind: "parameter", identity: "source:input", name: "input" };
+  const parameter = { kind: "type-parameter", identity: "source:Value", name: "Value" };
+  const future = {
+    ...rustNativeCompletionFutureType({
+      identity: "source:captured-future",
+      captures: [{ kind: "lifetime", lifetime }, { kind: "type", type: parameter }],
+      output: integer,
+      error: rustNamedTargetType("rust.core.Infallible", "core::convert::Infallible", []),
+    }),
+    outlives: [lifetime],
+  };
+  const carrier = rustNamedTargetType("native.Envelope", "Envelope", [{
+    kind: "type",
+    type: { kind: "tuple", elements: [{
+      kind: "reference", mutable: false, lifetime,
+      referent: { kind: "array", element: future },
+    }] },
+  }]);
+  const input = rustTypeFromCarrier(carrier, undefined, undefined, "parameter");
+  const output = rustTypeFromCarrier(carrier, undefined, undefined, "return");
+  const general = rustTypeFromCarrier(carrier);
+  assert.equal(input !== undefined && output !== undefined && general !== undefined, true);
+  const captured = "Envelope<(&'input Vec<impl core::future::Future<Output = Result<i32, core::convert::Infallible>> + 'input + use<'input, Value>>,)>";
+  assert.equal(printRustType(output), captured);
+  assert.equal(printRustType(general), captured);
+  assert.equal(printRustType(input), captured.replace(" + use<'input, Value>", ""));
+  assert.equal(future.captures.length, 2);
+});

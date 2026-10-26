@@ -49,7 +49,7 @@ export function resolveFunctionExpressionSignature(
   const parameters = sourceCallableValueParameters(ast, expression, walk.context.semanticsFor(expression));
   if (parameters === undefined) return undefined;
   const sourceSelected = sourceCarrier ?? resolveRustTargetTypeRef(
-    expression, rustResolutionContext(walk, expression, "value"), walk.operationOptions,
+    expression, { ...rustResolutionContext(walk, expression, "value"), callableRepresentation: "signature" }, walk.operationOptions,
   );
   const sourceProtocol = sourceSelected?.kind === "function-pointer"
     ? { parameters: sourceSelected.args, result: sourceSelected.result }

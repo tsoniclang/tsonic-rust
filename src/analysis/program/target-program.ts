@@ -330,7 +330,6 @@ export function analyzeRustAnalysisProgram(
     errorTypes,
     preparedOwnership.borrowFor,
   );
-  if (declarationGenericRequirements.kind === "rejected") return declarationGenericRequirements;
   const sourceModuleConstructions = analyzeRustSourceModuleConstructions({
     source: context.source,
     sourceFiles: context.sourceFiles,
@@ -347,9 +346,6 @@ export function analyzeRustAnalysisProgram(
       evidence: ["target.capability=rust.backend.source-module-construction"],
     })));
   }
-  const ownership = preparedOwnership.complete(declarationGenericRequirements.index);
-  if (ownership.kind === "rejected") return rejectedTargetStage(ownership.diagnostics);
-  analyzeRustBorrowedInitializers(context.ast, context.nativeNodes, records, ownership.ownership.reads, context.records.borrowedInitializers);
   analyzeRustCaptureStorage({ ast: context.ast, nativeNodes: context.nativeNodes, records, producer: context.records.captureStorage });
   const typeDefinitions = context.typeDefinitions.seal();
   const projectTypes = context.projectTypes.seal();
@@ -370,17 +366,26 @@ export function analyzeRustAnalysisProgram(
   const taskUses = publishRustNativeTaskUses({ context, graph: sourceStage.nativeTasks, completions: sourceStage.nativeTaskCompletions,
     regions: errorRegions.value, initialization: initializationErrors.value });
   if (taskUses.kind === "rejected") return taskUses;
-  const retentionIssues = context.callableValues.validateStructuralRetention(declarationGenericRequirements.index, context.typeFamilies, classValues, errorTypes);
-  const promiseResults = analyzeRustPromiseResults({ ast: context.ast, source: context.source, genericAdoption,
+  const promiseResultsFor = (nativeStorageValidated: boolean) => analyzeRustPromiseResults({ ast: context.ast, source: context.source, genericAdoption,
     storage: context.sourceStorage,
-    nodes: context.nativeNodes, records, uses: context.promiseResultUses, definitions: context.typeDefinitions,
+    nodes: context.nativeNodes, records, readFor: node => preparedOwnership.readFor(node, declarationGenericRequirements),
+    uses: context.promiseResultUses, definitions: context.typeDefinitions,
     nativeStorage: context.callableValues.nativeStorage, native: context.callableValues.native,
     promiseBodies: context.promiseBodies.plan,
     nativeCaptures: context.callableValues.selected.nativeCaptures, errorTypes,
     sourceTypes: sourceStage.sourceTypes,
-    sourceLifetimes: context.sourceLifetimes, requirements: declarationGenericRequirements, retentionIssues, families: context.typeFamilies, jsEnabled: context.jsEnabled,
+    sourceLifetimes: context.sourceLifetimes, requirements: declarationGenericRequirements, nativeStorageValidated, families: context.typeFamilies, jsEnabled: context.jsEnabled,
     evidence: { genericCallables: context.callableValues.generic, frameCallables: context.callableValues.selected.frames,
       classValues, objectRepresentations, structuralShapes: context.structuralShapes.completed, projectTypes: context.projectTypes, records } });
+  if (declarationGenericRequirements.kind === "rejected") {
+    const promiseResults = promiseResultsFor(false);
+    return rejectedTargetStage([...declarationGenericRequirements.diagnostics, ...promiseResults.diagnostics]);
+  }
+  const ownership = preparedOwnership.complete(declarationGenericRequirements.index);
+  if (ownership.kind === "rejected") return rejectedTargetStage(ownership.diagnostics);
+  analyzeRustBorrowedInitializers(context.ast, context.nativeNodes, records, ownership.ownership.reads, context.records.borrowedInitializers);
+  const retentionIssues = context.callableValues.validateStructuralRetention(declarationGenericRequirements.index, context.typeFamilies, classValues, errorTypes);
+  const promiseResults = promiseResultsFor(retentionIssues.length === 0);
   if (retentionIssues.length !== 0 || promiseResults.diagnostics.length > 0) {
     return rejectedTargetStage([...retentionIssues.map(issue => ({ code: "RUST_CALLABLE_VALUE_NOT_CLOSED", category: "error" as const,
       source: "tsonic-rust", message: issue.message, sourceNode: issue.subject,

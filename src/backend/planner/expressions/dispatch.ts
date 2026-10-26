@@ -2,7 +2,7 @@ import { rustConditionPrintsAsBlock } from "../../target-ast/syntax/expressions.
 import type { Node } from "@tsonic/tsts";
 import { Node_Expression, ConditionalExpression_Condition, ConditionalExpression_WhenTrue, ConditionalExpression_WhenFalse,
   BinaryExpression_OperatorToken } from "@tsonic/target-api/source";
-import type { RustBlock, RustExpr, RustStmt } from "../../target-ast/syntax/nodes.js";
+import type { RustExpr, RustStmt } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import type { RustExpressionAccess, RustExpressionResultUse } from "./entry.js";
 import { rustSourceBindingPath } from "../program/plan-context.js";
@@ -37,6 +37,7 @@ import { planUnaryExpression } from "./expression-unary.js";
 import { planRustAwaitExpression } from "./await.js";
 import { requireRustCarrierRequirements } from "../types/generic-requirements.js";
 import { rustValueDestinationContext } from "./value-destinations.js";
+import { planExpressionAsStatement } from "../statements/statement-simple.js";
 
 export function planExpressionInner(node: Node, context: RustPlanContext, resultUse: RustExpressionResultUse,
   access: RustExpressionAccess = "value"): RustExpr | undefined {
@@ -117,13 +118,12 @@ export function planExpressionInner(node: Node, context: RustPlanContext, result
         // A discarded conditional evaluates its test and then only the selected branch, itself discarded.
         if (condition === undefined || yes === undefined || no === undefined)
           failRustPlannerInvariant("An admitted discarded conditional requires its native test and branches.", node);
-        const whenTrue = planExpression(yes, context, "discarded");
-        const whenFalse = planExpression(no, context, "discarded");
-        const branch = (expr: RustExpr): RustBlock => ({ statements: [{ kind: "expr", expr }] });
+        const whenTrue = planExpressionAsStatement(yes, context);
+        const whenFalse = planExpressionAsStatement(no, context);
         // Only branches with work are emitted; with none, the test is still evaluated once.
-        const statement: RustStmt | undefined = whenTrue !== undefined
-          ? { kind: "if", condition, then: branch(whenTrue), ...(whenFalse === undefined ? {} : { else: branch(whenFalse) }) }
-          : whenFalse !== undefined ? { kind: "if", condition: { kind: "unary", operator: "!", operand: condition }, then: branch(whenFalse) }
+        const statement: RustStmt | undefined = whenTrue.length > 0
+          ? { kind: "if", condition, then: { statements: whenTrue }, ...(whenFalse.length === 0 ? {} : { else: { statements: whenFalse } }) }
+          : whenFalse.length > 0 ? { kind: "if", condition: { kind: "unary", operator: "!", operand: condition }, then: { statements: whenFalse } }
           : undefined;
         return statement === undefined ? condition : { kind: "block", body: { statements: [statement] } };
       }

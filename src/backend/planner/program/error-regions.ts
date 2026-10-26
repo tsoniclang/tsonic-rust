@@ -22,7 +22,7 @@ export function planRustErrorJoinDeclarations(sourceFile: import("@tsonic/tsts")
   return Object.freeze(selected.flatMap(declaration => {
     const join = planRustNativeErrorJoin({
       identity: rustNativeErrorJoinIdentity(fileName, declaration.arity), name: declaration.name,
-      clone: declaration.clone, visibility: "public",
+      clone: declaration.clone, visibility: "public", resultShape: "result",
       sources: Array.from({ length: declaration.arity }, (_value, index) => ({
         identity: String(index), variant: `Error${index}`, errorType: { kind: "named", path: `Error${index}` },
       })),
@@ -57,7 +57,7 @@ export function planRustSelectedErrorRegion(
   };
   if (selected.localOwner !== undefined && owner === undefined) failRustPlannerInvariant("An admitted native error region requires its exact physical package boundary.", sourceNode);
   if (owner !== undefined) registerAliasFromPath(context, owner.errorTypePath);
-  if (selected.sources.length === 0) return Object.freeze({ boundary: owner === undefined
+  if (selected.sources.length === 0 && selected.kind !== "native") return Object.freeze({ boundary: owner === undefined
     ? undefined : rustPackageFallibleBoundary(owner) });
   const arity = selected.sources.length + (owner === undefined ? 0 : 1);
   const name = context.input.program.records.nativeErrorJoinName.get(selected.fileName, arity);
@@ -75,7 +75,7 @@ export function planRustSelectedErrorRegion(
     variant: "Error0", errorType: rustErrorType(owner) };
   const sources = [...(local === undefined ? [] : [local]), ...nativeSources];
   const join = planRustNativeErrorJoin({ identity: rustNativeErrorJoinIdentity(selected.fileName, arity), name, referencePath,
-    visibility: "public", sources });
+    visibility: "public", resultShape: "result", sources });
   const boundary = join === undefined ? undefined : rustNativeFallibleBoundary(join,
     owner === undefined || local === undefined ? undefined : { owner, source: local });
   return boundary === undefined ? undefined : Object.freeze({ boundary });
