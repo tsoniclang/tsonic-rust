@@ -31,6 +31,7 @@ import type { RustTargetGenericBindings } from "../../target-model/types/carrier
 import type { RustNativeStoragePlan } from "../callables/native-storage.js";
 import type { RustNativeCallableInputPlan } from "../callables/native-inputs.js";
 import type { RustNativeCallableProducerPlan } from "../../target-model/records/native-producers.js";
+import { rustCallableConversionSource } from "../../target-model/conversions/callable-physical.js";
 
 type RustSourceErrorContext = {
   readonly ast: AstReader;
@@ -124,15 +125,20 @@ export function createRustSourceErrorEffectSelection(walk: { readonly context: R
       const supplied = rustGenericCallableProtocol(actualCarrier) ?? rustCallableProtocol(actualCarrier) ??
         rustNativeCallableProtocol(actualCarrier);
       if (formal === undefined || supplied === undefined) return false;
-      const template = substituteRustTargetGenerics({ kind: "tuple", elements: [...formal.parameters, formal.result] },
-        types, lifetimes, consts);
+      const formalSignature: TargetTypeRef = { kind: "tuple", elements: [...formal.parameters, formal.result] };
+      const formalReferences = rustTargetGenericReferences(formalSignature);
+      const template = substituteRustTargetGenerics(formalSignature, types, lifetimes, consts);
       const references = rustTargetGenericReferences(template);
-      if (references.typeIdentities.length === 0 && references.lifetimeIdentities.length === 0 &&
-        references.constIdentities.length === 0) return true;
+      const typeIdentities = new Set(references.typeIdentities.filter(identity =>
+        formalReferences.typeIdentities.includes(identity) && !types.has(identity)));
+      const lifetimeIdentities = new Set(references.lifetimeIdentities.filter(identity =>
+        formalReferences.lifetimeIdentities.includes(identity) && !lifetimes.has(identity)));
+      const constIdentities = new Set(references.constIdentities.filter(identity =>
+        formalReferences.constIdentities.includes(identity) && !consts.has(identity)));
+      if (typeIdentities.size === 0 && lifetimeIdentities.size === 0 && constIdentities.size === 0) return true;
       const inferred = inferRustTargetGenericBindings(template,
         { kind: "tuple", elements: [...supplied.parameters, supplied.result] }, {
-          typeIdentities: new Set(references.typeIdentities), lifetimeIdentities: new Set(references.lifetimeIdentities),
-          constIdentities: new Set(references.constIdentities),
+          typeIdentities, lifetimeIdentities, constIdentities,
         });
       if (inferred === undefined) return false;
       for (const [identity, carrier] of types) types.set(identity,
@@ -166,7 +172,7 @@ export function createRustSourceErrorEffectSelection(walk: { readonly context: R
     const physicalInputs = new Map<string, TargetTypeRef>();
     const completedInputs = new Map<string, TargetTypeRef>();
     const absentInputs = new Set<string>();
-    const erasedInputs = new Map<string, TargetTypeRef>();
+    const erasedInputs = new Set<string>();
     const bindings = new Set<string>();
     const references = rustTargetGenericReferences({ kind: "tuple", elements: carriers });
     const needed = new Set(references.typeIdentities);
@@ -226,7 +232,10 @@ export function createRustSourceErrorEffectSelection(walk: { readonly context: R
       }
       if (actual !== undefined) {
         types.set(identity, actual);
-        if (erasedActual) erasedInputs.set(identity, actual);
+        if (erasedActual) {
+          erasedInputs.add(identity);
+          physicalInputs.set(identity, substituteRustTargetGenerics(input.carrier, types, lifetimes, consts));
+        }
       }
       else if (producer !== undefined) {
         const carrier = substituteRustTargetGenerics(input.carrier, types, lifetimes, consts);
@@ -262,13 +271,13 @@ export function createRustSourceErrorEffectSelection(walk: { readonly context: R
         if (original.kind !== "associated-type" || original.owner.kind !== "type-parameter") return type;
         const producer = producers.get(original.owner.identity);
         const input = inputs.get(original.owner.identity);
-        const erased = erasedInputs.get(original.owner.identity);
+        const erased = erasedInputs.has(original.owner.identity) ? selectedTypes.get(original.owner.identity) : undefined;
         if (input === undefined || producer === undefined && erased === undefined && !absentInputs.has(original.owner.identity)) return type;
         const channel = rustNativeCallableErrorChannel(input, input.implementation, original);
         if (channel === undefined) return type;
         // A type-erased runtime callable's invocation error is its own declared error.
         const replacement: TargetTypeRef | undefined = erased !== undefined
-          ? channel === "invocation" ? rustCallableProtocol(erased)?.error : undefined
+          ? channel === "invocation" ? rustCallableConversionSource(erased)?.error : undefined
           : absentInputs.has(original.owner.identity)
           ? { kind: "target-named", id: rustInfallibleTargetId } : producer === undefined ? undefined
           : walk.context.callableValues.nativeProducers.errorFor(producer.declaration, channel === "invocation" ? "invoke" : channel);
@@ -288,7 +297,8 @@ export function createRustSourceErrorEffectSelection(walk: { readonly context: R
       complete(carrier: TargetTypeRef, physical: Pick<RustNativeStoragePlan, "invocationInputFor" | "boundSubjectFor">) {
         const logical = substitute(carrier, types);
         if (logical === undefined) return undefined;
-        const needed = new Set(rustTargetGenericReferences(logical).typeIdentities);
+        const needed = new Set([...rustTargetGenericReferences(carrier).typeIdentities,
+          ...rustTargetGenericReferences(logical).typeIdentities]);
         const selectedTypes = new Map(types);
         for (const [identity, logical] of physicalInputs) {
           if (!needed.has(identity)) continue;
