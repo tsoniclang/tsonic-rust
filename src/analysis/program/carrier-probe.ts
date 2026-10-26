@@ -31,8 +31,8 @@ export function createRustCarrierProbe(walk: RustFactWalk): RustFactWalk {
       sourceCallableAbi,
       callableSignatureCarrier: declaration => probe.callableSignatureCarrierFor(probe, declaration),
       callableParameterCarriers: declaration => finalizeRustCallableParameterAbis(probe, declaration)?.map(parameter => parameter.parameterCarrier),
-      callableStorageCarrier: (subject, logicalCarrier, environmentFor, classFrameFor) =>
-        resolveRustCallableOwnershipCarrier(probe, subject, logicalCarrier, environmentFor, classFrameFor),
+      callableStorageCarrier: (source, selection, logicalCarrier, environmentFor, classFrameFor) =>
+        resolveRustCallableOwnershipCarrier(probe, source, selection, logicalCarrier, environmentFor, classFrameFor),
     },
   };
   return probe;

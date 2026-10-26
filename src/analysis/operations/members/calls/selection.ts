@@ -268,8 +268,10 @@ export function resolveRustCheckedCall(
     }
     if (checkedCallIsConstruction(request, context)) {
       const typeArgumentCarriers = (request.source.sourceSelectedMethodTypeArguments ?? []).map((argument) =>
-        resolveRustTargetTypeRef(argument.explicitTypeNode ?? argument.selectedType, context, options));
-      const argumentCarriers = selectedCallArgumentCarriers(request, context, options);
+        resolveRustTargetTypeRef(argument.explicitTypeNode ?? argument.selectedType,
+          { ...context, callableRepresentation: "signature" }, options));
+      const argumentCarriers = selectedCallArgumentCarriers(request,
+        { ...context, callableRepresentation: "signature" }, options);
       const selection = selectJsSurfaceConstructorBySourceOwner({
         sourceOwnerName: selectedSourceMember.ownerName,
         typeArgumentCarriers,

@@ -1,11 +1,11 @@
 import type { AstReader } from "@tsonic/tsts";
-import type { SourceStorageSubject } from "@tsonic/target-api/analysis";
+import type { SourceStorageProducer } from "@tsonic/target-api/analysis";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustCallableOrigin } from "../../policy/types/callables/callable-origins.js";
 import { rustCallableProtocol, rustNativeCallableProtocol } from "../../target-model/types/carriers/callables.js";
 import { rustGenericCallableProtocol, rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
 import { rustFrameCallableTargetType, rustFrameCallableValue } from "../../target-model/types/carriers/frame-callables.js";
-import type { RustCallableOwnershipPlan } from "./ownership-plan.js";
+import { selectRustCallableOwnership, type RustCallableOwnershipInput, type RustCallableOwnershipPlan } from "./ownership-plan.js";
 import type { RustCallableActivation } from "../../target-model/records/callable-ownership.js";
 import type { RustClassFrameInstantiationSelection, RustTargetTypeResolutionOptions } from "../source-evidence/types/resolution/model.js";
 import { substituteRustTargetGenerics } from "../../target-model/types/carriers/substitution.js";
@@ -19,14 +19,15 @@ export type RustCallableOwnershipCarrierSelection =
 
 export function resolveRustCallableOwnershipCarrier(
   walk: RustFactWalk,
-  subject: SourceStorageSubject,
+  source: Pick<SourceStorageProducer, "subject" | "bindings">,
+  selection: RustCallableOwnershipInput,
   logicalCarrier: TargetTypeRef,
-  environmentFor: Parameters<RustTargetTypeResolutionOptions["callableStorageCarrier"]>[2],
-  classFrameFor: Parameters<RustTargetTypeResolutionOptions["callableStorageCarrier"]>[3],
+  environmentFor: Parameters<RustTargetTypeResolutionOptions["callableStorageCarrier"]>[3],
+  classFrameFor: Parameters<RustTargetTypeResolutionOptions["callableStorageCarrier"]>[4],
 ): TargetTypeRef | undefined {
   const selected = selectRustCallableOwnershipCarrier({
     ast: walk.context.ast, ownership: walk.context.callableOwnership,
-    subject, logicalCarrier, classFrameFor,
+    source, selection, logicalCarrier, classFrameFor,
     environmentFor(component) {
       const excluded = new Set([...component.slotDeclarations, component.ownerDeclaration]);
       const environments = component.callableDeclarations.map(declaration => environmentFor(declaration, excluded));
@@ -35,7 +36,7 @@ export function resolveRustCallableOwnershipCarrier(
     },
   });
   if (selected.kind === "rejected")
-    appendRustDiagnostic(walk, "RUST_CALLABLE_FRAME_RECEIVER_NOT_PROVEN", selected.reason, subject.node,
+    appendRustDiagnostic(walk, "RUST_CALLABLE_FRAME_RECEIVER_NOT_PROVEN", selected.reason, source.subject.node,
       ["target.capability=rust.callable-value.exact-receiver-instantiation"]);
   return selected.kind === "selected" ? selected.carrier : undefined;
 }
@@ -43,7 +44,8 @@ export function resolveRustCallableOwnershipCarrier(
 export function selectRustCallableOwnershipCarrier(input: {
   readonly ast: AstReader;
   readonly ownership: RustCallableOwnershipPlan;
-  readonly subject: SourceStorageSubject;
+  readonly source: Pick<SourceStorageProducer, "subject" | "bindings">;
+  readonly selection: RustCallableOwnershipInput;
   readonly logicalCarrier: TargetTypeRef;
   readonly environmentFor: (activation: RustCallableActivation) => readonly TargetTypeRef[] | undefined;
   readonly classFrameFor: (declaration: RustCallableActivation["ownerDeclaration"]) => RustClassFrameInstantiationSelection | undefined;
@@ -53,7 +55,7 @@ export function selectRustCallableOwnershipCarrier(input: {
     rustGenericCallableProtocol(input.logicalCarrier, generic?.signature.typeParameters);
   if (protocol === undefined)
     return Object.freeze({ kind: "unresolved", reason: "Callable ownership requires a valid native callable signature." });
-  const selection = input.ownership.storageFor(input.subject);
+  const selection = selectRustCallableOwnership(input.ownership, input.source.subject, input.selection);
   if (selection.kind === "unresolved") return selection;
   if (selection.kind === "ordinary") return Object.freeze({ kind: "selected", carrier: input.logicalCarrier });
   if (generic !== undefined && generic.signature.typeParameters.length !== 0)

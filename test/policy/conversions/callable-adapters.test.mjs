@@ -100,7 +100,12 @@ test("physical callable fields use one arity and uninhabited-error adapter into 
   assert.equal(adapter?.kind, "conversion", "one adapter selects arity and error transport together");
   assert.equal(adapter?.conversion.kind, "callable-adapter", "the canonical callable conversion owns the adaptation");
   assert.equal(rustTargetTypeRefEquals(adapter?.sourceCarrier, source), true, "the actual two-type-argument physical field is retained");
-  assert.equal(adapter?.targetCarrier.genericArguments[0].lifetime === lifetime, true, "the getter retains the physical field lifetime");
+  assert.equal(rustTargetTypeRefEquals(adapter?.targetCarrier,
+    rustCallableTargetType([integer], integer, lifetime, error)), true,
+  "the getter retains the physical field lifetime and complete native contract");
+  assert.equal(rustTargetTypeRefEquals(adapter?.targetCarrier,
+    rustCallableTargetType([integer], integer, { ...lifetime, identity: "unrelated-field" }, error)), false,
+  "a distinct lifetime identity is not made equal by the same native spelling");
   assert.equal(adapter?.conversion.parameters.length, 0, "the original zero-argument source ignores the getter argument");
   assert.equal(rustCallableConversionMatches(adapter?.conversion, source, adapter?.targetCarrier), true,
     "the selected conversion admits the exact physical source");

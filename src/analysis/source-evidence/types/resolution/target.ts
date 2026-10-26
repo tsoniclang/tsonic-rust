@@ -90,6 +90,7 @@ export function resolveRustTargetType(
     ? options.sourceTypes.structuralObjectForType(type)
     : undefined;
   if (existingStructuralObject !== undefined &&
+    (context.currentSemantics.types.aliasApplication(type)?.bindings.length ?? 0) === 0 &&
     !(existingStructuralObject.fields.length === 0 &&
       rustStructuralObjectCarrierValue(existingStructuralObject.carrier)?.representation === "value")) {
     return existingStructuralObject.carrier;
@@ -372,11 +373,8 @@ export function resolveStructuralObjectType(
     const authoredTypeNodes = propertyTypeNodes.length !== 0 || authoredTypeRoot === undefined
       ? propertyTypeNodes
       : sourceTransformedTypeFactEvidenceNodes(context.ast, semantics, authoredTypeRoot, property.type);
-    const memberContexts = ordinaryDeclarations.length === 0 ? [context] : ordinaryDeclarations.flatMap(declaration => {
-      const selection = context.sourceStorage.memberSubjectFor(declaration);
-      return selection.kind !== "resolved" ? [] : [{ ...context, sourceStorageSubject: selection.subject }];
-    });
-    if (ordinaryDeclarations.length !== 0 && memberContexts.length !== ordinaryDeclarations.length) return undefined;
+    const memberContexts = ordinaryDeclarations.length === 0 ? [context] : ordinaryDeclarations.map(declaration =>
+      rustSourceStorageComponentContext(context, { kind: "member", declaration }));
     const authoredCarriers = memberContexts.flatMap(memberContext => authoredTypeNodes.map((node) =>
       resolveRustTypeComponentEvidence({
         authoredTypeNode: node,
@@ -401,7 +399,8 @@ export function resolveStructuralObjectType(
       ? initializerCarriers[0] : undefined;
     const inferredCarriers = authoredTypeNodes.length === 0 && inferredCarrier === undefined
       ? memberContexts.map(memberContext => resolveRustTargetType(property.type, memberContext, options, resolving,
-          memberContext.sourceStorageSubject?.node)) : [];
+          memberContext.sourceStorageResolution?.kind === "resolved"
+            ? memberContext.sourceStorageResolution.subject?.node : undefined)) : [];
     const selectedFieldCarrier = authoredTypeNodes.length === 0
       ? inferredCarrier ?? (inferredCarriers.length > 0 && inferredCarriers.every(carrier =>
         carrier !== undefined && rustTargetTypeRefEquals(carrier, inferredCarriers[0])) ? inferredCarriers[0] : undefined)

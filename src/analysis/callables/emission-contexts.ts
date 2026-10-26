@@ -7,7 +7,7 @@ import type { RustLifetimeIndex } from "../../target-model/lifetimes/index.js";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { RustFinalizedOperationAbi, RustFinalizedValueConversion } from "../../target-model/records/finalized-operation.js";
 import type { RustErrorRegionRecords, RustInitializationErrorRecords } from "../../target-model/records/error-regions.js";
-import type { RustCallableEmissionContexts, RustEmissionErrorContext, RustEmissionReturnDestination, RustEmissionProviderOperation, RustPhysicalEmissionContext, RustPhysicalEmissionOperand, RustPhysicalEmissionOperandOrigin, RustPhysicalEmissionSourceOccurrence, RustPhysicalEmissionSourceOrigins } from "../../target-model/records/physical-emission-contexts.js";
+import type { RustCallableEmissionContexts, RustEmissionErrorContext, RustEmissionReturnDestination, RustEmissionProviderOperation, RustPhysicalEmissionContext, RustPhysicalEmissionOperand, RustPhysicalEmissionOperandOrigin, RustPhysicalEmissionSourceOccurrence, RustPhysicalEmissionSourceOrigins, RustPhysicalEmissionSourceSlot } from "../../target-model/records/physical-emission-contexts.js";
 import type { RustTargetGenericBindings } from "../../target-model/types/carriers/generic-inference.js";
 import type { RustTargetGenericArgument, TargetTypeRef } from "../../target-model/types/model.js";
 import { substituteRustTargetGenerics } from "../../target-model/types/carriers/substitution.js";
@@ -420,28 +420,32 @@ export function prepareRustEmissionContextRequests(
       const evaluation = Object.freeze({ kind: "ordinary" as const, site: demand.context });
       add(node, Object.freeze({ kind: demand.kind, evaluation }), selected.carrier, destination, endpoints);
     }
-    for (const occurrence of occurrences) for (const slot of occurrence.slots) {
-      const value = input.nativeStorage.valueFor(slot.node);
-      const operand = input.nativeStorage.operandFor(slot.node);
-      if (value.kind === "unresolved" || operand.kind === "unresolved") {
-        diagnostics.push(emissionDiagnostic(slot.node, value.kind === "unresolved" ? value.reason
-          : operand.kind === "unresolved" ? operand.reason : "Missing prepared provider source storage."));
-        continue;
+    const providerSourceCarrier = (occurrence: RustPhysicalEmissionSourceOccurrence,
+      slot: RustPhysicalEmissionSourceSlot, role: "value" | "operand"): TargetTypeRef | undefined => {
+      if (slot.source.kind === "receiver" && occurrence.receiverProjection.kind === "union-payload")
+        return occurrence.receiverProjection.variant.carrier;
+      const selected = role === "value" ? input.nativeStorage.valueFor(slot.node) : input.nativeStorage.operandFor(slot.node);
+      if (selected.kind === "unresolved") {
+        diagnostics.push(emissionDiagnostic(slot.node, selected.reason));
+        return undefined;
       }
+      return selected.carrier;
+    };
+    for (const occurrence of occurrences) for (const slot of occurrence.slots) {
+      const value = providerSourceCarrier(occurrence, slot, "value");
+      const operand = providerSourceCarrier(occurrence, slot, "operand");
+      if (value === undefined || operand === undefined) continue;
       const evaluation = Object.freeze({ kind: "provider-source" as const, slot });
       const endpoints = [slot.source.row.carrier, ...rustPhysicalEmissionRecordCarriers(input.records, slot.node)];
       const destination = input.records.contextualValueConversion.get(slot.node)?.targetCarrier;
-      add(slot.node, Object.freeze({ kind: "value", evaluation }), value.carrier, destination, endpoints);
-      add(slot.node, Object.freeze({ kind: "operand", evaluation }), operand.carrier, destination, endpoints);
+      add(slot.node, Object.freeze({ kind: "value", evaluation }), value, destination, endpoints);
+      add(slot.node, Object.freeze({ kind: "operand", evaluation }), operand, destination, endpoints);
     }
     for (const occurrence of occurrences) for (const [ordinal, { input: value, slot }] of occurrence.inputs.entries()) {
-      const source = input.nativeStorage.operandFor(slot.node);
-      if (source.kind === "unresolved") {
-        diagnostics.push(emissionDiagnostic(slot.node, source.reason));
-        continue;
-      }
+      const source = providerSourceCarrier(occurrence, slot, "operand");
+      if (source === undefined) continue;
       add(slot.node, Object.freeze({ kind: "call-input", operationNode: occurrence.node, operation: occurrence.operation, input: value }),
-        source.carrier, value.parameterCarrier, [value.sourceCarrier, value.conversion.sourceCarrier, value.conversion.targetCarrier,
+        source, value.parameterCarrier, [value.sourceCarrier, value.conversion.sourceCarrier, value.conversion.targetCarrier,
           ...(value.conversion.kind === "sequence" ? value.conversion.steps.flatMap(step => [step.sourceCarrier, step.targetCarrier]) : []),
           ...rustPhysicalEmissionRecordCarriers(input.records, slot.node)], ordinal);
     }

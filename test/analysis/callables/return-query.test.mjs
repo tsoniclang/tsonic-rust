@@ -1,13 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { Node_Type } from "@tsonic/target-api/source";
 import { analyzeRustErrorEffects } from "../../helpers/rust-error-analysis.mjs";
 import { createRustSourceCallableReturnProducer } from "../../../dist/analysis/program/records/source-callable-return.js";
 import { createRustRetainedEnvironmentProducer } from "../../../dist/analysis/program/records/retained-environment.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
-import { resolveRustTargetTypeRef } from "../../../dist/analysis/source-evidence/types/resolution/source.js";
-import { rustResolutionContext } from "../../../dist/analysis/program/walk.js";
-import { selectedSourceCallableReturn } from "../../../dist/analysis/callables/source-callable-abi.js";
+import { selectedSourceCallableReturn, selectRustCallableLogicalReturn } from "../../../dist/analysis/callables/source-callable-abi.js";
 
 const integer = { kind: "source-primitive", name: "int32" };
 const text = { kind: "target-named", id: "rust.std.String" };
@@ -167,8 +164,9 @@ test("a return query waits for every checked parameter ABI before publishing", (
 test("logical pre-retention requests reuse the complete physical return and native environment", () => {
   const current = fixture('export function step(callback: () => int32): () => int32 { return callback; }');
   const parameter = current.walk.context.ast.parameters(current.declaration)[0];
-  const logical = resolveRustTargetTypeRef(Node_Type(current.walk.context.ast, current.declaration),
-    rustResolutionContext(current.walk, current.declaration), current.walk.operationOptions);
+  const selection = selectRustCallableLogicalReturn(current.walk, current.declaration);
+  assert.equal(selection.kind, "complete", "the source owner completes the checked logical contract before physical retention");
+  const logical = selection.carrier;
   assert.equal(logical !== undefined, true, "use the checked return annotation before result retention");
   assert.equal(current.producer.resolve(current.walk, current.declaration, logical), true);
   const canonical = current.producer.records.get(current.declaration);

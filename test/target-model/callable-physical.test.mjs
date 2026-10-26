@@ -13,6 +13,7 @@ import { rustRuntimeCallableTargetType, rustRuntimeErrorTargetType } from "../..
 import { isRustCopyCarrier, rustCarrierSupportsClone, rustCarrierSupportsTrait } from "../../dist/policy/constraints/native-traits.js";
 import { rustTargetTypeRefEquals } from "../../dist/target-model/types/equality.js";
 import { rustNativeCompletionFutureType } from "../../dist/target-model/types/callable-completions.js";
+import { rustProgramErrorTargetType } from "../../dist/target-model/types/carriers/js.js";
 
 const integer = { kind: "source-primitive", name: "int32" };
 const wide = { kind: "source-primitive", name: "int64" };
@@ -77,6 +78,23 @@ test("physical adapters preserve source error and native Future payload without 
     assert.equal(Object.isFrozen(physical.result.bounds), true);
   }
   assert.deepEqual(rustCallableConversionErrorArities(selected), []);
+});
+
+test("physical adapters eliminate uninhabited invocation errors only for concrete target error contracts", () => {
+  const actual = { parameters: [], result: integer, error: infallible };
+  for (const error of [rustRuntimeErrorTargetType(),
+    rustProgramErrorTargetType({ kind: "physical", domain: "project", componentId: "fixture:component" })]) {
+    const target = rustCallableTargetType([integer], integer, { kind: "static" }, error);
+    const selected = select(physicalCarrier(actual), target);
+    assert.equal(selected !== undefined, true, "the exact native source admits uninhabited-error elimination");
+    const physical = rustCallableConversionPhysical(selected, actual, file);
+    assert.equal(physical !== undefined, true, "the selected concrete destination error is representable");
+    assert.equal(physical.eliminatedInvokeError, true);
+    assert.equal(rustTargetTypeRefEquals(physical.error, error), true);
+    assert.equal(rustTargetTypeRefEquals(rustCallablePhysicalSignature(physical.carrier).error, error), true);
+    assert.equal(select(physicalCarrier({ ...actual, error: failure }), target), undefined,
+      "an inhabited native error cannot be eliminated or silently replaced");
+  }
 });
 
 test("fallible argument and result adapters expose canonical distinct exact error channels", () => {

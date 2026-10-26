@@ -243,7 +243,7 @@ export function planRustConstructionBody(
         init: { kind: "field", receiver: { kind: "path", path: name }, name: String(index) },
       }))];
     },
-    finish: () => !plan.completesNormally ? []
+    finish: () => !plan.emission.canFallThrough ? []
       : plan.publishesReceiver ? [...(final?.published ? [] : publication()), { kind: "tail", expr: completion(root) }]
       : [{ kind: "tail", expr: completion(materialize(values, identity, frameCounter, retainedFrame)) }],
   };

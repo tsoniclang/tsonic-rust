@@ -21,7 +21,7 @@ import { substituteRustTargetGenerics } from "../../target-model/types/carriers/
 import { rustNativeCallableCompletion } from "../../policy/types/callables/native-completion.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { normalizeRustErrorType, selectRustPhysicalProgramErrorOwner, type RustErrorTypeContext } from "./error-types.js";
-import { rustNativeErrorJoinReference, rustNativeErrorJoinTargetType } from "../../target-model/types/native-error-joins.js";
+import { rustNativeErrorJoinReference, rustNativeErrorJoinTargetType, type RustNativeErrorSource } from "../../target-model/types/native-error-joins.js";
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
 import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustInfallibleTargetId } from "../../target-model/types/carriers/source-types.js";
@@ -75,14 +75,16 @@ export function selectRustErrorRegion(
   }]);
   const file = input.ast.getSourceFile(node);
   const owner = effects.localErrors ? selectRustPhysicalProgramErrorOwner(node, input) : undefined;
-  const sources = effects.nativeErrors.map((source, index) => {
+  const sources: RustNativeErrorSource<TargetTypeRef>[] = [];
+  for (const source of effects.nativeErrors) {
     const errorType = normalizeRustErrorType(source.errorType, input, node);
-    return errorType === undefined ? undefined : Object.freeze({ identity: source.identity,
-      variant: `Error${index + (effects.localErrors ? 1 : 0)}`, errorType });
-  });
-  if (file === undefined || effects.localErrors && owner === undefined || sources.some(source => source === undefined))
+    if (errorType === undefined) return reject("An error region has no exact normalized native payload carrier.");
+    if (!rustUninhabitedError(errorType)) sources.push(Object.freeze({ identity: source.identity,
+      variant: `Error${sources.length + (effects.localErrors ? 1 : 0)}`, errorType }));
+  }
+  if (file === undefined || effects.localErrors && owner === undefined)
     return reject("An error region has no exact physical package owner or native payload carrier.");
-  const selectedSources = snapshotRustNativeErrorSources(sources as NonNullable<typeof sources[number]>[], isRustTargetTypeRef);
+  const selectedSources = snapshotRustNativeErrorSources(sources, isRustTargetTypeRef);
   if (selectedSources === undefined || selectedSources.length + (owner === undefined ? 0 : 1) > 4096)
     return reject("An error region exceeds its bounded exact native error-source contract.");
   const closure = body ? input.records.targetOperation.get(node) : undefined;
@@ -288,9 +290,20 @@ export function analyzeRustErrorRegions(input: RustErrorTypeContext & {
       reject(node, "A source invocation has inconsistent exact native error channels.");
       return;
     }
-    const operand = regionFor(edge.declaration, { localErrors: source.localErrors,
-      nativeErrors: instantiated as NonNullable<typeof instantiated[number]>[] });
-    if (operand === undefined) return;
+    const declaration = regionFor(edge.declaration, source);
+    if (declaration === undefined) return;
+    const sources: RustNativeErrorSource<TargetTypeRef>[] = [];
+    for (const selected of declaration.sources) {
+      const bound = channels.get(selected.identity);
+      const errorType = bound === undefined ? undefined : normalizeRustErrorType(bound.target.errorType, input, edge.declaration);
+      if (errorType === undefined) {
+        reject(node, "A source invocation requires its identical declared native error arm and closed actual carrier.");
+        return;
+      }
+      inspectCarrier(errorType);
+      sources.push(Object.freeze({ ...selected, errorType }));
+    }
+    const operand = Object.freeze({ ...declaration, sources: Object.freeze(sources) });
     return Object.freeze({ operand,
       local: operand.localOwner === undefined ? undefined : Object.freeze({ kind: "local" as const }),
       channels: Object.freeze(operand.sources.map(selected =>
@@ -346,8 +359,8 @@ export function analyzeRustErrorRegions(input: RustErrorTypeContext & {
         const asynchronous = input.records.asyncFunction.get(node);
         const settledPromise = asynchronous?.kind === "js-promise" && asynchronous.lowering.kind === "settled";
         const nativeRegion = selected?.jsRejection === undefined || input.promiseBodies.declarations.has(node);
-        if (effects.nativeErrors.length > 0 && plannedRegion && !settledPromise && nativeRegion) {
-          const arity = effects.nativeErrors.length + (effects.localErrors ? 1 : 0);
+        if (selected !== undefined && plannedRegion && !settledPromise && nativeRegion) {
+          const arity = selected.sources.length + (selected.localOwner === undefined ? 0 : 1);
           if (arity > 1) arities.add(arity);
           if (effects.localErrors) registerRuntimeArm(fileName, arity, 0, node);
           if (asynchronous?.kind === "js-promise") clonedArities.add(arity);
