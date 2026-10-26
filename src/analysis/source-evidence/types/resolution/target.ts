@@ -1,7 +1,7 @@
 import { rustBigIntTargetType, rustEmptyObjectTargetType, rustObjectIdentityTargetType, rustFixedArrayTargetType, rustJsArrayTargetType, rustJsSymbolTargetType, rustSourceLocationTargetType, rustAbsenceTargetType, rustNeverTargetType, rustOptionElementCarrier, rustSourcePrimitiveTargetType, rustStructuralObjectTargetType, rustStructuralObjectCarrierValue, rustSourceUnionCarrierValue, rustSourceTypeCarrierValue, rustStringTargetType, rustUnitTargetType, rustVecTargetType, isRustNumericCarrier } from "../../../../target-model/types/index.js";
 import { rustTupleTargetType } from "../../../../policy/types/collections/tuple-carrier.js";
 import { denseDefined, resolveProjectSourceCarrier } from "./project.js";
-import { rustSourceStorageComponentContext } from "./source-storage-projection.js";
+import { rustSourceStorageComponentContext, rustSourceStorageSubjectContext } from "./source-storage-projection.js";
 import { bindRustSourceAliasArguments, resolveRustSelectedTypeArguments } from "./generic-arguments.js";
 import { instantiateTargetType, resolveSourceProfileCarrier } from "./providers.js";
 import { providerCarrierFromRelations } from "../../../../policy/types/project/provider-instantiation.js";
@@ -85,7 +85,7 @@ export function resolveRustTargetType(
   if (context.currentSemantics.facts.typeSubjects(type).some(subject => isRustSourceRawPointer(subject, context))) {
     return rustRawPointerTargetType();
   }
-  const existingStructuralObject = authoredTypeRoot === undefined &&
+  const existingStructuralObject = context.callableRepresentation === "signature" && authoredTypeRoot === undefined &&
       (context.sourceTypeParameterSubstitutions?.size ?? 0) === 0
     ? options.sourceTypes.structuralObjectForType(type)
     : undefined;
@@ -373,8 +373,10 @@ export function resolveStructuralObjectType(
     const authoredTypeNodes = propertyTypeNodes.length !== 0 || authoredTypeRoot === undefined
       ? propertyTypeNodes
       : sourceTransformedTypeFactEvidenceNodes(context.ast, semantics, authoredTypeRoot, property.type);
-    const memberContexts = ordinaryDeclarations.length === 0 ? [context] : ordinaryDeclarations.map(declaration =>
-      rustSourceStorageComponentContext(context, { kind: "member", declaration }));
+    const memberContexts = methods.length === 1
+      ? [rustSourceStorageSubjectContext({ ...context, callableRepresentation: "signature" }, undefined)]
+      : ordinaryDeclarations.length === 0 ? [context] : ordinaryDeclarations.map(declaration =>
+        rustSourceStorageComponentContext(context, { kind: "member", declaration }));
     const authoredCarriers = memberContexts.flatMap(memberContext => authoredTypeNodes.map((node) =>
       resolveRustTypeComponentEvidence({
         authoredTypeNode: node,
@@ -398,9 +400,7 @@ export function resolveStructuralObjectType(
       isRustNumericCarrier(carrier) && rustTargetTypeRefEquals(carrier, initializerCarriers[0]))
       ? initializerCarriers[0] : undefined;
     const inferredCarriers = authoredTypeNodes.length === 0 && inferredCarrier === undefined
-      ? memberContexts.map(memberContext => resolveRustTargetType(property.type, memberContext, options, resolving,
-          memberContext.sourceStorageResolution?.kind === "resolved"
-            ? memberContext.sourceStorageResolution.subject?.node : undefined)) : [];
+      ? memberContexts.map(memberContext => resolveRustTargetType(property.type, memberContext, options, resolving)) : [];
     const selectedFieldCarrier = authoredTypeNodes.length === 0
       ? inferredCarrier ?? (inferredCarriers.length > 0 && inferredCarriers.every(carrier =>
         carrier !== undefined && rustTargetTypeRefEquals(carrier, inferredCarriers[0])) ? inferredCarriers[0] : undefined)
