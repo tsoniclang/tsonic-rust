@@ -65,8 +65,9 @@ function planImplementation(
 ): readonly RustItem[] {
   const emission = context.input.program.records.genericImplementation.get(implementation);
   if (emission === undefined) failRustPlannerInvariant("An admitted generic implementation requires its sealed emission record.", implementation.declaration);
-  const selected = emission.environment;
-  const arguments_ = emission.arguments;
+  const entry = emission.entry;
+  const selected = entry.environment;
+  const arguments_ = entry.arguments;
   const helperContext = rustGeneratedTypeParameterContext(arguments_.flatMap(argument =>
     argument.kind === "type" && argument.type.kind === "type-parameter" ? [argument.type] : []),
     authoredTypeParameterNames(implementation.declaration, context.input.program.source.ast),
@@ -75,9 +76,8 @@ function planImplementation(
   if (captures === undefined) failRustPlannerInvariant("An admitted generic callable requires its complete native environment and quantified call contract.");
   const names = createRustSyntheticNameState(context.input.program.source.ast, implementation.declaration, []);
   const owner = allocateRustSyntheticName(names, "environment");
-  const suspended = emission.suspended;
   const bodyContext = rustCallablePayloadContext(selected, { kind: "path", path: owner }, helperContext, "named");
-  const planned = implementation.creation === "declaration" ? undefined
+  const planned = !entry.helper ? undefined
     : planNativeModuleFunction(implementation.declaration, implementation.declaration,
         implementation.functionName, bodyContext, undefined);
   const helpers = planned === undefined ? [] : planned.helper === undefined ? [planned.item] : [planned.item, planned.helper];
@@ -105,8 +105,8 @@ function planImplementation(
   const state: RustType = { kind: "named", path: implementation.stateName,
     genericArguments: stateArguments as NonNullable<typeof stateArguments[number]>[],
   };
-  const ownerParams: readonly RustFunctionParam[] = captures.length === 0 ? [] : [{ name: owner,
-    type: suspended ? implementation.storage === "shared" ? shared(state) : state
+  const ownerParams: readonly RustFunctionParam[] = entry.statePassing === undefined ? [] : [{ name: owner,
+    type: entry.statePassing === "rc" ? shared(state) : entry.statePassing === "value" ? state
       : { kind: "reference", referent: state, mutable: false },
   }];
   return [{ kind: "struct", name: implementation.stateName, visibility: "public",

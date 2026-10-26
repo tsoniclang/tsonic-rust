@@ -390,6 +390,7 @@ export function analyzeRustAnalysisProgram(
   const entryIssues = analyzeRustCallableEntryParameters({ source: context.source, nodes: context.nativeNodes, records,
     lifetimes: context.sourceLifetimes, nativeStorage: context.callableValues.nativeStorage, native: context.callableValues.native,
     nativeProducers: context.callableValues.nativeProducers,
+    generic: context.callableValues.generic,
     producer: context.records.declarationEmission, required: context.requiredRecords });
   if (entryIssues.length !== 0) return rejectedTargetStage(entryIssues);
   analyzeRustBorrowedInitializers(context.ast, context.nativeNodes, records, ownership.ownership.reads, context.records.borrowedInitializers);

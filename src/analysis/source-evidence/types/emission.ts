@@ -111,9 +111,9 @@ export function analyzeRustTypeEmission(program: Omit<RustAnalysisProgram, "reac
     for (const implementation of inventory.implementations) {
       const emission = program.records.genericImplementation.get(implementation);
       if (emission === undefined) failTargetAnalysisInvariant("tsonic-rust", "An emitted generic implementation requires its finalized physical environment.", implementation.declaration);
-      const environment = emission.environment;
+      const environment = emission.entry.environment;
       const bindings = environment.substitutions;
-      pending.push(...typeArguments(emission.arguments),
+      pending.push(...typeArguments(emission.entry.arguments),
         ...[...environment.captures, ...environment.receiverFields, ...environment.receivers].map(capture =>
           substituteRustTargetGenerics(capture.storageCarrier, bindings.types, bindings.lifetimes, bindings.consts)),
         ...environment.inputs.flatMap(input => [input.carrier, input.implementation, input.trait, ...input.environment]).map(carrier =>

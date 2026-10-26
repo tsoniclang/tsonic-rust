@@ -112,7 +112,7 @@ for (const name of ["supported-nested-payload", "captured-native-constraint", "t
         const implementation = program.records.genericImplementation.get(member.implementation);
         const returned = program.records.sourceCallableReturn.get(member.implementation.declaration);
         assert.equal(implementation !== undefined && returned !== undefined, true, "the real checked native helper is admitted");
-        const substitutions = implementation.environment.substitutions;
+        const substitutions = implementation.entry.environment.substitutions;
         admitted(substituteRustTargetGenerics(returned.returnCarrier, substitutions.types, substitutions.lifetimes, substitutions.consts));
       }
     }

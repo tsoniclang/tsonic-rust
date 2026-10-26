@@ -6,7 +6,6 @@ import type { RustGenericEmissionProducer } from "../program/records/generic-emi
 import type { RustGenericMemberEmission } from "../../target-model/records/generic-emission.js";
 import type { RustGenericCallableImplementation, RustGenericCallablePhysicalMember } from "../../target-model/records/generic-callables.js";
 import { rustGenericCallableCarrier, rustGenericCallableProtocol, rustNativeFutureCallableResult } from "../../target-model/types/carriers/generic-callables.js";
-import { rustGenericCallableStorageArguments } from "../../target-model/types/carriers/generic-callable-storage.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustGenericCallableSignaturesMatch } from "../../policy/conversions/generic-callable.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
@@ -45,10 +44,11 @@ export function analyzeRustGenericEmission(input: {
   for (const definition of generic.definitions) for (const implementation of definition.implementations) {
     if (implementations.has(implementation)) continue;
     implementations.add(implementation);
-    const environment = generic.physical.environmentFor(implementation);
+    const entry = program.records.callableLeading.get(implementation.declaration)?.genericEntry;
     const requirements = program.declarationGenericRequirements.contractFor(implementation.declaration);
-    if (environment === undefined || requirements === undefined) failTargetAnalysisInvariant("tsonic-rust",
+    if (entry?.implementation !== implementation || requirements === undefined) failTargetAnalysisInvariant("tsonic-rust",
       "An admitted generic implementation requires its finalized physical environment and generic contract.", implementation.declaration);
+    const environment = entry.environment;
     const returned = program.records.sourceCallableReturn.get(implementation.declaration);
     const parameters = sourceCallableValueParameters(source.ast, implementation.declaration,
       source.semantics.forNode(implementation.declaration));
@@ -63,9 +63,7 @@ export function analyzeRustGenericEmission(input: {
     }
     admitNativeHeader(helperTypes.map(carrier => substituteRustTargetGenerics(carrier,
       environment.substitutions.types, environment.substitutions.lifetimes, environment.substitutions.consts)));
-    producer.implementation(implementation, { environment, requirements,
-      arguments: rustGenericCallableStorageArguments(definition.signature.environmentParameters, environment.parameters),
-      suspended: program.records.asyncFunction.get(implementation.declaration) !== undefined || program.records.generator.get(implementation.declaration) !== undefined });
+    producer.implementation(implementation, { entry, requirements });
   }
   const physical = generic.physical.definitions();
   const requests = new Map<Node, Map<string, TargetTypeRef>>();

@@ -1,15 +1,14 @@
 import type { Node, SourceFile } from "@tsonic/tsts";
-import type { TargetTypeRef, RustTargetGenericArgument } from "../types/model.js";
-import type { RustGenericCallableImplementation, RustGenericCallableEnvironment, RustGenericCallablePhysicalDefinition,
+import type { TargetTypeRef } from "../types/model.js";
+import type { RustGenericCallableImplementation, RustGenericCallablePhysicalDefinition,
   RustGenericCallablePhysicalMember, RustGenericCallableIdentitySelection, RustGenericCallableIdentityComparison } from "./generic-callables.js";
 import type { RustDeclarationGenericRequirementContract } from "./generic-requirements.js";
 import type { RustSourceCallEffectsFact } from "./object-methods.js";
+import type { RustNativeGenericEntry } from "./declaration-emission.js";
 
 export interface RustGenericImplementationEmission {
-  readonly environment: RustGenericCallableEnvironment;
-  readonly arguments: readonly RustTargetGenericArgument[];
+  readonly entry: RustNativeGenericEntry;
   readonly requirements: RustDeclarationGenericRequirementContract;
-  readonly suspended: boolean;
 }
 
 export interface RustGenericMemberEmission {

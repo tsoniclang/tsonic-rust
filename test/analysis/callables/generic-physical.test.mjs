@@ -3,6 +3,7 @@ import test from "node:test";
 import { analyzeRust } from "../../helpers/rust-session.mjs";
 import { rustGenericCallableCarrier, rustGenericCallableValue } from "../../../dist/target-model/types/carriers/generic-callables.js";
 import { rustInvariantTypeMarker } from "../../../dist/backend/planner/types/invariant-marker.js";
+import { rustGenericCallableStorageArguments } from "../../../dist/target-model/types/carriers/generic-callable-storage.js";
 
 test("native capture markers preserve exact invariant input and output without a redundant singleton tuple", () => {
   const lifetime = { kind: "named", name: "capture" };
@@ -44,6 +45,42 @@ function fixture(text) {
   };
   return { program, declaration, returned, nodes };
 }
+
+test("generic native helper prefixes consume one early selected physical capture environment", () => {
+  const { program } = fixture(`
+    type Identity = <Value>(value: Value) => Value;
+    export function first(left: () => number): Identity {
+      return <Value>(value: Value): Value => { left(); return value; };
+    }
+    export function second(right: () => number): Identity {
+      return <Value>(value: Value): Value => { right(); return value; };
+    }
+    export function choose(left: () => number, right: () => number, useLeft: boolean): Identity {
+      return useLeft ? first(left) : second(right);
+    }
+  `);
+  const implementations = new Set();
+  for (const definition of program.callableValues.generic.definitions) for (const implementation of definition.implementations) {
+    if (implementations.has(implementation)) continue;
+    implementations.add(implementation);
+    const entry = program.records.callableLeading.get(implementation.declaration)?.genericEntry;
+    assert.equal(entry?.implementation === implementation, true, "the early entry belongs to the exact admitted implementation");
+    assert.equal(entry.environment === program.callableValues.generic.physical.environmentFor(implementation), true,
+      "the entry consumes the canonical physical environment completed before capture publication");
+    assert.equal(entry.environment.captures.length, 1, "each helper retains only its own callback input");
+    assert.equal(entry.helper, true, "the original captured arrows are actual activation helpers");
+    assert.equal(entry.suspended, false, "a generic signature alone does not select a suspended helper");
+    assert.equal(entry.statePassing, "shared-reference", "the native synchronous helper borrows its exact state");
+    const arguments_ = rustGenericCallableStorageArguments(definition.signature.environmentParameters, entry.environment.parameters);
+    assert.equal(arguments_.length === entry.arguments.length && arguments_.every((argument, index) =>
+      argument.kind === entry.arguments[index].kind && (argument.kind === "type"
+        ? argument.type === entry.arguments[index].type : argument === entry.arguments[index])), true,
+    "lifetime, signature and physical arguments keep their original ordering and selected identities");
+    assert.equal(program.records.genericImplementation.get(implementation)?.entry === entry, true,
+      "late requirements and the helper renderer consume the identical early entry without reselection");
+  }
+  assert.equal(implementations.size, 2, "both original native helper implementations are exercised");
+});
 
 test("generic physical factories retain their own input without unrelated family captures", () => {
   const current = fixture(`
