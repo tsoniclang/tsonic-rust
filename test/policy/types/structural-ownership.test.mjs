@@ -23,8 +23,8 @@ export function pass(value: ${type}): ${type} { return value; }
     assert.deepEqual(result.diagnostics.map(({ code, message }) => ({ code, message })), [
       name === "nested"
         ? {
-            code: "RUST_MISSING_TARGET_FACT",
-            message: "Record field 'layout' has no supported Rust carrier fact. Node kind: KindPropertySignature.",
+            code: "RUST_INTERFACE_FIELD_NOT_CLOSED",
+            message: "A record field requires its exact selected name, native carrier and project-object storage slot.",
           }
         : {
             code: "RUST_PARAMETER_CARRIER_UNSUPPORTED",
@@ -63,7 +63,8 @@ export function nested(value: Holder): RawPointer { return value.address; }
   assert.match(output, /use tsonic_rust_runtime as rt;/u);
   assert.match(output, /pub fn pass\(value: rt::RawPointer\) -> rt::RawPointer/u);
   assert.match(output, /pub fn alias\(value: rt::RawPointer\) -> rt::RawPointer/u);
-  assert.match(output, /pub fn nested\(value: Holder\) -> rt::RawPointer/u);
+  assert.match(output, /pub fn nested\(value: &Holder\) -> rt::RawPointer/u);
+  assert.match(output, /pub address: rt::RawPointer,/u);
   assert.doesNotMatch(output, /__tsonicRawPointer|__tsonic_raw_pointer/u);
 });
 
