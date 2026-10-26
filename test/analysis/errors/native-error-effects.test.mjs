@@ -88,7 +88,7 @@ export function call(value: int32): int32 { return fail(value); }`;
       }] }],
       operations: [{ exportId: "test:producer::fail", operationKind: "method", target,
         parameterCarriers: [int32], resultCarrier: int32,
-        ...(fallible ? { isFallible: true, errorBoundary: "provider-native", errorCarrier: errorType } : { isFallible: false }),
+        ...(fallible ? { isFallible: true, errorBoundary: "provider-native", errorCarrier: errorType } : {}),
       }],
     });
     const current = analyzedFixture(analyzeRustErrorEffects(source, { surfaces: [], packages: [capability] }));
