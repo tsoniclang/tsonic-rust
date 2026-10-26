@@ -61,7 +61,7 @@ import { recordRustLexicalValueEnvironments } from "../callables/lexical-value-e
 import type { RustSourceCallableSpecializationIssue } from "../../target-model/records/callable-issues.js";
 import { rustSourceErrorTargetType, rustWritableSourceErrorTargetType } from "../../target-model/types/carriers/source-error.js";
 import { analyzeRustReceiverStorage } from "../project-types/receiver-storage.js";
-import { selectRustCallableOwnershipCarrier } from "../callables/ownership-carriers.js";
+import { resolveRustCallableOwnershipCarrier } from "../callables/ownership-carriers.js";
 import { createSourceStorageBudget, defaultSourceStorageLimits, type SourceNativeTaskGraph } from "@tsonic/target-api/analysis";
 import { analyzeRustSourcePackageComponents } from "../source-modules/component-semantics.js";
 import { type RustSourcePackageComponentClassifications } from "../../target-model/records/source-package-semantics.js";
@@ -126,15 +126,7 @@ export function analyzeRustProgram(context: RustAnalysisContext, outputType: "bi
       return finalizeRustCallableParameterAbis(walk, declaration)?.map(parameter => parameter.parameterCarrier);
     },
     callableStorageCarrier(source, selection, logicalCarrier, environmentFor, classFrameFor) {
-      const selected = selectRustCallableOwnershipCarrier({ ast, ownership: context.callableOwnership,
-        source, selection, logicalCarrier, classFrameFor, environmentFor(component) {
-          const excluded = new Set([...component.slotDeclarations, component.ownerDeclaration]);
-          const environments = component.callableDeclarations.map(declaration => environmentFor(declaration, excluded));
-          return environments.some(environment => environment === undefined) ? undefined
-            : Object.freeze(environments.flatMap(environment => environment!));
-        },
-      });
-      return selected.kind === "selected" ? selected.carrier : undefined;
+      return resolveRustCallableOwnershipCarrier(walk, source, selection, logicalCarrier, environmentFor, classFrameFor);
     },
     sourceErrorCarrier(subject) {
       const demand = subject === undefined ? undefined : context.errorStorageDemands.storageFor(subject);

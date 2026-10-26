@@ -6,7 +6,7 @@ import { analyzeSourceGenericAdoption, sourceGenericAdoptionDiagnosticCode, sour
   type SourceStorageBindings, type SourceStorageProjection, type SourceStorageQueries, type SourceStorageSubject } from "@tsonic/target-api/analysis";
 import { sourceEnclosingCallable, sourceExpressionResultDisposition, sourceCallableValueParameters, type TargetSourceProgram } from "@tsonic/target-api/source";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
-import type { RustOwnershipRecords } from "../../target-model/records/ownership.js";
+import type { RustPreparedReadSelection } from "../ownership/reads.js";
 import type { RustPromiseResult, RustPromiseResults, RustPromiseResultUses } from "../../target-model/records/promise-results.js";
 import { mapRustAwaitSelection, rustAwaitSelectionLeaves } from "../../target-model/types/await.js";
 import { rustAwaitSelection } from "../../policy/operations/flow/await.js";
@@ -26,7 +26,6 @@ import type { RustNativeStoragePlan } from "./native-storage.js";
 import type { RustNativeCallableInputPlan } from "./native-inputs.js";
 import type { RustPromiseBodies } from "../../target-model/records/callables-and-resources.js";
 
-import type { RustSourceCallableSpecializationIssue } from "../../target-model/records/callable-issues.js";
 import { rustTargetTypeParameterIdentities } from "../../target-model/types/carriers/generic-references.js";
 import { completeRustNativeCaptureCarrier } from "./native-captures.js";
 import type { RustNativeCapturePlan } from "../../target-model/records/native-captures.js";
@@ -71,7 +70,7 @@ export function analyzeRustPromiseResults(input: {
   readonly storage: SourceStorageQueries;
   readonly nodes: readonly Node[];
   readonly records: RustProgramRecords;
-  readonly reads: RustOwnershipRecords["reads"];
+  readonly readFor: (node: Node) => RustPreparedReadSelection | undefined;
   readonly uses: RustPromiseResultUses;
   readonly definitions: RustTypeDefinitions;
   readonly nativeStorage: RustNativeStoragePlan;
@@ -82,7 +81,7 @@ export function analyzeRustPromiseResults(input: {
   readonly native: Pick<RustNativeCallableInputPlan, "callFor">;
   readonly sourceLifetimes: RustLifetimeIndex;
   readonly requirements: AnalyzeRustDeclarationGenericRequirementsResult;
-  readonly retentionIssues: readonly RustSourceCallableSpecializationIssue[];
+  readonly nativeStorageValidated: boolean;
   readonly families: Pick<RustSourceTypeFamilyRegistry, "implementation">;
   readonly evidence: Omit<RustStaticRequirementEvidence, "lifetimeContract">;
   /** The js surface spawns discarded native futures on its event loop (selectRustDiscardedFutureSpawn). */
@@ -334,7 +333,8 @@ export function analyzeRustPromiseResults(input: {
     if (checked.kind === "unresolved") return unresolved(value.node, checked.reason);
     const evidence = { value, contractDeclaration: value.node, checkedType: checked.type };
     if (request.kind === "read-value") {
-      const read = input.reads.get(request.reference);
+      const read = input.readFor(request.reference);
+      if (read?.kind === "unresolved") return unresolved(value.node, read.reason);
       if (read === undefined || read.value.kind === "borrow") return undefined;
       const projection = input.records.flowReadProjection.get(request.reference);
       if (projection !== undefined && !rustTargetTypeRefEquals(projection.sourceCarrier, read.carrier)) return unresolved(value.node,
@@ -541,7 +541,7 @@ export function analyzeRustPromiseResults(input: {
     if (input.ast.is.IsCallExpression(node) && (!native || disposition.kind === "discarded" && spawn === undefined)) {
       const selected = ownership.forCall(node);
       if (selected.kind === "unresolved") {
-        if (input.requirements.kind === "resolved" && input.retentionIssues.length === 0)
+        if (input.nativeStorageValidated)
           diagnostics.push(Object.freeze({ code: "RUST_ASYNC_RESULT_USE_NOT_PROVEN", category: "error", source: "tsonic-rust",
             sourceNode: node, message: selected.reason, evidence: ["target.capability=rust.async.native-result-use"] }));
         continue;

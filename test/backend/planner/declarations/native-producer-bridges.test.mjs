@@ -224,7 +224,7 @@ test("environment parameters remain on the protocol while universal methods requ
   const callable = items[1].generics.wherePredicates[0].bounds[0].reference.trait;
   assert.equal(callable.path, "rt::CallableImplementation");
   assert.deepEqual(callable.genericArguments[0].type, { kind: "tuple", elements: [{ kind: "named", path: "EnvironmentType0" }] });
-  assert.deepEqual(callable.genericArguments[1].type, { kind: "named", path: "Result", genericArguments: [
+  assert.deepEqual(callable.genericArguments[1].type, { kind: "named", path: "Result", identity: "rust.core.Result", genericArguments: [
     { kind: "type", type: { kind: "named", path: "EnvironmentType0" } },
     { kind: "type", type: { kind: "named", path: "InvocationError" } },
   ] });

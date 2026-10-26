@@ -7,7 +7,7 @@ import { failRustPlannerInvariant } from "../diagnostics.js";
 import { planExpression } from "./entry.js";
 import { effectivePlannedExpressionCarrier } from "./fundamentals.js";
 import { planRustValueFieldLocation, rustSourceFieldHasValueReceiver } from "../objects/value-fields.js";
-import { planRustSharedReceiver } from "./typed-locations.js";
+import { planRustSharedReceiver, requireRustReadOwnership } from "./typed-locations.js";
 import { planRustSourceAccessorReceiver, rustSourceAccessorHasValueReceiver } from "../objects/accessor-receivers.js";
 import { rustCarrierHasCopyContract } from "../types/generic-requirements.js";
 
@@ -55,9 +55,13 @@ export function prepareRustComputedMemberEvaluation(node: Node, context: RustPla
   const receiverCarrier = effectivePlannedExpressionCarrier(fact.receiver, context);
   if (receiver === undefined || receiverCarrier === undefined)
     failRustPlannerInvariant("An admitted computed member requires its native receiver and carrier.", fact.receiver);
+  const ownership = requireRustReadOwnership(fact.receiver, context).value;
+  const borrowed = ownership.kind === "borrow" && !ownership.mutable;
+  const evaluatedReceiver = borrowed ? planRustSharedReceiver(fact.receiver, receiver, context, fact.key) : receiver;
   const receiverName = allocateRustSyntheticName(names, "member_receiver");
-  overrides.set(fact.receiver, { expression: { kind: "path", path: receiverName }, carrier: receiverCarrier, valueForm: "value" });
-  return { bindings: [{ name: receiverName, value: receiver }, { name: keyName, value: evaluatedKey }],
+  overrides.set(fact.receiver, { expression: { kind: "path", path: receiverName }, carrier: receiverCarrier,
+    valueForm: borrowed ? "shared-reference" : "value" });
+  return { bindings: [{ name: receiverName, value: evaluatedReceiver }, { name: keyName, value: evaluatedKey }],
     context: { ...context, expressionOverrides: overrides } };
 }
 

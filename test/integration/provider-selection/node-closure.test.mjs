@@ -284,10 +284,11 @@ export async function roundtrip(dir: string, file: string): Promise<int32> {
   const roundtrip = nativeFunction(result, "roundtrip");
   assert.equal(roundtrip.visibility, "public");
   assert.deepEqual(roundtrip.params.map(parameter => parameter.type), [nativeType("String"), nativeType("String")]);
-  assert.equal(roundtrip.returnType.path, "js_abi::JsPromise");
-  assert.deepEqual(roundtrip.returnType.genericArguments[0], { kind: "lifetime", lifetime: { kind: "static" } });
-  assert.deepEqual(roundtrip.returnType.genericArguments[1].type, nativeType("i32"));
-  assert.equal(roundtrip.returnType.genericArguments[2].type.identity, "tsonic-rust-runtime:TsonicError");
+  assert.deepEqual(roundtrip.returnType, {
+    kind: "named",
+    path: "js_abi::JsPromise",
+    genericArguments: [{ kind: "type", type: nativeType("i32") }],
+  });
   const factory = nativeCalls(roundtrip.body, "js_abi::JsPromise::from_fallible_factory");
   assert.equal(factory.length, 1);
   assert.equal(factory[0].args[0].move, true);

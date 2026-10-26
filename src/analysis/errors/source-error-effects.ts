@@ -59,7 +59,6 @@ export interface RustSourceErrorEffectSelection {
     bindings: RustSourceErrorBindings | undefined): RustSourceErrorEffectEdge | undefined;
   pending(error: RustNativeErrorEffect, complete: () => RustNativeErrorEffect | undefined,
     substitution?: "bound" | "completed"): boolean;
-  substitutesOnCompletion(identity: string): boolean;
   complete(error: RustNativeErrorEffect,
     physical: Pick<RustNativeStoragePlan, "invocationInputFor" | "boundSubjectFor">): RustNativeErrorEffect | undefined;
 }
@@ -368,7 +367,6 @@ export function createRustSourceErrorEffectSelection(walk: { readonly context: R
     } finally { active.delete(error.identity); }
   };
   return Object.freeze({ register, bindingsFor, edgeFor, complete,
-    substitutesOnCompletion: (identity: string) => substitutedOnCompletion.has(identity),
     pending(error: RustNativeErrorEffect, select: () => RustNativeErrorEffect | undefined, substitution: "bound" | "completed" = "bound") {
       if (!register([error])) return false;
       pending.set(error.identity, select);

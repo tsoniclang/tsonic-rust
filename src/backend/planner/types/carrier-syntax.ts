@@ -38,6 +38,7 @@ export function rustTypeFromCarrier(
   carrier: TargetTypeRef | undefined,
   resolveSourceTypePath?: RustSourceTypeRendering,
   resolveStructuralShape?: (carrier: TargetTypeRef) => RustType | undefined,
+  position: "general" | "parameter" | "return" = "general",
 ): RustType | undefined {
   if (carrier === undefined) {
     return undefined;
@@ -47,7 +48,7 @@ export function rustTypeFromCarrier(
   const joinedError = rustNativeErrorJoinReference(carrier);
   if (joinedError !== undefined) return resolveSourceTypePath?.nativeErrorJoinType?.(joinedError);
   if (carrier.kind === "trait-ref") {
-    const reference = rustTraitReferenceFromCarrier(carrier, resolveSourceTypePath, resolveStructuralShape);
+    const reference = rustTraitReferenceFromCarrier(carrier, resolveSourceTypePath, resolveStructuralShape, position);
     return (reference?.binder?.length ?? 0) === 0 ? reference?.trait : undefined;
   }
   if (isRustNeverCarrier(carrier)) {
@@ -80,11 +81,11 @@ export function rustTypeFromCarrier(
       ? bindRustCallableInputLifetimes(argumentsCarrier.elements, resultCarrier) : undefined;
     if (carrier.id === rustCallableInputTargetId && signature === undefined) return undefined;
     const argumentsType = rustTypeFromCarrier(signature === undefined ? argumentsCarrier :
-      { kind: "tuple", elements: signature.parameters }, resolveSourceTypePath, resolveStructuralShape);
-    const resultType = rustTypeFromCarrier(signature?.result ?? resultCarrier, resolveSourceTypePath, resolveStructuralShape);
+      { kind: "tuple", elements: signature.parameters }, resolveSourceTypePath, resolveStructuralShape, position);
+    const resultType = rustTypeFromCarrier(signature?.result ?? resultCarrier, resolveSourceTypePath, resolveStructuralShape, position);
     const packageResult = rustProgramErrorOwner(errorCarrier)?.kind === "logical";
     const errorType = errorCarrier === undefined || packageResult ? undefined
-      : rustTypeFromCarrier(errorCarrier, resolveSourceTypePath, resolveStructuralShape);
+      : rustTypeFromCarrier(errorCarrier, resolveSourceTypePath, resolveStructuralShape, position);
     if (carrier.id === rustCallableInputTargetId) {
       return argumentsType === undefined || resultType === undefined ? undefined : {
         kind: "impl-trait",
@@ -132,6 +133,7 @@ export function rustTypeFromCarrier(
           ? { kind: "type", type: rustUnitTargetType() } : argument) : carrier.genericArguments,
       resolveSourceTypePath,
       resolveStructuralShape,
+      position,
     );
     if (genericArguments === undefined) {
       return undefined;
@@ -149,7 +151,7 @@ export function rustTypeFromCarrier(
     const referent = !carrier.mutable && carrier.referent.kind === "target-named" &&
         carrier.referent.id === rustStringTargetId
       ? { kind: "str" as const }
-      : rustTypeFromCarrier(carrier.referent, resolveSourceTypePath, resolveStructuralShape);
+      : rustTypeFromCarrier(carrier.referent, resolveSourceTypePath, resolveStructuralShape, position);
     return referent === undefined ? undefined : {
       kind: "reference",
       referent,
@@ -160,23 +162,24 @@ export function rustTypeFromCarrier(
     };
   }
   if (carrier.kind === "slice") {
-    const element = rustTypeFromCarrier(carrier.element, resolveSourceTypePath, resolveStructuralShape);
+    const element = rustTypeFromCarrier(carrier.element, resolveSourceTypePath, resolveStructuralShape, position);
     return element === undefined ? undefined : { kind: "slice", element };
   }
   if (carrier.kind === "pointer" &&
     (carrier.mutability === "const" || carrier.mutability === "mut")) {
-    const pointee = rustTypeFromCarrier(carrier.pointee, resolveSourceTypePath, resolveStructuralShape);
+    const pointee = rustTypeFromCarrier(carrier.pointee, resolveSourceTypePath, resolveStructuralShape, position);
     return pointee === undefined
       ? undefined
       : { kind: "raw-pointer", pointee, mutable: carrier.mutability === "mut" };
   }
   if (carrier.kind === "function-pointer") {
     const parameters = carrier.args.map((argument) =>
-      rustTypeFromCarrier(argument, resolveSourceTypePath, resolveStructuralShape));
+      rustTypeFromCarrier(argument, resolveSourceTypePath, resolveStructuralShape, position));
     const result = rustReturnTypeFromCarrier(
       carrier.result,
       resolveSourceTypePath,
       resolveStructuralShape,
+      position,
     );
     return result === undefined || parameters.some((parameter) => parameter === undefined)
       ? undefined
@@ -193,11 +196,12 @@ export function rustTypeFromCarrier(
   }
   if (carrier.kind === "closure") {
     const parameters = carrier.args.map((argument) =>
-      rustTypeFromCarrier(argument, resolveSourceTypePath, resolveStructuralShape));
+      rustTypeFromCarrier(argument, resolveSourceTypePath, resolveStructuralShape, position));
     const result = rustReturnTypeFromCarrier(
       carrier.result,
       resolveSourceTypePath,
       resolveStructuralShape,
+      position,
     );
     return result === undefined || parameters.some((parameter) => parameter === undefined)
       ? undefined
@@ -217,7 +221,7 @@ export function rustTypeFromCarrier(
   }
   const fixedArray = rustFixedArrayCarrierValue(carrier);
   if (fixedArray !== undefined) {
-    const element = rustTypeFromCarrier(fixedArray.element, resolveSourceTypePath, resolveStructuralShape);
+    const element = rustTypeFromCarrier(fixedArray.element, resolveSourceTypePath, resolveStructuralShape, position);
     return element === undefined
       ? undefined
       : { kind: "fixed-array", element, length: rustConstArgumentToAst(fixedArray.length) };
@@ -228,6 +232,7 @@ export function rustTypeFromCarrier(
       rustExplicitNamedTypeArguments(namedType),
       resolveSourceTypePath,
       resolveStructuralShape,
+      position,
     );
     return genericArguments === undefined
       ? undefined
@@ -246,7 +251,7 @@ export function rustTypeFromCarrier(
     return resolveStructuralShape?.(carrier);
   }
   if (carrier.kind === "array") {
-    const element = rustTypeFromCarrier(carrier.element, resolveSourceTypePath, resolveStructuralShape);
+    const element = rustTypeFromCarrier(carrier.element, resolveSourceTypePath, resolveStructuralShape, position);
     return element === undefined ? undefined : {
       kind: "named",
       path: "Vec",
@@ -258,7 +263,7 @@ export function rustTypeFromCarrier(
       return { kind: "unit" };
     }
     const elements = carrier.elements.map((element) =>
-      rustTypeFromCarrier(element, resolveSourceTypePath, resolveStructuralShape));
+      rustTypeFromCarrier(element, resolveSourceTypePath, resolveStructuralShape, position));
     if (elements.some((element) => element === undefined)) {
       return undefined;
     }
@@ -272,6 +277,7 @@ export function rustTypeFromCarrier(
         value.genericArguments,
         resolveSourceTypePath,
         resolveStructuralShape,
+        position,
       );
       if (path === undefined || genericArguments === undefined) return undefined;
       const completeArguments = [
@@ -291,7 +297,7 @@ export function rustTypeFromCarrier(
       const path = resolveSourceTypePath.pathFor(union);
       const arguments_ = resolveSourceTypePath.payloadArgumentsFor(carrier);
       const genericArguments = arguments_ === undefined ? undefined : rustGenericArgumentsFromCarrier(
-        arguments_, resolveSourceTypePath, resolveStructuralShape,
+        arguments_, resolveSourceTypePath, resolveStructuralShape, position,
       );
       return path === undefined || genericArguments === undefined ? undefined : {
         kind: "named", path,
@@ -304,11 +310,13 @@ export function rustTypeFromCarrier(
       carrier.principal,
       resolveSourceTypePath,
       resolveStructuralShape,
+      position,
     );
     const autoTraits = carrier.autoTraits.map((trait) => rustTraitReferenceFromCarrier(
       trait,
       resolveSourceTypePath,
       resolveStructuralShape,
+      position,
     ));
     return principal === undefined || autoTraits.some((trait) => trait === undefined)
       ? undefined
@@ -326,11 +334,13 @@ export function rustTypeFromCarrier(
       bound,
       resolveSourceTypePath,
       resolveStructuralShape,
+      position,
     ));
     const captures = rustGenericArgumentsFromCarrier(
       carrier.captures,
       resolveSourceTypePath,
       resolveStructuralShape,
+      position,
     );
     return bounds.some((bound) => bound === undefined) || captures === undefined
       ? undefined
@@ -341,7 +351,7 @@ export function rustTypeFromCarrier(
             reference,
           })),
           outlives: carrier.outlives.map(rustLifetimeToAst),
-          captures,
+          ...(position === "parameter" ? {} : { captures }),
         };
   }
   if (carrier.kind === "associated-type") {
@@ -349,6 +359,7 @@ export function rustTypeFromCarrier(
       carrier.owner,
       resolveSourceTypePath,
       resolveStructuralShape,
+      position,
     );
     const traitReference = carrier.trait === undefined
       ? undefined
@@ -356,11 +367,13 @@ export function rustTypeFromCarrier(
           carrier.trait,
           resolveSourceTypePath,
           resolveStructuralShape,
+          position,
         );
     const genericArguments = rustGenericArgumentsFromCarrier(
       carrier.genericArguments,
       resolveSourceTypePath,
       resolveStructuralShape,
+      position,
     );
     if (owner === undefined || carrier.trait !== undefined && traitReference === undefined ||
       (traitReference?.binder?.length ?? 0) !== 0 ||
@@ -382,6 +395,7 @@ function rustTraitReferenceFromCarrier(
   carrier: TargetTypeRef,
   resolveSourceTypePath?: RustSourceTypeRendering,
   resolveStructuralShape?: (carrier: TargetTypeRef) => RustType | undefined,
+  position: "general" | "parameter" | "return" = "general",
 ): RustTraitReference | undefined {
   if (carrier.kind !== "trait-ref") return undefined;
   const path = carrier.sourceItem === undefined ? carrier.path : resolveSourceTypePath?.pathFor(carrier.sourceItem);
@@ -390,6 +404,7 @@ function rustTraitReferenceFromCarrier(
     carrier.genericArguments,
     resolveSourceTypePath,
     resolveStructuralShape,
+    position,
   );
   if (genericArguments === undefined) return undefined;
   const associatedConstraints = carrier.associatedConstraints.map((constraint) => {
@@ -397,6 +412,7 @@ function rustTraitReferenceFromCarrier(
       constraint.genericArguments,
       resolveSourceTypePath,
       resolveStructuralShape,
+      position,
     );
     if (arguments_ === undefined) return undefined;
     if (constraint.kind === "equality") {
@@ -404,6 +420,7 @@ function rustTraitReferenceFromCarrier(
         constraint.type,
         resolveSourceTypePath,
         resolveStructuralShape,
+        position,
       );
       return type === undefined
         ? undefined
@@ -418,6 +435,7 @@ function rustTraitReferenceFromCarrier(
       trait,
       resolveSourceTypePath,
       resolveStructuralShape,
+      position,
     ));
     return traits.some((trait) => trait === undefined)
       ? undefined
@@ -464,10 +482,11 @@ export function rustReturnTypeFromCarrier(
   carrier: TargetTypeRef | undefined,
   resolveSourceTypePath?: RustSourceTypeRendering,
   resolveStructuralShape?: (carrier: TargetTypeRef) => RustType | undefined,
+  position: "general" | "parameter" | "return" = "general",
 ): RustType | undefined {
   return isRustNeverCarrier(carrier)
     ? { kind: "never" }
-    : rustTypeFromCarrier(carrier, resolveSourceTypePath, resolveStructuralShape);
+    : rustTypeFromCarrier(carrier, resolveSourceTypePath, resolveStructuralShape, position);
 }
 
 export function isFloatCarrier(carrier: TargetTypeRef | undefined): boolean {
@@ -488,6 +507,7 @@ export function rustGenericArgumentsFromCarrier(
   arguments_: readonly RustTargetGenericArgument[] | undefined,
   resolveSourceTypePath?: RustSourceTypeRendering,
   resolveStructuralShape?: (carrier: TargetTypeRef) => RustType | undefined,
+  position: "general" | "parameter" | "return" = "general",
 ): readonly RustGenericArgument[] | undefined {
   const result: RustGenericArgument[] = [];
   for (const argument of arguments_ ?? []) {
@@ -503,6 +523,7 @@ export function rustGenericArgumentsFromCarrier(
       argument.type,
       resolveSourceTypePath,
       resolveStructuralShape,
+      position,
     );
     if (type === undefined) return undefined;
     result.push({ kind: "type", type });
