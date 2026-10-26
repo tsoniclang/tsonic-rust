@@ -234,7 +234,7 @@ export function resolveRustCheckedElementAccess(
   const nativeArrayReceiver = receiverCarrier?.kind === "array"
     ? receiverCarrier
     : receiverCarrier?.kind === "reference" && receiverCarrier.referent.kind === "slice"
-      ? receiverCarrier.referent
+      ? { ...receiverCarrier, referent: receiverCarrier.referent }
       : undefined;
   const nativeIndexIdentity = sourceProfileIdentity?.profile === "native" ? sourceProfileIdentity
     : receiverCarrier?.kind === "reference" && receiverCarrier.referent.kind === "slice" ? jsIdentity : undefined;
@@ -250,7 +250,7 @@ export function resolveRustCheckedElementAccess(
       return rejectSelectedOperation(request.expression, context, "RUST_NATIVE_INDEX_CARRIER_UNSUPPORTED",
         "Native indexing requires an exact integer carrier.");
     }
-    const template = selectRustNativeArrayElementPlan(nativeIndexIdentity.ownerName, nativeArrayReceiver.element, index, request.accessMode);
+    const template = selectRustNativeArrayElementPlan(nativeIndexIdentity.ownerName, nativeArrayReceiver, index, request.accessMode);
     const fact = finalizeProviderOperationFromSubjects(template, request.receiver, [request.argument], context, options, selectedReceiverCarrier, [index.carrier]);
     if (fact === undefined) {
       return rejectSelectedOperation(request.expression, context, "RUST_SELECTED_OPERATION_ABI_INCOMPLETE", "Native array indexing cannot finalize one total Rust operation ABI.");
