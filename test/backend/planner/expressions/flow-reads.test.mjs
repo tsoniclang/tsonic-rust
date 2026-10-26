@@ -83,8 +83,11 @@ test("optional native associated values move or borrow without inventing Clone, 
   };
   const sourceCarrier = rustOptionTargetType(selectedCarrier);
   const fact = { kind: "option-value", sourceCarrier, selectedCarrier };
-  for (const [canMove, borrowedResult, succeeds] of [[true, false, true], [false, true, true], [false, false, false]]) {
-    const read = { carrier: sourceCarrier, source: { kind: canMove ? "move" : "clone" }, value: { kind: canMove ? "move" : "clone" },
+  for (const [canMove, borrowedResult, succeeds, sealedBorrow = false] of [
+    [true, false, true], [false, true, true], [false, false, false], [false, false, true, true],
+  ]) {
+    const mode = sealedBorrow ? { kind: "borrow", mutable: false } : { kind: canMove ? "move" : "clone" };
+    const read = { carrier: sourceCarrier, source: mode, value: mode,
       snapshot: undefined, stablePlace: true, readsStorage: true, pure: true, sharedReference: false, borrowedAcross: new Set() };
     const sealed = sealFlowRead(program, node, fact, {
       readOwnership: { get: candidate => candidate === node ? read : program.records.readOwnership.get(candidate) },

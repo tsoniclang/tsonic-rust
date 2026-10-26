@@ -4,6 +4,7 @@ import { analyzeRust } from "../../../helpers/rust-session.mjs";
 
 import { rustClosedTypeTestMatches } from "../../../../dist/analysis/operations/type-tests.js";
 import { planRustClosedTypeTest } from "../../../../dist/backend/planner/expressions/type-tests.js";
+import { planRustFlowReadProjection } from "../../../../dist/backend/planner/expressions/flow-read-projections.js";
 import { createRustSyntheticNameState } from "../../../../dist/backend/planner/names/synthetic.js";
 import { rustSourcePrimitiveTargetType } from "../../../../dist/target-model/types/index.js";
 import { analyzeRustClosedTypeTests } from "../../../../dist/analysis/operations/type-test-emission.js";
@@ -163,6 +164,35 @@ test("concrete native Error catch projections preserve their exact payload carri
       projections += 1;
       assert.equal(program.records.flowReadEmission.get(projection)?.kind, "identity",
         "narrowing an already-native Error keeps the payload rather than invoking a package projection");
+      const ownership = program.records.readOwnership.get(node);
+      assert.equal(ownership?.value.kind, "borrow", "the physical native Error observation already owns an exact sealed borrow");
+      const expression = { kind: "path", path: "caught" };
+      const context = { input: { program }, diagnostics: [] };
+      assert.equal(planRustFlowReadProjection(node, expression, projection, context) === expression, true,
+        "the renderer consumes the existing borrow without cloning its native Error payload");
+      for (const kind of ["move", "clone", "copy"]) {
+        const selected = { ...program, records: { ...program.records, readOwnership: {
+          get: candidate => candidate === node ? { ...ownership, value: { kind } } : program.records.readOwnership.get(candidate),
+        } } };
+        const rendered = planRustFlowReadProjection(node, expression, projection, { ...context, input: { program: selected } });
+        if (kind === "move") assert.equal(rendered === expression, true, "an existing move is still direct");
+        else {
+          assert.equal(rendered.kind, "method-call", `${kind}: the pre-existing non-borrow rendering is unchanged`);
+          assert.equal(rendered.method, "clone", `${kind}: this fix does not redesign non-borrow read semantics`);
+          assert.equal(rendered.receiver === expression, true, `${kind}: the exact source is retained`);
+          assert.equal(rendered.args.length, 0, `${kind}: no adapter arguments are introduced`);
+        }
+      }
+      const withoutOwnership = { ...program, records: { ...program.records, readOwnership: {
+        get: () => assert.fail("explicit borrowing and overrides do not demand a read-ownership record"),
+      } } };
+      const explicit = { ...context, input: { program: withoutOwnership } };
+      assert.equal(planRustFlowReadProjection(node, expression, projection, explicit, true) === expression, true,
+        "explicit borrowing retains its original lookup short circuit");
+      const override = { kind: "path", path: "selected_catch" };
+      assert.equal(planRustFlowReadProjection(node, expression, projection, { ...explicit, flowReadOverrides: new Map([
+        [node, { sourceCarrier: projection.sourceCarrier, selectedCarrier: projection.selectedCarrier, expression: override }],
+      ]) }) === override, true, "the exact branch-local override remains the first fast path");
     }
     ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
   };

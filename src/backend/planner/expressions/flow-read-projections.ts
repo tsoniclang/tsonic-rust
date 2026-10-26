@@ -24,8 +24,9 @@ export function planRustFlowReadProjection(node: Node, expression: RustExpr, fac
       failRustPlannerInvariant("An admitted branch-local flow read requires its exact source and selected carrier correspondence.", node);
     return override.expression;
   }
+  const ownership = borrowedResult ? "borrow" : requireRustReadOwnership(node, context).value.kind;
   return planRustValueProjection(node, expression, fact, context,
-    borrowedResult ? "borrow" : requireRustReadOwnership(node, context).value.kind === "move" ? "move" : "clone");
+    ownership === "move" || ownership === "borrow" ? ownership : "clone");
 }
 
 export function planRustValueProjection(node: Node, expression: RustExpr, fact: RustFlowReadProjectionFact,
