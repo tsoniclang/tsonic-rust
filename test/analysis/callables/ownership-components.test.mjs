@@ -178,30 +178,6 @@ test("plain callback storage does not invent a cyclic owning activation", () => 
   assert.equal(selected.kind, "ordinary");
 });
 
-test("uncalled constructor storage selects ordinary ownership only from a complete frame-free inventory", () => {
-  const text = `class LocalCapture {
-    get: () => string;
-    constructor(public seed: string) { this.get = (): string => seed; }
-  }`;
-  const current = fixture(text);
-  const registry = createRustCallableOwnershipRegistry();
-  registry.initialize(current.input);
-  assert.equal(registry.failureReason() === undefined, true, "the complete ownership analysis succeeds");
-  assert.equal(registry.issues.length, 0, "there is no unresolved native activation owner");
-  assert.equal(registry.activations.length, 0, "no physical frame family exists in the checked domain");
-  const subject = current.storage.storageSubjectFor(current.named("get", "KindPropertyDeclaration")[0]);
-  assert.equal(subject.kind, "resolved", "the original constructor field has its exact checked subject");
-  assert.equal(current.storage.storageProducersFor(subject.subject).kind, "unresolved",
-    "uninvoked constructor values do not acquire a fabricated correlated producer");
-  assert.equal(registry.storageFor(subject.subject).kind, "ordinary",
-    "a completed frame-free ownership inventory does not require concrete constructor invocation");
-  const other = fixture(text);
-  const foreign = other.storage.storageSubjectFor(other.named("get", "KindPropertyDeclaration")[0]);
-  assert.equal(foreign.kind, "resolved");
-  assert.equal(registry.storageFor(foreign.subject).kind, "unresolved", "frame-free selection still rejects foreign graphs");
-  assert.equal(registry.storageFor({ ...subject.subject }).kind, "unresolved", "frame-free selection still rejects forged subjects");
-});
-
 test("observed frame callers cannot close an exported ordinary callback parameter", () => {
   const current = fixture(lexicalSource + `
     export function invoke(callback: (count: number) => number): number { return callback(0); }
