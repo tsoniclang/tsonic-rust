@@ -15,7 +15,7 @@ import { resolveExpressionCarrier } from "./expression-carriers.js";
 import { resolveRustExactNullishValueCarrier } from "./index.js";
 import { rustPolicyTargetDiagnostic } from "../../../program/policy-diagnostics.js";
 
-import { resolveRustDeclaredBindingStorage } from "../../../declarations/binding-storage.js";
+import { selectRustDeclaredBinding } from "../../../declarations/binding-storage.js";
 import { tryFlowMarkerCall } from "../../../operations/flow-markers.js";
 import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustFactWalk } from "../../../program/walk.js";
@@ -100,26 +100,19 @@ export function resolveIdentifierCarrier(
     if (declarationCarrier !== undefined) {
       return setCarrierFact(walk, identifier, declarationCarrier.carrier);
     }
-    if (declarationKind === KindParameter || declarationKind === KindVariableDeclaration ||
-      declarationKind === KindBindingElement) {
-      const annotated = resolveRustDeclaredBindingStorage(walk, declaration);
-      if (annotated !== undefined) {
-        setCarrierFact(walk, declaration, annotated);
-        return setCarrierFact(walk, identifier, annotated);
-      }
-      const initializer = Node_Initializer(walk.context.ast, declaration);
-      if (initializer !== undefined) {
-        const initializerCarrier = resolveExpressionCarrier(
-          walk,
-          initializer,
-          sourceFile,
-          undefined,
-        );
-        if (initializerCarrier !== undefined) {
-          setCarrierFact(walk, declaration, initializerCarrier);
-          return setCarrierFact(walk, identifier, initializerCarrier);
-        }
-      }
+    if (declarationKind === KindVariableDeclaration) {
+      const selected = selectRustDeclaredBinding(walk, declaration, sourceFile);
+      return selected.kind === "unresolved" ? undefined : setCarrierFact(walk, identifier, selected.carrier);
+    }
+    if (declarationKind === KindParameter) {
+      const parameter = walk.context.records.sourceParameterAbi.get(declaration);
+      if (parameter === undefined) return undefined;
+      return setCarrierFact(walk, identifier, parameter.valueCarrier);
+    }
+    if (declarationKind === KindBindingElement) {
+      const projection = walk.context.records.bindingProjection.get(declaration);
+      return projection !== undefined && "bindingCarrier" in projection
+        ? setCarrierFact(walk, identifier, projection.bindingCarrier) : undefined;
     }
   }
   const semantics = walk.context.semantics(sourceFile);

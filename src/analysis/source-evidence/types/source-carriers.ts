@@ -7,8 +7,17 @@ import { appendRustDiagnostic, rustResolutionContext } from "../../program/walk.
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import { resolveRustTargetTypeRef } from "./resolution/source.js";
 import { setCarrierFact } from "../../operations/project-calls.js";
+import { rustSourceStorageSubjectContext } from "./resolution/source-storage-projection.js";
 
 export function resolveTypeNodeCarrier(walk: RustFactWalk, typeNode: Node | undefined): TargetTypeRef | undefined {
+  return resolveTypeNode(walk, typeNode, "storage");
+}
+
+export function resolveTypeNodeContract(walk: RustFactWalk, typeNode: Node | undefined): TargetTypeRef | undefined {
+  return resolveTypeNode(walk, typeNode, "contract");
+}
+
+function resolveTypeNode(walk: RustFactWalk, typeNode: Node | undefined, purpose: "storage" | "contract"): TargetTypeRef | undefined {
   if (typeNode === undefined) return undefined;
   if (walk.rejectedExpressions.has(typeNode)) return undefined;
   const semantics = walk.context.semanticsFor(typeNode);
@@ -40,6 +49,8 @@ export function resolveTypeNodeCarrier(walk: RustFactWalk, typeNode: Node | unde
     walk.rejectedExpressions.add(typeNode);
     return undefined;
   }
+  if (purpose === "contract") return requiredType === undefined ? undefined : resolveRustTargetTypeRef(requiredType,
+    rustSourceStorageSubjectContext(rustResolutionContext(walk, typeNode), undefined), walk.operationOptions);
   const existing = walk.context.records.runtimeCarrier.get(typeNode);
   if (existing !== undefined) return existing.carrier;
   const carrier = resolveRustTargetTypeRef(typeNode, rustResolutionContext(walk, typeNode), walk.operationOptions);

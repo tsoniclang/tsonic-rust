@@ -99,9 +99,9 @@ export const producersCarrierRegistry = Object.freeze([
     frozen: false,
   },
   {
-    id: "src/analysis/declarations/binding-storage.ts#resolveRustDeclaredBindingStorage",
+    id: "src/analysis/declarations/binding-storage.ts#selectRustDeclaredBinding",
     kinds: ["array", "associated-type", "closure", "function-pointer", "impl-trait", "opaque", "pointer", "reference", "slice", "source-primitive", "target-named", "target-specific", "trait-object", "trait-ref", "tuple", "type-parameter"],
-    declaration: { module: "src/analysis/declarations/binding-storage.ts", symbol: "resolveRustDeclaredBindingStorage" },
+    declaration: { module: "src/analysis/declarations/binding-storage.ts", symbol: "selectRustDeclaredBinding" },
     responsibility: "producers/resolve-storage",
     frozen: false,
   },
