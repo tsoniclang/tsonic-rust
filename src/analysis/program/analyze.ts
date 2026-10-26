@@ -125,8 +125,8 @@ export function analyzeRustProgram(context: RustAnalysisContext, outputType: "bi
     callableParameterCarriers(declaration) {
       return finalizeRustCallableParameterAbis(walk, declaration)?.map(parameter => parameter.parameterCarrier);
     },
-    callableStorageCarrier(subject, logicalCarrier, environmentFor, classFrameFor) {
-      return resolveRustCallableOwnershipCarrier(walk, subject, logicalCarrier, environmentFor, classFrameFor);
+    callableStorageCarrier(source, selection, logicalCarrier, environmentFor, classFrameFor) {
+      return resolveRustCallableOwnershipCarrier(walk, source, selection, logicalCarrier, environmentFor, classFrameFor);
     },
     sourceErrorCarrier(subject) {
       const demand = subject === undefined ? undefined : context.errorStorageDemands.storageFor(subject);
@@ -161,14 +161,17 @@ export function analyzeRustProgram(context: RustAnalysisContext, outputType: "bi
       const representation = context.objectRepresentations.representationFor(definition);
       return representation !== undefined && representation.kind !== "value";
     },
-    projectFieldProjection(property, owner, ownerType) {
+    projectFieldProjection(property, owner, ownerType, sourceStorageResolution) {
       const definition = context.projectTypes.definitionForCarrier(owner);
       const declarations = definition === undefined ? []
         : context.semanticsFor(definition.declaration).declarations.symbolDeclarations(property.symbol);
       if (declarations.length !== 1) return undefined;
       const declaration = declarations[0]!;
+      const contextForField = rustOperationContext(walk, declaration);
       const selected = resolveRustProjectField(declaration, owner, ownerType,
-        rustOperationContext(walk, declaration), operationOptions);
+        { ...contextForField, sourceStorageResolution: sourceStorageResolution === undefined
+          ? { kind: "unresolved", reason: "Physical project-field resolution requires its original source storage binding." }
+          : sourceStorageResolution }, operationOptions);
       return selected === undefined ? undefined : {
         output: selected.resultCarrier,
         field: { storage: selected.storage, storageIndex: selected.storageIndex, readonly: property.readonly,

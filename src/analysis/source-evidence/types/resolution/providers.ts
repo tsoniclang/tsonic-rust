@@ -104,7 +104,8 @@ export function resolveSourceProfileCarrier(
   return resolveSourceProfileCarrierFromArguments(name, carriers as readonly TargetTypeRef[], {
     jsEnabled: options.jsEnabled,
     sourceErrorCarrier: rustSourceProfileErrorCarrierNeeded(name, options.jsEnabled)
-      ? options.sourceErrorCarrier(context.sourceStorageSubject) : undefined,
+      ? options.sourceErrorCarrier(context.sourceStorageResolution?.kind === "resolved"
+        ? context.sourceStorageResolution.subject : undefined) : undefined,
   });
 }
 

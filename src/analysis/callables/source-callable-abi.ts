@@ -29,6 +29,7 @@ import { rustHasOpenOwnedStorage } from "../../policy/ownership/retained-storage
 import { rustTargetGenericReferences } from "../../target-model/types/carriers/generic-references.js";
 import { retainRustStructuralInstantiation } from "../source-evidence/types/resolution/structural-instantiations.js";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
+import { rustSourceStorageSubjectContext } from "../source-evidence/types/resolution/source-storage-projection.js";
 import { appendRustDiagnostic, rustResolutionContext, type RustFactWalk } from "../program/walk.js";
 import type { RustSourceCallableReturnFact } from "../../target-model/records/source-declarations.js";
 import type { RustRetainedEnvironment } from "../../target-model/records/retained-environments.js";
@@ -565,8 +566,8 @@ function parameterCanUseSharedBorrow(
       if (provider.kind === "conflict") return false;
       const sourceFile = ast.getSourceFile(call);
       const callback = argumentIndex < 0 || sourceFile === undefined ? undefined : rustCallableInputProtocol(resolveRustTargetTypeRef(
-        selected.sourceCallee.expression, { ...context, currentSourceFile: sourceFile, currentSemantics: semantics,
-          sourceStorageSubject: undefined }, options));
+        selected.sourceCallee.expression, rustSourceStorageSubjectContext({ ...context,
+          currentSourceFile: sourceFile, currentSemantics: semantics }, undefined), options));
       if (callback !== undefined) {
         const input = callback.parameters[argumentIndex];
         if (input?.kind !== "reference" || input.mutable ||
