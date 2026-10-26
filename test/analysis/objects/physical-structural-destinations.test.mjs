@@ -20,6 +20,42 @@ const field = (sourceName, type, rest = {}) => ({ sourceName, type, presence: "r
 const physicalError = file => rustProgramErrorTargetType({ kind: "physical", domain: "project",
   componentId: file === "/dependency.ts" ? "dependency" : "root" });
 
+test("same-layout physical instances retain independent canonical lifetimes and authored type binders", () => {
+  const parameter = Object.freeze({ kind: "type-parameter", identity: "canonical:Value", name: "Value" });
+  const left = Object.freeze({ kind: "parameter", identity: "canonical:left", name: "left" });
+  const right = Object.freeze({ kind: "parameter", identity: "canonical:right", name: "right" });
+  const staticLifetime = Object.freeze({ kind: "static" });
+  const carrier = (value, leftLifetime, rightLifetime) => rustStructuralObjectTargetType("/root.ts", [
+    field("left", rustCallableTargetType([value], value, leftLifetime)),
+    field("right", rustCallableTargetType([value], value, rightLifetime)),
+  ]);
+  const template = carrier(parameter, left, right);
+  const instance = carrier(integer, staticLifetime, staticLifetime);
+  const builder = createRustStructuralShapePlanRegistry();
+  builder.initialize([{ carrier: template }, { carrier: instance }], [], () => "root", [],
+    [{ template, instance }], new Map());
+  builder.initializeUnions([]);
+  const original = builder.templateForCarrier(instance);
+  assert.equal(original !== undefined, true, "the checked source edge owns the canonical generic template");
+  assert.equal(builder.completePhysicalCarrier(instance, instance).kind, "resolved",
+    "the actual concrete member instance completes without specializing its owner");
+  builder.finalizeMethodStorage(new Map(), physicalError);
+  const canonical = builder.templateForCarrier(instance);
+  assert.equal(canonical !== undefined, true, "physical finalization retains the same canonical family");
+  assert.equal(canonical.genericParameters.filter(value => value.kind === "lifetime").length, 2,
+    "independently quantified callable data lifetimes are not replaced with their static actual arguments");
+  assert.equal(canonical.genericParameters.filter(value => value.kind === "type").length, 1,
+    "an actual integer instance does not remove its authored type binder");
+  for (const selected of [left, right]) assert.equal(canonical.genericParameters.some(value =>
+    value.kind === "lifetime" && value.lifetime.identity === selected.identity), true,
+    selected.name + ": exact independent lifetime identity remains canonical");
+  assert.equal(canonical.targetName, original.targetName, "completion does not invent a second native owner");
+  const physical = builder.definitionForCarrier(instance);
+  assert.equal(physical !== undefined, true, "the original instance still selects its exact physical implementation");
+  assert.equal(physical.fields.every(selected => rustCallableProtocol(selected.carrier)?.lifetime.kind === "static"), true,
+    "the concrete instance keeps its actual static arguments without retagging the canonical family");
+});
+
 test("physical structural destinations preserve source errors and nested component ownership", () => {
   const callable = error => rustCallableTargetType([integer], integer, lifetime, error);
   const logical = rustProgramErrorTargetType();
@@ -74,6 +110,12 @@ test("one physical structural finalization preserves logical keys completed inst
   builder.finalizeMethodStorage(new Map(), physicalError);
   const selected = builder.definitionForCarrier(instance);
   assert.equal(selected !== undefined, true, "the original logical source key reads its exact physical instance");
+  const canonical = builder.templateForCarrier(instance);
+  assert.equal(canonical !== undefined, true, "the completed concrete instance retains its original generic owner");
+  assert.equal(canonical.genericParameters.filter(value => value.kind === "type").length, 1,
+    "a concrete instance does not specialize its canonical owner's type parameter inventory");
+  assert.equal(canonical.genericParameters.some(value => value.kind === "type" && value.identity === parameter.identity), true,
+    "the exact authored generic binder remains on the canonical definition");
   assert.equal(rustProgramErrorOwner(rustCallableProtocol(selected.fields[0].carrier).error)?.componentId, "root",
     "field and shape metadata carry the finalized destination error");
   assert.equal(rustTargetTypeRefEquals(rustStructuralObjectCarrierValue(selected.carrier).fields[0].type,

@@ -439,14 +439,15 @@ export function createRustStructuralShapeConstruction(
       if (previous !== undefined && !rustTargetTypeRefEquals(previous.carrier, physical))
         return unresolved("A structural source instance requires one exact native implementation and capture environment.");
       if (previous !== undefined) return Object.freeze({ kind: "resolved", carrier: previous.carrier });
-      const carrier = rustStructuralGenericCarrier(physical, "fields").carrier;
+      const sameLayoutInstance = instantiateStructuralDefinition(original, physical) !== undefined;
+      const carrier = sameLayoutInstance ? original.carrier : rustStructuralGenericCarrier(physical, "fields").carrier;
       const references = rustTargetGenericReferences(carrier);
       const physicalOwner = originsByKey.get(closedMetadataKey(physical));
       const completedOwner = physicalOwner === undefined || physicalOwner === original ? undefined : physicalTemplateFor(physicalOwner);
       if (physicalOwner !== undefined && physicalOwner !== original && completedOwner === undefined)
         failTargetAnalysisInvariant("tsonic-rust", "An admitted structural implementation requires its actual completed native template.");
       const template = physicalOwner !== undefined && physicalOwner !== original ? completedOwner!
-        : Object.freeze({ ...original, carrier,
+        : sameLayoutInstance ? original : Object.freeze({ ...original, carrier,
         genericParameters: Object.freeze([
           ...references.lifetimes.map(lifetime => ({ kind: "lifetime" as const, lifetime: lifetime as Extract<RustLifetimeRef, { kind: "parameter" }> })),
           ...references.typeParameters.map(parameter => ({ kind: "type" as const, identity: parameter.identity, name: parameter.name })),
@@ -476,7 +477,7 @@ export function createRustStructuralShapeConstruction(
           template.template.componentId !== definition.componentId)) continue;
         if (definition.fields.some(field => field.methodPlan?.kind === "fixed") && template === undefined)
           failTargetAnalysisInvariant("tsonic-rust", "A fixed structural method requires its completed physical template before publication.");
-        const carrier = selectPhysicalCarrier(template === undefined ? definition.carrier : rustStructuralGenericCarrier(template.carrier, "fields").carrier);
+        const carrier = selectPhysicalCarrier(template === undefined ? definition.carrier : template.template.carrier);
         const physicalShape = rustStructuralObjectCarrierValue(carrier);
         if (physicalShape === undefined) failTargetAnalysisInvariant("tsonic-rust",
           "An admitted structural definition requires its completed native field layout.");
