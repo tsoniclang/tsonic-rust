@@ -3,6 +3,7 @@ import test from "node:test";
 import { analyzeRust } from "../../../helpers/rust-session.mjs";
 import { rustSourceFilePlanContext } from "../../../helpers/plan-context.mjs";
 import { analyzeRustNativeCallableGenerics } from "../../../../dist/analysis/callables/native-inputs.js";
+import { selectRustCallableEntryGenerics } from "../../../../dist/analysis/callables/entry-generics.js";
 import { createRustNativeGenericProducer } from "../../../../dist/analysis/program/records/native-generics.js";
 import { planRustNativeCallableGenerics } from "../../../../dist/backend/planner/declarations/callables/native-generics.js";
 import { rustCallablePayloadContext } from "../../../../dist/backend/planner/expressions/capture-payloads.js";
@@ -33,9 +34,21 @@ function fixture(body, name) {
 function seal({ program, declaration }, replace = {}) {
   const producer = createRustNativeGenericProducer(() => {});
   const values = program.callableValues;
-  const result = analyzeRustNativeCallableGenerics({ source: program.source, ast: program.source.ast, lifetimes: program.sourceLifetimes,
-    records: program.records, producer, native: { ...values.native, ...replace.native },
-    nativeStorage: { ...values.nativeStorage, ...replace.nativeStorage }, nativeProducers: values.nativeProducers,
+  const nativeStorage = { ...values.nativeStorage, prepareReturn: values.nativeStorage.returnFor, ...replace.nativeStorage };
+  const headers = new Map();
+  for (const selected of values.nativeProducers.producers) {
+    const result = selectRustCallableEntryGenerics({ source: program.source, ast: program.source.ast,
+      lifetimes: program.sourceLifetimes, records: program.records, nativeStorage, nativeProducers: values.nativeProducers }, selected.declaration);
+    if (result.kind === "rejected") return { result, selected: undefined, program };
+    headers.set(selected.declaration, result.value);
+  }
+  const records = { ...program.records, callableLeading: { get: node => {
+    const selected = program.records.callableLeading.get(node);
+    return selected === undefined ? undefined : { ...selected, genericHeader: headers.get(node) };
+  } } };
+  const result = analyzeRustNativeCallableGenerics({ ast: program.source.ast,
+    records, producer, native: { ...values.native, ...replace.native },
+    nativeStorage, nativeProducers: values.nativeProducers,
     nativeGenericProducers: values.nativeGenericProducers, retainedCallableInputs: program.retainedCallableInputs,
     declarationGenericRequirements: program.declarationGenericRequirements });
   return { result, selected: producer.records.get(declaration),
@@ -54,6 +67,30 @@ function generics(current, sealed, substitutions, typeParameterNames) {
 const invoked = "function inner(first: () => int32): int32 { return first(); }\n" +
   "export function outer(first: () => int32): int32 { return inner(first) + 1; }";
 const protocol = /^crate::index::NativeCallable_[0-9a-f]+$/u;
+
+test("native generic emission consumes the exact early header without selecting its membership again", () => {
+  const { program, declaration } = fixture(invoked, "inner");
+  const header = program.records.callableLeading.get(declaration)?.genericHeader;
+  const published = program.records.nativeGenerics.get(declaration);
+  assert.equal(header !== undefined && published !== undefined, true, "the actual checked declaration owns both completed stages");
+  assert.equal(Object.isFrozen(header), true, "early header data is immutable");
+  assert.equal(header.sourceContract === published.sourceContract, true, "native source binder ownership is shared exactly");
+  assert.equal(header.implicitLifetimes === published.implicitLifetimes, true, "implicit lifetime membership is not selected again");
+  assert.equal(header.retention === published.retention, true, "source and native-body retained lifetimes use one selected plan");
+  const values = program.callableValues;
+  const producer = createRustNativeGenericProducer(() => {});
+  const nativeStorage = { returnFor: values.nativeStorage.returnFor, valueFor: values.nativeStorage.valueFor };
+  Object.defineProperty(nativeStorage, "futureEnvironmentFor", { get() {
+    assert.fail("late generic bounds must not request a second header membership decision");
+  } });
+  const result = analyzeRustNativeCallableGenerics({ ast: program.source.ast, records: program.records, producer,
+    native: values.native, nativeStorage, nativeProducers: values.nativeProducers,
+    nativeGenericProducers: values.nativeGenericProducers, retainedCallableInputs: program.retainedCallableInputs,
+    declarationGenericRequirements: program.declarationGenericRequirements });
+  assert.equal(result.kind, "resolved", "later requirements and bounds consume the completed early header");
+  assert.equal(producer.records.get(declaration)?.sourceContract === header.sourceContract, true,
+    "repeated emission preserves the original selected source contract identity");
+});
 
 test("native generic implementation parameters are not redeclared after exact environment substitution", () => {
   const current = fixture(invoked, "inner");

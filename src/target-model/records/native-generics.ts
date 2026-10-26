@@ -3,6 +3,7 @@ import type { RustSourceGenericParameterContract, RustSourceGenericContract, Rus
 import type { RustDeclarationGenericRequirementContract } from "./generic-requirements.js";
 import type { RustGenericRequirement } from "./generic-requirements.js";
 import type { Node } from "@tsonic/tsts";
+import type { RustNativeFutureEnvironmentSelection } from "./native-future-inputs.js";
 
 export interface RustGenericRequirementEmissionRecords {
   readonly declarationRequirements: { readonly get: (declaration: Node, body?: true) => RustDeclarationGenericRequirementContract | undefined };
@@ -31,3 +32,8 @@ export interface RustNativeCallableGenericContext {
     readonly body: readonly TargetTypeRef[];
   } | undefined;
 }
+
+export type RustNativeCallableGenericHeader = Pick<RustNativeCallableGenericContext,
+  "sourceContract" | "implicitLifetimes" | "retention"> & {
+  readonly futureEnvironment: Extract<RustNativeFutureEnvironmentSelection, { readonly kind: "resolved" }>;
+};

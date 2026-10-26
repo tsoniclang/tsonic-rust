@@ -1,6 +1,7 @@
 import type { RustRecordFamily } from "./program.js";
 import type { TargetTypeRef } from "../types/model.js";
 import type { Node } from "@tsonic/tsts";
+import type { RustNativeCallableGenericHeader } from "./native-generics.js";
 
 export interface RustClassDeclarationEmission {
   readonly environmentBindingName: string | undefined;
@@ -17,6 +18,7 @@ export interface RustCallableReturnEmission {
 }
 
 export interface RustCallableLeadingEmission {
+  readonly genericHeader: RustNativeCallableGenericHeader | undefined;
   readonly parameters: readonly {
     readonly kind: "this" | "receiver";
     readonly carrier: TargetTypeRef;

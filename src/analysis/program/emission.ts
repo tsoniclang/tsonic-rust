@@ -75,7 +75,6 @@ import { analyzeRustObjectReferenceEmission } from "../objects/object-reference-
 import { analyzeRustSourceCallArguments } from "../callables/source-call-arguments.js";
 import { analyzeRustBinaryEmission } from "../operations/binary-emission.js";
 import { analyzeRustAssignmentEvaluation } from "../storage/assignment-evaluation.js";
-import { analyzeRustLexicalFunctionEmission } from "../callables/lexical-emission.js";
 import { analyzeRustCallableDeclarationEmission } from "../callables/declaration-emission.js";
 import { analyzeRustMethodEmission } from "../declarations/classes/methods.js";
 import { analyzeRustFrameEmission } from "../callables/frame-emission.js";
@@ -153,7 +152,6 @@ export function finalizeRustNativeEmission(
     producer: context.records.declarationEmission, required: context.requiredRecords });
   if (declarationEmissionIssues.length !== 0) return rejectedTargetStage(declarationEmissionIssues);
   analyzeRustLexicalValues({ program, nodes: context.nativeNodes, producer: context.records.lexicalValuePlans });
-  analyzeRustLexicalFunctionEmission({ program, nodes: context.nativeNodes, producer: context.records.lexicalFunctionPlans });
   analyzeRustCallableParameterEmission({ program, nodes: context.nativeNodes, producer: context.records.callableParameterPlans, required: context.requiredRecords });
   const classInitializationIssues = analyzeRustClassInitialization({ program, nodes: context.nativeNodes, producer: context.records.classInitializationPlans });
   if (classInitializationIssues.length !== 0) return rejectedTargetStage(classInitializationIssues);

@@ -1,6 +1,9 @@
 import type { Node } from "@tsonic/tsts";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
-import type { RustAnalysisProgram } from "../program/model.js";
+import type { RustProgramRecords } from "../../target-model/records/program.js";
+import type { RustLexicalFunctionQueries } from "../../target-model/records/lexical-functions.js";
+import type { RustOwnershipRecords } from "../../target-model/records/ownership.js";
+import type { RustCallableValueConstruction } from "./value-plan.js";
 import type { RustLexicalFunctionProducer } from "../program/records/lexical-functions.js";
 import type { RustLexicalCaptureEmission } from "../../target-model/records/lexical-functions.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
@@ -10,7 +13,12 @@ import { rustLocationTargetType } from "../../target-model/types/carriers/callab
 import { rustNamedTargetType } from "../../target-model/types/carriers/native.js";
 
 export function analyzeRustLexicalFunctionEmission(input: {
-  readonly program: Omit<RustAnalysisProgram, "reachability">;
+  readonly program: {
+    readonly records: RustProgramRecords;
+    readonly lexicalFunctions: RustLexicalFunctionQueries;
+    readonly ownership: Pick<RustOwnershipRecords, "captures">;
+    readonly callableValues: Pick<RustCallableValueConstruction, "nativeStorage" | "generic">;
+  };
   readonly nodes: readonly Node[];
   readonly producer: RustLexicalFunctionProducer;
 }): void {
