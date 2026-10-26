@@ -27,7 +27,7 @@ export function planRustBorrowedElementRead(
   const element: RustExpr = { kind: "dereference", pointer: guard };
   overrides.set(read.receiver, append
     ? { expression: { kind: "reference", expr: guard }, carrier: rustStringTargetType(), valueForm: "shared-reference" }
-    : { expression: { kind: "reference", expr: element }, carrier: rustStringTargetType(), valueForm: "shared-reference" });
+    : { expression: element, carrier: rustStringTargetType(), valueForm: "storage", storageForm: "borrow-guard" });
   const body = planRead(node, { ...context, expressionOverrides: overrides });
   return body === undefined ? undefined : rustValueBlock(bindings, body);
 }
