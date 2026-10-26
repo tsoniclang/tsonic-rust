@@ -24,8 +24,7 @@ test("admitted native entries never omit an unused formal whose selected incomin
   const leading = program.records.callableLeading.get(declaration);
   assert.equal(leading?.genericHeader !== undefined, true, "the real native producer owns a complete early header");
   const select = createRustNativeEntryLayouts({ source: createTargetSourceProgram(checked), records: program.records,
-    projectTypes: program.projectTypes, structuralShapes: program.structuralShapes, classValues: program.classValues,
-    native: program.callableValues.native });
+    projectTypes: program.projectTypes, structuralShapes: program.structuralShapes, classValues: program.classValues });
   const parameters = new Map(leading.sourceParameters);
   const original = program.source.ast.parameters(declaration)[0];
   assert.equal(parameters.delete(original), true, "only the unused formal's actual selected input is withheld");

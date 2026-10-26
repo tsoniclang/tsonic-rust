@@ -10,7 +10,6 @@ import type { RustClassValuePlan } from "../../target-model/records/class-values
 import type { RustProjectTypePolicy } from "../project-types/index.js";
 import type { RustStructuralShapePlan } from "../objects/shapes/structural-shape-plan.js";
 import type { RustStructuralShapeDefinition, RustStructuralShapeField } from "../../target-model/records/structural-shapes.js";
-import type { RustNativeCallableInputPlan } from "./native-inputs.js";
 import type { RustTargetGenericArgument, TargetTypeRef } from "../../target-model/types/model.js";
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
 import { selectRustNativeStructuralReceiverPassing } from "../../policy/ownership/generic-callables.js";
@@ -21,7 +20,6 @@ export function createRustNativeEntryLayouts(input: {
   readonly projectTypes: RustProjectTypePolicy;
   readonly structuralShapes: RustStructuralShapePlan;
   readonly classValues: RustClassValuePlan;
-  readonly native: Pick<RustNativeCallableInputPlan, "inputsFor" | "capturesFor">;
 }) {
   const fixed = new Map<Node, Map<RustStructuralShapeDefinition, readonly RustStructuralShapeField[]>>();
   for (const owner of input.structuralShapes.definitions) {
@@ -48,8 +46,7 @@ export function createRustNativeEntryLayouts(input: {
     const lexical = input.records.lexicalFunction.get(declaration);
     const captured = [...(header?.sourceContract.parameters ?? []), ...(header?.implicitLifetimes ?? []), ...(lexical?.genericParameters ?? [])];
     const arguments_: RustTargetGenericArgument[] = captured.map(argument);
-    for (const selected of [...input.native.inputsFor(declaration), ...input.native.capturesFor(declaration),
-      ...(header?.futureEnvironment.inputs ?? []), ...(header?.futureEnvironment.captures ?? [])])
+    for (const selected of header.inputs)
       arguments_.push(Object.freeze({ kind: "type", type: selected.implementation }));
     const owner = input.projectTypes.definitionContainingDeclaration(declaration);
     if (owner !== undefined) arguments_.push(...owner.genericParameters.map(argument));

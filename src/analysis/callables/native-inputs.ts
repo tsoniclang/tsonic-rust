@@ -332,10 +332,7 @@ export function analyzeRustNativeCallableGenerics(input: {
     const header = input.records.callableLeading.get(declaration)?.genericHeader;
     if (header === undefined) failTargetAnalysisInvariant("tsonic-rust",
       "An admitted native callable requires its completed early generic header.", declaration);
-    const { sourceContract, implicitLifetimes, retention, futureEnvironment: environment } = header;
-    const callableInputs = [...input.native.inputsFor(declaration), ...input.native.capturesFor(declaration)];
-    const inputs = [...new Map([...callableInputs, ...environment.inputs, ...environment.captures]
-      .map(selected => [selected.implementation.identity, selected] as const)).values()];
+    const { sourceContract, implicitLifetimes, retention, callableInputs, inputs } = header;
     const sourceRequirements = input.declarationGenericRequirements.contractFor(declaration);
     const bodyRequirements = input.declarationGenericRequirements.contractFor(declaration, true);
     if (inputs.length === 0) {

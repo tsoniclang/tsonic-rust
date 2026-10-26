@@ -34,11 +34,13 @@ function fixture(body, name) {
 function seal({ program, declaration }, replace = {}) {
   const producer = createRustNativeGenericProducer(() => {});
   const values = program.callableValues;
+  const native = { ...values.native, ...replace.native };
   const nativeStorage = { ...values.nativeStorage, prepareReturn: values.nativeStorage.returnFor, ...replace.nativeStorage };
   const headers = new Map();
   for (const selected of values.nativeProducers.producers) {
     const result = selectRustCallableEntryGenerics({ source: program.source, ast: program.source.ast,
-      lifetimes: program.sourceLifetimes, records: program.records, nativeStorage, nativeProducers: values.nativeProducers }, selected.declaration);
+      lifetimes: program.sourceLifetimes, records: program.records, nativeStorage, native,
+      nativeProducers: values.nativeProducers }, selected.declaration);
     if (result.kind === "rejected") return { result, selected: undefined, program };
     headers.set(selected.declaration, result.value);
   }
@@ -47,7 +49,7 @@ function seal({ program, declaration }, replace = {}) {
     return selected === undefined ? undefined : { ...selected, genericHeader: headers.get(node) };
   } } };
   const result = analyzeRustNativeCallableGenerics({ ast: program.source.ast,
-    records, producer, native: { ...values.native, ...replace.native },
+    records, producer, native,
     nativeStorage, nativeProducers: values.nativeProducers,
     nativeGenericProducers: values.nativeGenericProducers, retainedCallableInputs: program.retainedCallableInputs,
     declarationGenericRequirements: program.declarationGenericRequirements });
@@ -77,6 +79,11 @@ test("native generic emission consumes the exact early header without selecting 
   assert.equal(header.sourceContract === published.sourceContract, true, "native source binder ownership is shared exactly");
   assert.equal(header.implicitLifetimes === published.implicitLifetimes, true, "implicit lifetime membership is not selected again");
   assert.equal(header.retention === published.retention, true, "source and native-body retained lifetimes use one selected plan");
+  assert.equal(Object.isFrozen(header.inputs) && Object.isFrozen(header.callableInputs), true,
+    "original native input membership is immutable before later bounds completion");
+  assert.equal(header.inputs.length === published.inputs.length && header.inputs.every((input, index) =>
+    input.implementation === published.inputs[index].implementation), true,
+  "late bounds preserve the exact early ordered implementation identities");
   const values = program.callableValues;
   const producer = createRustNativeGenericProducer(() => {});
   const nativeStorage = { returnFor: values.nativeStorage.returnFor, valueFor: values.nativeStorage.valueFor };
@@ -84,7 +91,10 @@ test("native generic emission consumes the exact early header without selecting 
     assert.fail("late generic bounds must not request a second header membership decision");
   } });
   const result = analyzeRustNativeCallableGenerics({ ast: program.source.ast, records: program.records, producer,
-    native: values.native, nativeStorage, nativeProducers: values.nativeProducers,
+    native: { ...values.native,
+      inputsFor() { assert.fail("late generic bounds must not select native input membership again"); },
+      capturesFor() { assert.fail("late generic bounds must not select native capture membership again"); } },
+    nativeStorage, nativeProducers: values.nativeProducers,
     nativeGenericProducers: values.nativeGenericProducers, retainedCallableInputs: program.retainedCallableInputs,
     declarationGenericRequirements: program.declarationGenericRequirements });
   assert.equal(result.kind, "resolved", "later requirements and bounds consume the completed early header");

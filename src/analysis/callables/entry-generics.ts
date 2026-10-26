@@ -6,6 +6,7 @@ import { rustLifetimeKey } from "../../target-model/lifetimes/index.js";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { RustNativeCallableGenericHeader } from "../../target-model/records/native-generics.js";
 import type { RustNativeCallableProducerPlan } from "../../target-model/records/native-producers.js";
+import type { RustNativeCallableInputPlan } from "./native-inputs.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { isValidRustIdentifier } from "../../target-model/names/identifiers.js";
 import { rustProgramErrorTargetType } from "../../target-model/types/carriers/js.js";
@@ -21,6 +22,7 @@ export function selectRustCallableEntryGenerics(input: {
   readonly records: RustProgramRecords;
   readonly nativeStorage: Pick<RustNativeStorageConstruction, "futureEnvironmentFor" | "prepareReturn" | "parameterFor">;
   readonly nativeProducers: RustNativeCallableProducerPlan;
+  readonly native: Pick<RustNativeCallableInputPlan, "inputsFor" | "capturesFor">;
 }, declaration: Node): TargetStageResult<RustNativeCallableGenericHeader> {
   const parameters = input.ast.typeParameters(declaration);
   const sourceContract = parameters.length === 0 ? Object.freeze({ declaration, parameters: Object.freeze([]) })
@@ -97,5 +99,9 @@ export function selectRustCallableEntryGenerics(input: {
     else implicitLifetimes = Object.freeze(implicitLifetimes.filter(parameter =>
       parameter.kind !== "lifetime" || rustLifetimeKey(parameter.lifetime) !== rustLifetimeKey(retained.lifetime)));
   }
-  return resolvedTargetStage(Object.freeze({ sourceContract, implicitLifetimes, retention, futureEnvironment: environment }));
+  const callableInputs = Object.freeze([...input.native.inputsFor(declaration), ...input.native.capturesFor(declaration)]);
+  const inputs = Object.freeze([...new Map([...callableInputs, ...environment.inputs, ...environment.captures]
+    .map(selected => [selected.implementation.identity, selected] as const)).values()]);
+  return resolvedTargetStage(Object.freeze({ sourceContract, implicitLifetimes, retention, futureEnvironment: environment,
+    callableInputs, inputs }));
 }
