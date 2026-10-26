@@ -10,9 +10,9 @@ test("selected native category methods borrow automatically without a copied or 
   assert.equal(result.kind, "runtime-method");
   const context = { input: { program: { typeDefinitions: emptyRustTypeDefinitions } } };
   const value = { kind: "path", path: "value" };
-  const expected = { kind: "owned-string-from-borrowed-str", expression: {
+  const expected = {
     kind: "method-call", receiver: value, method: result.method, args: [],
-  } };
+  };
   assert.deepEqual(planRustRuntimeCategory(value, result, context), expected);
   assert.deepEqual(planRustRuntimeCategory({ kind: "reference", expr: value }, result, context, true), expected);
   assert.equal(result.method, "type_of", "the single producer and literal method contract exclude forged method names");

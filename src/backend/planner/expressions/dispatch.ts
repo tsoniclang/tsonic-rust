@@ -9,7 +9,7 @@ import { rustSourceBindingPath } from "../program/plan-context.js";
 import { failRustPlannerInvariant } from "../diagnostics.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { rustValueBlock } from "../../target-ast/syntax/value-block.js";
-import { planExpression, planExpressionBeforeValueProjections } from "./entry.js";
+import { planExpression } from "./entry.js";
 import { planNumericLiteral, planBigIntLiteral } from "./literal-conversions.js";
 import { planSourceConversion } from "./source-conversions.js";
 import { planTemplateExpression } from "./expression-template-strings.js";
@@ -21,11 +21,8 @@ import { planRustClassValueRead } from "../objects/class-values.js";
 import { planRustIdentifierValue, planRustValueRead } from "./typed-locations.js";
 import { planProviderOperationExpression, finishProviderOperationExpression } from "./conversions.js";
 import { planRustSourceCallableValue } from "./source-callable-value.js";
-import { planRustRuntimeCategory } from "./runtime-category.js";
-import { createRustSharedReferenceArgument } from "./input-shaping.js";
-import { planRustDiscardedValue } from "./discarded-values.js";
+import { planRustRuntimeCategoryExpression } from "./runtime-category.js";
 import { planRustVoidExpression } from "./expression-void.js";
-import { rustUnparenthesizedExpression } from "../../../target-model/syntax/expressions.js";
 import { planElementAccess } from "./elements.js";
 import { planArrayLiteral } from "./array-literals/planning.js";
 import { planBinaryExpression } from "./binary.js";
@@ -142,20 +139,8 @@ export function planExpressionInner(node: Node, context: RustPlanContext, result
       return rustValueBlock([{ name, value: condition }], { kind: "conditional", condition: { kind: "path", path: name }, whenTrue, whenFalse });
     }
     case "KindTemplateExpression": return planTemplateExpression(node, context);
-    case "KindTypeOfExpression": {
-      const source = Node_Expression(ast, node);
-      const operand = source === undefined ? undefined : rustUnparenthesizedExpression(ast, source);
-      if (fact?.kind !== "typeof" || operand === undefined) failRustPlannerInvariant("An admitted typeof requires its exact native category and checked operand.", node);
-      if (typeof fact.result !== "string") {
-        const value = planExpressionBeforeValueProjections(operand, context, "value", "shared-reference");
-        if (value === undefined) failRustPlannerInvariant("An admitted runtime category requires its native operand.", node);
-        return planRustRuntimeCategory(createRustSharedReferenceArgument(context,
-          { stage: "source", expression: value, node: operand }), fact.result, context, true);
-      }
-      const discarded = planRustDiscardedValue(operand, context)
-        ?? failRustPlannerInvariant("An admitted static category requires its operand effects.", node);
-      return { kind: "evaluate-then", effect: discarded.expression, discard: discarded.discard, value: { kind: "string-literal", value: fact.result } };
-    }
+    case "KindTypeOfExpression": return { kind: "owned-string-from-borrowed-str",
+      expression: planRustRuntimeCategoryExpression(node, context) };
     case "KindVoidExpression": return planRustVoidExpression(node, context);
     case "KindDeleteExpression": return planDeleteExpression(node, context);
     case "KindArrayLiteralExpression": {
