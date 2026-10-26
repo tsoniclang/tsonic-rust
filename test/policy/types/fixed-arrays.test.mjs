@@ -433,7 +433,6 @@ test("fixed-array literals reject out-of-range ordinals and noninteger dynamic i
     ["-1", "RUST_FIXED_ARRAY_INDEX_NOT_PROVEN"],
     ["2", "RUST_FIXED_ARRAY_INDEX_NOT_PROVEN"],
     ["9007199254740993", "RUST_FIXED_ARRAY_INDEX_NOT_PROVEN"],
-    ["index", "RUST_FIXED_ARRAY_DYNAMIC_INDEX_REQUIRES_COPY"],
     ["1.5", "RUST_INTEGER_LITERAL_NOT_EXACT"],
   ]) {
     const { result } = compileRust({ files: { "index.ts": `

@@ -120,6 +120,13 @@ export const producersCarrierRegistry = Object.freeze([
     frozen: false,
   },
   {
+    id: "src/analysis/errors/regions.ts#rustErrorRegionCarrier",
+    kinds: ["array", "associated-type", "closure", "function-pointer", "impl-trait", "opaque", "pointer", "reference", "slice", "source-primitive", "target-named", "target-specific", "trait-object", "trait-ref", "tuple", "type-parameter"],
+    declaration: { module: "src/analysis/errors/regions.ts", symbol: "rustErrorRegionCarrier" },
+    responsibility: "producers/normalize-error-type",
+    frozen: false,
+  },
+  {
     id: "src/analysis/source-evidence/types/resolution/expression-carriers.ts#resolveExpressionCarrier",
     kinds: ["array", "associated-type", "closure", "function-pointer", "impl-trait", "opaque", "pointer", "reference", "slice", "source-primitive", "target-named", "target-specific", "trait-object", "trait-ref", "tuple", "type-parameter"],
     declaration: { module: "src/analysis/source-evidence/types/resolution/expression-carriers.ts", symbol: "resolveExpressionCarrier" },

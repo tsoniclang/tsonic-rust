@@ -365,6 +365,13 @@ export const callablesCarrierRegistry = Object.freeze([
     frozen: false,
   },
   {
+    id: "src/analysis/callables/ownership-carriers.ts#resolveRustCallableOwnershipCarrier",
+    kinds: ["array", "associated-type", "closure", "function-pointer", "impl-trait", "opaque", "pointer", "reference", "slice", "source-primitive", "target-named", "target-specific", "trait-object", "trait-ref", "tuple", "type-parameter"],
+    declaration: { module: "src/analysis/callables/ownership-carriers.ts", symbol: "resolveRustCallableOwnershipCarrier" },
+    responsibility: "callables/resolve-callable-storage-carrier",
+    frozen: false,
+  },
+  {
     id: "src/policy/conversions/native-callables.ts#rustNativeCallableAbsenceWitness",
     kinds: ["array", "associated-type", "closure", "function-pointer", "impl-trait", "opaque", "pointer", "reference", "slice", "source-primitive", "target-named", "target-specific", "trait-object", "trait-ref", "tuple", "type-parameter"],
     declaration: { module: "src/policy/conversions/native-callables.ts", symbol: "rustNativeCallableAbsenceWitness" },

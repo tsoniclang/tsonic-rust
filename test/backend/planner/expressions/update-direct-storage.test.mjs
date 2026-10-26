@@ -6,11 +6,11 @@ import { analyzeRustDirectStorage } from "../../../../dist/analysis/storage/dire
 import { createRustDirectStorageProducer } from "../../../../dist/analysis/program/records/direct-storage.js";
 import { analyzeRust, compileRust } from "../../../helpers/rust-session.mjs";
 import { rustSourceFilePlanContext } from "../../../helpers/plan-context.mjs";
+import { BinaryExpression_Left, Node_Expression } from "@tsonic/target-api/source";
 import { planRustUnionProjection } from "../../../../dist/backend/planner/expressions/union-mappings.js";
 import { isRustCopyCarrier } from "../../../../dist/policy/constraints/native-traits.js";
 import { validateGeneratedProject } from "../../../helpers/cargo-projects.mjs";
 import { assertNoTargetDiagnostics } from "../../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
-import { BinaryExpression_Left, Node_Expression } from "@tsonic/target-api/source";
 
 const programs = new Map();
 
@@ -32,15 +32,15 @@ export function update(body: boolean | unknown[]): void {
   const target = BinaryExpression_Left(ast, assignment);
   const receiver = Node_Expression(ast, target);
   const place = program.records.directStorage.get(target);
+  const receiverPlace = program.records.directStorage.get(receiver);
   const flow = program.records.flowReadProjection.get(receiver);
   const emission = program.records.flowReadEmission.get(flow);
   assert.equal(place?.kind === "provider" && emission?.kind === "union", true,
     "the existing native place and closed-union owners select this exact receiver");
-  const selectedReceiver = program.records.directStorage.get(receiver);
-  assert.equal(selectedReceiver.projection?.emission === emission.projection, true,
+  assert.equal(receiverPlace?.kind !== "unavailable" && receiverPlace?.projection?.emission === emission.projection, true,
     "the place transports the same admitted arm and payload correspondence");
-  assert.equal(selectedReceiver.projection.access, "mutable", "the checked write keeps its actual mutable source use");
-  assert.equal(Object.isFrozen(selectedReceiver.projection), true, "the native projection selection is finalized before rendering");
+  assert.equal(receiverPlace.projection.access, "mutable", "the checked write keeps its actual mutable source use");
+  assert.equal(Object.isFrozen(receiverPlace.projection), true, "the native projection selection is finalized before rendering");
 });
 
 function fixture(storage, module = false) {
