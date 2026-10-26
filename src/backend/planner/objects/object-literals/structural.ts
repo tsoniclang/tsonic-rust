@@ -64,7 +64,11 @@ export function createStructuralLiteralImplementation(
       const selected = field.methodPlan;
       if (selected?.kind !== "fixed") continue;
       const scope = createRustSyntheticNameState(context.input.program.source.ast, selected.declaration, []);
-      const receiverName = allocateRustSyntheticName(scope, "object_receiver");
+      const leading = context.input.program.records.callableLeading.get(selected.declaration)
+        ?? failRustPlannerInvariant("A fixed structural method requires its sealed native leading parameters.", selected.declaration);
+      const receiverRead = leading.parameters.some(parameter => parameter.kind === "this" && parameter.reads.length > 0) ||
+        selected.payload.captures.length > 0 || selected.payload.receiverFields.length > 0 || selected.payload.receivers.length > 0;
+      const receiverName = allocateRustSyntheticName(scope, receiverRead ? "object_receiver" : "_object_receiver");
       const captures: RustExpr = { kind: "field", name: String(storageIndex),
         receiver: { kind: "method-call", receiver: { kind: "path", path: receiverName }, method: "context", args: [] } };
       const bodyContext = rustCallablePayloadContext(selected.payload, captures, context, "tuple");
