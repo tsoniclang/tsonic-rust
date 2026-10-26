@@ -24,6 +24,68 @@ import { sourcePackageCallbackErrorFiles, sourcePackageCallbackErrorGraph }
   from "../../../../tsonic/test/fixtures/source-package-callback-errors.mjs";
 import { createRustNativeStorageJoins } from "../../../dist/analysis/callables/native-storage-joins.js";
 import { emptyRustTypeDefinitions } from "../../../dist/target-model/types/source-union-definitions.js";
+import { createRustStructuralShapePlanRegistry } from "../../../dist/analysis/objects/shapes/structural-shape-plan.js";
+import { rustStructuralGenericCarrier } from "../../../dist/policy/types/objects/structural-generics.js";
+import { structuralStorageKey } from "../../../dist/policy/types/objects/structural-storage.js";
+import { rustFutureTargetType } from "../../../dist/target-model/types/carriers/primitives.js";
+
+test("physical demand uses initial layout kinds without reading completed method storage", () => {
+  const integer = rustSourcePrimitiveTargetType("int32");
+  const callable = rustCallableTargetType([integer], integer);
+  for (const kind of ["native-dispatch", "fixed", "stored", "Callable field", "Future field"]) {
+    const method = kind === "native-dispatch" || kind === "fixed" || kind === "stored";
+    const carrier = rustStructuralObjectTargetType("/source.ts", [{ sourceName: "read",
+      type: kind === "Future field" ? rustFutureTargetType(integer) : callable,
+      presence: "required", readonly: false, ...(method ? { method: true } : {}) }],
+      "reference", kind === "native-dispatch" ? callable : undefined);
+    const componentForFile = () => "source";
+    const exposure = kind === "fixed" ? { kind: "fixed", declaration: {} } : { kind: "stored" };
+    const key = structuralStorageKey(rustStructuralGenericCarrier(carrier, "fields").carrier, componentForFile);
+    const registry = createRustStructuralShapePlanRegistry();
+    registry.initialize([{ carrier }], [], componentForFile, [], [], new Map(method ? [[`${key}#0`, exposure]] : []));
+    assert.throws(() => registry.completed, /completed/u, `${kind}: method payload publication is still unavailable`);
+    if (method) assert.equal(registry.field(carrier, 0).methodPlan.kind, kind,
+      `${kind}: the initial native layout owns the method classification`);
+    const selected = createRustNativeStorageJoins({
+      input: { storage: { subject() { assert.fail(`${kind}: classification must not project source storage`); } },
+        definitions: emptyRustTypeDefinitions, structuralShapes: registry, producerErrorFor: () => undefined },
+      boundaries: [], joinWrites: new Map(), step: () => true,
+      fail(message) { assert.fail(`${kind}: ${message}`); },
+    });
+    assert.equal(selected.requiresPhysicalSelection(carrier, 0), kind !== "native-dispatch",
+      `${kind}: only actual physical payloads need producer selection`);
+    assert.throws(() => registry.completed, /completed/u, `${kind}: demand does not complete method payloads`);
+  }
+});
+
+test("physical demand validates every nested layout even after finding a stored callable", () => {
+  const integer = rustSourcePrimitiveTargetType("int32");
+  const callable = rustCallableTargetType([], integer);
+  const missing = rustStructuralObjectTargetType("/foreign.ts", []);
+  let reason;
+  let projections = 0;
+  const registry = createRustStructuralShapePlanRegistry();
+  registry.initialize([], [], () => "source", [], [], new Map());
+  const selected = createRustNativeStorageJoins({
+    input: { storage: { subject() { projections += 1; assert.fail("invalid layout cannot reach source projection"); } },
+      definitions: emptyRustTypeDefinitions, structuralShapes: registry, producerErrorFor: () => undefined },
+    boundaries: [], joinWrites: new Map(), step: () => true,
+    fail(message) { reason = message; return undefined; },
+  });
+  for (const [label, nested] of [
+    ["array", { kind: "array", element: missing }],
+    ["slice", { kind: "slice", element: missing }],
+    ["tuple", { kind: "tuple", elements: [missing] }],
+    ["reference", { kind: "reference", referent: missing, mutable: false }],
+    ["optional", rustOptionTargetType(missing)],
+  ]) {
+    reason = undefined;
+    assert.equal(selected.requiresPhysicalSelection({ kind: "tuple", elements: [callable, nested] }, 0) === undefined, true,
+      `${label}: an earlier true demand cannot hide an invalid layout`);
+    assert.match(reason, /layout owner/u, `${label}: exact native layout refusal is preserved`);
+  }
+  assert.equal(projections, 0, "physical classification never enters source projection");
+});
 
 test("native callback signatures do not masquerade as stored aggregate payloads", () => {
   const integer = rustSourcePrimitiveTargetType("int32");
@@ -38,16 +100,16 @@ test("native callback signatures do not masquerade as stored aggregate payloads"
   for (const callTrait of ["Fn", "FnMut", "FnOnce"]) {
     for (const [name, args, result] of [["input", [callback], integer], ["output", [], callback], ["both", [callback], callback]]) {
       const carrier = { kind: "closure", callTrait, args, result };
-      assert.equal(selected.containsCallable(carrier, 0), false,
+      assert.equal(selected.requiresPhysicalSelection(carrier, 0), false,
         `${callTrait} ${name}: callback ABI metadata is not a captured aggregate storage slot`);
       assert.equal(carrier.args === args && carrier.result === result, true,
         `${callTrait} ${name}: the exact native argument and result contracts remain unchanged`);
     }
   }
-  assert.equal(selected.containsCallable({ kind: "function-pointer", args: [callback], result: callback }, 0), false,
+  assert.equal(selected.requiresPhysicalSelection({ kind: "function-pointer", args: [callback], result: callback }, 0), false,
     "a native function pointer keeps the same signature-only storage rule");
   for (const carrier of [{ kind: "array", element: callback }, { kind: "tuple", elements: [callback] }]) {
-    assert.equal(selected.containsCallable(carrier, 0), true,
+    assert.equal(selected.requiresPhysicalSelection(carrier, 0), true,
       "actual aggregate callback payloads still require their physical stored-producer owner");
   }
 });
@@ -793,6 +855,7 @@ test("structural native dispatch signatures are not stored callable payloads and
       ["array", { kind: "array", element: invalid }],
       ["slice", { kind: "slice", element: invalid }],
       ["tuple", { kind: "tuple", elements: [invalid] }],
+      ["tuple after callable", { kind: "tuple", elements: [rustCallableTargetType([], rustSourcePrimitiveTargetType("int32")), invalid] }],
       ["reference", { kind: "reference", referent: invalid, mutable: false }],
       ["optional", rustOptionTargetType(invalid)],
     ]) {

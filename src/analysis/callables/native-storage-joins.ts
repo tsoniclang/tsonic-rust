@@ -9,18 +9,20 @@ import { rustCallablePhysicalSignature } from "../../target-model/conversions/ca
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
 import { isRustNativeFutureCarrier } from "../../target-model/types/carriers/primitives.js";
-import { rustStructuralObjectCarrierValue } from "../../target-model/types/carriers/source-types.js";
+import { rustSourceUnionCarrierValue, rustStructuralObjectCarrierName, rustStructuralObjectCarrierValue } from "../../target-model/types/carriers/source-types.js";
 import { snapshotClosedMetadata } from "../../target-model/metadata/closed-data.js";
 import type { RustCallableJoinWrite } from "../../target-model/records/native-storage.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
-import type { RustStructuralStorageLookup } from "../../policy/model/operation-record-inputs.js";
+import type { RustStructuralShapeLayoutPlan } from "../objects/shapes/structural-shape-plan.js";
+import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
+import { rustUnionAlternatives } from "../../target-model/types/union-relations.js";
 
 /** The selection state one native storage selection shares with its producer joins. */
 export interface RustNativeStorageJoinContext {
   readonly input: {
     readonly storage: SourceStorageQueries;
     readonly definitions: RustTypeDefinitions;
-    readonly structuralShapes: RustStructuralStorageLookup;
+    readonly structuralShapes: Pick<RustStructuralShapeLayoutPlan, "field" | "definitionForCarrier">;
     readonly producerErrorFor: (reference: RustProducerErrorReference) => TargetTypeRef | undefined;
   };
   readonly boundaries: readonly SourceStorageSubject[];
@@ -87,19 +89,33 @@ export function createRustNativeStorageJoins(context: RustNativeStorageJoinConte
     }
     return carrier;
   };
-  const containsCallable = (type: TargetTypeRef, depth: number, visited = new Set<TargetTypeRef>()): boolean | undefined => {
+  const requiresPhysicalSelection = (type: TargetTypeRef, depth: number, visited = new Set<TargetTypeRef>()): boolean | undefined => {
     if (!step(depth)) return undefined;
     if (visited.has(type)) return false;
     visited.add(type);
     if (type.kind === "closure" || type.kind === "function-pointer") return false;
     if (rustCallableProtocol(type) !== undefined || rustGenericCallableValue(type) !== undefined || isRustNativeFutureCarrier(type)) return true;
-    const variants = input.definitions.sourceUnionVariants(type);
+    const variants = rustUnionAlternatives(type, input.definitions);
+    if (rustSourceUnionCarrierValue(type) !== undefined && (variants === undefined || variants.length === 0))
+      return fail("Native storage TYPE demand requires its admitted source union payload inventory.");
     const shape = rustStructuralObjectCarrierValue(type);
     const children: TargetTypeRef[] = [];
+    let required = false;
+    let physical = false;
+    if (type.kind === "target-specific" && type.target === "rust" && type.name === rustStructuralObjectCarrierName && shape === undefined)
+      return fail("A structural value requires its actual checked physical layout owner.");
     if (shape !== undefined) {
+      const definition = input.structuralShapes.definitionForCarrier(type);
+      if (definition === undefined || definition.fields.length !== shape.fields.length)
+        return fail("A structural value requires its actual checked physical layout owner.");
+      physical = shape.implementation?.kind === "physical";
+      if (physical && !rustTargetTypeRefEquals(type, definition.carrier))
+        return fail("A physical structural carrier requires its exact admitted canonical definition.");
+      children.push(...shape.bases);
       for (const [index, sourceField] of shape.fields.entries()) {
         const field = input.structuralShapes.field(type, index);
-        if (field === undefined) {
+        if (field === undefined || field.sourceName !== sourceField.sourceName ||
+          field.presence !== sourceField.presence || field.method !== sourceField.method) {
           fail("Native aggregate storage requires its exact structural field layout owner.");
           return undefined;
         }
@@ -108,14 +124,16 @@ export function createRustNativeStorageJoins(context: RustNativeStorageJoinConte
             fail("Native aggregate method storage requires its canonical callable field layout owner.");
             return undefined;
           }
-        } else if (field.storage === "stored" && field.methodPlan?.kind !== "native-dispatch") children.push(sourceField.type);
+          if (field.methodPlan.kind !== "native-dispatch") required = true;
+        } else if (field.storage === "stored") children.push(sourceField.type);
       }
     } else children.push(...rustTargetTypeChildren(type));
     for (const child of [...children, ...(variants?.map(variant => variant.carrier) ?? [])]) {
-      const selected = containsCallable(child, depth + 1, visited);
-      if (selected !== false) return selected;
+      const selected = requiresPhysicalSelection(child, depth + 1, visited);
+      if (selected === undefined) return undefined;
+      required = required || selected;
     }
-    return false;
+    return physical ? false : required;
   };
-  return { joinProducers, containsCallable };
+  return { joinProducers, requiresPhysicalSelection };
 }

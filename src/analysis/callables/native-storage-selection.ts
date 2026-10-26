@@ -36,7 +36,7 @@ import { rustCallableTargetId } from "../../target-model/types/carriers/source-t
 
 import { rustNativeCallableInvocationArguments } from "../../policy/types/callables/native-invocations.js";
 import { createRustNativeStorageGenericSelection, rustNativeStorageProjectionSteps, rustNativeStorageProjectionDepth } from "./native-storage-generics.js";
-import { createRustNativeFutureInputPlan, selectRustNativeStorageTypeDemand } from "./native-future-inputs.js";
+import { createRustNativeFutureInputPlan } from "./native-future-inputs.js";
 import { selectRustNativeConversionBoundaries } from "./native-storage-witnesses.js";
 import { createRustRecordMemberProducers } from "./native-storage-members.js";
 
@@ -105,7 +105,7 @@ export function createRustNativeStorageSelection(
       return false;
     };
     const genericsFor = createRustNativeStorageGenericSelection({ ...input, step, genericInvocationBindingsFor });
-    const { joinProducers, containsCallable } =
+    const { joinProducers, requiresPhysicalSelection } =
       createRustNativeStorageJoins({ input, boundaries, joinWrites, fail, step });
     const project = (subject: SourceStorageSubject, component: SourceStorageSubject["projection"][number]): SourceStorageSubject | undefined => {
       const selected = input.storage.subject(subject.node, subject.kind, [...subject.projection, component]);
@@ -525,18 +525,18 @@ export function createRustNativeStorageSelection(
         return physical ?? fail("Native callable storage has no selected physical input implementation.");
       }
       if (current.kind === "array" || current.kind === "slice") {
-        const demand = selectRustNativeStorageTypeDemand(current.element, input.definitions, step, depth + 1);
-        if (demand.kind === "unresolved") return fail(demand.reason);
-        if (!demand.future && !demand.implementation) return current;
+        const demand = requiresPhysicalSelection(current.element, depth + 1);
+        if (demand === undefined) return undefined;
+        if (!demand) return current;
         const component = project(selectedSubject, { kind: "array-element" });
         const element = component === undefined ? undefined : visit(current.element, component, bindings, depth + 1, false, position);
         return element === undefined ? undefined : element === current.element ? current : Object.freeze({ ...current, element });
       }
       const jsElement = rustJsArrayLikeElementTargetType(current);
       if (jsElement !== undefined && current.kind === "target-named") {
-        const demand = selectRustNativeStorageTypeDemand(jsElement, input.definitions, step, depth + 1);
-        if (demand.kind === "unresolved") return fail(demand.reason);
-        if (!demand.future && !demand.implementation) return current;
+        const demand = requiresPhysicalSelection(jsElement, depth + 1);
+        if (demand === undefined) return undefined;
+        if (!demand) return current;
         const component = project(selectedSubject, { kind: "array-element" });
         const element = component === undefined ? undefined : visit(jsElement, component, bindings, depth + 1, false, position);
         return element === undefined ? undefined : element === jsElement ? current
@@ -546,7 +546,9 @@ export function createRustNativeStorageSelection(
       if (storedSlots !== undefined && current.kind === "target-named") {
         const arguments_ = current.genericArguments;
         if (arguments_ === undefined) return fail("Opaque collection storage requires its selected native type arguments.");
-        const callableSlots = storedSlots.filter(slot => containsCallable(slot.carrier, depth + 1) !== false);
+        const demands = storedSlots.map(slot => requiresPhysicalSelection(slot.carrier, depth + 1));
+        if (demands.some(demand => demand === undefined)) return undefined;
+        const callableSlots = storedSlots.filter((_slot, index) => demands[index] === true);
         if (callableSlots.length === 0) return current;
         const producers = input.storage.storageProducersFor(selectedSubject, bindings);
         if (producers.kind === "unresolved") return fail(producers.reason);
@@ -599,11 +601,11 @@ export function createRustNativeStorageSelection(
         return Object.freeze({ ...current, genericArguments: Object.freeze(genericArguments) });
       }
       if (current.kind === "tuple") {
+        const demands = current.elements.map(element => requiresPhysicalSelection(element, depth + 1));
+        if (demands.some(demand => demand === undefined)) return undefined;
         const elements: TargetTypeRef[] = [];
         for (const [index, element] of current.elements.entries()) {
-          const demand = selectRustNativeStorageTypeDemand(element, input.definitions, step, depth + 1);
-          if (demand.kind === "unresolved") return fail(demand.reason);
-          if (!demand.future && !demand.implementation) {
+          if (!demands[index]) {
             elements.push(element);
             continue;
           }
@@ -620,17 +622,9 @@ export function createRustNativeStorageSelection(
         if (structural === undefined) return fail("A structural value requires its actual checked physical layout owner.");
         const completed = input.structuralShapes.definitionForCarrier(current);
         if (completed === undefined) return fail("A structural value requires its actual checked physical layout owner.");
-        if (structural.implementation?.kind === "physical") {
-          if (!rustTargetTypeRefEquals(current, completed.carrier))
-            return fail("A physical structural carrier requires its exact admitted canonical definition.");
-          return completed.carrier;
-        }
-        if (structural.implementation === undefined && completed.fields.every(field => field.method === true
-          ? field.methodPlan?.kind === "native-dispatch" : field.storage !== "stored")) {
-          const storedCallable = containsCallable(current, depth + 1);
-          if (storedCallable === undefined) return undefined;
-          if (!storedCallable) return completed.carrier;
-        }
+        const demand = requiresPhysicalSelection(current, depth + 1);
+        if (demand === undefined) return undefined;
+        if (!demand) return completed.carrier;
         const operation = selectedSubject.kind === "value" && selectedSubject.projection.length === 0
           ? input.records.targetOperation.get(selectedSubject.node) : undefined;
         if (operation?.kind === "source-call") {
@@ -700,7 +694,7 @@ export function createRustNativeStorageSelection(
         const checkedProperties = fieldSemantics.types.propertyInfos(selectedType.type);
         const fields = structural.fields.map(field => {
           if (field.method === true || field.accessor !== undefined) return field;
-          const requiresImplementation = containsCallable(field.type, depth + 1);
+          const requiresImplementation = requiresPhysicalSelection(field.type, depth + 1);
           if (requiresImplementation === undefined) return undefined;
           if (requiresImplementation === false) return field;
           const property = checkedProperties.find(property => property.name === field.sourceName);
@@ -731,12 +725,10 @@ export function createRustNativeStorageSelection(
       }
       const variants = rustUnionAlternatives(current, input.definitions);
       if (variants !== undefined) {
-        const payloads = variants.map(variant => {
-          const demand = selectRustNativeStorageTypeDemand(variant.carrier, input.definitions, step, depth + 1);
-          if (demand.kind === "unresolved") return fail(demand.reason);
-          return demand.future || demand.implementation
-            ? visit(variant.carrier, selectedSubject, bindings, depth + 1, permitsAbsence, position) : variant.carrier;
-        });
+        const demands = variants.map(variant => requiresPhysicalSelection(variant.carrier, depth + 1));
+        if (demands.some(demand => demand === undefined)) return undefined;
+        const payloads = variants.map((variant, index) => demands[index]
+          ? visit(variant.carrier, selectedSubject, bindings, depth + 1, permitsAbsence, position) : variant.carrier);
         if (payloads.some(payload => payload === undefined)) return undefined;
         if (payloads.every((payload, index) => payload === variants[index]!.carrier)) return current;
         const selected = rustSourceUnionCarrierValue(current) === undefined
@@ -744,7 +736,7 @@ export function createRustNativeStorageSelection(
           : instantiateRustSourceUnionPayloads(current, payloads as TargetTypeRef[], input.definitions);
         return selected ?? fail("Native physical union storage requires its exact canonical payload template.");
       }
-      const nested = containsCallable(current, depth + 1);
+      const nested = requiresPhysicalSelection(current, depth + 1);
       return nested === undefined ? undefined : nested
         ? fail("Native callable storage requires its existing physical aggregate layout owner.") : current;
     };

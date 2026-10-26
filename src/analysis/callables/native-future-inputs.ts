@@ -22,14 +22,13 @@ import type { RustNativeFutureInput, RustNativeFutureEnvironmentSelection, RustN
 import { sealRustNativeFutureInputs } from "../program/records/native-future-inputs.js";
 import { rustNativeStorageProjectionDepth, rustNativeStorageProjectionSteps } from "./native-storage-generics.js";
 
-export function selectRustNativeStorageTypeDemand(carrier: TargetTypeRef, definitions: RustTypeDefinitions,
+export function selectRustNativeFutureTypeDemand(carrier: TargetTypeRef, definitions: RustTypeDefinitions,
   step: (depth: number) => boolean, depth: number):
-  | { readonly kind: "resolved"; readonly future: boolean; readonly implementation: boolean }
+  | { readonly kind: "resolved"; readonly future: boolean }
   | { readonly kind: "unresolved"; readonly reason: string } {
   const pending = [{ carrier, depth }];
   const seen = new Set<string>();
   let future = false;
-  let implementation = false;
   while (pending.length !== 0) {
     const selected = pending.pop();
     if (selected === undefined) break;
@@ -46,7 +45,6 @@ export function selectRustNativeStorageTypeDemand(carrier: TargetTypeRef, defini
     }
     if (rustCallableProtocol(current) !== undefined || rustGenericCallableValue(current) !== undefined ||
       rustFrameCallableValue(current) !== undefined) {
-      implementation = true;
       continue;
     }
     const variants = rustUnionAlternatives(current, definitions);
@@ -55,12 +53,10 @@ export function selectRustNativeStorageTypeDemand(carrier: TargetTypeRef, defini
     const structural = rustStructuralObjectCarrierValue(current);
     const children = structural === undefined ? rustTargetTypeChildren(current) : [...structural.bases, ...structural.fields
       .filter(field => field.method !== true && field.accessor === undefined).map(field => field.type)];
-    if (structural !== undefined && (structural.implementation !== undefined || structural.construction !== undefined ||
-      structural.fields.some(field => field.method === true || field.accessor !== undefined))) implementation = true;
     for (const child of [...children, ...(variants?.map(variant => variant.carrier) ?? [])])
       pending.push({ carrier: child, depth: selected.depth + 1 });
   }
-  return Object.freeze({ kind: "resolved", future, implementation });
+  return Object.freeze({ kind: "resolved", future });
 }
 
 export function createRustNativeFutureInputPlan(input: {
@@ -108,7 +104,7 @@ export function createRustNativeFutureInputPlan(input: {
     const bindings = formal ? undefined : input.bindingsFor(owner);
     let remaining = rustNativeStorageProjectionSteps;
     const step = (depth: number): boolean => remaining-- > 0 && depth <= rustNativeStorageProjectionDepth;
-    const initialDemand = selectRustNativeStorageTypeDemand(carrier, input.definitions, step, 0);
+    const initialDemand = selectRustNativeFutureTypeDemand(carrier, input.definitions, step, 0);
     if (initialDemand.kind === "unresolved") { fail(owner, initialDemand.reason); return; }
     if (!initialDemand.future) return;
     const visit = (current: TargetTypeRef, selected: SourceStorageSubject,
@@ -156,7 +152,7 @@ export function createRustNativeFutureInputPlan(input: {
       const variants = rustUnionAlternatives(current, input.definitions);
       if (variants !== undefined) {
         for (const variant of variants) {
-          const demand = selectRustNativeStorageTypeDemand(variant.carrier, input.definitions, step, next.size);
+          const demand = selectRustNativeFutureTypeDemand(variant.carrier, input.definitions, step, next.size);
           if (demand.kind === "unresolved") { fail(owner, demand.reason); return; }
           if (demand.future) visit(variant.carrier, selected, next);
         }
@@ -170,7 +166,7 @@ export function createRustNativeFutureInputPlan(input: {
       if (current.kind === "array" || current.kind === "slice") project({ kind: "array-element" }, current.element);
       else if (current.kind === "tuple") {
         for (const [index, element] of current.elements.entries()) {
-          const demand = selectRustNativeStorageTypeDemand(element, input.definitions, step, next.size);
+          const demand = selectRustNativeFutureTypeDemand(element, input.definitions, step, next.size);
           if (demand.kind === "unresolved") { fail(owner, demand.reason); return; }
           if (demand.future) project({ kind: "tuple-element", index }, element);
         }

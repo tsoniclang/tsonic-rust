@@ -8,6 +8,35 @@ import { rustOptionElementCarrier } from "../../../dist/target-model/types/carri
 import { rustUnionLeaves } from "../../../dist/target-model/types/union-relations.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 import { closedUnionCallbackCompletionSource } from "../../../../tsonic/test/fixtures/closed-union-callback-completion.mjs";
+import * as futureInputs from "../../../dist/analysis/callables/native-future-inputs.js";
+import { rustFutureTargetType } from "../../../dist/target-model/types/carriers/primitives.js";
+import { rustSourcePrimitiveTargetType } from "../../../dist/target-model/types/carriers/native.js";
+import { rustCallableTargetType } from "../../../dist/target-model/types/carriers/callables.js";
+import { emptyRustTypeDefinitions } from "../../../dist/target-model/types/source-union-definitions.js";
+
+test("early Future demand reads only stored type metadata without physical layout inputs", () => {
+  assert.equal("selectRustNativeStorageTypeDemand" in futureInputs, false, "the superseded combined demand API is absent");
+  const integer = rustSourcePrimitiveTargetType("int32");
+  const future = rustFutureTargetType(integer);
+  const callable = rustCallableTargetType([], future);
+  for (const [label, carrier, expected] of [
+    ["Future", future, true],
+    ["stored Future", { kind: "array", element: future }, true],
+    ["tuple Future", { kind: "tuple", elements: [integer, future] }, true],
+    ["logical callback result", callable, false],
+    ["native callback result", { kind: "closure", callTrait: "Fn", args: [], result: future }, false],
+    ["function pointer result", { kind: "function-pointer", args: [], result: future }, false],
+    ["stored callback signature", { kind: "array", element: callable }, false],
+  ]) {
+    const selected = futureInputs.selectRustNativeFutureTypeDemand(carrier, emptyRustTypeDefinitions, () => true, 0);
+    assert.equal(selected.kind, "resolved", `${label}: source-free metadata resolves`);
+    assert.equal(selected.future, expected, `${label}: only actual stored Future data is selected`);
+    assert.equal("implementation" in selected, false, `${label}: physical implementation demand is not metadata`);
+    assert.equal(Object.isFrozen(selected), true, `${label}: the metadata result is immutable`);
+  }
+  const limited = futureInputs.selectRustNativeFutureTypeDemand(future, emptyRustTypeDefinitions, () => false, 0);
+  assert.equal(limited.kind, "unresolved", "source-free traversal preserves its finite budget");
+});
 
 function fixture(text) {
   const { program } = analyzeRust({ surfaces: [], files: { "index.ts": text } });

@@ -43,7 +43,6 @@ import type { RustLexicalFunctionEnvironments } from "../../target-model/records
 import { Node_Expression } from "@tsonic/target-api/source";
 import { rustSourceCallCallableStorageCarrier } from "../../policy/operations/members/native-contracts.js";
 import type { RustFrameCallablePlan } from "../../target-model/records/frame-callables.js";
-import type { RustStructuralStorageLookup } from "../../policy/model/operation-record-inputs.js";
 import { rustSourceStorageProjectedCarrier, type RustValueDomainCarrierHost } from "../objects/value-domain-carriers.js";
 import { selectRustSourceCallableInvocationBindings } from "./native-storage-generics.js";
 import type { RustTargetGenericBindings } from "../../target-model/types/carriers/generic-inference.js";
@@ -93,7 +92,7 @@ export function createRustNativeStorageQueries(input: {
   readonly physicalCarrierFor: RustGenericCallablePhysicalCarrierSelector;
   readonly lifetimes: RustLifetimeIndex;
   readonly lexicalFunctions: RustLexicalFunctionEnvironments;
-  readonly structuralShapes: RustStructuralStorageLookup & Pick<RustStructuralShapePlanRegistry, "completePhysicalCarrier" | "definitionForCarrier">;
+  readonly structuralShapes: Pick<RustStructuralShapePlanRegistry, "field" | "completePhysicalCarrier" | "definitionForCarrier">;
   readonly capturesFor: (declaration: Node) => RustNativeCaptureSelection;
   readonly carrierHost: RustValueDomainCarrierHost;
   // Resolved after the error regions; storage shared by distinct producers is selected only once it is available.
