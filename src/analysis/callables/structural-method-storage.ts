@@ -346,7 +346,19 @@ export function createRustStructuralMethodStorage(input: {
         const source = sourceStorage.subject(base.subject.node, base.subject.kind,
           [...base.subject.projection, { kind: "method-value", declaration }]);
         if (source.kind === "unresolved") sourceIssues.push({ subject: node, message: source.reason });
-        else register(node, destination, source.subject);
+        else {
+          const direct = ast.is.IsObjectLiteralExpression(node) && ast.parent(declaration) === node;
+          const element = direct ? semantics.operations.objectLiteralElement(declaration) : undefined;
+          if (direct && (element?.elementKind !== "method" || element.element !== declaration ||
+            element.objectLiteral !== node || ast.body(declaration) === undefined)) {
+            sourceIssues.push({ subject: declaration,
+              message: "A directly constructed structural method requires its exact checked literal element and native body." });
+            continue;
+          }
+          register(node, destination, source.subject, !direct ? undefined : { construction: Object.freeze({
+            object: node, property: declaration, expression: declaration, storageIndex: field.destinationIndex,
+          }) });
+        }
       }
     }
   }

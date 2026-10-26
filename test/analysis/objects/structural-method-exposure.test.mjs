@@ -83,6 +83,45 @@ test("fixed native methods require complete readonly, required and exact body ev
   ]) assert.equal(selectRustStructuralMethodExposure({ ...selected, ...change }), "stored", name);
 });
 
+for (const surfaces of [[], ["js"]]) test(`generic literal method views retain their original construction and captures (${surfaces[0] ?? "native"})`, () => {
+  let context;
+  const { result } = compileRust({ surfaces, files: { "index.ts": `
+    function make<Value>(value: Value): { read(): Value } {
+      return { read(): Value { return value; } };
+    }
+    async function keep<Actual>(api: { read(): Actual }, pending: Promise<void>): Promise<Actual> {
+      await pending;
+      return api.read();
+    }
+    export async function run(): Promise<number> {
+      const original = make(7);
+      const alias = original;
+      return await keep(alias, Promise.resolve(undefined));
+    }
+  ` }, compileTarget(request) {
+    context = analyzeRustCheckedContext(request);
+    return { kind: "resolved", value: { artifacts: [] }, diagnostics: context.diagnostics };
+  } });
+  assert.equal(result.diagnostics.length, 0, "the original checked factory reaches completed native construction selection");
+  const { ast } = context;
+  const method = context.nativeNodes.find(node => ast.is.IsMethodDeclaration(node) && ast.body(node) !== undefined &&
+    ast.text(ast.name(node)) === "read");
+  assert.equal(method !== undefined, true, "the original method has its checked body identity");
+  const object = ast.parent(method);
+  const constructions = context.structuralShapes.completed.definitions.flatMap(definition => definition.fields.flatMap(field =>
+    (field.methodPlan?.constructions ?? []).filter(construction => construction.expression === method)));
+  assert.equal(constructions.length > 0, true, "the admitted view keeps the genuine original method construction");
+  for (const construction of constructions) {
+    assert.equal(construction.object === object && construction.property === method, true,
+      "native provenance retains the exact literal and own method rather than a same-signature declaration");
+    assert.equal(construction.payload.captures.length, 1, "the actual retained value is not replaced by an empty environment");
+    assert.equal(ast.text(ast.name(construction.payload.captures[0].declaration)), "value",
+      "the original creation's captured formal is retained");
+    assert.equal(Object.isFrozen(construction) && Object.isFrozen(construction.payload), true,
+      "construction and physical capture evidence are immutable before publication");
+  }
+});
+
 for (const surfaces of [[], ["js"]]) {
   for (const [label, suffix, expected] of [
     ["direct native invocation", "export function read(): number { return source.value(); }", "fixed"],
