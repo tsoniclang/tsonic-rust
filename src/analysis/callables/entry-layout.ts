@@ -76,7 +76,7 @@ export function createRustNativeEntryLayouts(input: {
     const leadingSlots = leading.map(parameter => Object.freeze({ kind: "leading" as const, parameter, carrier: parameter.carrier }));
     const prefix: RustNativeCallableEntrySlot[] = [...leadingSlots];
     const method = ast.is.IsMethodDeclaration(declaration) || ast.is.IsGetAccessorDeclaration(declaration) || ast.is.IsSetAccessorDeclaration(declaration);
-    if (method && owner?.kind === "class") {
+    if (method && owner?.kind === "class" && ast.parent(declaration) === owner.declaration) {
       if (!ast.hasModifierKind(declaration, "static")) {
         const self = input.records.selfMode.get(declaration);
         if (self === undefined) failTargetAnalysisInvariant("tsonic-rust", "An admitted native class entry requires its original selected receiver mode.", declaration);

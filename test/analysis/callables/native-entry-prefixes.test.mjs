@@ -102,6 +102,47 @@ export function make(value: number): { read(): number } {
   assert.equal(checked > 0, true, "the real captured structural method exercises a fixed native entry");
 });
 
+test("nested object method entries preserve object receivers and lexical class generics without inventing native class self", () => {
+  const { program } = analyzeRust({ surfaces: [], files: { "index.ts": `
+class Enclosing<Value> {
+  value: Value;
+  constructor(value: Value) { this.value = value; }
+  make(): { value: Value; read(): Value } {
+    return { value: this.value, read(): Value { return this.value; } };
+  }
+}
+export function read(): number { return new Enclosing<number>(7).make().read(); }
+` } });
+  const { ast } = program.source;
+  let nested;
+  let direct;
+  const visit = node => {
+    if (ast.is.IsMethodDeclaration(node)) {
+      const parent = ast.parent(node);
+      if (parent !== undefined && ast.is.IsObjectLiteralExpression(parent)) nested = node;
+      if (parent !== undefined && ast.is.IsClassDeclaration(parent)) direct = node;
+    }
+    ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+  };
+  program.sourceFiles.forEach(visit);
+  assert.equal(nested !== undefined && direct !== undefined, true, "the real source contains distinct object and original class methods");
+  const lexicalOwner = program.projectTypes.definitionContainingDeclaration(nested);
+  assert.equal(lexicalOwner?.kind, "class", "the object method retains its actual enclosing class generic owner");
+  assert.equal(ast.parent(nested) === lexicalOwner.declaration, false, "lexical containment is not native class member ownership");
+  const leading = program.records.callableLeading.get(nested);
+  assert.equal(leading?.nativeEntry.module !== undefined, true, "the nested object method has its own module helper entry");
+  assert.equal(leading.nativeEntry.module.body.slots.some(slot => slot.kind === "method-receiver" || slot.kind === "class-environment"),
+    false, "an enclosing class never invents class self or static environment for the object method");
+  assert.equal(leading.parameters.some(parameter => parameter.kind === "this"), true, "the original object this parameter is retained");
+  assert.equal(lexicalOwner.genericParameters.filter(parameter => parameter.kind === "type").every(parameter =>
+    leading.nativeEntry.module.body.captureArguments.some(argument => argument.kind === "type" &&
+      argument.type.kind === "type-parameter" && argument.type.identity === parameter.identity)), true,
+  "direct member selection does not erase the actual enclosing generic capture obligations");
+  const directEntry = program.records.callableLeading.get(direct)?.nativeEntry.direct;
+  assert.equal(directEntry?.body.slots.some(slot => slot.kind === "method-receiver" && slot.owner.declaration === ast.parent(direct)),
+    true, "an original class member still keeps its exact native self receiver");
+});
+
 test("native helper prefix policy preserves every physical state and frame passing mode", () => {
   for (const mode of ["value", "shared"]) {
     const selected = selectRustNativeStructuralReceiverPassing(mode);
