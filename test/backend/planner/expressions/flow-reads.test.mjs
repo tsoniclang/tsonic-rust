@@ -51,11 +51,26 @@ test("optional readonly native references preserve one exact borrow without redu
   assertNoTargetDiagnostics(sealed.issues);
   for (const ownership of ["move", "clone", "borrow"]) {
     const context = planContext(sealed.program, sourceFile, node);
-    const result = planRustValueProjection(node, { kind: "path", path: "values" }, fact, context, ownership);
+    const expression = { kind: "path", path: "values" };
+    const result = planRustValueProjection(node, expression, fact, context, ownership);
     assertNoTargetDiagnostics(context.diagnostics);
-    assert.equal(result.arms[0].expression.kind, "path");
-    if (ownership === "borrow") assert.equal(result.expression.method, "as_ref");
-    else assert.equal(result.expression.kind, "path");
+    if (ownership === "move") {
+      assert.equal(result.kind, "method-call");
+      assert.equal(result.receiver === expression, true, "the owned Option is consumed exactly once");
+      assert.equal(result.method, "unwrap_or_else");
+      assert.equal(result.args.length, 1);
+      assert.equal(result.args[0].kind, "closure");
+      assert.equal(result.args[0].params.length, 0);
+      assert.equal(result.args[0].body.kind, "unreachable");
+      assert.equal(result.args[0].body.message, "checked flow selected a missing optional value");
+    } else {
+      assert.equal(result.kind, "match");
+      assert.equal(result.arms[0].expression.kind, "path");
+      if (ownership === "borrow") {
+        assert.equal(result.expression.method, "as_ref");
+        assert.equal(result.expression.receiver === expression, true, "the borrowed Option retains its exact source");
+      } else assert.equal(result.expression === expression, true, "the readonly reference retains its exact source");
+    }
     assert.doesNotMatch(printRustExpr(result), /\*flow_value|as_deref\(|clone\(|to_vec\(|collect\(/u);
   }
 });
@@ -79,9 +94,24 @@ test("optional native associated values move or borrow without inventing Clone, 
     assertNoTargetDiagnostics(sealed.issues);
     const context = planContext(sealed.program, sourceFile, node);
     if (succeeds) {
-      const result = planRustFlowReadProjection(node, { kind: "path", path: "value" }, fact, context, borrowedResult);
-      assert.equal(result.kind, "match");
-      assert.equal(result.arms[0].expression.kind, "path");
+      const expression = { kind: "path", path: "value" };
+      const result = planRustFlowReadProjection(node, expression, fact, context, borrowedResult);
+      if (canMove) {
+        assert.equal(result.kind, "method-call");
+        assert.equal(result.receiver === expression, true, "the non-Clone owned payload consumes its exact Option");
+        assert.equal(result.method, "unwrap_or_else");
+        assert.equal(result.args.length, 1);
+        assert.equal(result.args[0].kind, "closure");
+        assert.equal(result.args[0].params.length, 0);
+        assert.equal(result.args[0].body.kind, "unreachable");
+        assert.equal(result.args[0].body.message, "checked flow selected a missing optional value");
+      } else {
+        assert.equal(result.kind, "match");
+        assert.equal(result.expression.method, "as_ref");
+        assert.equal(result.expression.receiver === expression, true, "the non-Clone borrowed payload retains its exact Option");
+        assert.equal(result.arms[0].expression.kind, "path");
+      }
+      assert.doesNotMatch(printRustExpr(result), /clone\(|to_owned\(|to_vec\(|collect\(/u);
       assertNoTargetDiagnostics(context.diagnostics);
     } else {
       // A copy of a value whose carrier has no proven Clone guarantee is a corrupt record set at the planner boundary.

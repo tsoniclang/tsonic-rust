@@ -164,7 +164,7 @@ function planFrameEntry(
     const helperContext = rustFrameBindingContext(definition, owner,
       rustCallablePayloadContext(implementation, { kind: "path", path: stateName }, context, "named"));
     const planned = planNativeModuleFunction(implementation.declaration, implementation.declaration,
-      implementation.functionName, true, helperContext, undefined);
+      implementation.functionName, helperContext, undefined);
     const helpers = planned.helper === undefined ? [planned.item] : [planned.item, planned.helper];
     argumentTypes ??= callable.parameterCarriers.map(carrier => rustTypeFromCarrierInContext(carrier, context)
       ?? failRustPlannerInvariant("An admitted frame entry requires its renderable native argument ABI.", implementation.declaration));

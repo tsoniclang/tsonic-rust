@@ -100,7 +100,7 @@ export function analyzeRustCallableDeclarationEmission(input: {
     const error = program.records.nativeErrorRegion.get(declaration);
     if (error === undefined) failTargetAnalysisInvariant("tsonic-rust", "An admitted callable requires its selected native error region.", declaration);
     input.producer.declaration(declaration, { name, exported,
-      visibility: lexical !== undefined ? "private" : exported || publicAbi ? "public" : "crate",
+      visibility: lexical !== undefined ? "private" : publicAbi ? "public" : "crate",
       deadCode: input.reachability.suppressedDeclarations.has(declaration) || moduleBindingSuppressed(declaration)
         ? "authored-declaration" : undefined,
       promiseObjectDeadCode: program.promiseBodies.objects.has(declaration) && !input.reachability.usedPromiseObjects.has(declaration)
