@@ -348,7 +348,7 @@ export function write(value: Value, next: int32): void {
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /fn read_value_current\(self: alloc::rc::Rc<Self>\) -> Result<i32, rt::TsonicError>/u);
   assert.match(text, /fn write_value_current\(self: alloc::rc::Rc<Self>, _value: i32\) -> Result<\(\), rt::TsonicError>/u);
-  assert.match(text, /pub fn read\(value: Value\) -> Result<i32, rt::TsonicError>[\s\S]*read_value_current\(\)/u);
+  assert.match(text, /pub fn read\(value: &Value\) -> Result<i32, rt::TsonicError>[\s\S]*read_value_current\(\)/u);
   assert.match(text, /write_value_current\(accessor_value\)\?/u);
   validateGeneratedProject("class-accessor-fallibility", result.artifacts);
 });

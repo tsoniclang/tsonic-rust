@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { planRustRecordSpread } from "../../../../dist/backend/planner/expressions/record-spreads.js";
 import { rustOptionTargetType, rustStructuralObjectTargetType } from "../../../../dist/target-model/types/index.js";
-import { analyzeRustRecordContributions, rustRecordFinalFieldContributions, rustRecordSpreadRetainsField, rustRecordSpreadReadIsObservable } from "../../../../dist/analysis/reachability/record-contributions.js";
+import { analyzeRustRecordContributions, admitRustRecordContributions, rustRecordFinalFieldContributions, rustRecordSpreadRetainsField, rustRecordSpreadReadIsObservable } from "../../../../dist/analysis/reachability/record-contributions.js";
+import { createRustRecordContributionProducer } from "../../../../dist/analysis/program/records/record-contributions.js";
+import { fakeAstReader, fakeStatement } from "../../../helpers/fake-compile-input.mjs";
 
 const source = rustStructuralObjectTargetType("/src/index.ts", []);
 const expression = { kind: "call", path: "source", args: [] };
@@ -35,19 +37,41 @@ test("spread evaluation and liveness share exact final-field and observable-read
 });
 
 test("empty optional record spread retains one evaluation and validates the exact presence relation", () => {
-  const spread = { kind: "spread", fields: [], methods: [], sourceStorage: "structural-object",
+  const property = fakeStatement({ kindName: "KindSpreadAssignment" });
+  const spread = { kind: "spread", property, fields: [], methods: [], sourceStorage: "structural-object",
     sourceCarrier: rustOptionTargetType(source), sourceValueCarrier: source };
-  const evidence = Object.freeze({ retained: new Set(), evaluated: new Set() });
-  const planned = planRustRecordSpread(spread, expression, [], [], new Map(), evidence, context());
-  assert.ok(planned);
-  assert.equal(planned.bindings.length, 1);
-  assert.equal(planned.bindings[0].value, expression);
-  assert.equal(planned.fields.size, 0);
-  assert.equal(planRustRecordSpread({ ...spread, sourceValueCarrier: spread.sourceCarrier },
-    expression, [], [], new Map(), evidence, context()) === undefined, true);
-  assert.equal(planRustRecordSpread({ ...spread, sourceCarrier: source },
-    expression, [], [], new Map(), evidence, context()).bindings.length, 1);
-  assert.equal(planRustRecordSpread(spread, expression, [], [{ kind: "spread" }], new Map(), evidence, context()) === undefined, true);
+  const program = { source: { ast: fakeAstReader() } };
+  const shapes = { field: () => assert.fail("an empty spread never selects a field"),
+    definitionForCarrier: () => assert.fail("an empty spread never queries a physical definition") };
+  for (const selected of [spread, { ...spread, sourceCarrier: source }]) {
+    const fact = { contributions: [selected] };
+    const contribution = analyzeRustRecordContributions(fact, shapes);
+    const producer = createRustRecordContributionProducer(() => undefined);
+    assert.equal(admitRustRecordContributions(program, new Map([[fact, contribution]]), producer).length, 0);
+    assert.equal(producer.records.recordContribution.get(fact) === contribution, true,
+      "the renderer receives the exact contribution admitted by its analysis owner");
+    const evidence = contribution.spreads.get(selected);
+    assert.equal(evidence.optional, selected === spread, "presence comes from the exact source carrier");
+    const planned = planRustRecordSpread(selected, expression, [], [], new Map(), evidence, context());
+    assert.equal(planned !== undefined, true, "the admitted empty spread retains its native evaluation");
+    assert.equal(planned.bindings.length, 1);
+    assert.equal(planned.bindings[0].value === expression, true, "the original source is evaluated once");
+    assert.equal(planned.fields.size, 0);
+    assert.throws(() => planRustRecordSpread(selected, expression, [], [{ kind: "spread" }],
+      new Map(), evidence, context()), error => error?.diagnostic?.code === "TSONIC_INTERNAL_PLANNER_INVARIANT" &&
+        error.diagnostic.message === "An admitted spread method requires its exact source contract.",
+    "a fabricated internal method cannot bypass the exact source contract");
+  }
+  const invalid = { ...spread, sourceValueCarrier: spread.sourceCarrier };
+  const fact = { contributions: [invalid] };
+  const contribution = analyzeRustRecordContributions(fact, shapes);
+  const issues = admitRustRecordContributions(program, new Map([[fact, contribution]]),
+    createRustRecordContributionProducer(() => undefined));
+  assert.equal(issues.length, 1, "a mismatched native presence relation is rejected before rendering");
+  assert.equal(issues[0].code, "RUST_UNSUPPORTED_AST");
+  assert.equal(issues[0].sourceNode === property, true, "rejection retains the original source spread");
+  assert.equal(issues[0].message,
+    "Record spread requires its exact native source carrier and non-optional retained method storage. Node kind: KindSpreadAssignment.");
 });
 
 test("source contribution evidence owns last writes, observable reads and exact method identities", () => {

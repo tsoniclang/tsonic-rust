@@ -52,9 +52,10 @@ main();
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /const currentValue: i32 = 40;/u);
-  assert.match(source, /#\[doc\(hidden\)\][\s\S]*pub struct BuildResultState \{\s*pub outputDir: String,\s*pub pagesBuilt: i32,/u);
+  assert.match(source, /pub\(crate\) struct BuildResultState \{\s*pub\(crate\) outputDir: String,\s*#\[allow\(dead_code, reason = "retains an unread authored field"\)\]\s*pub\(crate\) pagesBuilt: i32,/u);
   assert.match(source, /pub struct BuildResult/u);
-  assert.match(source, /#\[doc\(hidden\)\]\s*pub state: rt::ObjectRef<BuildResultState>/u);
+  assert.match(source, /pub\(crate\) state: rt::ObjectRef<BuildResultState>/u);
+  assert.doesNotMatch(source, /pub (?:struct BuildResultState|state:)/u);
   assert.match(source, /pub fn pageLabel\([^)]*prefixText: String/u);
   assert.match(source, /pub fn buildSite\(siteDir: String\) -> BuildResult/u);
   assert.match(source, /pub fn selectUsed\(unusedValue: i32, usedValue: i32\) -> i32/u);
@@ -184,7 +185,7 @@ export function readEntry(): string {
   assert.match(shapes, /pub struct EntryShape \{/u);
   assert.match(
     shapes,
-    /pub entry: rt::ObjectHandle<OutputDirPagesBuiltShape>,/u,
+    /pub entry: rt::ObjectHandle<OutputDirPagesBuiltShape, \(\)>,/u,
   );
   assert.match(shapes, /pub struct ValueShape \{/u);
   assert.match(shapes, /pub struct ValueShape2 \{/u);

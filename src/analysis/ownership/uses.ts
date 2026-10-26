@@ -1,5 +1,5 @@
 import type { AstReader, Node } from "@tsonic/tsts";
-import { BinaryExpression_Left, BinaryExpression_Right, ElementAccessExpression_ArgumentExpression, Node_Expression, sourceTransparentExpressionOperand } from "@tsonic/target-api/source";
+import { BinaryExpression_Left, BinaryExpression_Right, ConditionalExpression_Condition, ElementAccessExpression_ArgumentExpression, ForStatement_Condition, Node_Expression, sourceTransparentExpressionOperand } from "@tsonic/target-api/source";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { RustAnalysisRecords } from "../../target-model/records/analysis.js";
 import { rustFinalizedSourceInputs } from "../../target-model/operations/finalized-inputs.js";
@@ -80,7 +80,12 @@ export function analyzeRustReadUses(ast: AstReader, nodes: readonly Node[], reco
     const computedMember = records.computedMember.get(node);
     const address = records.rawAddressPlan.get(node);
     const location = records.typedLocationPlan.get(node);
-    const guard = records.optionalChain.get(node)?.guard;
+    const condition = ast.is.IsConditionalExpression(node) ? ConditionalExpression_Condition(ast, node)
+      : ast.is.IsForStatement(node) ? ForStatement_Condition(ast, node)
+        : ast.is.IsIfStatement(node) || ast.is.IsWhileStatement(node) || ast.is.IsDoStatement(node) ? Node_Expression(ast, node)
+          : undefined;
+    const guard = condition !== undefined ? records.nativeGuardResult.get(condition) === undefined ? condition : undefined
+      : records.optionalChain.get(node)?.guard;
     if (operation === undefined && computedMember === undefined && address === undefined && location === undefined && guard === undefined) continue;
     const callable = operation?.kind === "source-call" && operation.target.form === "callable" ? operation.target.carrier : undefined;
     const callTrait = callable?.kind === "closure" ? callable.callTrait ?? "Fn" : undefined;
