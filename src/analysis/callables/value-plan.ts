@@ -3,6 +3,7 @@ import type { TargetSourcePackageGraph } from "@tsonic/target-api";
 import type { SourceProgramNavigation } from "@tsonic/target-api/source";
 import { failTargetAnalysisInvariant, rejectedTargetStage, resolvedTargetStage, type TargetStageResult } from "@tsonic/target-api/artifacts";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
+import type { RustOperationAttempt } from "../program/operation-attempts.js";
 import type { RustNamePlan } from "../../target-model/names/model.js";
 import type { RustLifetimeIndex } from "../../target-model/lifetimes/index.js";
 import type { RustGenericCallableConversion } from "../../target-model/conversions/generic-callable.js";
@@ -116,6 +117,7 @@ export interface RustCallableValuePlanInput {
   readonly sourceFiles: readonly SourceFile[];
   readonly sourcePackages: TargetSourcePackageGraph;
   readonly records: RustProgramRecords;
+  readonly operationAttempts: Pick<WeakMap<Node, RustOperationAttempt>, "get">;
   readonly names: RustNamePlan;
   readonly navigation: SourceProgramNavigation;
   readonly lifetimes: RustLifetimeIndex;
@@ -342,6 +344,7 @@ function createRustCallableValueLifecycle(input: RustCallableValuePlanInput,
   let physicalCarrierFor: RustGenericCallablePhysicalCarrierSelector | undefined;
   let producerErrors: Pick<RustErrorRegionRecords, "producerError"> | undefined;
   const nativeStorageQueries = createRustNativeStorageQueries({ ast: input.ast, records: input.records,
+    operationAttempts: input.operationAttempts,
     frames: frameConstruction,
     storage: input.sourceStorage, nativeNodes: input.nativeNodes, definitions: input.typeDefinitions, native, producers: nativeProducers, generic,
     capturesFor: declaration => captures.forDeclaration(declaration),

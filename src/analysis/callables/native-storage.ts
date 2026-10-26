@@ -6,6 +6,7 @@ import type { AstReader, Node } from "@tsonic/tsts";
 import type { SourceStorageBindings, SourceStorageBindingsSelection, SourceStorageQueries, SourceStorageSubject, SourceStorageSubjectsSelection, SourceStorageProducersSelection } from "@tsonic/target-api/analysis";
 import { isSourceCallableBodyBoundary, sourceEnclosingCallable, sourceCallableValueParameters } from "@tsonic/target-api/source";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
+import type { RustOperationAttempt } from "../program/operation-attempts.js";
 
 import type { RustTargetGenericArgument, TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustLifetimeIndex } from "../../target-model/lifetimes/index.js";
@@ -84,6 +85,7 @@ export function createRustNativeStorageQueries(input: {
   readonly nativeNodes: readonly Node[];
   readonly storage: SourceStorageQueries;
   readonly records: RustProgramRecords;
+  readonly operationAttempts: Pick<WeakMap<Node, RustOperationAttempt>, "get">;
   readonly definitions: RustTypeDefinitions;
   readonly native: RustNativeCallableInputPlan;
   readonly producers: RustNativeCallableProducerPlan;

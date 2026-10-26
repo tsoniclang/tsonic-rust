@@ -76,7 +76,7 @@ interface RustSourceStageOutput {
   readonly nativeTaskCompletions: readonly RustNativeTaskCompletion[];
   readonly lexicalFunctions: RustLexicalFunctionQueries;
   readonly sourcePackageComponents: RustSourcePackageComponentClassifications;
-  readonly sourceTypes: Pick<RustSourceTypeRegistry, "structuralObjectForType">;
+  readonly sourceTypes: Pick<RustSourceTypeRegistry, "structuralObjectForCarrier">;
 }
 
 export function analyzeRustProgram(context: RustAnalysisContext, outputType: "bin" | "lib"): RustSourceStageOutput | undefined {
@@ -595,6 +595,7 @@ export function analyzeRustProgram(context: RustAnalysisContext, outputType: "bi
   }
   if (context.diagnostics.length !== 0) return undefined;
   const callableValues = context.callableValues.initialize({ ast, sourceFiles: context.sourceFiles, records: context.records,
+    operationAttempts: walk.operationAttempts,
     flowApplications: context.records.genericFlowApplications,
     nativeNodes: context.nativeNodes, isNativeNode: context.isNativeNode,
     sourcePackages: context.sourcePackages,
@@ -660,5 +661,5 @@ export function analyzeRustProgram(context: RustAnalysisContext, outputType: "bi
   return Object.freeze({ lexicalFunctions, nativeTasks, nativeTaskCompletions: nativeTaskCompletions.value,
     operationAttempts: walk.operationAttempts,
     sourcePackageComponents: sourcePackageComponents.plan,
-    sourceTypes: Object.freeze({ structuralObjectForType: sourceTypes.structuralObjectForType }) });
+    sourceTypes: Object.freeze({ structuralObjectForCarrier: sourceTypes.structuralObjectForCarrier }) });
 }
