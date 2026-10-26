@@ -43,7 +43,7 @@ import type { RustGenericCallablePhysicalCarrierSelector } from "./generic-physi
 import type { RustLexicalFunctionEnvironments } from "../../target-model/records/lexical-functions.js";
 import { createRustNativeCallableDispatchPlan } from "./native-dispatch.js";
 import type { RustNativeCallableDispatchPlan } from "../../target-model/records/native-dispatch.js";
-import type { RustStructuralShapePlanRegistry } from "../objects/shapes/structural-shape-plan.js";
+import type { RustStructuralShapePlanRegistry } from "../objects/shapes/structural-shape-registry.js";
 import { createRustGenericCallableCompletionPlan, type RustGenericCallableCompletionInput, type RustGenericCallableCompletionPlan } from "./generic-completions.js";
 import { createRustPhysicalCallableLifecycle, type RustPhysicalCallableLifecycle, type RustPhysicalCallableEmissionRequest } from "./physical-lifecycle.js";
 import { type RustPhysicalCallableStorage } from "../../target-model/records/native-storage.js";

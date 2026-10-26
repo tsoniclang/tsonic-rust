@@ -24,7 +24,7 @@ import { sourcePackageCallbackErrorFiles, sourcePackageCallbackErrorGraph }
   from "../../../../tsonic/test/fixtures/source-package-callback-errors.mjs";
 import { createRustNativeStorageJoins } from "../../../dist/analysis/callables/native-storage-joins.js";
 import { emptyRustTypeDefinitions } from "../../../dist/target-model/types/source-union-definitions.js";
-import { createRustStructuralShapePlanRegistry } from "../../../dist/analysis/objects/shapes/structural-shape-plan.js";
+import { createRustStructuralShapePlanRegistry } from "../../../dist/analysis/objects/shapes/structural-shape-registry.js";
 import { rustStructuralGenericCarrier } from "../../../dist/policy/types/objects/structural-generics.js";
 import { structuralStorageKey } from "../../../dist/policy/types/objects/structural-storage.js";
 import { rustFutureTargetType } from "../../../dist/target-model/types/carriers/primitives.js";

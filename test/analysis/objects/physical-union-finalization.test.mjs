@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createRustStructuralShapePlanRegistry } from "../../../dist/analysis/objects/shapes/structural-shape-plan.js";
+import { createRustStructuralShapePlanRegistry } from "../../../dist/analysis/objects/shapes/structural-shape-registry.js";
 import { createRustGeneratedUnionPlan } from "../../../dist/analysis/objects/shapes/generated-union-plan.js";
 import { createRustTypeDefinitionRegistry } from "../../../dist/analysis/project-types/type-definitions.js";
 import { rustSourceUnionTargetType, rustJsPromiseTargetType, rustStringTargetType } from "../../../dist/target-model/types/index.js";

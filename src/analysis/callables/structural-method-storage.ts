@@ -21,7 +21,7 @@ import { rustStructuralGenericCarrier } from "../../policy/types/objects/structu
 import { rustEnclosingStorageContract } from "./storage-contracts.js";
 import { rustCallableTargetForSourceLifetime } from "../../policy/conversions/value-carrier-reconciliation.js";
 import type { RustStructuralMethodConstruction, RustStructuralMethodStorageSelection, RustStructuralMethodPayload, RustStructuralMethodExposure } from "../../target-model/records/structural-shapes.js";
-import type { RustStructuralShapePlanRegistry } from "../objects/shapes/structural-shape-plan.js";
+import type { RustStructuralShapePlanRegistry } from "../objects/shapes/structural-shape-registry.js";
 import { rustNativeCallablePhysicalSource } from "../../policy/conversions/native-callables.js";
 import type { RustNativeCallableInputPlan } from "./native-inputs.js";
 import type { RustNativeCallableProducerConstruction } from "./native-producers.js";

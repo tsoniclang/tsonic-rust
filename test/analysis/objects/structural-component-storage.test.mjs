@@ -3,7 +3,9 @@ import test from "node:test";
 import { sourceEnclosingCallable } from "@tsonic/target-api/source";
 import { compileRust } from "../../helpers/rust-session.mjs";
 import { analyzeRustCheckedContext } from "../../helpers/rust-session-analysis-context.mjs";
-import { createRustStructuralShapePlan, createRustStructuralShapePlanRegistry } from "../../../dist/analysis/objects/shapes/structural-shape-plan.js";
+import { createRustStructuralShapePlan } from "../../../dist/analysis/objects/shapes/structural-shape-plan.js";
+import * as structuralShapePlan from "../../../dist/analysis/objects/shapes/structural-shape-plan.js";
+import { createRustStructuralShapePlanRegistry } from "../../../dist/analysis/objects/shapes/structural-shape-registry.js";
 import { rustStructuralObjectTargetType, rustStructuralObjectCarrierValue } from "../../../dist/target-model/types/index.js";
 import { rustStructuralGenericCarrier } from "../../../dist/policy/types/objects/structural-generics.js";
 import { structuralStorageKey } from "../../../dist/policy/types/objects/structural-storage.js";
@@ -15,6 +17,14 @@ import { rustCallablePhysicalSignature } from "../../../dist/target-model/conver
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 import { rustOptionElementCarrier } from "../../../dist/target-model/types/carriers/optional.js";
 const noCallablePropertyError = () => assert.fail("this fixture has no fixed callable property requiring a component error");
+
+test("structural registry lifecycle has one owning module without a plan re-export", () => {
+  assert.equal(typeof createRustStructuralShapePlanRegistry, "function", "the lifecycle owner exports its actual registry constructor");
+  assert.equal("createRustStructuralShapePlanRegistry" in structuralShapePlan, false,
+    "the construction owner does not retain the removed registry API as a forwarding path");
+  assert.equal(typeof structuralShapePlan.createRustStructuralShapeConstruction, "function",
+    "the lifecycle invokes the original structural construction owner directly");
+});
 
 function storedMethodExposures(carriers, componentForFile) {
   return new Map(carriers.flatMap(carrier => rustStructuralObjectCarrierValue(carrier).fields.flatMap((field, index) =>

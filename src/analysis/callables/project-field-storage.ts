@@ -10,7 +10,7 @@ import { rustGenericCallableValue } from "../../target-model/types/carriers/gene
 import type { RustProjectTypePolicy } from "../project-types/index.js";
 import { rustOwnedStorageChildren } from "../../policy/types/storage/owned-storage.js";
 import type { RustProjectStructuralView } from "../../target-model/records/project-structural-views.js";
-import type { RustStructuralShapePlanRegistry } from "../objects/shapes/structural-shape-plan.js";
+import type { RustStructuralShapePlanRegistry } from "../objects/shapes/structural-shape-registry.js";
 import type { RustSourceCallableSpecializationIssue } from "../../target-model/records/callable-issues.js";
 import { rustCallableTargetForSourceLifetime } from "../../policy/conversions/value-carrier-reconciliation.js";
 import { rustStructuralObjectCarrierValue, rustStructuralObjectTargetType } from "../../target-model/types/carriers/source-types.js";

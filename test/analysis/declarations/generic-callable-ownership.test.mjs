@@ -19,7 +19,7 @@ import { createRustProjectTypePolicy } from "../../../dist/analysis/project-type
 import { createRustSourceTypeRegistry } from "../../../dist/analysis/project-types/source-type-registry.js";
 import { analyzeRustReceiverStorage } from "../../../dist/analysis/project-types/receiver-storage.js";
 import { createRustObjectRepresentationPlan } from "../../../dist/analysis/project-types/object-representation.js";
-import { createRustStructuralShapePlanRegistry } from "../../../dist/analysis/objects/shapes/structural-shape-plan.js";
+import { createRustStructuralShapePlanRegistry } from "../../../dist/analysis/objects/shapes/structural-shape-registry.js";
 import { createRustRetainedEnvironmentQueries } from "../../../dist/analysis/callables/retained-environment-shapes.js";
 import { compileRust } from "../../helpers/rust-session.mjs";
 import { analyzeRustCheckedContext } from "../../helpers/rust-session-analysis-context.mjs";

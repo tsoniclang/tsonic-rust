@@ -29,8 +29,8 @@ import type { RustProjectFieldDispatchPlanRegistry } from "../project-types/fiel
 import { createRustSourceCallableSpecializationPlanRegistry } from "../callables/specializations.js";
 import type { RustSourceCallableSpecializationPlanRegistry } from "../callables/specializations.js";
 import { createRustCallableValuePlanRegistry, type RustCallableValuePlanRegistry } from "../callables/value-plan.js";
-import { createRustStructuralShapePlanRegistry } from "../objects/shapes/structural-shape-plan.js";
-import type { RustStructuralShapePlanRegistry } from "../objects/shapes/structural-shape-plan.js";
+import { createRustStructuralShapePlanRegistry } from "../objects/shapes/structural-shape-registry.js";
+import type { RustStructuralShapePlanRegistry } from "../objects/shapes/structural-shape-registry.js";
 import { createRustFrozenDataWriteRegistry, type RustFrozenDataWriteRegistry } from "../objects/frozen-data-writes.js";
 import { createRustSafetyApplicationFactIndex } from "../safety/application-index.js";
 import type { RustSafetyApplicationFactIndex } from "../safety/application-index.js";

@@ -1,7 +1,7 @@
 import { createRustNativeStorageSelection } from "./native-storage-selection.js";
 import type { RustNativeCaptureSelection } from "../../target-model/records/native-captures.js";
 import { createRustSourceErrorEffectSelection, type RustSourceErrorEffectSelection } from "../errors/source-error-effects.js";
-import type { RustStructuralShapePlanRegistry } from "../objects/shapes/structural-shape-plan.js";
+import type { RustStructuralShapePlanRegistry } from "../objects/shapes/structural-shape-registry.js";
 import type { AstReader, Node } from "@tsonic/tsts";
 import type { SourceStorageBindings, SourceStorageBindingsSelection, SourceStorageQueries, SourceStorageSubject, SourceStorageSubjectsSelection, SourceStorageProducersSelection } from "@tsonic/target-api/analysis";
 import { isSourceCallableBodyBoundary, sourceEnclosingCallable, sourceCallableValueParameters } from "@tsonic/target-api/source";
