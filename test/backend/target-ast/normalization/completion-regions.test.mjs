@@ -17,6 +17,8 @@ const styled = statement => finalizeRustSourceStyle({ headerComment: "native com
   kind: "function", name: "run", visibility: "public", params: [], generics: emptyRustGenerics,
   body: { statements: [statement] },
 }] });
+const returnDispatch = block => block.statements.at(-1)?.expr?.arms?.find(arm =>
+  arm.pattern.kind === "tuple-variant" && arm.pattern.path === "rt::Completion::Return")?.expression;
 
 test("completion semantics are lowered before printing, never interpreted by the printer", () => {
   for (const asynchronous of [false, true]) {
@@ -50,9 +52,14 @@ test("completion return Result shape is independent of the local throw channel",
   for (const dispatchResultWrapped of [false, true]) {
     const statement = region({ dispatchResultWrapped, errorType: undefined, bodyErrorType: undefined,
       body: { statements: [{ ...completion, resultWrapped: false }] } });
-    const text = printRustBlockStatements({ statements: [lowerRustCompletionScope(statement)] }, 0);
-    assert.equal(text.includes("rt::Completion::Return(value) => Ok(value)"), dispatchResultWrapped,
+    const normalized = lowerRustCompletionScope(statement);
+    const returned = returnDispatch(normalized.body);
+    assert.equal(returned?.kind === "return-expression", true, "the outward dispatch exits the callable");
+    assert.equal(returned.expr.kind === "call" && returned.expr.path === "Ok", dispatchResultWrapped,
       "only the exact outward Result target wraps the returned native value");
+    const value = dispatchResultWrapped ? returned.expr.args[0] : returned.expr;
+    assert.equal(value.kind === "path" && value.path === "value", true, "the original returned native payload is unchanged");
+    const text = printRustBlockStatements({ statements: [normalized] }, 0);
     assert.equal(text.includes("let body_flow: rt::Completion<i32, ()> = rt::Completion::Return(selected);"), true,
       "the pure local completion never acquires a synthetic Result envelope");
     assert.equal(text.includes("Err("), false, "a return ABI adds no inhabited error path");
@@ -66,7 +73,9 @@ test("nested pure completions reach the single outer Result return target", () =
     body: { statements: [child] } });
   const source = styled(parent);
   const text = printRustBlockStatements(source.items[0].body, 0);
-  assert.equal(text.includes("rt::Completion::Return(value) => Ok(value)"), true,
+  const returned = returnDispatch(source.items[0].body.statements[0].body);
+  assert.equal(returned?.kind === "return-expression" && returned.expr.kind === "call" && returned.expr.path === "Ok" &&
+    returned.expr.args[0]?.kind === "path" && returned.expr.args[0].path === "value", true,
     "the callable's outward boundary alone adds its native Ok");
   assert.equal(text.includes("Ok(rt::Completion::Return"), false,
     "neither pure inner boundary returns a Result to its pure parent");
@@ -78,11 +87,16 @@ test("pure resource cleanup precedes its exact Result return dispatch", () => {
     body: { statements: [{ ...completion, resultWrapped: false }] },
     cleanup: { statements: [{ kind: "expr", expr: { kind: "call", path: "cleanup", args: [] } }] },
     propagate: false, dispatchResultWrapped: true, dispatchReturn: true, dispatchTargets: [], terminates: true };
-  const text = printRustBlockStatements({ statements: [lowerRustCompletionScope(scope)] }, 0);
+  const normalized = lowerRustCompletionScope(scope);
+  const returned = returnDispatch(normalized.body);
+  const text = printRustBlockStatements({ statements: [normalized] }, 0);
   assert.equal(text.split("cleanup();").length - 1, 1, "the original cleanup is present exactly once");
-  assert.equal(text.includes("rt::Completion::Return(value) => Ok(value)"), true,
+  assert.equal(returned?.kind === "return-expression" && returned.expr.kind === "call" && returned.expr.path === "Ok" &&
+    returned.expr.args[0]?.kind === "path" && returned.expr.args[0].path === "value", true,
     "the resource returns through its actual outer Result ABI");
-  assert.equal(text.indexOf("cleanup();") < text.indexOf("rt::Completion::Return(value) => Ok(value)"), true,
+  const cleanupIndex = normalized.body.statements.findIndex(statement => statement.kind === "expr" &&
+    statement.expr.kind === "call" && statement.expr.path === "cleanup");
+  assert.equal(cleanupIndex >= 0 && cleanupIndex < normalized.body.statements.length - 1, true,
     "the original pure cleanup runs before outward return dispatch");
   assert.equal(text.includes("finish_resource"), false, "pure cleanup invents no fallible suppression channel");
   assert.equal(text.includes("Result<"), false, "only the real native return ABI is wrapped, not local resource values");

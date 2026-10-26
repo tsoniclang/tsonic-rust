@@ -7,6 +7,7 @@ import { validateGeneratedProject } from "../../../helpers/cargo-projects.mjs";
 import { planGeneratorResumeExpression } from "../../../../dist/backend/planner/expressions/generator-resume.js";
 import { createRustSyntheticNameState } from "../../../../dist/backend/planner/names/synthetic.js";
 import { getRustGeneratorProtocol } from "../../../../dist/target-model/types/carriers/callables.js";
+import { rustProducerErrorReference } from "../../../../dist/target-model/types/carriers/producer-errors.js";
 import { rustTargetTypeRefEquals } from "../../../../dist/target-model/types/equality.js";
 import { rustCompletionDispatchResultWrapped } from "../../../../dist/backend/planner/statements/resource-management.js";
 
@@ -26,8 +27,10 @@ test("generator bodies consume one sealed physical throw disposition across all 
       count += 1;
       const selected = program.records.callableReturn.get(node);
       const physical = getRustGeneratorProtocol(selected.outward)?.physical;
+      const reference = rustProducerErrorReference(physical?.errorCarrier);
+      const completedError = reference === undefined ? physical?.errorCarrier : program.errorRegions.producerError(reference);
       assert.equal(selected.generatorError?.uninhabited, true, "the actual infallible physical generator disposition was sealed once");
-      assert.equal(physical !== undefined && rustTargetTypeRefEquals(selected.generatorError.carrier, physical.errorCarrier), true,
+      assert.equal(completedError !== undefined && rustTargetTypeRefEquals(selected.generatorError.carrier, completedError), true,
         "the disposition belongs to that identical physical generator error carrier");
       const errorType = { kind: "named", path: "core::convert::Infallible" };
       const context = { syntheticNames: createRustSyntheticNameState(ast, node, []), usedAliases: new Set(),

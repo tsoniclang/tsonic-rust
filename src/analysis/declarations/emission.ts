@@ -3,13 +3,15 @@ import { failTargetAnalysisInvariant, type TargetDiagnostic } from "@tsonic/targ
 import type { RustAnalysisProgram } from "../program/model.js";
 import { getRustGeneratorProtocol } from "../../target-model/types/carriers/callables.js";
 import { rustUninhabitedError } from "../../policy/conversions/callable-physical.js";
+import { rustProducerErrorReference } from "../../target-model/types/carriers/producer-errors.js";
+import { mapRustTargetTypes } from "../../target-model/types/carriers/substitution.js";
 import type { RustDeclarationEmissionProducer } from "../program/records/declaration-emission.js";
 import { requireRustRecord, type RustRequiredRecord } from "../program/records/required-records.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustProgramNodeIsOutsideNativeCode } from "../control-flow/compile-time-statements.js";
 
 export function analyzeRustDeclarationEmission(input: {
-  readonly program: Pick<RustAnalysisProgram, "source" | "sourceFiles" | "records" | "projectTypes" | "classValues" | "callableValues" | "names" | "projectConstructions" | "safetyApplications">;
+  readonly program: Pick<RustAnalysisProgram, "source" | "sourceFiles" | "records" | "projectTypes" | "classValues" | "callableValues" | "names" | "projectConstructions" | "safetyApplications" | "errorRegions">;
   readonly nodes: readonly Node[];
   readonly producer: RustDeclarationEmissionProducer;
   readonly required: RustRequiredRecord[];
@@ -87,9 +89,17 @@ export function analyzeRustDeclarationEmission(input: {
     const generator = outward === undefined ? undefined : getRustGeneratorProtocol(outward)?.physical;
     if (program.records.generator.get(declaration) !== undefined && generator === undefined)
       failTargetAnalysisInvariant("tsonic-rust", "An admitted generator requires its selected physical error protocol.", declaration);
+    const generatorError = generator === undefined ? undefined : mapRustTargetTypes(generator.errorCarrier, carrier => {
+      const reference = rustProducerErrorReference(carrier);
+      if (reference === undefined) return carrier;
+      const selected = program.errorRegions.producerError(reference);
+      if (selected === undefined)
+        failTargetAnalysisInvariant("tsonic-rust", "An admitted generator requires its completed physical producer error carrier.", declaration);
+      return selected;
+    });
     input.producer.callable(declaration, { invocation: program.callableValues.nativeProducers.invocationResultFor(declaration), outward,
-      generatorError: generator === undefined ? undefined : Object.freeze({ carrier: generator.errorCarrier,
-        uninhabited: rustUninhabitedError(generator.errorCarrier) }),
+      generatorError: generatorError === undefined ? undefined : Object.freeze({ carrier: generatorError,
+        uninhabited: rustUninhabitedError(generatorError) }),
       destination: destination.kind === "identity" ? Object.freeze({ kind: "identity" })
         : Object.freeze({ kind: "selected", carrier: destination.carrier }) });
     requireRustRecord(input.required, "callableReturn", declaration, "native callable result", "analyzeRustDeclarationEmission");
