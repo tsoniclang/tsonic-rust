@@ -10,6 +10,10 @@ import { receiverFieldCaptureEdges } from "../../../../tsonic/test/fixtures/rece
 import { rustStructuralObjectTargetType, rustStructuralObjectCarrierValue } from "../../../dist/target-model/types/carriers/source-types.js";
 import { rustCallableProtocol } from "../../../dist/target-model/types/carriers/callables.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
+import { rustRuntimeCallableTargetType } from "../../../dist/target-model/types/carriers/runtime-carriers.js";
+import { rustNamedTargetType, rustNamedTypeCarrierValue } from "../../../dist/target-model/types/carriers/native.js";
+import { closeRustRetainedCallableCarrier } from "../../../dist/policy/ownership/retained-storage.js";
+import { rustOptionElementCarrier, rustOptionTargetType } from "../../../dist/target-model/types/carriers/optional.js";
 
 const bool = { kind: "source-primitive", name: "bool" };
 const parameter = { kind: "type-parameter", identity: "Value", name: "Value" };
@@ -17,6 +21,63 @@ const origin = { fileName: "/source.ts", declarationIdentity: "/source.ts:1" };
 const generic = rustGenericCallableTargetType([parameter], [parameter], parameter, origin);
 const frame = rustFrameCallableTargetType([bool], bool, { kind: "lexical", origin });
 const ordinary = rustCallableTargetType([bool], bool);
+
+test("owned physical callable fields close only their open storage environment at the original declaring owner", () => {
+  const inputLifetime = { kind: "parameter", identity: "field:argument", name: "argument" };
+  const reference = { kind: "reference", referent: bool, mutable: false, lifetime: inputLifetime };
+  const error = rustNamedTargetType("rust.core.Infallible", "core::convert::Infallible");
+  const completion = rustNamedTargetType("rust.core.Result", "core::result::Result", [
+    { kind: "type", type: reference }, { kind: "type", type: error },
+  ]);
+  for (const [label, ownerParameters, environment, expected] of [
+    ["owned open", [], { kind: "placeholder" }, "static"],
+    ["borrowed open", [{ kind: "lifetime" }], { kind: "placeholder" }, "placeholder"],
+    ["selected named", [], inputLifetime, "parameter"],
+  ]) {
+    const declaration = {};
+    const owner = { genericParameters: ownerParameters };
+    const inherited = { genericParameters: [] };
+    const logical = rustCallableTargetType([reference], reference, environment);
+    const physical = rustRuntimeCallableTargetType(environment, [reference], completion);
+    const construction = prepareRustProjectCallableFieldStorage({ ast: {},
+      records: createRustRecordFixture({ runtimeCarrier: { get: node => node === declaration ? { carrier: logical } : undefined } }),
+      projectTypes: { definitions: [inherited], objectLayoutForDefinition: () => ({ fields: [{ declaration }] }),
+        definitionContainingDeclaration: node => node === declaration ? owner : undefined },
+      storage: { subject: node => ({ kind: "resolved", subject: { node, kind: "member", projection: [] } }), failureReason: () => undefined },
+    }, () => ({ kind: "selected", carrier: physical, sources: [], inputs: [] }));
+    const selected = construction.get(declaration);
+    const before = rustNamedTypeCarrierValue(physical);
+    const after = rustNamedTypeCarrierValue(selected);
+    assert.equal(after !== undefined, true, `${label}: the physical callable representation is preserved`);
+    assert.equal(after.genericArguments[0].lifetime.kind, expected, `${label}: original declaring storage owns the open environment`);
+    assert.equal(after.genericArguments[1] === before.genericArguments[1], true, `${label}: borrowed invocation inputs retain exact identity`);
+    assert.equal(after.genericArguments[2] === before.genericArguments[2], true, `${label}: result and error channels retain exact identity`);
+    assert.equal(after.traits === before.traits && after.genericDefaults === before.genericDefaults && after.upcasts === before.upcasts,
+      true, `${label}: native traits, defaults and upcasts are not reconstructed`);
+    if (expected !== "static") assert.equal(selected === physical, true, `${label}: actual selected environments are never retagged`);
+    assert.equal(construction.seal().kind, "resolved", `${label}: canonical physical storage seals without reselecting`);
+    assert.equal(construction.get(declaration) === selected, true, `${label}: publication retains the selected storage identity`);
+  }
+});
+
+test("stored callable completion preserves source optional metadata and authored optional witness identity", () => {
+  const error = rustNamedTargetType("rust.core.Infallible", "core::convert::Infallible");
+  const completion = rustNamedTargetType("rust.core.Result", "core::result::Result", [
+    { kind: "type", type: bool }, { kind: "type", type: error },
+  ]);
+  const physical = rustRuntimeCallableTargetType({ kind: "placeholder" }, [], completion);
+  const option = { ...rustOptionTargetType(physical), sourceAbsence: true };
+  const binder = { kind: "type-parameter", identity: "field:optional", name: "OptionalField", optionalStorageValue: physical };
+  for (const original of [option, binder]) {
+    const selected = closeRustRetainedCallableCarrier(original, { kind: "static" });
+    const payload = rustOptionElementCarrier(selected);
+    assert.equal(rustNamedTypeCarrierValue(payload)?.genericArguments[0].lifetime.kind, "static", "only the stored payload environment closes");
+    assert.equal(selected.kind, original.kind, "the optional container or authored binder representation is unchanged");
+    if (original === option) assert.equal(selected.sourceAbsence, true, "one source absence retains its existing metadata");
+    else assert.equal(selected.identity === binder.identity && selected.name === binder.name, true, "the quantified optional witness is preserved exactly");
+    assert.equal(closeRustRetainedCallableCarrier(selected, { kind: "static" }) === selected, true, "completed storage is stable by identity");
+  }
+});
 
 test("physical member selection completes structural getter storage once without rewriting input lifetimes", () => {
   const declaration = Object.freeze({ field: "read" });
@@ -32,7 +93,8 @@ test("physical member selection completes structural getter storage once without
   let queries = 0;
   const construction = prepareRustProjectCallableFieldStorage({ ast: {},
     records: createRustRecordFixture({ runtimeCarrier: { get: node => node === declaration ? { carrier: logical } : undefined } }),
-    projectTypes: { definitions: [owner], objectLayoutForDefinition: () => ({ fields: [{ declaration }] }),
+    projectTypes: { definitions: [owner], definitionContainingDeclaration: () => owner,
+      objectLayoutForDefinition: () => ({ fields: [{ declaration }] }),
       instantiateMemberCarrier: (selected, receiver, carrier) => selected === declaration && receiver === bool ? carrier : undefined },
     storage: { subject: () => ({ kind: "resolved", subject }), failureReason: () => undefined },
   }, (selected, carrier) => {
@@ -77,7 +139,8 @@ for (const [label, carrier, required] of [
   let selections = 0;
   const construction = prepareRustProjectCallableFieldStorage({
     ast: {}, records: createRustRecordFixture({ runtimeCarrier: { get: node => node === declaration ? { carrier } : undefined } }),
-    projectTypes: { definitions: [definition], objectLayoutForDefinition: () => ({ fields: [{ declaration }] }) },
+    projectTypes: { definitions: [definition], definitionContainingDeclaration: () => definition,
+      objectLayoutForDefinition: () => ({ fields: [{ declaration }] }) },
     storage: { subject(node, kind) {
       assert.equal(node === declaration && kind === "member", true, `${label}: selection uses its actual original member`);
       return { kind: "resolved", subject };

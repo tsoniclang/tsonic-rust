@@ -9,6 +9,9 @@ import { rustLifetimeKey, type RustLifetimeRef } from "../../target-model/lifeti
 import { rustTargetGenericReferences } from "../../target-model/types/carriers/generic-references.js";
 import type { RustClassEnvironment } from "../../target-model/records/class-values.js";
 import { isRustCopyCarrier } from "../constraints/native-traits.js";
+import { rustNamedTypeCarrierValue } from "../../target-model/types/carriers/native.js";
+import { rustCallableTargetId } from "../../target-model/types/carriers/source-types.js";
+import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 
 export function selectRustStructuralFactoryReceiver(input: {
   readonly factory: boolean;
@@ -56,9 +59,26 @@ export function rustHasOpenOwnedStorage(carrier: TargetTypeRef): boolean {
 
 export function closeRustRetainedCallableCarrier(carrier: TargetTypeRef, lifetime: RustLifetimeRef): TargetTypeRef {
   return mapRustTargetTypes(carrier, (current, original) => {
-    if (original.kind === "reference" || original.kind === "function-pointer" || original.kind === "closure") return original;
+    if (original.kind === "reference" || original.kind === "pointer" ||
+      original.kind === "function-pointer" || original.kind === "closure") return original;
     const protocol = rustCallableProtocol(original);
-    return protocol === undefined ? current : protocol.lifetime?.kind === "placeholder"
+    if (protocol !== undefined) return protocol.lifetime?.kind === "placeholder"
       ? rustCallableTargetType(protocol.parameters, protocol.result, lifetime, protocol.error) : original;
-  }, rustOwnedStorageChild);
+    const named = rustNamedTypeCarrierValue(original);
+    if (named?.id === rustCallableTargetId) {
+      const environment = named.genericArguments[0];
+      return environment?.kind === "lifetime" && environment.lifetime.kind === "placeholder"
+        ? { ...original, value: { ...named, genericArguments: Object.freeze([
+          { kind: "lifetime", lifetime }, ...named.genericArguments.slice(1),
+        ]) } } : original;
+    }
+    if (original.kind === "type-parameter" && original.optionalStorageValue !== undefined) {
+      const payload = closeRustRetainedCallableCarrier(original.optionalStorageValue, lifetime);
+      return payload === original.optionalStorageValue ? original : { ...original, optionalStorageValue: payload };
+    }
+    return rustTargetTypeRefEquals(current, original) ? original : current;
+  }, (parent, child, role) => parent.kind !== "reference" && parent.kind !== "pointer" &&
+    parent.kind !== "function-pointer" && parent.kind !== "closure" && parent.kind !== "type-parameter" &&
+    rustCallableProtocol(parent) === undefined && rustNamedTypeCarrierValue(parent)?.id !== rustCallableTargetId &&
+    rustOwnedStorageChild(parent, child, role));
 }

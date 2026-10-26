@@ -15,6 +15,8 @@ import type { RustSourceCallableSpecializationIssue } from "../../target-model/r
 import { rustCallableTargetForSourceLifetime } from "../../policy/conversions/value-carrier-reconciliation.js";
 import { rustStructuralObjectCarrierValue, rustStructuralObjectTargetType } from "../../target-model/types/carriers/source-types.js";
 import { rustOptionElementCarrier } from "../../target-model/types/carriers/optional.js";
+import { closeRustRetainedCallableCarrier } from "../../policy/ownership/retained-storage.js";
+import { rustStaticLifetime } from "../../target-model/lifetimes/index.js";
 
 const containsCallableStorage = (carrier: TargetTypeRef): boolean => carrier.kind !== "function-pointer" && carrier.kind !== "closure" &&
   (rustCallableProtocol(carrier) !== undefined || rustGenericCallableValue(carrier) !== undefined ||
@@ -58,7 +60,9 @@ export function prepareRustProjectCallableFieldStorage(input: {
     if (subject.kind === "unresolved") { failures.set(declaration, subject.reason); return undefined; }
     const selection = subjectFor(subject.subject, declared);
     if (selection.kind === "unresolved") { failures.set(declaration, selection.reason); return undefined; }
-    const carrier = selection.carrier;
+    const owner = input.projectTypes.definitionContainingDeclaration(declaration);
+    const carrier = owner !== undefined && !owner.genericParameters.some(parameter => parameter.kind === "lifetime")
+      ? closeRustRetainedCallableCarrier(selection.carrier, rustStaticLifetime) : selection.carrier;
     selected.set(declaration, carrier);
     failures.delete(declaration);
     return carrier;

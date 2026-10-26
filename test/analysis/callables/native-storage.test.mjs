@@ -313,7 +313,7 @@ for (const [name, genericParameters, selectedLifetime] of [
         queries += 1;
         return { kind: "resolved", subject: subjects.get(node) };
       } },
-      projectTypes: { definitions: [definition], objectLayoutForDefinition: owner =>
+      projectTypes: { definitions: [definition], definitionContainingDeclaration: () => definition, objectLayoutForDefinition: owner =>
         owner === definition ? { fields: [{ declaration }, { declaration: unrequested }] } : undefined },
     }, (selected, carrier) => {
       assert.equal(open && subjects.get(selected.node) === selected && carrier === declared, true,
@@ -355,7 +355,8 @@ test("unresolved callable member storage is rejected by its producer before publ
     records: { runtimeCarrier: { get: node => node === declaration ? { carrier } : undefined } },
     storage: { subject: node => ({ kind: "resolved", subject: { node, kind: "member", projection: [] } }),
       failureReason: () => undefined },
-    projectTypes: { definitions: [definition], objectLayoutForDefinition: () => ({ fields: [{ declaration }] }) },
+    projectTypes: { definitions: [definition], definitionContainingDeclaration: () => definition,
+      objectLayoutForDefinition: () => ({ fields: [{ declaration }] }) },
   }, () => ({ kind: "unresolved", reason: "The complete native field storage has incompatible actual producer contracts." }));
   const selected = fields.seal();
   assert.equal(selected.kind, "rejected", "missing physical member evidence never crosses the seal");
@@ -390,7 +391,8 @@ for (const [name, wrap, unwrap] of [
             "the complete field, not a guessed initializer or optional payload, owns the native selection");
           return { kind: "resolved", subject: { node, kind, projection: [] } };
         } },
-        projectTypes: { definitions: [definition], objectLayoutForDefinition: () => ({ fields: [{ declaration }] }) },
+        projectTypes: { definitions: [definition], definitionContainingDeclaration: () => definition,
+          objectLayoutForDefinition: () => ({ fields: [{ declaration }] }) },
       }, (_subject, carrier) => {
         calls += 1;
         assert.equal(carrier === declared, true, "the native storage selector receives the complete nested declared carrier");
