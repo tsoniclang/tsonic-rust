@@ -53,7 +53,7 @@ function planContext(program, node, state = {}) {
   return {
     input: { program },
     diagnostics: [],
-    sourceFile: ast.getSourceFile(node),
+    sourceFile: ast.getSourceFile(node), nativeHeaderPlacement: ast.getSourceFile(node), nativeHeaderParent: undefined,
     usedAliases: new Set(),
     ...(state.names === false ? {} : { syntheticNames: createRustSyntheticNameState(ast, node, []) }),
     ...(state.counter === false ? {} : { controlFlow: { nextLoopId: 0 } }),

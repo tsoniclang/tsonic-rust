@@ -34,7 +34,7 @@ for (const kind of ["nominal", "array", "error"]) test(`closed ${kind} tests rej
   assert.equal(fact.test.test.kind, "union");
   const arms = fact.test.test.arms;
   assert.ok(Object.isFrozen(fact.test) && Object.isFrozen(arms) && arms.every(Object.isFrozen));
-  const context = { input: { program }, diagnostics: [], sourceFile: ast.getSourceFile(node), usedAliases: new Set(),
+  const context = { input: { program }, diagnostics: [], sourceFile: ast.getSourceFile(node), nativeHeaderPlacement: ast.getSourceFile(node), nativeHeaderParent: undefined, usedAliases: new Set(),
     syntheticNames: createRustSyntheticNameState(ast, node, []), moduleName: "index", structuralShapesModuleName: "shapes",
     moduleNameByFileName: new Map([["/src/index.ts", "index"]]), externalCrateNameByFileName: new Map(),
     externalItemPathByIdentity: new Map(), externalStructuralShapeModuleByFileName: new Map(),

@@ -36,7 +36,7 @@ function sealFlowRead(program, node, fact, records = {}) {
 }
 
 function planContext(program, sourceFile, node) {
-  return { input: { program }, sourceFile, diagnostics: [], usedAliases: new Set(),
+  return { input: { program }, sourceFile, nativeHeaderPlacement: sourceFile, nativeHeaderParent: undefined, diagnostics: [], usedAliases: new Set(),
     syntheticNames: createRustSyntheticNameState(program.source.ast, node, []),
     moduleNameByFileName: new Map(), externalCrateNameByFileName: new Map(), externalItemPathByIdentity: new Map(),
     externalStructuralShapeModuleByFileName: new Map() };

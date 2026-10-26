@@ -55,7 +55,7 @@ export function copy(values: int32[]): int32[] { return [...values]; }
     records: createRustRecordFixture({
 targetOperation: { get: (subject) => subject === node
     ? selected : program.records.targetOperation.get(subject) }}, program.records) } }, diagnostics: [],
-    sourceFile: ast.getSourceFile(node), usedAliases: new Set(),
+    sourceFile: ast.getSourceFile(node), nativeHeaderPlacement: ast.getSourceFile(node), nativeHeaderParent: undefined, usedAliases: new Set(),
     syntheticNames: createRustSyntheticNameState(ast, node, []),
     moduleName: "index", structuralShapesModuleName: "shapes",
     moduleNameByFileName: new Map(), externalCrateNameByFileName: new Map(),

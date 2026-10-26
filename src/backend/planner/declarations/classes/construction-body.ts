@@ -172,6 +172,8 @@ export function planRustConstructionBody(
   };
   const contextForLayer: RustConstructionBody["contextForLayer"] = (selectedContext, layer, returnLabel) => ({
     ...selectedContext,
+    nativeHeaderPlacement: layer,
+    nativeHeaderParent: undefined,
     construction: {
       layer,
       prepare,

@@ -30,7 +30,7 @@ export function run(): number { const value = new Value(4); return value.count; 
   const value = { kind: "int-literal", text: "9" };
   for (const { node, fact } of fields) {
     const context = (override, records = program.records) => ({
-      input: { program: { ...program, records } }, diagnostics: [], sourceFile: ast.getSourceFile(node),
+      input: { program: { ...program, records } }, diagnostics: [], sourceFile: ast.getSourceFile(node), nativeHeaderPlacement: ast.getSourceFile(node), nativeHeaderParent: undefined,
       syntheticNames: createRustSyntheticNameState(ast, node, []),
       expressionOverrides: new Map([[node, override]]),
     });

@@ -71,7 +71,8 @@ export function createStructuralLiteralImplementation(
       const receiverName = allocateRustSyntheticName(scope, receiverRead ? "object_receiver" : "_object_receiver");
       const captures: RustExpr = { kind: "field", name: String(storageIndex),
         receiver: { kind: "method-call", receiver: { kind: "path", path: receiverName }, method: "context", args: [] } };
-      const bodyContext = rustCallablePayloadContext(selected.payload, captures, context, "tuple");
+      const bodyContext = rustCallablePayloadContext(selected.payload, captures,
+        { ...context, nativeHeaderPlacement: field, nativeHeaderParent: undefined }, "tuple");
       const planned = planNativeModuleFunction(selected.declaration, selected.declaration, field.targetName,
         bodyContext, { name: receiverName, boundLifetimes, entry: leading.nativeEntry.structuralFixed.get(shape)?.get(field.sourceName)
           ?? failRustPlannerInvariant("A fixed structural method requires its exact canonical owner and field entry.", selected.declaration) });

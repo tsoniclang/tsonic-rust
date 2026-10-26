@@ -32,6 +32,8 @@ export function rustSourceFilePlanContext(program, node, overrides = {}) {
   if (identity === undefined || component === undefined) throw new Error("The node's source file has no native component identity.");
   return {
     input,
+    nativeHeaderPlacement: sourceFile,
+    nativeHeaderParent: undefined,
     sourceFile,
     sourcePackageComponentId: component.componentId,
     moduleName: identity.moduleName,

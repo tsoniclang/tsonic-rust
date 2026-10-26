@@ -39,7 +39,7 @@ function selectedNode(program, family, predicate) {
 function planContext(program, node, withNames = true) {
   const { ast } = program.source;
   return {
-    input: createRustPlanningContext(program), sourceFile: ast.getSourceFile(node),
+    input: createRustPlanningContext(program), sourceFile: ast.getSourceFile(node), nativeHeaderPlacement: ast.getSourceFile(node), nativeHeaderParent: undefined,
     diagnostics: [], usedAliases: new Set(),
     ...(withNames ? { syntheticNames: createRustSyntheticNameState(ast, node, []) } : {}),
     moduleName: "index", structuralShapesModuleName: "shapes",

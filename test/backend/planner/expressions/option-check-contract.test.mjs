@@ -34,7 +34,7 @@ export function missing(values: (number | undefined)[]): boolean {
   assert.ok(Object.isFrozen(fact.nullishDepths));
   const context = records => ({
     input: { program: { ...program, records } }, diagnostics: [],
-    sourceFile: ast.getSourceFile(node), usedAliases: new Set(),
+    sourceFile: ast.getSourceFile(node), nativeHeaderPlacement: ast.getSourceFile(node), nativeHeaderParent: undefined, usedAliases: new Set(),
     syntheticNames: createRustSyntheticNameState(ast, node, []),
     moduleName: "index", structuralShapesModuleName: "shapes",
     moduleNameByFileName: new Map(), externalCrateNameByFileName: new Map(),
@@ -113,7 +113,7 @@ export function read(values: (string | undefined)[]): string {
   assert.equal(fact.rightOptionDepth, 0);
   const context = records => ({
     input: { program: { ...program, records } }, diagnostics: [],
-    sourceFile: ast.getSourceFile(node), usedAliases: new Set(),
+    sourceFile: ast.getSourceFile(node), nativeHeaderPlacement: ast.getSourceFile(node), nativeHeaderParent: undefined, usedAliases: new Set(),
     syntheticNames: createRustSyntheticNameState(ast, node, []),
     moduleName: "index", structuralShapesModuleName: "shapes",
     moduleNameByFileName: new Map(), externalCrateNameByFileName: new Map(),

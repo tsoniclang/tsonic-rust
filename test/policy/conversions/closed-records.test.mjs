@@ -154,7 +154,7 @@ test("nested required and optional JSON fields consume their own sealed literal 
       carrierRead: { get: () => ({ copy: true, clone: true }) },
       objectLiteralEmission: { get: node => literals.get(node) },
     });
-    const context = { input: { program: { source: { ast }, records } }, sourceFile,
+    const context = { input: { program: { source: { ast }, records } }, sourceFile, nativeHeaderPlacement: sourceFile, nativeHeaderParent: undefined,
       syntheticNames: createRustSyntheticNameState(ast, parentNode, []), usedAliases: new Set(), diagnostics: [] };
     const contract = rustValueConversionContract(selectRustProjectedValueConversion(parent, "json"));
     assert.equal(contract?.lowering, "js-value-from-structural-object", presence + ": checked projection is admitted");
@@ -209,7 +209,7 @@ test("closed record admission keeps the exact native backing and one source abse
   const node = fakeStatement({ kindName: "Identifier", pos: 0, end: 5 });
   const sourceFile = fakeSourceFile({ fileName: "/src/index.ts", text: "value", statements: [node] });
   const context = { input: { program: { source: { ast: fakeAstReader([sourceFile]) } } },
-    sourceFile, usedAliases: new Set(), diagnostics: [] };
+    sourceFile, nativeHeaderPlacement: sourceFile, nativeHeaderParent: undefined, usedAliases: new Set(), diagnostics: [] };
   const source = { kind: "call", path: "produce_record", args: [] };
   assert.deepEqual(lowerRustValueConversion(contract, source, context, node),
     { kind: "call", path: "js_abi::JsValue::from", args: [source] });

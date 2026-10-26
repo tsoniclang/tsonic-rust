@@ -96,7 +96,7 @@ test("property planning rejects absent or carrier-conflicting sealed native read
     if (selected === undefined || selected.cases.length === 0) {
       assert.equal(issues.length, 0, "an absent raw demand publishes no projection");
       assert.equal(producer.records.propertyValueProjection.get(node, input.source) === undefined, true);
-      const context = { input: { program: { ...program, records: { ...program.records, ...producer.records } } }, sourceFile,
+      const context = { input: { program: { ...program, records: { ...program.records, ...producer.records } } }, sourceFile, nativeHeaderPlacement: sourceFile, nativeHeaderParent: undefined,
         syntheticNames: { reserved: new Set(), nextSuffixByBase: new Map() }, diagnostics: [] };
       assert.throws(() => planRustPropertyValueProjection(contract, { kind: "path", path: "input" }, context, node,
         () => assert.fail("missing native reads must reject before conversion planning")),

@@ -71,7 +71,8 @@ function planImplementation(
   const helperContext = rustGeneratedTypeParameterContext(arguments_.flatMap(argument =>
     argument.kind === "type" && argument.type.kind === "type-parameter" ? [argument.type] : []),
     authoredTypeParameterNames(implementation.declaration, context.input.program.source.ast),
-    { ...context, typeParameterSubstitutions: selected.substitutions.types, lifetimeSubstitutions: selected.substitutions.lifetimes });
+    { ...context, nativeHeaderPlacement: implementation, nativeHeaderParent: undefined,
+      typeParameterSubstitutions: selected.substitutions.types, lifetimeSubstitutions: selected.substitutions.lifetimes });
   const captures = rustCallablePayloadTypes(selected, helperContext);
   if (captures === undefined) failRustPlannerInvariant("An admitted generic callable requires its complete native environment and quantified call contract.");
   const names = createRustSyntheticNameState(context.input.program.source.ast, implementation.declaration, []);

@@ -82,7 +82,8 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
   if (methodProperties === undefined) {
     failRustPlannerInvariant("An admitted native class requires its complete field, method and constructor plan.", node);
   }
-  const implementationContext = rustProjectTypeParameterContext(definition, context, "implementation");
+  const implementationContext = rustProjectTypeParameterContext(definition,
+    { ...context, nativeHeaderPlacement: definition.declaration, nativeHeaderParent: undefined }, "implementation");
   const implementationType = rustTypeFromCarrierInContext(selected.carrier, implementationContext);
   const implementationGenerics = rustProjectGenerics(definition, implementationContext);
   const implementationFields = planClassFields(selected, implementationContext);

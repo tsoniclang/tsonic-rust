@@ -6,6 +6,7 @@ import { analyzeRustNativeCallableGenerics } from "../../../../dist/analysis/cal
 import { selectRustCallableEntryGenerics } from "../../../../dist/analysis/callables/entry-generics.js";
 import { createRustNativeGenericProducer } from "../../../../dist/analysis/program/records/native-generics.js";
 import { planRustNativeCallableGenerics } from "../../../../dist/backend/planner/declarations/callables/native-generics.js";
+import { selectRustCallableEntryHeader } from "../../../../dist/policy/ownership/callable-entry-headers.js";
 import { rustCallablePayloadContext } from "../../../../dist/backend/planner/expressions/capture-payloads.js";
 
 // Native callable generic contexts are selected by analyzeRustNativeCallableGenerics (inputs, bounds and Future
@@ -61,7 +62,11 @@ function generics(current, sealed, substitutions, typeParameterNames) {
   const context = rustSourceFilePlanContext(sealed.program, current.declaration, {
     ...(substitutions === undefined ? {} : { typeParameterSubstitutions: substitutions }),
     ...(typeParameterNames === undefined ? {} : { typeParameterNames }) });
-  const source = { context, sourceTypeParameterIdentities: [], preservesExplicitLifetimes: false, parameterSlots: new Map(),
+  const selection = selectRustCallableEntryHeader({ header: sealed.selected, requirements: sealed.selected.sourceRequirements,
+    inherited: { types: substitutions ?? new Map(), lifetimes: new Map(), consts: new Map() },
+    ownerLifetimes: new Set(), capturedParameters: [], specialization: undefined, promiseBody: false,
+    enclosingArguments: [], trailingArguments: [], finalArguments: undefined });
+  const source = { context, selection, sourceTypeParameterIdentities: [], preservesExplicitLifetimes: false, parameterSlots: new Map(),
     finalizeGenerics: () => ({ parameters: [], wherePredicates: [] }) };
   return planRustNativeCallableGenerics(current.declaration, source).finalizeGenerics();
 }

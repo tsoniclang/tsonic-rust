@@ -1,6 +1,7 @@
 import type { Node, SourceFile } from "@tsonic/tsts";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustPlanningContext } from "../context.js";
+import type { RustCallableEntryHeaderPlacement, RustCallableEntryHeaderSelection } from "../../../target-model/records/callable-entry-headers.js";
 import type { RustGeneratorFact } from "../../../target-model/records/callables-and-resources.js";
 import type { RustSourceBindingFact } from "../../../target-model/records/value-projections.js";
 import type { RustConstructionLayer } from "../../../target-model/records/construction.js";
@@ -85,6 +86,8 @@ export interface RustConstructionPreparation {
 }
 
 export interface RustPlanContext {
+  readonly nativeHeaderPlacement: RustCallableEntryHeaderPlacement;
+  readonly nativeHeaderParent: RustCallableEntryHeaderSelection | undefined;
   readonly input: RustPlanningContext;
   readonly sourceFile: SourceFile;
   readonly sourcePackageComponentId: string;

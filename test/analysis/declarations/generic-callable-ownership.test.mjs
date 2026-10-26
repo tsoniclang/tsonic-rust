@@ -269,6 +269,7 @@ function physicalLifecycleInputs({ beforeInitialize, afterInitialize }) {
           native: registry.native, nativeProducers: registry.nativeProducers, generic: registry.generic,
           frames: registry.frames, classValues, projectTypes: context.projectTypes,
           structuralShapes: context.structuralShapes.completed,
+          requirements: program.declarationGenericRequirements,
           producer: context.records.declarationEmission, required: context.requiredRecords });
         assert.equal(entryResult.kind, "resolved", "the original lifecycle completes its canonical early native entry owner before sealing");
         assert.equal(entryResult.diagnostics.length, 0, "the original early native entry phase has no issues");

@@ -39,7 +39,7 @@ test("native union projection proves every carrier and selection without copying
       "physical input uses the selected arm, not the whole narrowed union");
   }
   const receiver = { kind: "path", path: "value" };
-  const context = () => ({ input: { program }, diagnostics: [], sourceFile: ast.getSourceFile(node), usedAliases: new Set(),
+  const context = () => ({ input: { program }, diagnostics: [], sourceFile: ast.getSourceFile(node), nativeHeaderPlacement: ast.getSourceFile(node), nativeHeaderParent: undefined, usedAliases: new Set(),
     syntheticNames: createRustSyntheticNameState(ast, node, []), moduleName: "index", structuralShapesModuleName: "shapes",
     moduleNameByFileName: new Map([["/src/index.ts", "index"]]), externalCrateNameByFileName: new Map(),
     externalItemPathByIdentity: new Map(), externalStructuralShapeModuleByFileName: new Map() });

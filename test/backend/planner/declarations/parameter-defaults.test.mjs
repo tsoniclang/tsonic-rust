@@ -36,7 +36,7 @@ runtimeCarrier: { get: (subject) => subject === parameter
     ? sourceCarrier === undefined ? undefined : { carrier: sourceCarrier }
     : program.records.runtimeCarrier.get(subject) }}, program.records);
     const names = createRustSyntheticNameState(ast, callable, []);
-    const context = { input: { program: { ...program, records } }, sourceFile,
+    const context = { input: { program: { ...program, records } }, sourceFile, nativeHeaderPlacement: sourceFile, nativeHeaderParent: undefined,
       diagnostics: [], usedAliases: new Set(), syntheticNames: names,
       moduleName: "index", structuralShapesModuleName: "shapes",
       moduleNameByFileName: new Map(), externalCrateNameByFileName: new Map(),

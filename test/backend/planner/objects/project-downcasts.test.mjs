@@ -27,7 +27,7 @@ export function select(value: Base | undefined): Child | undefined {
   assert.equal(projections.length, 1);
   const { node, fact } = projections[0];
   const context = () => ({
-    input: { program }, diagnostics: [], sourceFile: ast.getSourceFile(node), usedAliases: new Set(),
+    input: { program }, diagnostics: [], sourceFile: ast.getSourceFile(node), nativeHeaderPlacement: ast.getSourceFile(node), nativeHeaderParent: undefined, usedAliases: new Set(),
     syntheticNames: createRustSyntheticNameState(ast, node, []), moduleName: "index",
     moduleNameByFileName: new Map([[ast.getFileName(ast.getSourceFile(node)), "index"]]),
     externalCrateNameByFileName: new Map(), externalItemPathByIdentity: new Map(),

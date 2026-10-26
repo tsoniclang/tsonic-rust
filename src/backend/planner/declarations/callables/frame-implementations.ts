@@ -165,7 +165,8 @@ function planFrameEntry(
       data: definition.storage.kind === "standalone" ? { kind: "direct" }
         : { kind: "object", mutable: definition.storage.mutable, name: allocateRustSyntheticName(names, "frame_data") } };
     const helperContext = rustFrameBindingContext(definition, owner,
-      rustCallablePayloadContext(implementation, { kind: "path", path: stateName }, context, "named"));
+      rustCallablePayloadContext(implementation, { kind: "path", path: stateName },
+        { ...context, nativeHeaderPlacement: implementation, nativeHeaderParent: undefined }, "named"));
     const planned = planNativeModuleFunction(implementation.declaration, implementation.declaration,
       implementation.functionName, helperContext, undefined);
     const helpers = planned.helper === undefined ? [planned.item] : [planned.item, planned.helper];

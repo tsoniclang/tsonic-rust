@@ -39,6 +39,9 @@ export function planProjectRootImplementations(
   layers: readonly ProjectClassStateLayer[],
   context: RustPlanContext,
 ): readonly RustItem[] | undefined {
+  const headerPlacement = context.input.program.records.classImplementationContext.get(concrete.declaration, concreteCarrier);
+  if (headerPlacement === undefined) failRustPlannerInvariant("A native root requires its exact completed generic header placement.", concrete.declaration);
+  context = { ...context, nativeHeaderPlacement: headerPlacement, nativeHeaderParent: undefined };
   const selected = context.input.program.records.projectRootEmission.get(concreteCarrier);
   const representation = context.input.program.records.objectRepresentation.get(concrete);
   const instanceContracts = context.input.program.records.projectInstanceContracts.get(concreteCarrier);

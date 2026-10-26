@@ -384,7 +384,7 @@ contextualValueConversion: { get: (subject) => subject !== node ? undefined
 runtimeCarrier: { get: (subject) => subject === node ? { carrier: rawCarrier } : undefined },
 conversion: { get: () => undefined }}) } },
         expressionOverrides: new Map([[node, { expression, carrier: rawCarrier, valueForm: "owned" }]]),
-        sourceFile, diagnostics: [], moduleName: "index", moduleNameByFileName: new Map([[fileName, "index"]]),
+        sourceFile, nativeHeaderPlacement: sourceFile, nativeHeaderParent: undefined, diagnostics: [], moduleName: "index", moduleNameByFileName: new Map([[fileName, "index"]]),
         externalCrateNameByFileName: new Map() };
       const raw = context.input.program;
       context.input = createRustPlanningContext(prepare(raw));

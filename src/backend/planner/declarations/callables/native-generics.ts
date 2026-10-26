@@ -24,7 +24,7 @@ export function planRustNativeCallableGenerics(
   const typeParameterNames = new Map(source.context.typeParameterNames);
   const usedNames = new Set([...typeParameterNames.values(), ...sourceGenerics.parameters.map(parameter => parameter.name)]);
   for (const input of inputs) {
-    if (source.context.typeParameterSubstitutions?.has(input.implementation.identity) === true) continue;
+    if (!source.selection.nativeBinders.has(input.implementation.identity)) continue;
     typeParameterNames.set(input.implementation.identity, allocateRustGeneratedName(usedNames, input.implementation.name));
   }
   const context: RustPlanContext = { ...source.context, typeParameterNames };
@@ -59,7 +59,7 @@ export function planRustNativeCallableGenerics(
         trait: { kind: "named", path: "core::convert::Into", genericArguments: [{ kind: "type", type: target }] },
       } }] });
     }
-    if (context.typeParameterSubstitutions?.has(input.implementation.identity) === true) {
+    if (!source.selection.nativeBinders.has(input.implementation.identity)) {
       // A substituted implementation is named only where it carries a bound (a transport-only capture needs none).
       if (selectedBounds.length === 0) continue;
       const type = rustTypeFromCarrierInContext(input.implementation, context);

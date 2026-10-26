@@ -58,6 +58,7 @@ test("native error union planning preserves nested paths, original payloads and 
         selectRustProgramErrorRoute(sourcePackageErrors, consumer, selected, variant) },
     }, program.records);
     return { diagnostics: [], usedAliases: new Set(), moduleName: "index",
+      sourceFile: program.sourceFiles[0], nativeHeaderPlacement: program.sourceFiles[0], nativeHeaderParent: undefined,
       sourcePackageComponentId: "root",
       moduleNameByFileName: new Map([["/src/index.ts", "index"]]),
       externalCrateNameByFileName: new Map(),

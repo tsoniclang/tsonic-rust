@@ -90,11 +90,11 @@ export async function invoke(callback: () => Promise<number>): Promise<number> {
   assert.equal(selected.sourceRequirements?.associatedTypes.some(requirement =>
     requirement.requirements.includes("js-rejection")), true, "analysis already selected the exact rejection obligation");
   const context = rustSourceFilePlanContext(program, declaration);
-  const object = planRustCallableGenerics(declaration, context, new Set()).finalizeGenerics();
+  const object = planRustCallableGenerics(declaration, context, undefined).finalizeGenerics();
   const intoRetained = bound => bound.kind === "trait" && bound.path === "Into<tsonic_rust_runtime::RetainedError>";
   assert.equal(object.wherePredicates.some(predicate => predicate.kind === "type" && predicate.bounds.some(intoRetained)),
     true, "the object wrapper renders its selected associated-error bound without an authored generic");
-  const body = planRustCallableGenerics(declaration, { ...context, promiseBody: true }, new Set()).finalizeGenerics();
+  const body = planRustCallableGenerics(declaration, { ...context, promiseBody: true }, undefined).finalizeGenerics();
   assert.equal(body.wherePredicates.some(predicate => predicate.kind === "type" && predicate.bounds.some(intoRetained)),
     false, "the native body does not inherit an unrelated JS object conversion obligation");
 });

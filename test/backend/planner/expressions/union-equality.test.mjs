@@ -22,7 +22,7 @@ import { createRustBinaryEmissionProducer } from "../../../../dist/analysis/prog
 function planningContext(program, node) {
   const { ast } = program.source;
   return { input: { program }, diagnostics: [],
-    sourceFile: ast.getSourceFile(node), usedAliases: new Set(),
+    sourceFile: ast.getSourceFile(node), nativeHeaderPlacement: ast.getSourceFile(node), nativeHeaderParent: undefined, usedAliases: new Set(),
     syntheticNames: createRustSyntheticNameState(ast, node, []),
     moduleName: "index", structuralShapesModuleName: "shapes",
     moduleNameByFileName: new Map([["/src/index.ts", "index"]]), externalCrateNameByFileName: new Map(),

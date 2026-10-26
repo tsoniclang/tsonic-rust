@@ -27,7 +27,7 @@ export function forward(value: Result<int32, int32>): Result<int32, int32> {
   assert.equal(fact.operandExpression, ast.arguments(node)[0]);
   assert.equal(ast.is.IsFunctionDeclaration(fact.callableDeclaration), true);
   const context = callableDeclaration => ({ input: { program }, diagnostics: [],
-    sourceFile: ast.getSourceFile(node), callableDeclaration,
+    sourceFile: ast.getSourceFile(node), nativeHeaderPlacement: ast.getSourceFile(node), nativeHeaderParent: undefined, callableDeclaration,
     moduleName: "index", usedAliases: new Set(), moduleNameByFileName: new Map([["/src/index.ts", "index"]]),
     externalCrateNameByFileName: new Map(), externalItemPathByIdentity: new Map(),
     externalStructuralShapeModuleByFileName: new Map(), structuralShapesModuleName: "shapes" });

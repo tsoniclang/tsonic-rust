@@ -59,7 +59,8 @@ export function planPolymorphicClassDeclaration(
     failRustPlannerInvariant("An admitted polymorphic class requires exact native wrapper, dispatch, root and state syntax.", declaration);
   const trait = planProjectDispatchTrait(definition, openCarrier, context);
   if (trait === undefined) failRustPlannerInvariant("An admitted polymorphic class requires its exact native dispatch trait.", declaration);
-  const implementationContext = rustProjectTypeParameterContext(definition, context, "implementation");
+  const implementationContext = rustProjectTypeParameterContext(definition,
+    { ...context, nativeHeaderPlacement: definition.declaration, nativeHeaderParent: undefined }, "implementation");
   const implementationType = rustTypeFromCarrierInContext(openCarrier, implementationContext);
   const implementationRoot = rustProjectRootType(openCarrier, implementationContext);
   const implementationLayers = projectClassStateLayers(definition, openCarrier, implementationContext);

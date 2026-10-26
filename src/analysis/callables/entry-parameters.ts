@@ -28,9 +28,14 @@ import type { RustCallableLeadingEmission } from "../../target-model/records/dec
 import { createRustNativeEntryLayouts } from "./entry-layout.js";
 import type { RustProjectTypePolicy } from "../project-types/index.js";
 import type { RustStructuralShapePlan } from "../objects/shapes/structural-shape-plan.js";
+import { createRustCallableEntryHeaderSelections, type RustCallableEntryHeaderInput } from "./entry-header-selections.js";
+import type { RustDeclarationGenericRequirementIndex } from "../declarations/generic-requirements.js";
+import type { RustCallableEntryHeaderFacets, RustCallableEntryHeaderPlacement, RustCallableEntryHeaderVariant, RustCallableEntryHeaderSelection } from "../../target-model/records/callable-entry-headers.js";
 
 export interface RustCallableEntryConstruction {
   get(declaration: Node): RustCallableLeadingEmission | undefined;
+  selectHeader(declaration: Node, placement: RustCallableEntryHeaderPlacement, variant: RustCallableEntryHeaderVariant | undefined,
+    parent: RustCallableEntryHeaderSelection | undefined, request: RustCallableEntryHeaderInput): RustCallableEntryHeaderFacets;
   seal(): void;
 }
 
@@ -49,6 +54,7 @@ export function prepareRustCallableEntryParameters(input: {
   readonly structuralShapes: RustStructuralShapePlan;
   readonly producer: RustDeclarationEmissionProducer;
   readonly required: RustRequiredRecord[];
+  readonly requirements: Pick<RustDeclarationGenericRequirementIndex, "contractFor">;
 }): TargetStageResult<RustCallableEntryConstruction> {
   const { ast } = input.source;
   const issues: TargetDiagnostic[] = [];
@@ -117,6 +123,7 @@ export function prepareRustCallableEntryParameters(input: {
     else headers.set(declaration, selected.value);
   }
   if (issues.length !== 0) return rejectedTargetStage(Object.freeze(issues));
+  const selectedHeaders = createRustCallableEntryHeaderSelections({ headers, requirements: input.requirements });
   const entryFor = createRustNativeEntryLayouts(input);
   const entries = new Map<Node, RustCallableLeadingEmission>();
   for (const node of declarations) {
@@ -141,15 +148,16 @@ export function prepareRustCallableEntryParameters(input: {
     });
     const selectedParameters = sourceParameters.get(node) ?? new Map<Node, TargetTypeRef>();
     const genericHeader = headers.get(node);
-    entries.set(node, Object.freeze({ parameters: Object.freeze(parameters), genericHeader,
+    entries.set(node, Object.freeze({ parameters: Object.freeze(parameters), genericHeader, headerSelections: selectedHeaders.readerFor(node),
       nativeEntry: entryFor(node, parameters, selectedParameters, genericHeader),
       genericEntries: snapshotTargetReadonlyMap(genericEntries.get(node) ?? []),
       frameEntries: snapshotTargetReadonlyMap(frameEntries.get(node) ?? []),
       sourceParameters: snapshotTargetReadonlyMap(selectedParameters) }));
   }
   let sealed = false;
-  return resolvedTargetStage(Object.freeze({ get: (declaration: Node) => entries.get(declaration), seal() {
+  return resolvedTargetStage(Object.freeze({ get: (declaration: Node) => entries.get(declaration), selectHeader: selectedHeaders.select, seal() {
     if (sealed) return;
+    selectedHeaders.seal();
     for (const [declaration, entry] of entries) {
       input.producer.leading(declaration, entry);
       requireRustRecord(input.required, "callableLeading", declaration, "native callable entry parameters", "prepareRustCallableEntryParameters");

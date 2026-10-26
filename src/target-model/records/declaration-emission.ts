@@ -11,6 +11,7 @@ import type { RustLexicalCaptureEmission } from "./lexical-functions.js";
 import type { RustNativeTaskUse } from "./native-tasks.js";
 import type { RustNamedClassEnvironment } from "./class-values.js";
 import type { RustProjectTypeDefinition } from "../types/project-types.js";
+import type { RustCallableEntryHeaderSelections } from "./callable-entry-headers.js";
 
 export type RustNativeCallableEntrySlot =
   | { readonly kind: "source"; readonly declaration: Node; readonly carrier: TargetTypeRef }
@@ -26,7 +27,6 @@ export type RustNativeCallableEntrySlot =
 
 export interface RustNativeCallableEntry {
   readonly slots: readonly RustNativeCallableEntrySlot[];
-  readonly captureArguments: readonly RustTargetGenericArgument[];
 }
 
 export interface RustNativeCallableEntryFacets {
@@ -73,6 +73,7 @@ export interface RustCallableReturnEmission {
 }
 
 export interface RustCallableLeadingEmission {
+  readonly headerSelections: RustCallableEntryHeaderSelections;
   readonly nativeEntry: RustNativeCallableEntries;
   readonly genericHeader: RustNativeCallableGenericHeader | undefined;
   readonly genericEntries: ReadonlyMap<RustGenericCallableImplementation, RustNativeGenericEntry>;

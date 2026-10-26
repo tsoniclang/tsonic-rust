@@ -102,23 +102,12 @@ export function planRootMethodImplementation(
   variant: RustProjectMethodDispatchVariant,
   context: RustPlanContext,
 ): RustImplFunction | undefined {
-  const targetTypeArguments = context.input.program.records.projectMethodArguments.get(implementation, variant.targetTypeArguments, concreteCarrier);
-  if (targetTypeArguments === undefined) failRustPlannerInvariant("An admitted native root forwarder requires its sealed owner, specialization and callable plan.", context.sourceFile);
-  const specialization = rustCallableSpecialization(
-    variant.sourceTypeParameterIdentities,
-    targetTypeArguments,
+  return planRootCallableImplementation(
+    concreteCarrier,
+    implementation,
+    context,
+    { targetName: variant.exactSlot, headerVariant: variant },
   );
-  return specialization === undefined
-    ? failRustPlannerInvariant("An admitted native method requires its exact specialization bindings.", implementation)
-    : planRootCallableImplementation(
-        concreteCarrier,
-        implementation,
-        context,
-        {
-          targetName: variant.exactSlot,
-          typeArgumentSubstitutions: specialization,
-        },
-      );
 }
 
 export function planRootAccessorImplementation(
@@ -195,7 +184,7 @@ function planRootCallableImplementation(
   options: {
     readonly targetName: string;
     readonly safetyPlacement?: "getter" | "setter";
-    readonly typeArgumentSubstitutions?: ReadonlyMap<string, TargetTypeRef>;
+    readonly headerVariant?: RustProjectMethodDispatchVariant;
     readonly fallibleBoundary?: import("../../../../target-model/records/source-package-errors.js").RustSourcePackageErrorBoundary;
   },
 ): RustImplFunction | undefined {
@@ -229,9 +218,9 @@ function planRootCallableImplementation(
     ...(options.safetyPlacement === undefined
       ? {}
       : { safetyPlacement: options.safetyPlacement }),
-    ...(options.typeArgumentSubstitutions === undefined
+    ...(options.headerVariant === undefined
       ? {}
-      : { typeArgumentSubstitutions: options.typeArgumentSubstitutions }),
+      : { headerVariant: options.headerVariant }),
     ...(options.fallibleBoundary === undefined
       ? {}
       : { fallibleBoundary: options.fallibleBoundary }),
@@ -318,7 +307,7 @@ export function planRootMethodForwarder(
     context,
     {
       targetName: slot,
-      typeArgumentSubstitutions: specialization!,
+      headerVariant: variant,
       fallibleBoundary,
     },
   );

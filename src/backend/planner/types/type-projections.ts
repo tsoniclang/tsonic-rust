@@ -10,7 +10,7 @@ import { closedMetadataKey } from "../../../target-model/metadata/closed-data.js
 export function rustOptionalStorageParameters(
   requirements: readonly RustOptionalStorageRequirement[], context: RustTypeRenderingContext,
 ): readonly RustGenericParameter[] {
-  return requirements.filter(entry => !entry.captured).map(entry => {
+  return requirements.map(entry => {
     const value = rustTypeFromCarrierInContext(entry.carrier.optionalStorageValue, context);
     if (value === undefined) failRustPlannerInvariant("An admitted optional storage bound requires its exact native value type.");
     context.usedAliases?.add("rt");

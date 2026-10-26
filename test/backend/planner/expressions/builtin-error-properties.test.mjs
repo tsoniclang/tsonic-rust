@@ -47,7 +47,7 @@ for (const surfaces of [[], ["js"]]) {
       assert.equal(rustTargetTypeRefEquals(program.records.runtimeCarrier.get(node)?.carrier, optional.resultCarrier), true,
         `${fact.property}: runtime evidence describes the complete optional result`);
       const context = (records = program.records) => ({ input: { program: { ...program, records } }, diagnostics: [],
-        sourceFile: ast.getSourceFile(node), usedAliases: new Set(),
+        sourceFile: ast.getSourceFile(node), nativeHeaderPlacement: ast.getSourceFile(node), nativeHeaderParent: undefined, usedAliases: new Set(),
         syntheticNames: createRustSyntheticNameState(ast, node, []),
         moduleName: "index", structuralShapesModuleName: "shapes", moduleNameByFileName: new Map(),
         externalCrateNameByFileName: new Map(), externalItemPathByIdentity: new Map(),

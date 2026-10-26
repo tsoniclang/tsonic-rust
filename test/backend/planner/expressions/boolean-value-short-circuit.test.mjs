@@ -82,7 +82,7 @@ export function projected(value: boolean | undefined, other: int32): boolean | i
       binaryEmission: { get: subject => subject === node ? accepted.emission : program.records.binaryEmission.get(subject) },
       conversionContract: { get: conversion => conversions.records.conversionContract.get(conversion) ?? program.records.conversionContract.get(conversion) } } };
     const context = { input: { program: sealed }, diagnostics: [],
-      sourceFile: ast.getSourceFile(node), usedAliases: new Set(),
+      sourceFile: ast.getSourceFile(node), nativeHeaderPlacement: ast.getSourceFile(node), nativeHeaderParent: undefined, usedAliases: new Set(),
       syntheticNames: createRustSyntheticNameState(ast, node, []), moduleName: "index", structuralShapesModuleName: "shapes",
       moduleNameByFileName: new Map([["/src/index.ts", "index"]]), externalCrateNameByFileName: new Map(),
       externalItemPathByIdentity: new Map(), externalStructuralShapeModuleByFileName: new Map(),

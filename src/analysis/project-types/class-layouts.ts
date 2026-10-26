@@ -23,7 +23,8 @@ import type { RustClassImplementationContextConstruction } from "../objects/clas
 
 export function analyzeRustProjectClassLayouts(program: Omit<RustAnalysisProgram, "reachability">, source: TargetSourceProgram,
   nodes: readonly Node[], producer: RustProjectClassProducer, reachability: RustReachability,
-  classContexts: Pick<RustClassImplementationContextConstruction, "forInstance">): readonly TargetDiagnostic[] {
+  classContexts: Pick<RustClassImplementationContextConstruction, "forInstance">,
+  rootHeader: (definition: RustProjectTypeDefinition, carrier: TargetTypeRef) => void): readonly TargetDiagnostic[] {
   const { ast } = program.source;
   const issues: TargetDiagnostic[] = [];
   const members = new Map<RustProjectTypeDefinition, readonly Node[]>();
@@ -258,7 +259,10 @@ export function analyzeRustProjectClassLayouts(program: Omit<RustAnalysisProgram
     }
     producer.implementations(definition, implementations);
   }
-  for (const root of roots) analyzeRustProjectRootEmission(program, root.definition, root.carrier, producer, methodRequest);
+  for (const root of roots) {
+    analyzeRustProjectRootEmission(program, root.definition, root.carrier, producer, methodRequest);
+    rootHeader(root.definition, root.carrier);
+  }
   for (const definition of members.keys()) if (program.projectTypes.isPolymorphic(definition))
     issues.push(...analyzeRustProjectDispatchEmission(program, definition, reachability, producer));
   if (issues.length !== 0) return Object.freeze(issues);

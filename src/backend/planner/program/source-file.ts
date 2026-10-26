@@ -103,6 +103,8 @@ export function planRustSourceFile(
 ): PlannedRustSourceFile {
   const usedAliases = new Set<string>();
   const baseContext: RustPlanContext = {
+    nativeHeaderPlacement: sourceFile,
+    nativeHeaderParent: undefined,
     input,
     sourceFile,
     sourcePackageComponentId,

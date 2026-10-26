@@ -23,7 +23,8 @@ function planImplementation(implementation: RustSuspendedCallableImplementation,
   const selected = context.input.program.records.suspendedDeclaration.get(declaration);
   if (selected === undefined || selected.implementation !== implementation)
     failRustPlannerInvariant("An admitted suspended callable requires its exact sealed implementation record.", declaration);
-  const genericPlan = planRustCallableGenerics(declaration, context, new Set(), undefined, implementation.parameters);
+  const genericPlan = planRustCallableGenerics(declaration,
+    { ...context, nativeHeaderPlacement: implementation, nativeHeaderParent: undefined }, undefined);
   const scoped: RustPlanContext = { ...genericPlan.context,
     callableDeclaration: declaration,
     syntheticNames: createRustSyntheticNameState(context.input.program.source.ast, declaration, []),

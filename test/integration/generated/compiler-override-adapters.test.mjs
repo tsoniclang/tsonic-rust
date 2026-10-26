@@ -104,7 +104,7 @@ export function main(): void { const value: Base = new Derived(); value.value(3)
   const adapter = adapters.find(entry => entry.contract !== entry.implementation);
   assert.ok(adapter);
   const context = {
-    input: { program }, sourceFile: definition.sourceFile, diagnostics: [], usedAliases: new Set(),
+    input: { program }, sourceFile: definition.sourceFile, nativeHeaderPlacement: definition.sourceFile, nativeHeaderParent: undefined, diagnostics: [], usedAliases: new Set(),
     moduleName: "index", structuralShapesModuleName: "shapes",
     moduleNameByFileName: new Map(), externalCrateNameByFileName: new Map(),
     externalItemPathByIdentity: new Map(), externalStructuralShapeModuleByFileName: new Map(),
@@ -153,7 +153,7 @@ export function main(): void { const value: Base = new Derived(); value.read(1, 
   const adapter = adapters.find(entry => entry.contract !== entry.implementation);
   assert.ok(adapter);
   const context = {
-    input: { program }, sourceFile: definition.sourceFile, diagnostics: [], usedAliases: new Set(),
+    input: { program }, sourceFile: definition.sourceFile, nativeHeaderPlacement: definition.sourceFile, nativeHeaderParent: undefined, diagnostics: [], usedAliases: new Set(),
     moduleName: "index", structuralShapesModuleName: "shapes",
     moduleNameByFileName: new Map(), externalCrateNameByFileName: new Map(),
     externalItemPathByIdentity: new Map(), externalStructuralShapeModuleByFileName: new Map(),

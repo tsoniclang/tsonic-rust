@@ -6,7 +6,7 @@ import { isRustNeverCarrier, isRustUnitCarrier } from "../../../../target-model/
 import { failRustPlannerInvariant } from "../../diagnostics.js";
 import { planBlockLike } from "../../statements/index.js";
 import { planExpression } from "../../expressions/index.js";
-import { planRustCallableGenerics, rustCallableSpecialization } from "../callables/generics.js";
+import { planRustCallableGenerics } from "../callables/generics.js";
 import { planRustCallableParameterPrelude, planRustCallableParameters } from "../callables/parameters.js";
 import { rustSelfParameter } from "../callables/self-parameter.js";
 import { readRustProjectMethodOverride } from "../../objects/project-objects.js";
@@ -19,7 +19,6 @@ import { planRustAbsentValue } from "../../expressions/optional-storage.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import type { RustProjectTypeDefinition } from "../../../../target-model/types/project-types.js";
 import type { RustExpr, RustImplFunction, RustStmt } from "../../../target-ast/syntax/nodes.js";
-import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import { wrapRustJsPromiseBody } from "../callables/async-promise.js";
 import { planRustReturnExit } from "../../statements/completion-exits.js";
 import { rustClassMemberEnvironmentContext } from "../../objects/class-environments.js";
@@ -32,7 +31,7 @@ import { planRustSuspendedReceiver } from "../callables/suspended-receiver.js";
 import { planRustPromiseBodyObjectAdapter, rustPromiseBodyGenericArguments } from "../callables/promise-body-adapters.js";
 import type { RustSourceCallableSpecializationVariant } from "../../../../target-model/records/callable-emission.js";
 import { planRustNativeTaskOwner } from "../../program/native-tasks.js";
-import { rustLifetimeKey } from "../../../../target-model/lifetimes/index.js";
+import type { RustCallableEntryHeaderVariant } from "../../../../target-model/records/callable-entry-headers.js";
 
 export function planProjectMethod(
   member: Node,
@@ -40,7 +39,7 @@ export function planProjectMethod(
   options?: {
     readonly targetName?: string;
     readonly safetyPlacement?: "getter" | "setter";
-    readonly typeArgumentSubstitutions?: ReadonlyMap<string, TargetTypeRef>;
+    readonly headerVariant?: RustCallableEntryHeaderVariant;
     readonly fallibleBoundary?: import("../../../../target-model/records/source-package-errors.js").RustSourcePackageErrorBoundary;
     readonly promiseBody?: true;
     readonly specialization?: RustSourceCallableSpecializationVariant;
@@ -73,12 +72,7 @@ export function planProjectMethod(
   if (bodyNode === undefined) {
     failRustPlannerInvariant("An admitted native method requires its exact body, carrier, parameter and error-region records.", member);
   }
-  const genericPlan = planRustCallableGenerics(
-    member,
-    context,
-    new Set(emission.owner.genericParameters.flatMap(parameter => parameter.kind === "lifetime" ? [rustLifetimeKey(parameter.lifetime)] : [])),
-    options?.typeArgumentSubstitutions,
-  );
+  const genericPlan = planRustCallableGenerics(member, context, options?.headerVariant);
   if (genericPlan === undefined) {
     failRustPlannerInvariant("An admitted native method requires its complete syntax plan.", member);
   }
@@ -270,9 +264,8 @@ function planProjectPromiseObjectMethod(
   const nativeName = options?.specialization === undefined ? body.name : options.specialization.nativeBodyName;
   if (nativeName === undefined) failRustPlannerInvariant(
     "A specialized Promise method adapter requires its exact native-body name.", member);
-  const ownerLifetimes = new Set(emission.owner.genericParameters.flatMap(parameter => parameter.kind === "lifetime" ? [rustLifetimeKey(parameter.lifetime)] : []));
-  const genericPlan = planRustCallableGenerics(member, outerContext, ownerLifetimes, options?.typeArgumentSubstitutions);
-  const nativeGenerics = planRustCallableGenerics(member, { ...outerContext, promiseBody: true }, ownerLifetimes, options?.typeArgumentSubstitutions);
+  const genericPlan = planRustCallableGenerics(member, outerContext, options?.headerVariant);
+  const nativeGenerics = planRustCallableGenerics(member, { ...outerContext, promiseBody: true }, options?.headerVariant);
   if (genericPlan === undefined || nativeGenerics === undefined) failRustPlannerInvariant("An admitted native method requires its complete syntax plan.", member);
   const syntheticNames = createRustSyntheticNameState(ast, member, []);
   const nativeTasks = planRustNativeTaskOwner(member, { ...genericPlan.context, syntheticNames });
@@ -356,14 +349,12 @@ function planDirectProjectMethodOverridePrelude(
 function planMethodVariant(
   member: Node, variant: RustMethodEmissionVariant, context: RustPlanContext,
 ): RustImplFunction {
-  const specialization = variant.specialization === undefined ? undefined
-    : rustCallableSpecialization(variant.specialization.sourceTypeParameterIdentities, variant.specialization.targetTypeArguments);
-  if (variant.specialization !== undefined && specialization === undefined)
-    failRustPlannerInvariant("An admitted method variant requires its exact native generic substitutions.", member);
-  return planProjectMethod(member, context, {
+  const owner = context.input.program.records.methodDeclaration.get(member)?.owner;
+  if (owner === undefined) failRustPlannerInvariant("An admitted method variant requires its original native owner.", member);
+  return planProjectMethod(member, { ...context, nativeHeaderPlacement: owner.declaration, nativeHeaderParent: undefined }, {
     targetName: variant.name,
     ...(variant.promiseBody ? { promiseBody: true as const } : {}),
-    typeArgumentSubstitutions: specialization,
+    headerVariant: variant.specialization,
     specialization: variant.specialization,
   });
 }

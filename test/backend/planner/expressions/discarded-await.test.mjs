@@ -23,7 +23,7 @@ function discardedFixture() {
       ? { targetName: "Pending", native: true } : undefined },
     typeEmission: { get: () => ({ completion: "value", promiseObject: false }) },
   });
-  const context = { input: { program: { source: { ast }, records } }, sourceFile,
+  const context = { input: { program: { source: { ast }, records } }, sourceFile, nativeHeaderPlacement: sourceFile, nativeHeaderParent: undefined,
     moduleName: "index", moduleNameByFileName: new Map([["/src/index.ts", "index"]]),
     externalCrateNameByFileName: new Map(), usedAliases: new Set(),
     syntheticNames: createRustSyntheticNameState(ast, node, []), diagnostics: [] };

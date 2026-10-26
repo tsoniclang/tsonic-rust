@@ -246,7 +246,7 @@ export function run(): int32 {
   const [{ node, fact }] = reads;
   const receiver = { kind: "path", path: "selected_receiver" };
   const context = syntheticNames => ({
-    input: { program }, diagnostics: [], sourceFile: ast.getSourceFile(node), syntheticNames,
+    input: { program }, diagnostics: [], sourceFile: ast.getSourceFile(node), nativeHeaderPlacement: ast.getSourceFile(node), nativeHeaderParent: undefined, syntheticNames,
     expressionOverrides: new Map([[fact.classReceiver, { expression: receiver, valueForm: "value", carrier: fact.resultCarrier }]]),
   });
   const planned = readRustSourceStaticField(fact, context(createRustSyntheticNameState(ast, node, [])));

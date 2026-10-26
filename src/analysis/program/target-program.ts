@@ -395,6 +395,7 @@ export function analyzeRustAnalysisProgram(
   analyzeRustLexicalFunctionEmission({ program: { records, lexicalFunctions, ownership: ownership.ownership,
     callableValues: context.callableValues }, nodes: context.nativeNodes, producer: context.records.lexicalFunctionPlans });
   const callableEntries = prepareRustCallableEntryParameters({ source: context.source, nodes: context.nativeNodes, records,
+    requirements: declarationGenericRequirements.index,
     lifetimes: context.sourceLifetimes, nativeStorage: context.callableValues.nativeStorage, native: context.callableValues.native,
     nativeProducers: context.callableValues.nativeProducers,
     generic: context.callableValues.generic,

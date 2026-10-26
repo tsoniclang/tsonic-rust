@@ -13,7 +13,7 @@ function sealed(fixture) {
   const { records, issues } = analyzeRustErrorTransportFixture(fixture);
   assert.deepEqual(issues, []);
   return {
-    sourceFile: fixture.sourceFile,
+    sourceFile: fixture.sourceFile, nativeHeaderPlacement: fixture.sourceFile, nativeHeaderParent: undefined,
     sourcePackageComponentId: "root",
     diagnostics: [],
     usedAliases: new Set(),

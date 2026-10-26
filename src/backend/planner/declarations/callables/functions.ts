@@ -9,7 +9,6 @@ import type { RustPlanContext } from "../../program/plan-context.js";
 
 import {
   planRustCallableGenerics,
-  rustCallableSpecialization,
 } from "./generics.js";
 import type {
   RustSourceCallableSpecializationVariant,
@@ -182,23 +181,12 @@ function planRustFunctionItem(
   }
   const name = source.name ?? emission.name;
   if (name === undefined) failRustPlannerInvariant("An admitted callable requires its exact native declaration name.", node);
-  const lexical = outerContext.input.program.records.lexicalFunction.get(node);
   const visibility = emission.visibility;
   const deadCode = emission.deadCode;
   const declarationAttributes = [...safetyAttributes];
   let context: RustPlanContext = nativeBody === undefined ? functionContext
     : { ...functionContext, promiseBody: true, promiseBodyName: nativeBodyName! };
-  const specialization = source.specialization === undefined
-    ? undefined
-    : rustCallableSpecialization(
-        source.specialization.sourceTypeParameterIdentities,
-        source.specialization.targetTypeArguments,
-      );
-  if (source.specialization !== undefined && specialization === undefined) {
-    failRustPlannerInvariant("An admitted callable requires its exact native declaration, return, error and body contracts.", node);
-  }
-  const ownerLifetimes = source.nativeReceiver === undefined ? new Set<string>() : source.nativeReceiver.boundLifetimes;
-  const genericPlan = planRustCallableGenerics(node, context, ownerLifetimes, specialization, lexical?.genericParameters);
+  const genericPlan = planRustCallableGenerics(node, context, source.specialization);
   if (genericPlan === undefined) {
     failRustPlannerInvariant("An admitted callable requires its complete native function plan.", node);
   }
@@ -356,7 +344,7 @@ function planRustFunctionItem(
   };
   if (nativeBody === undefined || !emission.promiseObject)
     return Object.freeze({ item, helper: undefined });
-  const adapterGenerics = planRustCallableGenerics(node, functionContext, ownerLifetimes, specialization, lexical?.genericParameters);
+  const adapterGenerics = planRustCallableGenerics(node, functionContext, source.specialization);
   if (adapterGenerics === undefined) failRustPlannerInvariant("An admitted callable requires its complete native function plan.", node);
   const adapterParameters = planRustFunctionParameters(node, adapterGenerics.context, source.nativeReceiver, nativeEntry, "object", "signature");
   if (adapterParameters === undefined) failRustPlannerInvariant("An admitted callable requires its complete native function plan.", node);

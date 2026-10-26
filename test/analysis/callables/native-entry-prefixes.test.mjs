@@ -101,7 +101,9 @@ export async function empty<Value>(): Promise<void> {}
   assert.equal(parameter?.kind === "type", true, "the exact authored generic contract is finalized before retention");
   const entry = selected.nativeEntry.direct.body;
   assert.equal(entry.slots.length, 0, "the native body has no invented value input or helper state");
-  assert.equal(entry.captureArguments.some(argument => argument.kind === "type" && argument.type.kind === "type-parameter" &&
+  const header = selected.headerSelections.get(program.source.ast.getSourceFile(declaration), undefined, undefined)?.body;
+  assert.equal(header !== undefined, true, "the actual emitted async placement owns its selected header");
+  assert.equal(header.captureArguments.some(argument => argument.kind === "type" && argument.type.kind === "type-parameter" &&
     argument.type.identity === parameter.identity), true,
   "the native async capture inventory retains the phantom type's static-proof obligation");
 });
@@ -131,7 +133,10 @@ export function make(value: number): { read(): number } {
         "native body and object adapter retain their independently selected receiver ABI");
       assert.equal(selected[facet].slots.some(slot => slot.kind === "leading" && slot.parameter.kind === "this"), false,
         "the selected structural receiver replaces this rather than adding a duplicate input");
-      assert.equal(shape.genericArguments.every(argument => selected[facet].captureArguments.some(selected =>
+      const headers = leading.headerSelections.get(field, undefined, undefined);
+      const header = facet === "body" ? headers?.body : headers?.source;
+      assert.equal(header !== undefined, true, "the actual fixed field facet owns its selected native header");
+      assert.equal(shape.genericArguments.every(argument => header.captureArguments.some(selected =>
         rustTargetGenericArgumentEquals(selected, argument))), true,
       "all owner-bound generic arguments remain capture obligations even when not introduced as method binders");
     }
@@ -175,8 +180,12 @@ export function read(): number { return new Enclosing<number>(7).make().read(); 
   assert.equal(leading.parameters.some(parameter => parameter.kind === "this"), true, "the original object this parameter is retained");
   const ownerParameters = lexicalOwner.genericParameters.filter(parameter => parameter.kind === "type");
   assert.equal(ownerParameters.length, 1, "the original enclosing Value binder is present before capture preservation is checked");
+  const fixed = program.structuralShapes.definitions.flatMap(shape => shape.fields)
+    .find(field => field.methodPlan?.kind === "fixed" && field.methodPlan.declaration === nested);
+  const header = fixed === undefined ? undefined : leading.headerSelections.get(fixed, undefined, undefined)?.body;
+  assert.equal(header !== undefined, true, "the object method retains its actual emitted structural field header");
   assert.equal(ownerParameters.every(parameter =>
-    leading.nativeEntry.module.body.captureArguments.some(argument => argument.kind === "type" &&
+    header.captureArguments.some(argument => argument.kind === "type" &&
       argument.type.kind === "type-parameter" && argument.type.identity === parameter.identity)), true,
   "direct member selection does not erase the actual enclosing generic capture obligations");
   const directEntry = program.records.callableLeading.get(direct)?.nativeEntry.direct;

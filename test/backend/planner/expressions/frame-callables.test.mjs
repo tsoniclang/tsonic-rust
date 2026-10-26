@@ -38,7 +38,7 @@ export function escaped(value: string): (depth: number) => string {
       const carrier = implementation.carrier;
       const definition = program.callableValues.frames.definitionFor(carrier);
       const context = {
-        input: { program }, diagnostics: [], sourceFile: ast.getSourceFile(node), usedAliases: new Set(),
+        input: { program }, diagnostics: [], sourceFile: ast.getSourceFile(node), nativeHeaderPlacement: ast.getSourceFile(node), nativeHeaderParent: undefined, usedAliases: new Set(),
         syntheticNames: createRustSyntheticNameState(ast, node, []),
         moduleNameByFileName: new Map([["/src/index.ts", "index"]]), externalCrateNameByFileName: new Map(),
         frameOwners: new Map([[definition, { kind: "construction", counter: { kind: "path", path: "counter" } }]]),
