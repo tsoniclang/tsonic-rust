@@ -299,10 +299,6 @@ export function recordForOfFacts(
     }
     return;
   }
-  const body = ForInOrOfStatement_Statement(walk.context.ast, statement);
-  if (body !== undefined) {
-    recordStatementFacts(walk, body, sourceFile, returnCarrier);
-  }
 }
 
 export function sourceTypeCarrierForDeclaration(walk: RustFactWalk, declaration: Node): TargetTypeRef | undefined {
