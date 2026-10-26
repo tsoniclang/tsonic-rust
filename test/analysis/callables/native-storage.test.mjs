@@ -87,6 +87,77 @@ test("physical demand validates every nested layout even after finding a stored 
   assert.equal(projections, 0, "physical classification never enters source projection");
 });
 
+test("physical demand keeps shared sibling payloads independent of canonical physical boundaries", () => {
+  const integer = rustSourcePrimitiveTargetType("int32");
+  const callable = rustCallableTargetType([], integer);
+  const equalCallable = rustCallableTargetType([], integer);
+  assert.equal(callable !== equalCallable && rustTargetTypeRefEquals(callable, equalCallable), true,
+    "the controls differ only in metadata object sharing, never native invocation contracts");
+  const physical = rustStructuralObjectTargetType("/source.ts", [
+    { sourceName: "read", type: rustCallableTargetType([], integer), presence: "required", readonly: false, method: true },
+    { sourceName: "stored", type: callable, presence: "required", readonly: false },
+  ], "reference", undefined, [], { kind: "physical",
+    methods: [{ sourceName: "read", identity: "source:read", genericArguments: [] }] });
+  const shape = rustStructuralObjectCarrierValue(physical);
+  assert.equal(shape?.implementation?.kind, "physical", "the fixture uses a valid physical structural carrier");
+  const definition = Object.freeze({ carrier: physical, fields: Object.freeze(shape.fields.map(field => Object.freeze({
+    ...field, carrier: field.type, targetName: field.sourceName, storage: "stored",
+    ...(field.method !== true ? {} : { methodPlan: Object.freeze({ kind: "fixed", carrier: field.type }) }),
+  }))) });
+  let reason;
+  const selected = createRustNativeStorageJoins({
+    input: { storage: { subject() { assert.fail("demand cannot project source storage"); } },
+      definitions: emptyRustTypeDefinitions, producerErrorFor: () => undefined,
+      structuralShapes: {
+        definitionForCarrier: carrier => carrier === physical ? definition : undefined,
+        field: (carrier, index) => carrier === physical ? definition.fields[index] : undefined,
+      } },
+    boundaries: [], joinWrites: new Map(), step: depth => depth <= 128,
+    fail(message) { reason = message; return undefined; },
+  });
+  assert.equal(selected.requiresPhysicalSelection(physical, 0), false,
+    "the exact admitted physical carrier does not reconstruct its stored payload");
+  assert.equal(definition.carrier === physical, true, "the physical boundary preserves canonical identity");
+  for (const [label, sibling] of [["shared", callable], ["metadata-equal", equalCallable]]) {
+    const tuple = { kind: "tuple", elements: [physical, sibling] };
+    for (const [wrapper, carrier] of [["tuple", tuple], ["array", { kind: "array", element: tuple }]])
+      assert.equal(selected.requiresPhysicalSelection(carrier, 0), true,
+        `${label}/${wrapper}: the sibling outside the physical owner retains its actual demand`);
+  }
+  const active = new Set();
+  const foreign = rustStructuralObjectTargetType("/foreign.ts", shape.fields, shape.representation, undefined, [], shape.implementation);
+  assert.equal(selected.requiresPhysicalSelection({ kind: "tuple", elements: [physical, callable, foreign] }, 0, active) === undefined, true,
+    "a true sibling does not hide a foreign physical layout");
+  assert.match(reason, /layout owner/u, "foreign physical storage retains the owning refusal");
+  assert.equal(active.size, 0, "every failure releases the entire active recursion path");
+});
+
+test("physical demand terminates cyclic paths without erasing sibling demand or finite budgets", () => {
+  const callable = rustCallableTargetType([], rustSourcePrimitiveTargetType("int32"));
+  const cyclic = { kind: "tuple", elements: [] };
+  cyclic.elements.push(cyclic, callable);
+  let steps = 0;
+  let remaining = 16;
+  const selected = createRustNativeStorageJoins({
+    input: { storage: {}, definitions: emptyRustTypeDefinitions, producerErrorFor: () => undefined,
+      structuralShapes: {
+        definitionForCarrier() { assert.fail("a tuple cycle is not structural storage"); },
+        field() { assert.fail("a tuple cycle has no structural fields"); },
+      } },
+    boundaries: [], joinWrites: new Map(), step: depth => { steps += 1; return remaining-- > 0 && depth <= 128; },
+    fail(message) { assert.fail(message); },
+  });
+  const active = new Set();
+  assert.equal(selected.requiresPhysicalSelection(cyclic, 0, active), true,
+    "a repeated ancestor does not suppress the separate real callable payload");
+  assert.equal(steps, 3, "the cyclic path terminates at its repeated ancestor");
+  assert.equal(active.size, 0, "successful traversal releases its active path");
+  remaining = 1;
+  assert.equal(selected.requiresPhysicalSelection(cyclic, 0, active) === undefined, true,
+    "budget exhaustion remains unresolved, never a physical identity");
+  assert.equal(active.size, 0, "budget failure releases its active path");
+});
+
 test("native callback signatures do not masquerade as stored aggregate payloads", () => {
   const integer = rustSourcePrimitiveTargetType("int32");
   const callback = rustCallableTargetType([integer], integer);

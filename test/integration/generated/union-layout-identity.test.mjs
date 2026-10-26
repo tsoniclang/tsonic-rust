@@ -8,7 +8,8 @@ import { rustUnionEntryTransferIssue } from "../../../dist/policy/conversions/un
 import { emptyRustTypeDefinitions } from "../../../dist/target-model/types/source-union-definitions.js";
 import { rustCallableTargetType, rustFutureTargetType, rustJsArrayTargetType, rustOptionTargetType, rustSourcePrimitiveTargetType,
   rustSourceUnionTargetType, rustVecTargetType } from "../../../dist/target-model/types/index.js";
-import { selectRustNativeStorageTypeDemand } from "../../../dist/analysis/callables/native-future-inputs.js";
+import { selectRustNativeFutureTypeDemand } from "../../../dist/analysis/callables/native-future-inputs.js";
+import { createRustNativeStorageJoins } from "../../../dist/analysis/callables/native-storage-joins.js";
 
 const bodyType = "string | number | boolean | null | Record<string, unknown> | unknown[]";
 const identityCode = "RUST_UNION_ENTRY_STORAGE_IDENTITY_NOT_PRESERVED";
@@ -73,18 +74,30 @@ test("native TYPE demand distinguishes metadata from real Future and callable st
     ["native optional shared array", rustOptionTargetType(rustJsArrayTargetType(number)), false, false],
   ]) {
     let remaining = 4096;
-    const selected = selectRustNativeStorageTypeDemand(carrier, emptyRustTypeDefinitions,
+    const selected = selectRustNativeFutureTypeDemand(carrier, emptyRustTypeDefinitions,
       depth => remaining-- > 0 && depth <= 128, 0);
     assert.equal(selected.kind, "resolved", label + ": the actual admitted native carrier has a finite TYPE inventory");
     assert.equal(selected.future, hasFuture, label + ": only a real Future value demands Future provenance");
-    assert.equal(selected.implementation, hasImplementation, label + ": only a real native implementation demands value storage");
+    let physicalRemaining = 4096;
+    const physical = createRustNativeStorageJoins({
+      input: { storage: { subject() { assert.fail(label + ": TYPE demand must not project source storage"); } },
+        definitions: emptyRustTypeDefinitions,
+        structuralShapes: {
+          field() { assert.fail(label + ": scalar and wrapper controls have no structural field"); },
+          definitionForCarrier() { assert.fail(label + ": scalar and wrapper controls have no structural definition"); },
+        }, producerErrorFor: () => undefined },
+      boundaries: [], joinWrites: new Map(), step: depth => physicalRemaining-- > 0 && depth <= 128,
+      fail(message) { assert.fail(label + ": " + message); },
+    });
+    assert.equal(physical.requiresPhysicalSelection(carrier, 0), hasFuture || hasImplementation,
+      label + ": only a real native Future or implementation demands value storage");
   }
-  const missing = selectRustNativeStorageTypeDemand(rustSourceUnionTargetType("/src/index.ts", "Missing"),
+  const missing = selectRustNativeFutureTypeDemand(rustSourceUnionTargetType("/src/index.ts", "Missing"),
     emptyRustTypeDefinitions, () => true, 0);
   assert.equal(missing.kind, "unresolved", "a missing source-union payload inventory is not treated as closed-empty metadata");
   assert.equal(missing.reason, "Native storage TYPE demand requires its admitted source union payload inventory.",
     "the refusal identifies the actual missing native TYPE evidence");
-  const exhausted = selectRustNativeStorageTypeDemand(rustVecTargetType(future), emptyRustTypeDefinitions, () => false, 0);
+  const exhausted = selectRustNativeFutureTypeDemand(rustVecTargetType(future), emptyRustTypeDefinitions, () => false, 0);
   assert.equal(exhausted.kind, "unresolved", "the real existing native projection budget is not bypassed");
   assert.equal(exhausted.reason, "Native storage TYPE demand exceeds its bounded carrier projection budget.",
     "budget exhaustion is not an identity result");

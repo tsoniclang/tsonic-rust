@@ -89,51 +89,55 @@ export function createRustNativeStorageJoins(context: RustNativeStorageJoinConte
     }
     return carrier;
   };
-  const requiresPhysicalSelection = (type: TargetTypeRef, depth: number, visited = new Set<TargetTypeRef>()): boolean | undefined => {
+  const requiresPhysicalSelection = (type: TargetTypeRef, depth: number, active = new Set<TargetTypeRef>()): boolean | undefined => {
     if (!step(depth)) return undefined;
-    if (visited.has(type)) return false;
-    visited.add(type);
-    if (type.kind === "closure" || type.kind === "function-pointer") return false;
-    if (rustCallableProtocol(type) !== undefined || rustGenericCallableValue(type) !== undefined || isRustNativeFutureCarrier(type)) return true;
-    const variants = rustUnionAlternatives(type, input.definitions);
-    if (rustSourceUnionCarrierValue(type) !== undefined && (variants === undefined || variants.length === 0))
-      return fail("Native storage TYPE demand requires its admitted source union payload inventory.");
-    const shape = rustStructuralObjectCarrierValue(type);
-    const children: TargetTypeRef[] = [];
-    let required = false;
-    let physical = false;
-    if (type.kind === "target-specific" && type.target === "rust" && type.name === rustStructuralObjectCarrierName && shape === undefined)
-      return fail("A structural value requires its actual checked physical layout owner.");
-    if (shape !== undefined) {
-      const definition = input.structuralShapes.definitionForCarrier(type);
-      if (definition === undefined || definition.fields.length !== shape.fields.length)
+    if (active.has(type)) return false;
+    active.add(type);
+    try {
+      if (type.kind === "closure" || type.kind === "function-pointer") return false;
+      if (rustCallableProtocol(type) !== undefined || rustGenericCallableValue(type) !== undefined || isRustNativeFutureCarrier(type)) return true;
+      const variants = rustUnionAlternatives(type, input.definitions);
+      if (rustSourceUnionCarrierValue(type) !== undefined && (variants === undefined || variants.length === 0))
+        return fail("Native storage TYPE demand requires its admitted source union payload inventory.");
+      const shape = rustStructuralObjectCarrierValue(type);
+      const children: TargetTypeRef[] = [];
+      let required = false;
+      let physical = false;
+      if (type.kind === "target-specific" && type.target === "rust" && type.name === rustStructuralObjectCarrierName && shape === undefined)
         return fail("A structural value requires its actual checked physical layout owner.");
-      physical = shape.implementation?.kind === "physical";
-      if (physical && !rustTargetTypeRefEquals(type, definition.carrier))
-        return fail("A physical structural carrier requires its exact admitted canonical definition.");
-      children.push(...shape.bases);
-      for (const [index, sourceField] of shape.fields.entries()) {
-        const field = input.structuralShapes.field(type, index);
-        if (field === undefined || field.sourceName !== sourceField.sourceName ||
-          field.presence !== sourceField.presence || field.method !== sourceField.method) {
-          fail("Native aggregate storage requires its exact structural field layout owner.");
-          return undefined;
-        }
-        if (sourceField.method === true) {
-          if (field.method !== true || field.methodPlan?.carrier === undefined) {
-            fail("Native aggregate method storage requires its canonical callable field layout owner.");
+      if (shape !== undefined) {
+        const definition = input.structuralShapes.definitionForCarrier(type);
+        if (definition === undefined || definition.fields.length !== shape.fields.length)
+          return fail("A structural value requires its actual checked physical layout owner.");
+        physical = shape.implementation?.kind === "physical";
+        if (physical && !rustTargetTypeRefEquals(type, definition.carrier))
+          return fail("A physical structural carrier requires its exact admitted canonical definition.");
+        children.push(...shape.bases);
+        for (const [index, sourceField] of shape.fields.entries()) {
+          const field = input.structuralShapes.field(type, index);
+          if (field === undefined || field.sourceName !== sourceField.sourceName ||
+            field.presence !== sourceField.presence || field.method !== sourceField.method) {
+            fail("Native aggregate storage requires its exact structural field layout owner.");
             return undefined;
           }
-          if (field.methodPlan.kind !== "native-dispatch") required = true;
-        } else if (field.storage === "stored") children.push(sourceField.type);
+          if (sourceField.method === true) {
+            if (field.method !== true || field.methodPlan?.carrier === undefined) {
+              fail("Native aggregate method storage requires its canonical callable field layout owner.");
+              return undefined;
+            }
+            if (field.methodPlan.kind !== "native-dispatch") required = true;
+          } else if (field.storage === "stored") children.push(sourceField.type);
+        }
+      } else children.push(...rustTargetTypeChildren(type));
+      for (const child of [...children, ...(variants?.map(variant => variant.carrier) ?? [])]) {
+        const selected = requiresPhysicalSelection(child, depth + 1, active);
+        if (selected === undefined) return undefined;
+        required = required || selected;
       }
-    } else children.push(...rustTargetTypeChildren(type));
-    for (const child of [...children, ...(variants?.map(variant => variant.carrier) ?? [])]) {
-      const selected = requiresPhysicalSelection(child, depth + 1, visited);
-      if (selected === undefined) return undefined;
-      required = required || selected;
+      return physical ? false : required;
+    } finally {
+      active.delete(type);
     }
-    return physical ? false : required;
   };
   return { joinProducers, requiresPhysicalSelection };
 }
