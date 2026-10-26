@@ -8,6 +8,7 @@ import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import type { RustFactWalk } from "../program/walk.js";
 import { appendRustDiagnostic, rustResolutionContext } from "../program/walk.js";
 import { resolveRustTargetTypeRef } from "../source-evidence/types/resolution/source.js";
+import { resolveRustTypeComponentEvidence } from "../source-evidence/types/resolution/source-evidence.js";
 
 import { rustProjectStaticFieldStorage } from "../project-types/object-layout.js";
 import { finalizeRustClassValueCallable, selectRustClassValueCallable, selectRustClassValueCallablePlan } from "./class-value-callables.js";
@@ -34,9 +35,8 @@ export function selectRustClassValue(
   const semantics = walk.context.semanticsFor(expression);
   const sourceType = semantics.types.expressionType(expression);
   const contextual = semantics.types.contextualValueSelection(expression);
-  const destinationType = contextual.kind === "selected" ? contextual.type : undefined;
-  const carrier = expected ?? (destinationType === undefined ? undefined : resolveRustTargetTypeRef(
-    destinationType, rustResolutionContext(walk, expression), walk.operationOptions));
+  const carrier = expected ?? (contextual.kind !== "selected" ? undefined : resolveRustTypeComponentEvidence(
+    contextual.component, rustResolutionContext(walk, expression), walk.operationOptions, new Set<object>()));
   const shape = carrier === undefined ? undefined : walk.sourceTypes.structuralObjectForCarrier(carrier);
   if (sourceType === undefined) return undefined;
   const native = resolveRustTargetTypeRef(sourceType, rustResolutionContext(walk, expression), walk.operationOptions);

@@ -12,6 +12,7 @@ import { resolveOwnedSourceProfileTypeName, resolveOwnedSourceProfileTypeNameFor
 import { resolveProviderTypeIdentity } from "../../../../policy/identities/provider-types.js";
 import { resolveSourcePrimitive, resolveSourceTypeParameter } from "./callables.js";
 import { resolveReferencedDeclarationType, resolveRustAuthoredTargetType, rustParameterLaneTargetType } from "./tuples.js";
+import { resolveRustTypeComponentEvidence } from "./source-evidence.js";
 import { resolveRustFixedArrayTargetType, resolveRustTargetType, resolveStructuralObjectType } from "./target.js";
 
 import { tsonicFixedArrayFactKey } from "@tsonic/source-core/facts";
@@ -127,7 +128,8 @@ export function resolveRustTargetTypeRef(
   }
   if (node !== undefined && context.ast.is.IsArrayLiteralExpression(node) && context.ast.elements(node).length === 0) {
     const selected = context.semanticsFor(node).types.contextualValueSelection(node);
-    const expected = selected.kind === "selected" ? resolveRustTargetTypeRef(selected.type, context, options) : undefined;
+    const expected = selected.kind === "selected"
+      ? resolveRustTypeComponentEvidence(selected.component, context, options, new Set<object>()) : undefined;
     const contextual = expected === undefined ? undefined : resolveRustContextualLiteralCarrier(context, node, expected);
     if (contextual !== undefined) return contextual;
   }

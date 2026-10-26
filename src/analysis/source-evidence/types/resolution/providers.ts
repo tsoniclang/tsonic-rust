@@ -31,7 +31,7 @@ export function selectRustProviderObjectLiteralConstruction(
     return { kind: "not-applicable" };
   }
   const identity = resolveProviderTypeIdentity(
-    context.currentSemantics.facts.typeSubjects(contextual.type),
+    context.currentSemantics.facts.typeSubjects(contextual.component.selectedType),
     context,
   );
   if (identity === undefined) {
@@ -43,7 +43,7 @@ export function selectRustProviderObjectLiteralConstruction(
   }
   const carrier = instantiateTargetType(
     typeRow,
-    contextual.type,
+    contextual.component.selectedType,
     context,
     options,
     new Set(),

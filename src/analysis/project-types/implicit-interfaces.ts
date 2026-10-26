@@ -89,7 +89,7 @@ export function collectRustImplicitInterfaceContracts(walk: RustFactWalk): reado
       const semantics = walk.context.semanticsFor(node);
       const selected = semantics.types.contextualValueSelection(node);
       const source = selected.kind === "selected" ? semantics.types.expressionType(node) : undefined;
-      if (source !== undefined && selected.kind === "selected") collect(source, selected.type, node, semantics);
+      if (source !== undefined && selected.kind === "selected") collect(source, selected.component.selectedType, node, semantics);
     }
     ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
   };

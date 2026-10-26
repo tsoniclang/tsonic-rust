@@ -47,6 +47,6 @@ export function createRustStructuralStorageCollector(
     const contextual = semantics.types.contextualValueSelection(node);
     if (contextual.kind !== "selected") return;
     const source = semantics.types.expressionType(node);
-    if (source !== undefined) collectPair(source, contextual.type, semantics);
+    if (source !== undefined) collectPair(source, contextual.component.selectedType, semantics);
   };
 }

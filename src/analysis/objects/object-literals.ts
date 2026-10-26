@@ -10,6 +10,7 @@ import { resolveExpressionCarrier } from "../source-evidence/types/resolution/ex
 import { resolveRustIndexedRecordContract, resolveRustIndexedRecordLiteral } from "../objects/indexed-records.js";
 
 import { resolveRustTargetTypeRef } from "../source-evidence/types/resolution/source.js";
+import { resolveRustTypeComponentEvidence } from "../source-evidence/types/resolution/source-evidence.js";
 
 import { selectSourceObjectLiteralAccessors } from "@tsonic/target-api/source";
 import { setCarrierFact } from "../operations/project-calls.js";
@@ -110,15 +111,13 @@ export function resolveRecordLiteralCarrier(
     }
   }
   const selectedSourceType = contextualSelection.kind === "selected"
-    ? contextualSelection.type
+    ? contextualSelection.component.selectedType
     : sourceType;
   let selectedExpected = expected ?? (contextualSelection.kind !== "selected" && properties.length === 0
     ? rustEmptyObjectTargetType()
-    : resolveRustTargetTypeRef(
-        selectedSourceType,
-        rustResolutionContext(walk, expression),
-        walk.operationOptions,
-      ));
+    : contextualSelection.kind === "selected" ? resolveRustTypeComponentEvidence(
+      contextualSelection.component, rustResolutionContext(walk, expression), walk.operationOptions, new Set<object>())
+    : resolveRustTargetTypeRef(selectedSourceType, rustResolutionContext(walk, expression), walk.operationOptions));
   if (selectedExpected === undefined) {
     return undefined;
   }

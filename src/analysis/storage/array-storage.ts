@@ -38,7 +38,7 @@ export function collectRustArrayElementStorageDemands(
       const contextualType = authoredReturn === undefined
         ? walk.context.semanticsFor(declaration).types.contextualType(declaration) : undefined;
       const contextualResult = contextualType === undefined ? undefined
-        : walk.context.semanticsFor(declaration).types.callable(contextualType)?.result;
+        : walk.context.semanticsFor(declaration).types.callable(contextualType.selectedType)?.result;
       const authoredTypeNode = authoredReturn ?? contextualResult?.authoredTypeNode;
       if (authoredTypeNode === undefined) continue;
       const argument = sourceExpressionCallArgument(declaration, walk.context.source);

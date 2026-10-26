@@ -185,7 +185,7 @@ export function resolveProviderRecordLiteral(
     const contextual = semantics.types.contextualValueSelection(expression);
     const authoredType = semantics.types.expressionType(expression);
     const correspondence = contextual.kind !== "selected" || authoredType === undefined ? undefined
-      : semantics.types.structuralMembers(authoredType, contextual.type, "correspondence");
+      : semantics.types.structuralMembers(authoredType, contextual.component.selectedType, "correspondence");
     if (correspondence?.kind !== "available") return rejectProviderRecordLiteral(walk, expression,
       "Native provider struct construction requires its exact checked member correspondence.");
     const omittedMembers = new Set<string>();

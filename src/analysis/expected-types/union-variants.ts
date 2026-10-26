@@ -40,7 +40,7 @@ export function selectRustUnionVariantByCheckedType(
     return candidates.length === 1 ? candidates[0] : undefined;
   }
   const selection = semantics.types.contextualValueSelection(expression);
-  const contextualTypes = selection.kind === "selected" ? [selection.type]
+  const contextualTypes = selection.kind === "selected" ? [selection.component.selectedType]
     : selection.kind === "ambiguous" ? selection.types : [];
   const callableTypes = contextualTypes.filter(type => semantics.types.callable(type) !== undefined);
   const selectedSourceType = callableTypes.length === 1 ? callableTypes[0]

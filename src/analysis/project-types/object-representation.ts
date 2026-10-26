@@ -221,7 +221,7 @@ function collectProjectObjectOrigins(input: RustObjectRepresentationAnalysisInpu
         ? semantics.types.contextualValueSelection(node)
         : undefined;
       const symbol = contextual?.kind === "selected"
-        ? semantics.declarations.typeSymbol(contextual.type)
+        ? semantics.declarations.typeSymbol(contextual.component.selectedType)
         : undefined;
       const declarations = symbol === undefined
         ? [input.navigation.declarationFor(node)]

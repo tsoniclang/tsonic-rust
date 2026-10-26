@@ -13,7 +13,7 @@ test("recursive constructor contracts terminate at the exact already visited typ
   const node = {};
   let reads = 0;
   const semantics = { types: {
-    contextualValueSelection: () => ({ kind: "selected", type }),
+    contextualValueSelection: () => ({ kind: "selected", component: { selectedType: type } }),
     expressionType: () => type,
     signatureInfos: (_, kind) => {
       assert.equal(kind, "construct");

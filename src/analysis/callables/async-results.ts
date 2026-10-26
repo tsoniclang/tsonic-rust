@@ -14,6 +14,9 @@ import {
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { selectRustAsyncBodyPromise } from "../../policy/types/callables/async-results.js";
 import { resolveRustTargetTypeRef } from "../source-evidence/types/resolution/source.js";
+import { resolveRustTypeComponentEvidence } from "../source-evidence/types/resolution/source-evidence.js";
+import { rustCallableProtocol } from "../../target-model/types/carriers/callables.js";
+import { rustSourceStorageSubjectContext } from "../source-evidence/types/resolution/source-storage-projection.js";
 
 import { appendRustDiagnostic, rustResolutionContext } from "../program/walk.js";
 import type { RustFactWalk } from "../program/walk.js";
@@ -48,10 +51,10 @@ export function selectRustAsyncBodyFacts(
   const sourceContext = contextualLiteral && closedContext === undefined && (isJsPromise || isRustNeverCarrier(inferred))
     ? walk.context.semanticsFor(declaration).types.contextualType(declaration) : undefined;
   const callableContext = sourceContext === undefined ? undefined
-    : walk.context.semanticsFor(declaration).types.callable(sourceContext);
+    : rustCallableProtocol(resolveRustTypeComponentEvidence(sourceContext,
+      rustSourceStorageSubjectContext(rustResolutionContext(walk, declaration), undefined), walk.operationOptions, new Set<object>()));
   const selectedContext = contextualLiteral
-    ? closedContext ?? (callableContext === undefined ? undefined : resolveRustTargetTypeRef(
-      callableContext.result.selectedType, rustResolutionContext(walk, declaration), walk.operationOptions))
+    ? closedContext ?? callableContext?.result
     : undefined;
   if (!isJsPromise) {
     const inner = !isRustNeverCarrier(inferred) || selectedContext === undefined ? inferred

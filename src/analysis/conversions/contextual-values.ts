@@ -68,7 +68,7 @@ export function applyRustOptionalValueCarrier(
         const context = rustOperationContext(walk, expression);
         const conversion = selectProviderRecordArgument(
           context.currentSemantics.types.expressionType(expression),
-          context.currentSemantics.types.contextualType(expression),
+          context.currentSemantics.types.contextualType(expression)?.selectedType,
           resolved, reconciliationTarget, context, walk.operationOptions,
         );
         if (conversion !== undefined) reconciliation = { kind: "conversion", fact: {
