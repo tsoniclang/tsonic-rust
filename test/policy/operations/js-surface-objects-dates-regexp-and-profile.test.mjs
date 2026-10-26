@@ -8,6 +8,8 @@ import {
   rustSourceDiagnostics,
 } from "../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
+import { rustJsErrorTargetType } from "../../../dist/target-model/types/carriers/js.js";
+import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 
 
 
@@ -111,10 +113,22 @@ export function native(input: string): boolean {
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /js_abi::js_string_from_utf8\(input\)/u);
   assert.match(text, /js_exact_string::char_at\(&value, 0\.0\)/u);
-  assert.match(text, /\.exec\(&value\)\?/u);
+  const nativeErrors = result.program.physicalEmissionContexts.sourceOccurrences.filter(({ operation }) =>
+    operation.abi.effects.errorBoundary === "provider-native");
+  assert.equal(nativeErrors.length, 3, "RegExp exec, native test and native replacement retain their exact native error channels");
+  for (const { node, operation } of nativeErrors) {
+    assert.equal(rustTargetTypeRefEquals(operation.abi.effects.errorCarrier, rustJsErrorTargetType()), true,
+      "the selected native API fails with JsError, not a manufactured runtime-error conversion");
+    const selected = result.program.records.providerForm.get(node, operation.abi).nativeResult;
+    assert.equal(selected !== undefined, true, "the actual preseal provider producer publishes the required native propagation");
+    assert.equal(selected.operand.localOwner === undefined, true);
+    assert.equal(selected.channels.size, 1);
+  }
+  const nativeErrorProjection = String.raw`\.map_err::<crate::index::NativeErrors2<rt::TsonicError, rt::JsError>, _>\(\s*crate::index::NativeErrors2::<rt::TsonicError, rt::JsError>::Error1,\s*\)\?`;
+  assert.match(text, new RegExp(String.raw`\.exec\(&value\)\s*${nativeErrorProjection}`, "u"));
   assert.match(text, /js_exact_string::to_well_formed/u);
-  assert.match(text, /pub fn native\(input: &str\)/u);
-  assert.match(text, /js_abi::regexp_test_native\([^;]*AsRef::<str>::as_ref\(&input\),\s*\)\?/su);
+  assert.match(text, /pub fn native\(\s*input: &str,\s*\) -> Result<bool, crate::index::NativeErrors2<rt::TsonicError, rt::JsError>>/u);
+  assert.match(text, new RegExp(String.raw`js_abi::regexp_test_native\([^;]*AsRef::<str>::as_ref\(&input\),\s*\)\s*${nativeErrorProjection}`, "su"));
   assert.match(text, /string_replace_regexp_native/u);
   assert.doesNotMatch(text, /input\.(?:clone|to_string|to_owned)\(\)/u);
   validateGeneratedProject("native-and-exact-string-profile", result.artifacts);
