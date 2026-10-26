@@ -75,13 +75,15 @@ export function rustPhysicalEmissionRecordCarriers(records: RustProgramRecords, 
   const view = records.objectReferenceView.get(node);
   const option = records.optionProjection.get(node);
   const abi = records.sourceParameterAbi.get(node);
+  const caught = records.catchBinding.get(node);
   return [records.runtimeCarrier.get(node)?.carrier, records.conversion.get(node)?.convertedType,
     read?.sourceCarrier, read?.selectedCarrier, read !== undefined && "dispatchCarrier" in read ? read.dispatchCarrier : undefined,
     contextual?.sourceCarrier, contextual?.targetCarrier, lifetime?.sourceCarrier, lifetime?.selectedCarrier,
     upcast?.sourceCarrier, upcast?.targetCarrier, downcast?.sourceCarrier, downcast?.dispatchCarrier, downcast?.targetCarrier,
     view?.sourceCarrier, view?.targetCarrier, records.indexedFieldKeyArgument.get(node)?.carrier,
     option?.sourceCarrier, option !== undefined && option.kind === "some" ? option.elementCarrier : undefined, option?.resultCarrier,
-    abi?.valueCarrier, abi?.parameterCarrier].filter((carrier): carrier is TargetTypeRef => carrier !== undefined);
+    abi?.valueCarrier, abi?.parameterCarrier, caught?.inputCarrier, caught?.readCarrier]
+    .filter((carrier): carrier is TargetTypeRef => carrier !== undefined);
 }
 
 export function rustEmissionIdentityBindings(arguments_: readonly RustTargetGenericArgument[]): RustTargetGenericBindings | undefined {

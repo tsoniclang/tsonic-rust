@@ -20,7 +20,7 @@ import type {
 } from "../../target-model/records/statement-completion.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import { isRustBoolCarrier, isRustStringCarrier, isRustUnitCarrier, isRustProgramErrorCarrier, rustProgramErrorTargetType } from "../../target-model/types/index.js";
-import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
+import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustRecordCarrierValue } from "../../target-model/types/carriers/records.js";
 import { isRustAssignmentOperator } from "../../target-model/syntax/tokens.js";
 import { rustEffectiveValueCarrier } from "../conversions/value-carrier-queries.js";
@@ -39,7 +39,8 @@ import { admitRustAwaitBoundary } from "../callables/await-admission.js";
 import { admitRustSourceValueConversions } from "../conversions/source-admission.js";
 import type { RustProjectFieldDispatchQueries } from "../project-types/field-dispatch.js";
 import type { RustSourcePackageComponentClassifications } from "../../target-model/records/source-package-semantics.js";
-import type { RustThrowCompletion, RustCatchBinding } from "../../target-model/records/exception-flow.js";
+import type { RustThrowCompletion, RustCatchBinding, RustCatchErrorConversion } from "../../target-model/records/exception-flow.js";
+import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustAssignmentValueSelection } from "../../target-model/records/operator-selection.js";
 import { selectRustAssignmentValue } from "../../policy/operations/operators/assignment-value.js";
 import type { RustOwnershipRecords } from "../../target-model/records/ownership.js";
@@ -48,6 +49,8 @@ import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 import { rustErrorRegionCarrier } from "../errors/regions.js";
 import { rustCarrierProvidesErrorObservation } from "../../policy/constraints/error-protocols.js";
 import { selectRustPhysicalProgramErrorOwner } from "../errors/error-types.js";
+import { rustNativeErrorJoinReference } from "../../target-model/types/native-error-joins.js";
+import { rustUninhabitedError } from "../../policy/conversions/callable-physical.js";
 
 export interface RustStatementCompletionInput {
   readonly structuralShapes: Parameters<typeof analyzeRustOptionalChainBodyFallibility>[0]["structural"];
@@ -73,6 +76,32 @@ export interface RustStatementCompletionInput {
 export type RustStatementCompletionSelection =
   | { readonly kind: "resolved"; readonly plan: RustStatementCompletionRecords }
   | { readonly kind: "rejected"; readonly diagnostics: readonly TargetDiagnostic[] };
+
+export function selectRustCaughtErrorConversion(source: TargetTypeRef, target: TargetTypeRef,
+  proofs: readonly { readonly error: TargetTypeRef; readonly target: TargetTypeRef }[]): RustCatchErrorConversion | undefined {
+  if (!isRustTargetTypeRef(source) || !isRustTargetTypeRef(target) || !isDenseDataArray(proofs) || proofs.length > 4096 ||
+    proofs.some(proof => proof === null || typeof proof !== "object" ||
+      !isRustTargetTypeRef(proof.error) || !isRustTargetTypeRef(proof.target))) return undefined;
+  let remaining = 4096;
+  const select = (carrier: TargetTypeRef, depth: number): RustCatchErrorConversion | undefined => {
+    if (remaining-- <= 0 || depth > 128) return undefined;
+    if (rustTargetTypeRefEquals(carrier, target)) return Object.freeze({ kind: "identity", carrier });
+    if (rustUninhabitedError(carrier)) return Object.freeze({ kind: "uninhabited", carrier });
+    const join = rustNativeErrorJoinReference(carrier);
+    if (join !== undefined) {
+      const arms: RustCatchErrorConversion[] = [];
+      for (const error of join.errors) {
+        const arm = select(error, depth + 1);
+        if (arm === undefined) return undefined;
+        arms.push(arm);
+      }
+      return Object.freeze({ kind: "native-join", carrier, arms: Object.freeze(arms) });
+    }
+    return proofs.some(proof => rustTargetTypeRefEquals(proof.error, carrier) && rustTargetTypeRefEquals(proof.target, target))
+      ? Object.freeze({ kind: "into", carrier }) : undefined;
+  };
+  return select(source, 0);
+}
 
 const supportedStatements: ReadonlySet<string> = new Set([
   "KindBlock", "KindFunctionDeclaration", "KindClassDeclaration", "KindTypeAliasDeclaration",
@@ -239,15 +268,18 @@ export function analyzeRustStatementCompletions(input: RustStatementCompletionIn
         return parent === undefined || !ast.is.IsThrowStatement(parent) || Node_Expression(ast, parent) !== value;
       });
       const owner = sourceEnclosingCallable(node, ast);
-      const caught = owner === undefined ? undefined : records.nativeGenerics.get(owner)?.inputs
-        .find(parameter => parameter.caught !== undefined && rustTargetTypeRefEquals(parameter.caught.error, inputCarrier))?.caught;
-      const physicalOwner = caught === undefined ? undefined : selectRustPhysicalProgramErrorOwner(node, { ast, components: input.components });
-      const conversionTarget = observes && !isRustProgramErrorCarrier(inputCarrier) &&
-        !rustCarrierProvidesErrorObservation(inputCarrier, input.typeDefinitions) && physicalOwner !== undefined &&
-        caught !== undefined && rustTargetTypeRefEquals(caught.target, rustProgramErrorTargetType())
-        ? rustProgramErrorTargetType(physicalOwner) : undefined;
+      const physicalOwner = selectRustPhysicalProgramErrorOwner(node, { ast, components: input.components });
+      const target = physicalOwner === undefined ? undefined : rustProgramErrorTargetType(physicalOwner);
+      const proofs = owner === undefined ? [] : records.nativeGenerics.get(owner)?.inputs.flatMap(parameter =>
+        parameter.caught === undefined ? [] : [{ error: parameter.caught.error,
+          target: target !== undefined && rustTargetTypeRefEquals(parameter.caught.target, rustProgramErrorTargetType())
+            ? target : parameter.caught.target }]) ?? [];
+      const operand = observes && !isRustProgramErrorCarrier(inputCarrier) &&
+        !rustCarrierProvidesErrorObservation(inputCarrier, input.typeDefinitions) && target !== undefined
+        ? selectRustCaughtErrorConversion(inputCarrier, target, proofs) : undefined;
+      const conversion = operand === undefined || target === undefined ? undefined : Object.freeze({ target, operand });
       publish(catches, node, Object.freeze({ name, used: uses.length !== 0, inputCarrier,
-        readCarrier: conversionTarget ?? inputCarrier, conversionTarget }));
+        readCarrier: conversion?.target ?? inputCarrier, conversion }));
     }
   };
   const iteration = (node: Node): void => {

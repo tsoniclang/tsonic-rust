@@ -12,5 +12,9 @@ export interface RustCatchBinding {
   readonly used: boolean;
   readonly inputCarrier: TargetTypeRef;
   readonly readCarrier: TargetTypeRef;
-  readonly conversionTarget: TargetTypeRef | undefined;
+  readonly conversion: { readonly target: TargetTypeRef; readonly operand: RustCatchErrorConversion } | undefined;
 }
+
+export type RustCatchErrorConversion =
+  | { readonly kind: "identity" | "into" | "uninhabited"; readonly carrier: TargetTypeRef }
+  | { readonly kind: "native-join"; readonly carrier: TargetTypeRef; readonly arms: readonly RustCatchErrorConversion[] };

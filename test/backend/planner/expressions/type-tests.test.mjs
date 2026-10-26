@@ -112,7 +112,7 @@ test("caught generic error observations publish one admitted native input conver
   assert.equal(catches.length, 1, "the actual callback fixture owns exactly one catch");
   const selected = program.records.catchBinding.get(catches[0]);
   assert.equal(selected?.inputCarrier.kind, "associated-type", "the callback error retains its actual associated input");
-  assert.equal(selected?.conversionTarget !== undefined && rustTargetTypeRefEquals(selected.readCarrier, selected.conversionTarget), true,
+  assert.equal(selected?.conversion !== undefined && rustTargetTypeRefEquals(selected.readCarrier, selected.conversion.target), true,
     "all observations share the one admitted caught destination rather than converting individual reads");
   assert.equal(selected.readCarrier.errorOwner?.kind === "physical" && selected.readCarrier.errorOwner.domain === "runtime", true,
     "the existing native input Into bound supplies its exact physical runtime error owner");
@@ -134,7 +134,7 @@ test("unused and rethrown native input errors retain their original physical cha
       count += 1;
       const selected = program.records.catchBinding.get(node);
       assert.equal(selected?.inputCarrier.kind, "associated-type", "the original input keeps its exact native error");
-      assert.equal(selected.conversionTarget, undefined, "discarding or rethrowing alone introduces no conversion");
+      assert.equal(selected.conversion, undefined, "discarding or rethrowing alone introduces no conversion");
       assert.equal(rustTargetTypeRefEquals(selected.inputCarrier, selected.readCarrier), true,
         "the catch's source and read stay identical without an observation demand");
     }
@@ -154,7 +154,7 @@ test("concrete native Error catch projections preserve their exact payload carri
     if (ast.is.IsCatchClause(node)) {
       catches += 1;
       const selected = program.records.catchBinding.get(node);
-      assert.equal(selected?.conversionTarget, undefined, "native ErrorObject observation needs no program-error conversion");
+      assert.equal(selected?.conversion, undefined, "native ErrorObject observation needs no program-error conversion");
       assert.equal(rustTargetTypeRefEquals(selected.readCarrier, rustJsErrorTargetType()), true,
         "the actual protected intrinsic's JsError remains its native read payload");
     }

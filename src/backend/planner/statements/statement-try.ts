@@ -19,6 +19,7 @@ import type { RustCompletionBoundary, RustPlanContext } from "../program/plan-co
 import type { RustExpr, RustStmt } from "../../target-ast/syntax/nodes.js";
 import { planRustProgramErrorConstruction } from "../expressions/program-errors.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
+import type { RustCatchErrorConversion } from "../../../target-model/records/exception-flow.js";
 
 export function planThrowStatement(node: Node, context: RustPlanContext): readonly RustStmt[] {
   const completion = context.input.program.records.throwCompletion.get(node);
@@ -113,11 +114,11 @@ export function planTryStatement(node: Node, context: RustPlanContext): readonly
     });
     const binding = context.input.program.records.catchBinding.get(catchClause);
     if (binding === undefined) failRustPlannerInvariant("An admitted catch requires its exact native binding plan.", catchClause);
-    if (binding.conversionTarget !== undefined) {
-      const type = rustTypeFromCarrierInContext(binding.conversionTarget, context)
+    if (binding.conversion !== undefined) {
+      const type = rustTypeFromCarrierInContext(binding.conversion.target, context)
         ?? failRustPlannerInvariant("An admitted caught conversion requires its native destination.", catchClause);
       catchBody = { ...catchBody, statements: [{ kind: "let", name: binding.name, mutable: false, type,
-        init: { kind: "method-call", receiver: { kind: "path", path: binding.name }, method: "into", args: [] } },
+        init: planRustCaughtErrorConversion(binding.conversion.operand, binding.name, context) },
         ...catchBody.statements] };
     }
     const terminates = statementExits(catchBlock, context);
@@ -192,6 +193,23 @@ export function planTryStatement(node: Node, context: RustPlanContext): readonly
     return completionBindings[index]!.output === "declare" ? { ...binding, init: value }
       : { kind: "assign", target: { kind: "path", path: binding.name }, operator: "=", value };
   })];
+}
+
+function planRustCaughtErrorConversion(selected: RustCatchErrorConversion, name: string, context: RustPlanContext): RustExpr {
+  const value: RustExpr = { kind: "path", path: name };
+  switch (selected.kind) {
+    case "identity": return value;
+    case "into": return { kind: "method-call", receiver: value, method: "into", args: [] };
+    case "uninhabited": return { kind: "match", expression: value, arms: [] };
+    case "native-join": {
+      const type = rustTypeFromCarrierInContext(selected.carrier, context);
+      if (type?.kind !== "named") failRustPlannerInvariant("An admitted caught error join requires its exact native enum type.");
+      return { kind: "match", expression: value, arms: selected.arms.map((arm, index) => ({
+        pattern: { kind: "tuple-variant", path: `${type.path}::Error${index}`, elements: [{ kind: "binding", name }] },
+        expression: planRustCaughtErrorConversion(arm, name, context),
+      })) };
+    }
+  }
 }
 
 function statementExits(node: Node, context: RustPlanContext): boolean {
