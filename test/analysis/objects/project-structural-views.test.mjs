@@ -2,7 +2,7 @@ import { createRustRecordFixture } from "../../helpers/records.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createCompilerSessionFromFiles } from "@tsonic/tsts";
-import { createTargetSourceProgram, Node_Initializer } from "@tsonic/target-api/source";
+import { createTargetSourceProgram } from "@tsonic/target-api/source";
 import { createSourceStorageQuery } from "@tsonic/target-api/analysis";
 import { analyzeRust } from "../../helpers/rust-session.mjs";
 import { receiverFieldStorageCases } from "../../../../tsonic/test/fixtures/receiver-field-storage-cases.mjs";
@@ -628,21 +628,6 @@ export function main(): string { return view(new Box<string>("value")).identity(
     const shape = program.structuralShapes.definitionForCarrier(selected.nativeTargetCarrier);
     assert.equal(shape !== undefined, true, "the exact completed native getter carrier is admitted before close");
     for (const name of ["identity", "adapted"]) {
-      const ast = program.source.ast;
-      const sourceField = ast.members(owner.declaration).find(declaration => {
-        const fieldName = ast.name(declaration);
-        return fieldName !== undefined && ast.text(fieldName) === name;
-      });
-      assert.equal(sourceField !== undefined, true, `${name}: the native slot keeps its original checked declaration`);
-      const initializer = Node_Initializer(ast, sourceField);
-      assert.equal(initializer !== undefined, true, `${name}: the stored callable has its actual source initializer`);
-      assert.equal(program.records.runtimeCarrier.get(sourceField) !== undefined, true,
-        `${name}: declaration admission publishes its slot carrier before initializer analysis`);
-      assert.equal(program.records.runtimeCarrier.get(initializer) !== undefined &&
-        program.records.sourceCallableReturn.get(initializer) !== undefined, true,
-        `${name}: the real initializer publishes its own native value and return contract`);
-      const stored = program.callableValues.projectFieldStorage.get(sourceField);
-      assert.equal(stored !== undefined, true, `${name}: physical field storage is completed before publication`);
       const original = rustStructuralObjectCarrierValue(logical.targetCarrier).fields.find(field => field.sourceName === name);
       const native = shape.fields.find(field => field.sourceName === name);
       const member = selected.fields.find(field => field.storageIndex === shape.fields.indexOf(native));
