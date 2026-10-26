@@ -59,6 +59,19 @@ export function local(selectedValue: number): number { return selectedValue; }
   assert.match(output, /fn local\(selectedValue: f64\)/u);
 });
 
+test("provider globals select a default export by its public native declaration key", () => {
+  const source = definition();
+  source.modules[0].exports[0].exportKind = "default";
+  source.modules[0].exports[0].name = "internalValue";
+  const provider = createRustProviderPackage(source);
+  assert.deepEqual(provider.sourceProfileContributions({}), {
+    declarations: [{
+      fileName: "provider-globals.d.ts",
+      text: 'declare var selectedValue: typeof import("@acme/acme-global")["default"];',
+    }],
+  });
+});
+
 test("provider globals do not admit writes or dynamic indexing", () => {
   for (const body of [
     "globalThis.selectedValue = 3;",

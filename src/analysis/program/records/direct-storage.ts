@@ -24,7 +24,9 @@ export function createRustDirectStorageProducer(assertOpen: () => void) {
       projections.set(operand, Object.freeze({ arguments: Object.freeze([...value.arguments]),
         fieldOffsets: new Map(value.fieldOffsets), complete: value.complete }));
     },
-    place: (node: Node, value: RustDirectStorageEmission): void => places.writer.set(node, Object.freeze(value)),
+    place: (node: Node, value: RustDirectStorageEmission): void => places.writer.set(node, Object.freeze(
+      value.kind !== "unavailable" && value.projection !== undefined
+        ? { ...value, projection: Object.freeze({ ...value.projection }) } : value)),
     identity: (node: Node, value: RustDirectStorageIdentity): void => identities.writer.set(node, Object.freeze(value)),
     effect: (node: Node, value: boolean): void => effects.writer.set(node, value) });
 }

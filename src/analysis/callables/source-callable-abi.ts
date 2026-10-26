@@ -29,6 +29,7 @@ import { rustHasOpenOwnedStorage } from "../../policy/ownership/retained-storage
 import { rustTargetGenericReferences } from "../../target-model/types/carriers/generic-references.js";
 import { retainRustStructuralInstantiation } from "../source-evidence/types/resolution/structural-instantiations.js";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
+import { rustSourceStorageSubjectContext } from "../source-evidence/types/resolution/source-storage-projection.js";
 import { appendRustDiagnostic, rustResolutionContext, type RustFactWalk } from "../program/walk.js";
 import type { RustSourceCallableReturnFact } from "../../target-model/records/source-declarations.js";
 import type { RustRetainedEnvironment } from "../../target-model/records/retained-environments.js";
@@ -100,9 +101,11 @@ export function selectRustCallableLogicalReturn(
 ): RustInferredReturnSelection {
   const generator = walk.context.records.generator.get(declaration);
   const asynchronous = walk.context.records.asyncFunction.get(declaration);
+  const authoredReturn = Node_Type(walk.context.ast, declaration);
+  const context = rustResolutionContext(walk, declaration);
   const baseline = selectedCarrier ?? generator?.resultCarrier ?? asynchronous?.outputCarrier ?? resolveRustTargetTypeRef(
-    Node_Type(walk.context.ast, declaration) ?? selectedSourceCallableReturn(walk, declaration),
-    rustResolutionContext(walk, declaration), walk.operationOptions);
+    authoredReturn ?? selectedSourceCallableReturn(walk, declaration),
+    authoredReturn === undefined ? context : rustSourceStorageSubjectContext(context, undefined), walk.operationOptions);
   return selectedCarrier !== undefined || generator !== undefined || asynchronous !== undefined
     ? baseline === undefined ? { kind: "pending" as const } : { kind: "complete" as const, carrier: baseline }
     : selectRustInferredReturn(walk, declaration, baseline);
@@ -563,8 +566,8 @@ function parameterCanUseSharedBorrow(
       if (provider.kind === "conflict") return false;
       const sourceFile = ast.getSourceFile(call);
       const callback = argumentIndex < 0 || sourceFile === undefined ? undefined : rustCallableInputProtocol(resolveRustTargetTypeRef(
-        selected.sourceCallee.expression, { ...context, currentSourceFile: sourceFile, currentSemantics: semantics,
-          sourceStorageSubject: undefined }, options));
+        selected.sourceCallee.expression, rustSourceStorageSubjectContext({ ...context,
+          currentSourceFile: sourceFile, currentSemantics: semantics }, undefined), options));
       if (callback !== undefined) {
         const input = callback.parameters[argumentIndex];
         if (input?.kind !== "reference" || input.mutable ||

@@ -8,6 +8,7 @@ import { createRustSyntheticNameState } from "../../../../dist/backend/planner/n
 import { rustSourcePrimitiveTargetType } from "../../../../dist/target-model/types/index.js";
 import { analyzeRustClosedTypeTests } from "../../../../dist/analysis/operations/type-test-emission.js";
 import { createRustClosedTypeTestProducer } from "../../../../dist/analysis/program/records/type-tests.js";
+import { localProtectedIntrinsicSource } from "../../../../../tsonic/test/fixtures/local-protected-error-regions.mjs";
 
 for (const kind of ["nominal", "array", "error"]) test(`closed ${kind} tests reject missing, forged and reordered test evidence`, () => {
   const operation = kind === "array" ? "Array.isArray(value)" : kind === "error" ? "value instanceof TypeError" : "value instanceof RegExp";
@@ -71,4 +72,26 @@ for (const kind of ["nominal", "array", "error"]) test(`closed ${kind} tests rej
         /An admitted type predicate requires its native emission plan/u);
     }
   }
+});
+
+for (const transparent of [false, true]) test(`caught native error predicates use their completed physical channel (${transparent ? "transparent" : "direct"})`, () => {
+  const source = transparent ? localProtectedIntrinsicSource.replace("error instanceof TypeError", "(((error))) instanceof TypeError")
+    : localProtectedIntrinsicSource;
+  const { program } = analyzeRust({ surfaces: ["js"], files: { "index.ts": source } });
+  const ast = program.source.ast;
+  const selected = [];
+  const visit = node => {
+    if (program.records.targetOperation.get(node)?.kind === "closed-type-test") selected.push(node);
+    ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+  };
+  for (const file of program.sourceFiles) visit(file);
+  assert.equal(selected.length, 1, "the original source has one exact builtin Error-kind predicate");
+  const node = selected[0];
+  const emission = program.records.closedTypeTestEmission.get(node);
+  assert.equal(emission.test.kind === "error" && emission.test.lowering === "native-error" && emission.test.errorKind === "TypeError",
+    true, "the native JsError binding is observed through its existing ErrorObject contract, not a package-only method");
+  const producer = createRustClosedTypeTestProducer(() => undefined);
+  const missing = { ...program, errorRegions: { ...program.errorRegions, get: () => undefined } };
+  assert.throws(() => analyzeRustClosedTypeTests(missing, [node], producer),
+    /requires its completed protected error region/u, "a missing actual binding region never falls back to a logical Error recipe");
 });

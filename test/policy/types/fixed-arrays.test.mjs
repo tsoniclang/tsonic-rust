@@ -19,14 +19,15 @@ import { resolveRustTargetType } from "../../../dist/analysis/source-evidence/ty
 import {
   rustFixedArrayCarrierValue, rustFixedArrayTargetType, rustTargetConstInteger, rustTargetConstSafeInteger,
   rustVecTargetType, rustJsArrayTargetType, rustSourcePrimitiveTargetType, rustOptionTargetType,
-  rustAbsenceTargetType, rustCallableTargetType,
+  rustAbsenceTargetType, rustCallableTargetType, rustStringTargetType,
 } from "../../../dist/target-model/types/index.js";
 import { rustTupleTargetType } from "../../../dist/policy/types/collections/tuple-carrier.js";
+import { selectRustSourceParameterBorrowCarrier } from "../../../dist/policy/ownership/source-parameter-contracts.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 import { rustSpreadElementCarrier } from "../../../dist/target-model/operations/rest-assembly.js";
 import { rustTypeFromCarrier } from "../../../dist/backend/planner/types/carrier-syntax.js";
 import { printRustType } from "../../../dist/print/source/types.js";
-import { artifactText, compileRust } from "../../helpers/rust-session.mjs";
+import { acmePlatformPackage, acmeTestingPackage, analyzeRust, artifactText, compileRust } from "../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 
 const element = Object.freeze({ kind: "source-primitive", name: "uint32" });
@@ -427,7 +428,7 @@ test("fixed-array ordinal validation rejects inconsistent and malformed checker 
   }
 });
 
-test("fixed-array literals reject out-of-range ordinals without enabling dynamic non-Copy reads", () => {
+test("fixed-array literals reject out-of-range ordinals and noninteger dynamic indices", () => {
   for (const [index, code] of [
     ["-1", "RUST_FIXED_ARRAY_INDEX_NOT_PROVEN"],
     ["2", "RUST_FIXED_ARRAY_INDEX_NOT_PROVEN"],
@@ -446,6 +447,102 @@ test("fixed-array literals reject out-of-range ordinals without enabling dynamic
     assert.equal(result.artifacts.length, 0);
   }
 });
+
+test("fixed-array formal borrowing requires the exact non-Copy native input lane", () => {
+  const value = rustFixedArrayTargetType(rustStringTargetType(), 2);
+  const selected = selectRustSourceParameterBorrowCarrier(value, value);
+  assert.equal(selected?.kind === "reference" && selected.mutable === false &&
+    rustTargetTypeRefEquals(selected.referent, value), true,
+  "a readonly native affine array uses a reference to that exact extent and element carrier");
+  for (const [label, base, lane] of [
+    ["Copy array keeps its existing native value ABI", rustFixedArrayTargetType(element, 2), rustFixedArrayTargetType(element, 2)],
+    ["missing selected input is not invented", value, undefined],
+    ["different exact extent cannot borrow this input", value, rustFixedArrayTargetType(rustStringTargetType(), 3)],
+    ["different element carrier cannot borrow this input", value, rustFixedArrayTargetType(element, 2)],
+    ["an already borrowed lane is not reinterpreted", value, { kind: "reference", referent: value, mutable: false }],
+  ]) assert.equal(selectRustSourceParameterBorrowCarrier(base, lane) === undefined, true, label);
+});
+
+test("fixed-array formal borrowing preserves whole-value retention, writes and captures", () => {
+  const { program } = analyzeRust({ files: { "index.ts": `
+import type { FixedArray, int32 } from "@tsonic/core/types.js";
+export function read(values: FixedArray<string, 2>, index: int32): string { return values[index]; }
+export function own(values: FixedArray<string, 2>): FixedArray<string, 2> { return values; }
+export function replace(values: FixedArray<string, 2>, replacement: FixedArray<string, 2>): FixedArray<string, 2> {
+  values = replacement;
+  return values;
+}
+export function write(values: FixedArray<string, 2>, value: string): string {
+  values[0] = value;
+  return values[0];
+}
+export function capture(values: FixedArray<string, 2>): () => string { return () => values[0]; }
+` } });
+  const { ast } = program.source;
+  const selected = new Map();
+  const visit = node => {
+    if (ast.is.IsFunctionDeclaration(node)) {
+      const name = ast.text(ast.name(node));
+      if (["read", "own", "replace", "write", "capture"].includes(name)) {
+        selected.set(name, program.records.sourceParameterAbi.get(ast.parameters(node)[0]));
+      }
+    }
+    ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+  };
+  program.sourceFiles.forEach(visit);
+  assert.equal(selected.size, 5, "all five original checked source formals publish their own ABI");
+  for (const [name, mode] of [["read", "ref"], ["own", "value"], ["replace", "value"], ["write", "value"], ["capture", "value"]]) {
+    const abi = selected.get(name);
+    assert.equal(abi?.mode === mode, true, `${name}: only the actual nonretaining readonly formal borrows`);
+    assert.equal(rustFixedArrayCarrierValue(abi?.valueCarrier)?.length.value === "2", true,
+      `${name}: the body retains its exact native array value carrier`);
+    assert.equal(mode === "ref"
+      ? abi.parameterCarrier.kind === "reference" && abi.parameterCarrier.mutable === false &&
+        rustTargetTypeRefEquals(abi.parameterCarrier.referent, abi.valueCarrier)
+      : rustTargetTypeRefEquals(abi.parameterCarrier, abi.valueCarrier), true,
+    `${name}: the physical input implements the completed checked ownership obligation`);
+  }
+});
+
+for (const surfaces of [[], ["js"]]) {
+  const surface = surfaces[0] ?? "native";
+  test(`fixed-array dynamic String reads use their actual native Clone contract (${surface})`, () => {
+    const { result } = compileRust({ surfaces, packages: [acmeTestingPackage()],
+      target: { id: "rust", options: { outputType: "bin", crateName: "fixed_array_dynamic_string" } },
+      files: { "index.ts": `
+import type { FixedArray, int32 } from "@tsonic/core/types.js";
+import { check } from "@acme/testing";
+export function select(values: FixedArray<string, 2>, index: int32): string { return values[index]; }
+export function main(): void {
+  const values: FixedArray<string, 2> = ["first", "second"] as const;
+  check(select(values, 1 as int32) === "second");
+  check(select(values, 0 as int32) === "first");
+}
+main();
+` } });
+    assertNoTargetDiagnostics(result.diagnostics);
+    const generated = artifactText(result, "src/index.rs");
+    assert.match(generated, /fn select\(/u, "the actual dynamic native index callable is retained");
+    assert.match(generated, /\]\.clone\(\)/u, "an owned non-Copy String result uses its real native Clone operation");
+    assert.doesNotMatch(generated, /values\.clone\(\)|Box::|unsafe\s*\{/u,
+      "selecting one owned String never clones its whole array or invents a dynamic storage owner");
+    validateGeneratedProject(`fixed-array-dynamic-string-${surface}`, result.artifacts, { run: true });
+  });
+
+  test(`fixed-array dynamic owned reads retain the actual non-Clone refusal (${surface})`, () => {
+    const { result } = compileRust({ surfaces, packages: [acmePlatformPackage()], files: { "index.ts": `
+import type { FixedArray, int32 } from "@tsonic/core/types.js";
+import { Store } from "@acme/platform";
+export function select(values: FixedArray<Store, 2>, index: int32): Store { return values[index]; }
+` } });
+    assert.equal(result.diagnostics.some(diagnostic => diagnostic.code === "RUST_UNSUPPORTED_AST" &&
+      diagnostic.message === "A provider index read requires an exact Copy or Clone result-carrier contract. Node kind: KindElementAccessExpression." &&
+      diagnostic.evidence?.includes("target.capability=rust.backend.provider-index-read-ownership")), true,
+      result.diagnostics.slice(0, 4).map(diagnostic => `${diagnostic.code}: ${diagnostic.message}`).join("; "));
+    assert.equal(result.program === undefined && result.plan === undefined && result.artifacts.length === 0, true,
+      "a non-Clone native element cannot become an owned result through a borrowed array index");
+  });
+}
 
 for (const length of ["2n", "9007199254740993n"]) {
   for (const [name, expression] of [["direct", "values.length"], ["inferred", "inferred(values).length"]]) {

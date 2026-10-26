@@ -23,6 +23,7 @@ import { setCarrierFact } from "../operations/project-calls.js";
 import type { RustSourceParameterAbiFact } from "../../target-model/records/callables-and-resources.js";
 import type { RustProgramRecordBuilder } from "../program/records/model.js";
 import { rustClassCallableMemberOwner, rustClassReceiverCarriers } from "../declarations/classes/receivers.js";
+import { resolveRustCallableStorageCarrier } from "../source-evidence/types/resolution/source-evidence.js";
 
 export type RustInferredReturnSelection =
   | { readonly kind: "complete"; readonly carrier: TargetTypeRef }
@@ -54,7 +55,18 @@ export function selectRustRetainedReturn(
   declaration: Node,
   baseline: TargetTypeRef,
 ): RustInferredReturnSelection {
-  return selectReturn(walk, declaration, baseline, "retained");
+  const inferred = selectReturn(walk, declaration, baseline, "retained");
+  if (inferred.kind === "pending" || walk.context.ast.body(declaration) === undefined) return inferred;
+  const payload = rustOptionElementCarrier(inferred.carrier) ?? inferred.carrier;
+  if (rustCallableProtocol(payload) === undefined) return inferred;
+  const context = rustResolutionContext({ ...walk, currentCallableDeclaration: declaration }, declaration, "return");
+  const selected = resolveRustCallableStorageCarrier(payload, { ...context, callableRepresentation: "storage" },
+    walk.operationOptions, new Set());
+  if (selected === undefined) return { kind: "pending", hint: inferred.carrier };
+  const carrier = rustOptionElementCarrier(inferred.carrier) === undefined ? selected
+    : rustSourceOptionalElementCarrier(inferred.carrier) === undefined ? rustOptionTargetType(selected)
+      : rustSourceOptionalTargetType(selected);
+  return { kind: "complete", carrier };
 }
 
 function selectReturn(

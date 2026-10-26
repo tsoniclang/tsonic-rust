@@ -56,16 +56,23 @@ export function planRustNativeErrorJoin(input: {
   readonly name: string;
   readonly referencePath?: string;
   readonly visibility: RustVisibility;
+  readonly resultShape: "value" | "result";
   readonly sources: readonly RustNativeErrorJoinSource[];
   readonly clone?: boolean;
 }): RustNativeErrorJoinPlan | undefined {
+  if (input.resultShape !== "value" && input.resultShape !== "result")
+    failRustPlannerInvariant("An admitted native error join requires its explicit Result or value ABI.");
   const selectedSources = input.sources;
+  if (input.resultShape === "value" && selectedSources.length !== 0)
+    failRustPlannerInvariant("An admitted native value ABI cannot carry a fallible error join.");
   if (new Set(selectedSources.map(source => source.identity)).size !== selectedSources.length)
     failRustPlannerInvariant("An admitted native error join requires its unique sealed source identities.");
   const sources = new Map(selectedSources.map(source => [source.identity, source]));
   const parameters = selectedSources.map((_source, index) => ({ kind: "type" as const, name: `Error${index}`, bounds: [] }));
   const arguments_ = selectedSources.map(source => ({ kind: "type" as const, type: source.errorType }));
-  const errorType: RustType | undefined = selectedSources.length === 0 ? undefined : selectedSources.length === 1
+  const errorType: RustType | undefined = selectedSources.length === 0
+    ? input.resultShape === "value" ? undefined : { kind: "named", path: "core::convert::Infallible" }
+    : selectedSources.length === 1
     ? selectedSources[0]!.errorType : { kind: "named", path: input.referencePath ?? input.name,
       identity: input.identity, genericArguments: arguments_ };
   const items: readonly RustItem[] = selectedSources.length < 2 ? Object.freeze([]) : Object.freeze([{

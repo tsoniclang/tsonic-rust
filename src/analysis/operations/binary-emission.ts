@@ -1,7 +1,7 @@
 import type { Node } from "@tsonic/tsts";
 import { rustNodeIsOutsideNativeCode } from "../control-flow/compile-time-statements.js";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
-import { BinaryExpression_Left, BinaryExpression_Right, Node_Expression, sourceBooleanShortCircuitBranch, sourceEnclosingCallable, sourceSequenceInputChoice } from "@tsonic/target-api/source";
+import { BinaryExpression_Left, BinaryExpression_Right, Node_Expression, sourceBooleanShortCircuitBranch, sourceSequenceInputChoice } from "@tsonic/target-api/source";
 import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustBinaryEmissionProducer } from "../program/records/expression-binary.js";
 import type { RustBinaryEmission } from "../../target-model/records/expression-binary.js";
@@ -147,9 +147,7 @@ export function analyzeRustBinaryEmission(program: Omit<RustAnalysisProgram, "re
           refuse(node, "rust.backend.operator", "Binary expression selected a non-binary Rust operator fact.", "RUST_UNSUPPORTED_AST"); continue;
         }
         if (fact.kind === "operator-call" && fact.fallible) {
-          const owner = sourceEnclosingCallable(node, ast);
-          const file = ast.getSourceFile(node);
-          const region = owner === undefined ? file === undefined ? undefined : program.errorRegions.initialization.moduleFor(file)?.region : program.errorRegions.get(owner);
+          const region = program.errorRegions.localFor(node);
           if (region === undefined || region.kind === "infallible") { refuse(node, "rust.error.operator", "Fallible operator calls require a finalized fallible lowering context.", "RUST_UNSUPPORTED_AST"); continue; }
         }
         break;

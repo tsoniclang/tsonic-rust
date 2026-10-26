@@ -11,6 +11,7 @@ import { getRustTypeofRuntimeKind } from "../syntax/runtime-kind.js";
 import { isRustSourceErrorCarrier } from "../../../target-model/types/carriers/source-error.js";
 import { rustCarrierProvidesErrorObservation } from "../../constraints/error-protocols.js";
 import { isRustClosedValueCarrier } from "../../../target-model/types/carriers/closed-value-kind.js";
+import { rustNativeErrorJoinReference } from "../../../target-model/types/native-error-joins.js";
 
 export function selectRustProjectTypeTestPlan(
   sourceCarrier: TargetTypeRef,
@@ -80,6 +81,7 @@ export function selectRustClosedTypeTestPlan(
       ? Object.freeze({ kind: "constant", value: false }) : undefined;
   }
   if (predicate.kind === "error") {
+    if (rustNativeErrorJoinReference(source) !== undefined) return Object.freeze({ kind: "error", lowering: "program-error" });
     if (!isRustSourceErrorCarrier(source) && rustCarrierProvidesErrorObservation(source, definitions)) {
       return Object.freeze({ kind: "error", lowering: "native-error" });
     }

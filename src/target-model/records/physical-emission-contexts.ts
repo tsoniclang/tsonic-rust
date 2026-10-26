@@ -91,6 +91,11 @@ export interface RustPhysicalEmissionSourceSlot {
 export interface RustPhysicalEmissionSourceOccurrence {
   readonly node: Node;
   readonly operation: RustEmissionProviderOperation;
+  readonly receiverProjection:
+    | { readonly kind: "source" }
+    | { readonly kind: "union-payload";
+        readonly union: Extract<RustTargetOperationFact, { readonly kind: "union-property" }>;
+        readonly variant: Extract<RustTargetOperationFact, { readonly kind: "union-property" }>["variants"][number] };
   readonly slots: readonly RustPhysicalEmissionSourceSlot[];
   readonly inputs: readonly { readonly input: RustFinalizedSourceInput; readonly slot: RustPhysicalEmissionSourceSlot }[];
   readonly targetOrder: readonly string[];

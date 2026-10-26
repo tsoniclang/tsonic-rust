@@ -156,7 +156,7 @@ export function planRustInitializerBoundary(
   const join = planRustNativeErrorJoin({
     identity: `initializer:${rendering.sourcePackageComponentId}:${functionName}`, name: joinName,
     referencePath: referenceCrate === undefined ? `crate::${joinName}` : `${referenceCrate}::${joinName}`,
-    visibility: "public", sources,
+    visibility: "public", resultShape: "result", sources,
   });
   const boundary = join === undefined ? undefined : rustNativeFallibleBoundary(join,
     local === undefined ? undefined : { owner, source: { identity: local.identity, errorType: rustErrorType(owner) } });

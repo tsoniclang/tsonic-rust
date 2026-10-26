@@ -16,7 +16,10 @@ export interface RustFrameCallableTypes {
   readonly rootType: RustType;
 }
 
-export function rustFrameCallableTypes(carrier: TargetTypeRef, context: RustTypeRenderingContext): RustFrameCallableTypes {
+export function rustFrameCallableTypes(
+  carrier: TargetTypeRef, context: RustTypeRenderingContext,
+  position: "general" | "parameter" | "return" = "general",
+): RustFrameCallableTypes {
   const selected = context.input.program.records.frameType.get(carrier);
   if (selected === undefined) failRustPlannerInvariant("An admitted native frame requires its sealed physical type and environment.");
   const { definition, entry } = selected;
@@ -24,7 +27,7 @@ export function rustFrameCallableTypes(carrier: TargetTypeRef, context: RustType
   if (module === undefined) failRustPlannerInvariant("An admitted native frame requires its emitted source module.");
   const external = context.externalCrateNameByFileName.get(definition.ownerFileName);
   const parameters = selected.environment.map(carrier => {
-    const type = rustTypeFromCarrierInContext(carrier, context);
+    const type = rustTypeFromCarrierInContext(carrier, context, position);
     if (type === undefined) failRustPlannerInvariant("An admitted native frame requires its exact environment type syntax.");
     return { kind: "type" as const, type };
   });
