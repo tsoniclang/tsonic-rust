@@ -13,7 +13,7 @@ import {
 } from "@tsonic/target-api/source";
 
 import { appendRustDiagnostic, rustOperationContext } from "../program/walk.js";
-import { rustStructuralFieldIsFallible } from "../../policy/operations/members/native-contracts.js";
+import { rustStructuralFieldIsFallible, rustOperationAbiConversionsAreFallible } from "../../policy/operations/members/native-contracts.js";
 import { finalizeRustPreparedCheckedCall } from "../operations/members/index.js";
 import { recordFinalizedOperationInputEffects } from "../operations/inputs.js";
 import { rustCallableProtocol } from "../../target-model/types/index.js";
@@ -255,6 +255,8 @@ function collectFallibilityFacts(
       walk.context.projectFieldDispatch,
       walk.context.frozenDataWrites, walk.context.typeDefinitions,
     ) ||
+      (operation?.kind === "provider-operation" || operation?.kind === "runtime-set") &&
+        rustOperationAbiConversionsAreFallible(operation.abi) ||
       bindingProjectionIsFallible ||
       rustContextualValueConversionIsFallible(contextualConversion?.conversion, walk.context.typeDefinitions);
   };

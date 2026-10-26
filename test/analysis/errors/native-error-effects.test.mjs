@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { analyzeRust } from "../../helpers/rust-session.mjs";
+import { analyzeRust, nodejsCapability } from "../../helpers/rust-session.mjs";
 import { analyzeRustErrorEffects } from "../../helpers/rust-error-analysis.mjs";
 import { nativeClosureProducerFixture, nativeClosureProducerFailurePackage } from "../../helpers/native-closure-producers.mjs";
 import { rustNamedTargetType } from "../../../dist/target-model/types/carriers/native.js";
@@ -59,6 +59,55 @@ function assertChannels(actual, expected, localErrors = false) {
     assert.equal(source !== undefined, true, "exact native channel identity");
     assert.equal(rustTargetTypeRefEquals(source.errorType, selected.errorType), true, "exact native channel carrier");
   }
+}
+
+for (const surfaces of [[], ["js"]]) {
+  test(`native environment writes retain their exact provider error through source callers (${surfaces[0] ?? "native"})`, async () => {
+    const current = fixture(`import type { ProcessEnv } from "node:process";
+function build(): ProcessEnv {
+  const values: ProcessEnv = {};
+  values["TSONIC_ENV_CHILD_ONLY"] = "child";
+  values["TSONIC_ENV_CHILD_ONLY"] = undefined;
+  return values;
+}
+export function copy(): ProcessEnv { return build(); }`, { surfaces, capabilities: [await nodejsCapability()] });
+    const writes = current.nodes.filter(node => current.program.records.targetOperation.get(node)?.kind === "runtime-set");
+    assert.equal(writes.length, 2, "both original provider writes are retained");
+    let channel;
+    for (const node of writes) {
+      const operation = current.program.records.targetOperation.get(node);
+      assert.equal(operation.abi.effects.invocation, "fallible", "the static ProcessEnv contract retains native failure");
+      assert.equal(operation.abi.effects.errorBoundary, "provider-native", "the actual provider owns the native error");
+      const actual = current.effects(node);
+      assert.equal(actual.localErrors, false, "the provider invocation does not manufacture a package channel");
+      assert.equal(actual.nativeErrors.length, 1, "one exact native invocation channel");
+      const selected = actual.nativeErrors[0];
+      assert.equal(rustTargetTypeRefEquals(selected.errorType, operation.abi.effects.errorCarrier), true,
+        "effects retain the finalized provider ABI's error carrier");
+      if (channel !== undefined) assert.equal(selected.identity, channel.identity, "both writes share their actual native error identity");
+      channel = selected;
+      const occurrence = current.program.physicalEmissionContexts.sourceOccurrences.find(occurrence => occurrence.node === node);
+      assert.equal(occurrence !== undefined, true, "the actual write has a completed native emission occurrence");
+      const form = current.program.records.providerForm.get(node, occurrence.operation.abi);
+      assert.equal(form?.nativeResult !== undefined, true, "the original write publishes native Result syntax");
+      assert.equal(form.nativeResult.local === undefined && form.nativeResult.operand.localOwner === undefined, true,
+        "native provider errors stay distinct from package errors");
+      assert.equal(form.nativeResult.operand.sources.length, 1, "one exact Result operand source");
+      assert.equal(form.nativeResult.operand.sources[0].identity, selected.identity, "the operand retains the same source identity");
+      assert.equal(form.nativeResult.channels.get(selected.identity)?.targetIdentity, selected.identity,
+        "the completed enclosing region accepts that exact native channel");
+    }
+    assertChannels(current.callable("build"), [channel]);
+    assertChannels(current.callable("copy"), [channel]);
+    const selected = current.program.records.sourceErrorEffects.get(current.calls("build")[0]);
+    assert.equal(selected?.edges.length, 1, "the real source call has one completed error correspondence");
+    const edge = selected.edges[0];
+    assert.equal(edge.declaration === current.declaration("build") && edge.kind === "invoke", true,
+      "the actual build declaration owns the call edge");
+    assert.equal(edge.nativeErrors.length, 1, "one exact native source-to-caller route");
+    assert.equal(edge.nativeErrors[0].source.identity, channel.identity, "the declaration's native identity is retained");
+    assert.equal(edge.nativeErrors[0].target.identity, channel.identity, "the caller's identical native error needs no rebranding");
+  });
 }
 
 for (const surfaces of [[], ["js"]]) {

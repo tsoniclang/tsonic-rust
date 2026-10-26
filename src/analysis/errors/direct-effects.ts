@@ -105,7 +105,7 @@ export function createRustDirectErrorEffects(
     const invokedError = nativeInput === undefined && frame === undefined
       ? rustCallableProtocol(rustSourceCallCallableStorageCarrier(operation, walk.context.structuralShapes))?.error : undefined;
     const invocationEffects = invokedError === undefined ? undefined : rustCallableInvocationErrorEffects(invokedError);
-    const providerError = operation?.kind === "provider-operation" && operation.abi.effects.invocation === "fallible" &&
+    const providerError = (operation?.kind === "provider-operation" || operation?.kind === "runtime-set") && operation.abi.effects.invocation === "fallible" &&
       operation.abi.effects.errorBoundary === "provider-native" ? operation.abi.effects.errorCarrier : undefined;
     const providerEffects = providerError === undefined ? undefined : rustCallableInvocationErrorEffects(providerError);
     if (kind === "KindThrowStatement" || kind === "KindRegularExpressionLiteral" ||

@@ -160,8 +160,11 @@ export function rustTargetOperationIsFallible(
 }
 
 export function rustOperationAbiInvocationIsFallible(abi: RustFinalizedOperationAbi): boolean {
-  if (abi.effects.invocation === "fallible" ||
-    (abi.targetReceiver.kind === "input" && abi.targetReceiver.input.conversion.fallible) ||
+  return abi.effects.invocation === "fallible" || rustOperationAbiConversionsAreFallible(abi);
+}
+
+export function rustOperationAbiConversionsAreFallible(abi: RustFinalizedOperationAbi): boolean {
+  if ((abi.targetReceiver.kind === "input" && abi.targetReceiver.input.conversion.fallible) ||
     abi.targetArguments.some((input) =>
       isRustFinalizedSourceInput(input)
         ? input.conversion.fallible
