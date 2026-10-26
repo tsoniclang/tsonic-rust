@@ -37,7 +37,8 @@ mod catch_checks {
             crate::program::TsonicError::from(tsonic_rust_runtime::JsError::error("original"));
         let throwing = tsonic_rust_runtime::Callable::new(move |()| Err(original.clone()));
         assert_eq!(crate::invoke(&throwing), "original");
-        let passing = tsonic_rust_runtime::Callable::new(|()| Ok::<(), crate::program::TsonicError>(()));
+        let passing =
+            tsonic_rust_runtime::Callable::new(|()| Ok::<(), crate::program::TsonicError>(()));
         assert_eq!(crate::invoke(&passing), "success");
     }
 }
