@@ -12,6 +12,7 @@ import { rustNamedTypeCarrierValue } from "../../../dist/target-model/types/carr
 import { rustSourceOptionalTargetType, rustOptionalStorageProjection } from "../../../dist/target-model/types/projections.js";
 import { analyzeRust } from "../../helpers/rust-session.mjs";
 import { selectRustStructuralEmission } from "../../../dist/policy/types/objects/structural-emission.js";
+import { selectRustPhysicalProgramErrorOwnerForFile } from "../../../dist/analysis/errors/error-types.js";
 
 const integer = { kind: "source-primitive", name: "int32" };
 const lifetime = { kind: "parameter", identity: "storage", name: "storage" };
@@ -128,9 +129,10 @@ test("checked generic source retention publishes the exact int64 callable-field 
       assert.equal(protocol !== undefined, true, `${width}: the admitted callable field remains exact`);
       assert.equal(protocol.parameters[0].name, width, `${width}: the actual native argument is retained`);
       assert.equal(protocol.result.name, width, `${width}: the actual native result is retained`);
-      const error = rustProgramErrorOwner(protocol.error);
-      assert.equal(error?.kind === "physical" && error.componentId === selected.componentId, true,
-        `${width}: the one physical replacement supplies the declared component error`);
+      const owner = selectRustPhysicalProgramErrorOwnerForFile(selected.ownerFileName, program.sourcePackageComponents);
+      assert.equal(owner !== undefined, true, `${width}: the actual declared component has one physical error classification`);
+      assert.equal(rustTargetTypeRefEquals(protocol.error, rustProgramErrorTargetType(owner)), true,
+        `${width}: the one physical replacement supplies the complete canonical declared-component error`);
       assert.equal(program.records.structuralShape.get(source) === selected, true,
         `${width}: canonical publication preserves the identical source-to-physical owner`);
       owners.push(`${selected.componentId}\0${selected.targetName}`);
