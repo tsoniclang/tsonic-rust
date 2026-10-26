@@ -1,6 +1,7 @@
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
 import type { TargetSourcePackageGraph } from "@tsonic/target-api";
 import type { SourceProgramNavigation } from "@tsonic/target-api/source";
+import { sourceDeclarationIsModuleScoped } from "@tsonic/target-api/source";
 import { failTargetAnalysisInvariant, rejectedTargetStage, resolvedTargetStage, type TargetStageResult } from "@tsonic/target-api/artifacts";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { RustOperationAttempt } from "../program/operation-attempts.js";
@@ -449,6 +450,17 @@ function createRustCallableValueLifecycle(input: RustCallableValuePlanInput,
       const identityRequests = prepareRustGenericCallableIdentityRequests({ sources: identitySources, nativeStorage: physicalLifecycle.prepared });
       const dispatchRequests = prepareRustGenericCallableDispatchRequests({ ...input, nodes: input.nativeNodes, generic,
         nativeStorage: physicalLifecycle.prepared });
+      for (const node of input.nativeNodes) {
+        if (!input.isNativeNode(node) || input.records.compileTimeSource.get(node) === true ||
+          input.records.nativeUnreachable.get(node) === true || input.records.nativeParticipation.get(node) === "erased") continue;
+        const declaration = input.records.sourceBinding.get(node)?.sourceDeclaration;
+        if (declaration === undefined || !input.ast.is.IsFunctionDeclaration(declaration) ||
+          input.ast.body(declaration) === undefined || !input.isNativeNode(declaration) ||
+          !sourceDeclarationIsModuleScoped(declaration, input.ast)) continue;
+        const capture = input.records.closureCapture.get(declaration);
+        if (capture !== undefined && capture.captures.length === 0 &&
+          capture.receiverFields.length === 0 && capture.receivers.length === 0) captures.require(declaration);
+      }
       physical.closeAdmission();
       const nativeCaptures = captures.complete();
       const nativeGenericProducers = createRustNativeGenericProducerPlan({ records: input.records, generic, nativeStorage,

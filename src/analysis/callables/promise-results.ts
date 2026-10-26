@@ -4,7 +4,7 @@ import { analyzeSourceGenericAdoption, sourceGenericAdoptionDiagnosticCode, sour
   createSourceControlFlowDomain, createSourceOwnershipQuery, createSourceStorageBudget, defaultSourceStorageLimits,
   type SourceOwnershipPremises, type SourceOwnershipUnresolved, type SourceRetentionSelection,
   type SourceStorageBindings, type SourceStorageProjection, type SourceStorageQueries, type SourceStorageSubject } from "@tsonic/target-api/analysis";
-import { sourceEnclosingCallable, sourceExpressionResultDisposition, sourceCallableValueParameters, type TargetSourceProgram } from "@tsonic/target-api/source";
+import { sourceEnclosingCallable, sourceExpressionResultDisposition, sourceCallableValueParameters, sourceDeclarationIsModuleScoped, type TargetSourceProgram } from "@tsonic/target-api/source";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { RustPreparedReadSelection } from "../ownership/reads.js";
 import type { RustPromiseResult, RustPromiseResults, RustPromiseResultUses } from "../../target-model/records/promise-results.js";
@@ -92,10 +92,12 @@ export function analyzeRustPromiseResults(input: {
   const budget = createSourceStorageBudget(defaultSourceStorageLimits);
   const unresolved = (at: Node, reason: string): SourceOwnershipUnresolved => Object.freeze({ kind: "unresolved", at, reason });
   const carrierFor = (subject: SourceStorageSubject, bindings: SourceStorageBindings): TargetTypeRef | SourceOwnershipUnresolved => {
-    if (subject.kind === "value" && subject.projection.length === 0 && input.ast.is.IsMethodDeclaration(subject.node) &&
+    const moduleDeclaration = input.ast.is.IsFunctionDeclaration(subject.node) && input.ast.body(subject.node) !== undefined &&
+      sourceDeclarationIsModuleScoped(subject.node, input.ast);
+    if (subject.kind === "value" && subject.projection.length === 0 && (moduleDeclaration || input.ast.is.IsMethodDeclaration(subject.node) &&
       input.evidence.structuralShapes?.definitions.some(definition => definition.fields.some(field =>
         field.methodPlan?.kind === "fixed" && field.methodPlan.declaration === subject.node ||
-        field.methodPlan?.constructions.some(construction => construction.expression === subject.node)))) {
+        field.methodPlan?.constructions.some(construction => construction.expression === subject.node))))) {
       const owner = sourceEnclosingCallable(input.ast.parent(subject.node), input.ast);
       const generic = input.nativeStorage.genericBindingsFor(owner ?? subject.node, bindings);
       if (generic.kind === "unresolved") return unresolved(subject.node, generic.reason);

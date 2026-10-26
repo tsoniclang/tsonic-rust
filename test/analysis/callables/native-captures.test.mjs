@@ -24,6 +24,34 @@ function fixture(text) {
   return { program, native, storage, plan, closures, declaration };
 }
 
+test("used module declarations publish their explicit empty native environment before capture completion", () => {
+  const current = fixture(`
+    function selected(): number { return 7; }
+    export function unused(): number { return 9; }
+    export function read(): number { return selected(); }
+  `);
+  const declaration = current.declaration("selected");
+  const source = current.program.records.closureCapture.get(declaration);
+  assert.equal(source !== undefined, true, "the source owner supplies an actual declaration environment");
+  assert.equal(source.captures.length + source.receiverFields.length + source.receivers.length, 0,
+    "this exact source module item has no runtime captured state");
+  const plan = current.program.callableValues.selected.nativeCaptures;
+  const selected = plan.forDeclaration(declaration);
+  assert.equal(selected.kind, "resolved", "the used module item was requested before capture publication");
+  assert.equal(selected.captures.length + selected.receiverFields.length + selected.receivers.length, 0,
+    "no environment object or captured component is fabricated");
+  assert.equal(selected.inputs.length, 0, "a direct native item adds no invocation dependency");
+  assert.equal(selected.environment.typeParameters.length + selected.environment.lifetimes.length +
+    selected.environment.constParameters.length, 0, "the environment is not the declaration's return signature");
+  assert.equal(Object.isFrozen(selected) && Object.isFrozen(selected.captures), true,
+    "retention reads immutable native capture evidence");
+  assert.equal(plan.forDeclaration(declaration) === selected, true, "retention does not recompute the selected environment");
+  assert.equal(plan.forDeclaration(current.declaration("unused")).kind, "unresolved",
+    "an unused module declaration is not made a demanded native environment");
+  assert.equal(current.program.records.closureCapture.get(declaration) === source, true,
+    "physical publication retains the original logical capture fact unchanged");
+});
+
 test("native captured equal-signature inputs retain distinct physical types without rewriting logical facts", () => {
   const current = fixture(`
     export function make(left: () => number, right: () => number): <Value>(value: Value) => Value {
