@@ -6,12 +6,12 @@ import { analyzeRustSourcePackageComponents } from "../../../dist/analysis/sourc
 import { normalizeRustErrorType, selectRustPhysicalProgramErrorOwner } from "../../../dist/analysis/errors/error-types.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 import { rustJsValueTargetType, rustProgramErrorTargetType } from "../../../dist/target-model/types/carriers/js.js";
-import { rustStringTargetType } from "../../../dist/target-model/types/carriers/native.js";
+import { rustNamedTargetType, rustStringTargetType } from "../../../dist/target-model/types/carriers/native.js";
 import { rustProducerErrorReference } from "../../../dist/target-model/types/carriers/producer-errors.js";
 import { rustNativeErrorJoinTargetType, rustNativeErrorJoinReference } from "../../../dist/target-model/types/native-error-joins.js";
 import { selectRustErrorRegion } from "../../../dist/analysis/errors/regions.js";
 import { nativeCallbackParametersSource } from "../../../../tsonic/test/fixtures/native-callback-parameters.mjs";
-import { rustCallableTargetType } from "../../../dist/target-model/types/carriers/callables.js";
+import { rustRuntimeCallableTargetType } from "../../../dist/target-model/types/carriers/runtime-carriers.js";
 import { rustNativeCallableErrorType } from "../../../dist/policy/types/callables/native-protocols.js";
 import { rustStaticLifetime } from "../../../dist/target-model/lifetimes/index.js";
 import { analyzeRust } from "../../helpers/rust-session.mjs";
@@ -59,7 +59,10 @@ test("concrete native Callable invocation errors normalize their bound producer 
     ["failed nested producer", failed, normalizeRustErrorType(failed, current.input)],
     ["JS rejection", rustJsValueTargetType(), rustJsValueTargetType()],
   ]) {
-    const implementation = rustCallableTargetType([], rustStringTargetType(), rustStaticLifetime, error);
+    const completion = rustNamedTargetType("rust.core.Result", "Result", [
+      { kind: "type", type: rustStringTargetType() }, { kind: "type", type: error },
+    ]);
+    const implementation = rustRuntimeCallableTargetType(rustStaticLifetime, [], completion);
     const associated = rustNativeCallableErrorType(input, implementation, "invocation", []);
     assert.equal(associated !== undefined, true, name + ": the actual native bridge admits the invocation projection");
     assert.equal(expected !== undefined, true, name + ": the original producer owns its exact error");
