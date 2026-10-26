@@ -220,7 +220,9 @@ for (const [name, source] of [
     const { result } = compileRust({ surfaces: ["js"],
       target: { id: "rust", options: { outputType: "bin", crateName: "native_callback_inverse" } },
       files: { "index.ts": "export {};\n" + source } });
-    assert.equal(result.diagnostics.length, 0, "the complete native program retains the admitted invocation and rejection conversions");
+    assert.equal(result.diagnostics.length, 0,
+      "the complete native program retains the admitted invocation and rejection conversions: " +
+      result.diagnostics.map(diagnostic => `${diagnostic.code}: ${diagnostic.message}`).join("; "));
     const joins = result.program.records.nativeErrorJoinDeclarations.get("/src/index.ts");
     assert.equal(joins !== undefined, true, "the actual source module has its sealed native join inventory");
     assert.equal(joins.some(declaration => declaration.arity > 1), false,
