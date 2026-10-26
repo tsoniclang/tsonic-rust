@@ -1,3 +1,4 @@
+import { rustCaughtErrorPhysicalDeclaration } from "../errors/catching-try.js";
 import type { AstReader, Node } from "@tsonic/tsts";
 import { Node_Expression, sourceEnclosingCallable, sourceTransparentExpressionOperand, type SourceProgramNavigation } from "@tsonic/target-api/source";
 import { failTargetAnalysisInvariant, type TargetDiagnostic } from "@tsonic/target-api/artifacts";
@@ -57,7 +58,7 @@ export function analyzeRustLocalBindings(input: {
     const variable = input.ast.as.AsVariableDeclaration(node);
     const nameNode = variable?.name;
     const initializer = variable?.Initializer;
-    const carrier = input.records.runtimeCarrier.get(node)?.carrier;
+    const carrier = rustCaughtErrorPhysicalDeclaration(input.ast, input.records, node) ?? input.records.runtimeCarrier.get(node)?.carrier;
     if (nameNode !== undefined && (input.ast.is.IsArrayBindingPattern(nameNode) || input.ast.is.IsObjectBindingPattern(nameNode))) {
       if (initializer === undefined || carrier === undefined)
         failTargetAnalysisInvariant("tsonic-rust", "A checked binding pattern requires its initializer and native carrier.", node);

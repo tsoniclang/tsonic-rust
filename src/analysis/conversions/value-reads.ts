@@ -1,3 +1,4 @@
+import { rustCaughtErrorPhysicalView } from "../errors/catching-try.js";
 import type { Node } from "@tsonic/tsts";
 import { rustProgramNodeIsOutsideNativeCode } from "../control-flow/compile-time-statements.js";
 import { failTargetAnalysisInvariant, type TargetDiagnostic } from "@tsonic/target-api/artifacts";
@@ -120,7 +121,8 @@ export function analyzeRustValueReads(program: Omit<RustAnalysisProgram, "reacha
     const indexed = program.records.indexedFieldKeyArgument.get(node);
     const contextual = program.records.contextualValueConversion.get(node);
     const optional = program.records.optionProjection.get(node);
-    const contextualInput = lifetime?.selectedCarrier ?? downcast?.targetCarrier ?? cast?.targetCarrier ?? conversion?.convertedType ?? flow?.selectedCarrier ?? source;
+    const physicalView = rustCaughtErrorPhysicalView(program.source.ast, program.records, node);
+    const contextualInput = lifetime?.selectedCarrier ?? downcast?.targetCarrier ?? cast?.targetCarrier ?? conversion?.convertedType ?? physicalView ?? flow?.selectedCarrier ?? source;
     const optionInput = contextual?.targetCarrier ?? indexed?.carrier ?? object?.targetCarrier ?? contextualInput;
     const value = optional?.resultCarrier ?? optionInput;
     if (source === undefined && value === undefined) continue;
@@ -143,7 +145,7 @@ export function analyzeRustValueReads(program: Omit<RustAnalysisProgram, "reacha
         refuse(node, "rust.backend.contextual-value-conversion", "Contextual Rust value conversion has no exact finalized target carrier.");
     }
     const transitions = [
-      ...(flow === undefined ? [] : [{ input: flow.sourceCarrier, output: flow.selectedCarrier, kind: "flow" as const }]),
+      ...(flow === undefined ? [] : [{ input: flow.sourceCarrier, output: physicalView ?? flow.selectedCarrier, kind: "flow" as const }]),
       ...(cast === undefined && downcast === undefined ? [] : [{ input: (cast ?? downcast)!.sourceCarrier, output: (cast ?? downcast)!.targetCarrier, kind: "cast" as const }]),
       ...(lifetime === undefined ? [] : [{ input: lifetime.sourceCarrier, output: lifetime.selectedCarrier, kind: "lifetime" as const }]),
       ...(object === undefined ? [] : [{ input: object.sourceCarrier, output: object.targetCarrier, kind: "object" as const }]),

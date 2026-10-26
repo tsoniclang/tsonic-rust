@@ -1,3 +1,4 @@
+import { rustCaughtErrorPhysicalView } from "../errors/catching-try.js";
 import type { Node } from "@tsonic/tsts";
 import { Node_Expression, BinaryExpression_Left, BinaryExpression_Right, forEachSourceImmediateEvaluationChild } from "@tsonic/target-api/source";
 import { failTargetAnalysisInvariant, type TargetDiagnostic } from "@tsonic/target-api/artifacts";
@@ -35,12 +36,14 @@ export function analyzeRustErrorFieldBorrows(program: Omit<RustAnalysisProgram, 
       selected.set(node, ordinary); producer.field(node, ordinary); continue;
     }
     const receiver = Node_Expression(ast, expression);
+    const physicalReceiver = receiver === undefined ? undefined : rustCaughtErrorPhysicalView(ast, program.records, receiver);
+    const receiverCarrier = physicalReceiver ?? operation.receiverCarrier;
     const result = operation.property === "stack" ? rustSourceOptionalTargetType(rustStringTargetType()) : rustStringTargetType();
-    if (receiver === undefined || !rustCarrierProvidesErrorObservation(operation.receiverCarrier, program.typeDefinitions) ||
+    if (receiver === undefined || !rustCarrierProvidesErrorObservation(receiverCarrier, program.typeDefinitions) ||
       !rustTargetTypeRefEquals(operation.resultCarrier, result))
       failTargetAnalysisInvariant("tsonic-rust", "Builtin Error property reading conflicts with its finalized member or exact native carriers.", expression);
     const projection = program.records.flowReadProjection.get(receiver);
-    const borrowed = projection?.kind === "builtin-error" &&
+    const borrowed = physicalReceiver === undefined && projection?.kind === "builtin-error" &&
       (isRustProgramErrorCarrier(projection.sourceCarrier) || isRustClosedValueCarrier(projection.sourceCarrier)) &&
       rustTargetTypeRefEquals(projection.selectedCarrier, operation.receiverCarrier) && rustFlowReadProjectionMatches(projection, program.projectTypes, program.typeDefinitions);
     const shared = operation.property !== "stack" && !rustTargetTypeRefEquals(operation.receiverCarrier, rustJsErrorTargetType());

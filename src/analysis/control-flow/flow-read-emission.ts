@@ -12,7 +12,7 @@ import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { isRustClosedValueCarrier } from "../../target-model/types/carriers/closed-value-kind.js";
 import { isRustSourceErrorCarrier, isRustRetainedErrorCarrier, isRustWritableSourceErrorCarrier,
   isRustWritableRetainedErrorCarrier, isRustMutableJsErrorCarrier } from "../../target-model/types/carriers/source-error.js";
-import { rustCaughtErrorReadCarrier } from "../errors/catching-try.js";
+import { rustCaughtErrorReadCarrier, rustCaughtErrorPhysicalView } from "../errors/catching-try.js";
 
 export function analyzeRustFlowReadEmission(program: Omit<RustAnalysisProgram, "reachability">,
   nodes: readonly Node[], producer: RustFlowReadEmissionProducer): readonly TargetDiagnostic[] {
@@ -49,7 +49,8 @@ export function analyzeRustFlowReadEmission(program: Omit<RustAnalysisProgram, "
     } else if (fact.kind === "builtin-error") {
       const physical = isRustProgramErrorCarrier(fact.sourceCarrier)
         ? rustCaughtErrorReadCarrier(program.source.ast, program.records, node) : undefined;
-      if (physical !== undefined && rustTargetTypeRefEquals(physical, fact.selectedCarrier)) {
+      if (physical !== undefined && rustTargetTypeRefEquals(physical, fact.selectedCarrier) ||
+        rustCaughtErrorPhysicalView(program.source.ast, program.records, node) !== undefined) {
         producer.publish(node, fact, { kind: "identity" });
         return;
       }
