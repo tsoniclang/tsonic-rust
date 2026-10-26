@@ -246,7 +246,7 @@ export function createRustDirectErrorEffects(
     if (effects === undefined) appendRustDiagnostic(walk, "RUST_ERROR_EFFECT_CONFLICT",
       "One native error identity has inconsistent exact carriers in this evaluation region.", node,
       ["target.capability=rust.native-error.exact-effects"]);
-    else if (kind === KindCallExpression || kind === KindNewExpression || kind === "KindAwaitExpression")
+    else if (kind === KindCallExpression || kind === KindNewExpression || kind === "KindAwaitExpression" || operation?.kind === "runtime-set")
       effectsByExpression.set(node, effects);
     return effects;
   };

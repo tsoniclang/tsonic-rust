@@ -287,7 +287,8 @@ function collectFallibilityFacts(
     const effects = collectRustErrorRegionEffects(root, ast, directEffects, (node, effects) => {
       budget.metadata(effects);
       const kind = ast.kindName(node);
-      if (!isDeclaration(node) && kind !== KindCallExpression && kind !== KindNewExpression && kind !== "KindAwaitExpression")
+      if (!isDeclaration(node) && kind !== KindCallExpression && kind !== KindNewExpression && kind !== "KindAwaitExpression" &&
+        walk.context.records.targetOperation.get(node)?.kind !== "runtime-set")
         effectsByRegion.set(node, effects);
     });
     if (effects === undefined) appendRustDiagnostic(walk, "RUST_ERROR_REGION_NOT_EXACT",
