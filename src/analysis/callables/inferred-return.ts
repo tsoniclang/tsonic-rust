@@ -1,4 +1,4 @@
-import { BinaryExpression_Left, BinaryExpression_Right, Node_Expression, Node_Initializer, Node_Operand, Node_Type, sourceCallableValueParameters, sourceReceiverOwner } from "@tsonic/target-api/source";
+import { BinaryExpression_Left, BinaryExpression_Right, Node_Expression, Node_Initializer, Node_Operand, Node_Type, ObjectLiteralProperty_Value, sourceCallableValueParameters, sourceReceiverOwner } from "@tsonic/target-api/source";
 import type { Node } from "@tsonic/tsts";
 import { createRustCarrierProbe } from "../program/carrier-probe.js";
 
@@ -24,6 +24,7 @@ import type { RustSourceParameterAbiFact } from "../../target-model/records/call
 import type { RustProgramRecordBuilder } from "../program/records/model.js";
 import { rustClassCallableMemberOwner, rustClassReceiverCarriers } from "../declarations/classes/receivers.js";
 import { resolveRustCallableStorageCarrier } from "../source-evidence/types/resolution/source-evidence.js";
+import { rustSourceStorageSubjectContext } from "../source-evidence/types/resolution/source-storage-projection.js";
 
 export type RustInferredReturnSelection =
   | { readonly kind: "complete"; readonly carrier: TargetTypeRef }
@@ -195,6 +196,9 @@ function selectReturn(
           const parameter = reference === undefined ? undefined : records.sourceParameterAbi.get(reference);
           if (parameter !== undefined) return parameter.valueCarrier;
           if (reference !== undefined && ast.kindName(reference) === "KindParameter") return undefined;
+          if (role === "logical" && reference !== undefined && ast.is.IsFunctionDeclaration(reference)) {
+            return resolveRustTargetTypeRef(expression, rustSourceStorageSubjectContext(context, undefined), probe.operationOptions);
+          }
           const initializer = reference === undefined ? undefined : Node_Initializer(ast, reference);
           const referenceFile = reference === undefined ? undefined : ast.getSourceFile(reference);
           const unwritten = referenceFile !== undefined && selection?.symbol !== undefined &&
@@ -248,15 +252,27 @@ function selectReturn(
           const sourceFile = ast.getSourceFile(expression);
           return sourceFile === undefined ? undefined : resolveExpressionCarrier(probe, expression, sourceFile, expected);
         }
-        const operands = kind === "KindBinaryExpression"
+        const literalValues = ast.is.IsObjectLiteralExpression(expression)
+          ? ast.as.AsObjectLiteralExpression(expression)?.Properties?.Nodes.flatMap(property => {
+              if (property === undefined) return [undefined];
+              const value = ast.is.IsSpreadAssignment(property) ? Node_Expression(ast, property)
+                : ObjectLiteralProperty_Value(ast, property);
+              return value === undefined && ast.is.IsMethodDeclaration(property) ? [] : [value];
+            })
+          : undefined;
+        if (ast.is.IsObjectLiteralExpression(expression) && literalValues === undefined) return undefined;
+        const operands = literalValues ?? (kind === "KindBinaryExpression"
           ? [BinaryExpression_Left(ast, expression), BinaryExpression_Right(ast, expression)]
           : kind === "KindPrefixUnaryExpression" ? [Node_Operand(ast, expression)]
-            : kind === "KindAwaitExpression" ? [Node_Expression(ast, expression)] : [];
+            : kind === "KindAwaitExpression" ? [Node_Expression(ast, expression)] : []);
         for (const operand of operands) {
           if (operand === undefined) return undefined;
           const carrier = expressionCarrier(operand);
           if (carrier === undefined) return undefined;
           if (setCarrierFact(probe, operand, carrier) === undefined) return undefined;
+        }
+        if (role === "logical" && ast.is.IsObjectLiteralExpression(expression)) {
+          return resolveRustTargetTypeRef(expression, rustSourceStorageSubjectContext(context, undefined), probe.operationOptions);
         }
         const sourceFile = ast.getSourceFile(expression);
         return sourceFile !== undefined
