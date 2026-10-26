@@ -90,6 +90,7 @@ export interface RustErrorJoinDeclaration {
 export interface RustErrorRegionRecords {
   readonly lifecycle: RustLifecycleErrorSelection | undefined;
   readonly get: (declaration: Node) => RustErrorRegionSelection | undefined;
+  readonly localFor: (node: Node) => RustErrorRegionSelection | undefined;
   readonly sourceFor: (edge: RustSourceErrorEffectEdge) => RustSourceErrorRegionSelection | undefined;
   readonly declarationsFor: (fileName: string) => readonly RustErrorJoinDeclaration[];
   readonly producerError: (reference: RustProducerErrorReference) => TargetTypeRef | undefined;

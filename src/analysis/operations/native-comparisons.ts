@@ -37,6 +37,12 @@ export function analyzeRustNativeComparisons(program: Omit<RustAnalysisProgram, 
     }
     return node;
   };
+  const exactInteger = (node: Node): bigint | undefined => {
+    const operand = unwrap(node);
+    const handler = program.records.nativeHandler.get(operand);
+    return handler?.kind === "native-pointer" && handler.selection.kind === "layout-query"
+      ? handler.selection.observation.value : program.records.literalValue.get(operand)?.integer;
+  };
   const scopedStringSource = (node: Node): Extract<RustNativeComparison, { readonly kind: "scoped-string" }>["source"] | undefined => {
     if (program.records.fieldValueReceiver.get(node) === true && borrowableField(node)) return Object.freeze({ kind: "field", field: node });
     while (rustBorrowValueIsUnprojected(node, program.records)) {
@@ -114,10 +120,10 @@ export function analyzeRustNativeComparisons(program: Omit<RustAnalysisProgram, 
       else if (operation.leftConversion === undefined && exactMask(left)) selected = { kind: "integer-identity", operand: "right" };
     }
     if (selected.kind === "ordinary" && operation.leftConversion === undefined && operation.rightConversion === undefined) {
-      const leftInteger = program.records.literalValue.get(left)?.integer;
-      const rightInteger = program.records.literalValue.get(right)?.integer;
+      const leftInteger = exactInteger(left);
+      const rightInteger = exactInteger(right);
       const reversed: Readonly<Record<string, string>> = { "==": "==", "!=": "!=", "<": ">", ">": "<", "<=": ">=", ">=": "<=" };
-      const boundary = rightInteger === 0n || rightInteger === 1n
+      const boundary = leftInteger !== undefined && rightInteger !== undefined ? undefined : rightInteger === 0n || rightInteger === 1n
         ? { operand: "left" as const, node: left, operator: operation.operator, integer: rightInteger }
         : (leftInteger === 0n || leftInteger === 1n) && reversed[operation.operator] !== undefined
           ? { operand: "right" as const, node: right, operator: reversed[operation.operator]!, integer: leftInteger } : undefined;
@@ -149,9 +155,9 @@ export function analyzeRustNativeComparisons(program: Omit<RustAnalysisProgram, 
       const rightValue = program.records.literalValue.get(unwrap(right));
       const leftCarrier = program.records.valueRead.get(left)?.value;
       const rightCarrier = program.records.valueRead.get(right)?.value;
-      if (leftValue?.integer !== undefined && rightValue?.integer !== undefined && isRustIntegerCarrier(leftCarrier) && isRustIntegerCarrier(rightCarrier)) {
-        const first = leftValue.integer;
-        const second = rightValue.integer;
+      const first = exactInteger(left);
+      const second = exactInteger(right);
+      if (first !== undefined && second !== undefined && isRustIntegerCarrier(leftCarrier) && isRustIntegerCarrier(rightCarrier)) {
         const value = operation.operator === "==" ? first === second : operation.operator === "!=" ? first !== second
           : operation.operator === "<" ? first < second : operation.operator === ">" ? first > second
           : operation.operator === "<=" ? first <= second : operation.operator === ">=" ? first >= second : undefined;

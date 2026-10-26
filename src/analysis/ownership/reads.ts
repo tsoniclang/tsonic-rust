@@ -6,9 +6,9 @@ import type { RustCaptureReadOwnership, RustOwnershipRecords, RustReadOwnershipF
 import type { RustAnalysisRecords } from "../../target-model/records/analysis.js";
 import type { RustClosureCaptureFact } from "../../target-model/records/operation-selections.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
-import { isRustStringCarrier, rustFixedArrayCarrierValue, rustLocationTargetType } from "../../target-model/types/index.js";
+import { isRustStringCarrier, rustLocationTargetType } from "../../target-model/types/index.js";
 import { isRustCopyCarrier, rustCarrierSupportsClone } from "../../policy/constraints/native-traits.js";
-import type { RustDeclarationGenericRequirementIndex } from "../declarations/generic-requirements.js";
+import type { AnalyzeRustDeclarationGenericRequirementsResult, RustDeclarationGenericRequirementIndex } from "../declarations/generic-requirements.js";
 import type { RustGenericCallablePlan } from "../callables/generic-values.js";
 import type { RustOwnershipFlow } from "../../target-model/records/ownership-flow.js";
 import { selectRustBorrowRelationship, type RustBorrowEffectsInput } from "./effects.js";
@@ -18,6 +18,10 @@ import { rustBorrowedOperationArguments } from "../storage/provider-borrows.js";
 import { BinaryExpression_Left, BinaryExpression_Right } from "@tsonic/target-api/source";
 import { rustContextualRuntimeConversionContract } from "../../policy/conversions/contextual.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
+
+export type RustPreparedReadSelection =
+  | { readonly kind: "selected"; readonly carrier: RustReadOwnershipFact["carrier"]; readonly value: RustReadOwnershipFact["value"] }
+  | { readonly kind: "unresolved"; readonly reason: string };
 
 export function prepareRustReadOwnership(input: {
   readonly storage: SourceStorageQueries;
@@ -33,6 +37,7 @@ export function prepareRustReadOwnership(input: {
   readonly invocationTransfersCapture: (owner: Node) => boolean;
   readonly limits?: Partial<SourceStorageLimits>;
 }): { readonly kind: "resolved"; readonly borrowFor: (node: Node) => "shared" | "mutable" | undefined;
+  readonly readFor: (node: Node, requirements: AnalyzeRustDeclarationGenericRequirementsResult) => RustPreparedReadSelection | undefined;
   readonly complete: (genericRequirements: RustDeclarationGenericRequirementIndex) =>
     { readonly kind: "resolved"; readonly ownership: RustOwnershipRecords }
     | { readonly kind: "rejected"; readonly diagnostics: readonly TargetDiagnostic[] } }
@@ -132,39 +137,44 @@ export function prepareRustReadOwnership(input: {
     if (borrowed !== undefined) borrows.set(node, borrowed);
   }
   const borrowFor = (node: Node) => borrows.get(node);
-  return { kind: "resolved", borrowFor, complete(genericRequirements) {
+  const valueReadFor = (node: Node, requirements: AnalyzeRustDeclarationGenericRequirementsResult) => {
+    const storageRead = storageReads.get(node);
+    if (storageRead === undefined) return undefined;
+    const parent = ast.parent(node);
+    const implicitProperty = parent !== undefined && ast.name(parent) === node && sourceParameterIsProperty(ast, parent);
+    const carrier = implicitProperty ? records.sourceParameterAbi.get(parent)?.valueCarrier : records.runtimeCarrier.get(node)?.carrier;
+    if (carrier === undefined) return undefined;
+    const declaration = sourceEnclosingCallable(node, ast);
+    const projection = records.flowReadProjection.get(node);
+    const valueCarrier = projection?.selectedCarrier ?? carrier;
+    const copy = isRustCopyCarrier(valueCarrier, selected => input.genericCallables.definitionFor(selected)?.copy === true);
+    const clone = rustCarrierSupportsClone(valueCarrier, input.definitions) || requirements.kind === "resolved" && declaration !== undefined &&
+      requirements.index.supportsClone(declaration, valueCarrier);
+    const use = uses.get(node);
+    const value = selectRustValueReadOwnership({ copy, clone, borrowed: borrowFor(node),
+      transfer: use?.mode === "move" || flow.movingReads.has(node) || !storageRead });
+    return { carrier, value };
+  };
+  const readFor = (node: Node, requirements: AnalyzeRustDeclarationGenericRequirementsResult): RustPreparedReadSelection | undefined => {
+    const selected = valueReadFor(node, requirements);
+    if (selected === undefined) return undefined;
+    if (selected.value === undefined) return requirements.kind === "rejected"
+      ? { kind: "unresolved", reason: "A retained native read requires its actual completed ownership contract." } : undefined;
+    return { kind: "selected", carrier: selected.carrier, value: selected.value };
+  };
+  return { kind: "resolved", borrowFor, readFor, complete(genericRequirements) {
+    const requirements = { kind: "resolved" as const, index: genericRequirements };
     const reads = new Map<Node, RustReadOwnershipFact>();
     const captures = new Map<Node, readonly RustCaptureReadOwnership[]>();
     const writes = new Map<Node, import("../../target-model/records/ownership.js").RustBorrowedFieldWrite>();
     for (const node of input.nativeNodes) {
-      const parent = ast.parent(node);
-      const implicitProperty = parent !== undefined && ast.name(parent) === node && sourceParameterIsProperty(ast, parent);
-      const carrier = implicitProperty ? records.sourceParameterAbi.get(parent)?.valueCarrier : records.runtimeCarrier.get(node)?.carrier;
-      if (carrier !== undefined) {
+      const selected = valueReadFor(node, requirements);
+      if (selected !== undefined) {
+        const { carrier, value } = selected;
         const declaration = sourceEnclosingCallable(node, ast);
         const projection = records.flowReadProjection.get(node);
-        const valueCarrier = projection?.selectedCarrier ?? carrier;
-        const copy = isRustCopyCarrier(valueCarrier, selected => input.genericCallables.definitionFor(selected)?.copy === true);
-        const clone = rustCarrierSupportsClone(valueCarrier, input.definitions) || declaration !== undefined &&
-          genericRequirements.supportsClone(declaration, valueCarrier);
-        const use = uses.get(node);
         const storageRead = storageReads.get(node)!;
         const borrowed = borrowFor(node);
-        const operation = records.targetOperation.get(node);
-        const fixedIndex = operation?.kind === "provider-operation" && operation.abi.target.form === "index" &&
-          operation.abi.result.kind === "sync" && operation.abi.result.conversion.kind === "identity" &&
-          operation.abi.targetReceiver.kind === "input" && operation.abi.targetReceiver.input.source.kind === "receiver" &&
-          operation.abi.targetReceiver.input.conversion.kind === "identity"
-          ? rustFixedArrayCarrierValue(operation.abi.targetReceiver.input.sourceCarrier) : undefined;
-        if (fixedIndex !== undefined && !copy && borrowed === undefined) {
-          return { kind: "rejected", diagnostics: [{
-            code: "RUST_FIXED_ARRAY_DYNAMIC_INDEX_REQUIRES_COPY", category: "error", source: "tsonic-rust", sourceNode: node,
-            message: "Dynamic fixed-array element access requires an exact Copy element carrier so a borrowed Rust index result can preserve source value semantics.",
-            evidence: ["target.capability=rust.analysis.ownership"],
-          }] };
-        }
-        const value = selectRustValueReadOwnership({ copy, clone, borrowed,
-          transfer: use?.mode === "move" || flow.movingReads.has(node) || !storageRead });
         const sourceCopy = isRustCopyCarrier(carrier, selected => input.genericCallables.definitionFor(selected)?.copy === true);
         const sourceClone = rustCarrierSupportsClone(carrier, input.definitions) || declaration !== undefined &&
           genericRequirements.supportsClone(declaration, carrier);
@@ -176,6 +186,7 @@ export function prepareRustReadOwnership(input: {
         const sourceRead = selectRustValueReadOwnership({ copy: sourceCopy, clone: sourceClone,
           transfer: flow.movingReads.has(node) || !storageRead, borrowed: conversionBorrows || projectBorrows || storageRead && projection !== undefined && value?.kind !== "move"
             ? "shared" : constructsContainer ? undefined : borrowed });
+        const operation = records.targetOperation.get(node);
         const binding = records.sourceBinding.get(node);
         const module = binding === undefined ? undefined : records.moduleBinding.get(binding.sourceDeclaration);
         const staticStringView = sourceRead?.kind === "borrow" && !sourceRead.mutable &&

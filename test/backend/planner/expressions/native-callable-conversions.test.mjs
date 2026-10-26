@@ -4,6 +4,7 @@ import { nativeClosureProducerFixture } from "../../../helpers/native-closure-pr
 import { analyzeRust, compileRust, rustSourceText } from "../../../helpers/rust-session.mjs";
 import { rustSourceFilePlanContext } from "../../../helpers/plan-context.mjs";
 import { createRustRecordFixture } from "../../../helpers/records.mjs";
+import { nativeFunction, nativeNodes, nativeSource } from "../../../helpers/native-ast.mjs";
 import { planRustCallableInputProducer, planRustCallableConversion }
   from "../../../../dist/backend/planner/expressions/callable-conversions.js";
 
@@ -11,6 +12,7 @@ import { rustSourcePrimitiveTargetType } from "../../../../dist/target-model/typ
 import { rustCallableTargetType } from "../../../../dist/target-model/types/carriers/callables.js";
 import { selectRustCallableConversion } from "../../../../dist/policy/conversions/callable.js";
 import { printRustExpr } from "../../../../dist/print/source/expressions/core.js";
+import { printRustType } from "../../../../dist/print/source/types.js";
 import { nativeFallibleAdapterFixture } from "../../../helpers/physical-callable-adapters.mjs";
 import { planRustNativeInputInvocation, planRustNativeProtocolInvocation } from "../../../../dist/backend/planner/expressions/calls/native-input.js";
 import { planRustErrorJoinDeclarations } from "../../../../dist/backend/planner/program/error-regions.js";
@@ -54,26 +56,41 @@ export function run(${throwing ? "source: () => int32" : ""}): ${result} { retur
   assert.deepEqual(compiled.diagnostics, []);
   const run = rustSourceText(compiled).match(/pub fn run[\s\S]*?\n\}\n/u)?.[0];
   assert.equal(run !== undefined, true, "the converting caller is emitted");
-  return run;
+  return { text: run, model: nativeFunction(compiled, "run"), source: nativeSource(compiled) };
 }
 const okType = throwing => throwing ? `Ok::<\\s*_,\\s*${nativeError},?\\s*>` : "Ok::<_, core::convert::Infallible>";
 
 for (const throwing of [false, true]) {
   test(`borrowed input elides the fresh physical ${throwing ? "fallible" : "pure"} producer allocation`, () => {
-    const text = compiledRun("borrowed", throwing);
+    const { text } = compiledRun("borrowed", throwing);
     assert.doesNotMatch(text, /Callable::|::new|ConsumerFailure|TsonicError|TsonicResult/u);
     assert.match(text, new RegExp(okType(throwing), "u"));
   });
 
   for (const retained of [false, true]) {
     test(`${retained ? "retained" : "borrowed"} arity adapter keeps ${throwing ? "native E" : "Infallible"} without an intermediate allocation`, () => {
-      const text = compiledRun(retained ? "retained" : "arity", throwing);
+      const { text, model, source } = compiledRun(retained ? "retained" : "arity", throwing);
       assert.doesNotMatch(text, /ConsumerFailure|TsonicError|TsonicResult|\.clone\(/u);
-      assert.equal((text.match(/rt::Callable::<[^\n]+>::new/gu) ?? []).length, retained ? 1 : 0);
+      const constructions = nativeNodes(model, node => node.kind === "associated-call" &&
+        node.owner.path === "rt::Callable" && node.method === "new");
+      assert.equal(constructions.length, retained ? 1 : 0, "the exact callable owner allocation count is independent of formatting");
       assert.match(text, new RegExp(okType(throwing), "u"));
-      // A returned retained callable owns its environment, so its construction lifetime is 'static here.
-      if (retained) assert.match(text, new RegExp(
-        `rt::Callable::<'(?:_|static), \\(i32,\\), Result<i32, ${throwing ? nativeError : "core::convert::Infallible"}>>::new`, "u"));
+      if (retained) {
+        const owner = constructions[0].owner;
+        let returnType = model.returnType;
+        if (returnType.kind === "named" && returnType.path !== "rt::Callable") {
+          const aliases = source.items.filter(item => item.kind === "type-alias" && item.name === returnType.path);
+          assert.equal(aliases.length, 1, "the returned native alias has one exact definition");
+          returnType = aliases[0].target;
+        }
+        assert.equal(printRustType(owner), printRustType(returnType),
+          "the retained owner has the function's exact native environment lifetime and return carrier");
+        const types = owner.genericArguments.filter(argument => argument.kind === "type").map(argument => argument.type);
+        assert.equal(types.length, 2, "the native callable retains exactly its argument tuple and output");
+        assert.equal(printRustType(types[0]), "(i32,)", "the native adapter preserves its exact argument tuple");
+        assert.match(printRustType(types[1]), new RegExp(
+          `^Result<i32, ${throwing ? nativeError : "core::convert::Infallible"}>$`, "u"));
+      }
     });
   }
 }
@@ -143,7 +160,9 @@ test("fallible adapters use the same canonical native error channels as their ph
   assert.match(text, /checked_integer::<i32>[\s\S]+::Error1/u);
   assert.match(text, /::Error0/u);
   assert.match(text, /::Error2/u);
-  assert.equal((text.match(/rt::Callable::<[^\n]+>::new/gu) ?? []).length, 1);
+  assert.equal(nativeNodes(converted, node => node.kind === "associated-call" &&
+    node.owner.path === "rt::Callable" && node.method === "new").length, 1,
+  "the exact callable owner allocation count is independent of formatting");
   const file = current.program.source.ast.getSourceFile(current.node);
   assert.equal(planRustErrorJoinDeclarations(file, current.context.input).filter(item => item.name === "NativeErrors3").length, 1);
 });
