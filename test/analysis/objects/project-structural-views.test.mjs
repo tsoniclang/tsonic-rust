@@ -18,7 +18,7 @@ import { rustStringTargetType } from "../../../dist/target-model/types/carriers/
 import { rustSourceOptionalTargetType } from "../../../dist/target-model/types/projections.js";
 import { rustCallableProtocol, rustCallableTargetType } from "../../../dist/target-model/types/carriers/callables.js";
 import { rustProgramErrorOwner } from "../../../dist/target-model/types/carriers/program-errors.js";
-import { selectRustPhysicalProgramErrorOwner } from "../../../dist/analysis/errors/error-types.js";
+import { selectRustPhysicalProgramErrorOwner, normalizeRustErrorType } from "../../../dist/analysis/errors/error-types.js";
 import { substituteRustTargetGenerics, substituteRustTargetTypeParameters } from "../../../dist/target-model/types/carriers/substitution.js";
 import { emptyRustTypeDefinitions } from "../../../dist/target-model/types/source-union-definitions.js";
 import { selectRustCallableValueAdapter } from "../../../dist/policy/conversions/callable-adapters.js";
@@ -593,9 +593,11 @@ ${order === "open-first" ? `${open}\n${closed}` : `${closed}\n${open}`}`,
       const dispatch = program.records.projectDispatchEmission.get(definition);
       assert.equal(dispatch !== undefined, true, "the complete structural supertrait contract is published before the seal");
       assert.equal(dispatch.structuralSupers.length, 1, "the original structural supertrait remains in the native class contract");
+      const physical = program.structuralShapes.definitionForCarrier(view.targetCarrier);
+      assert.equal(physical !== undefined, true, "the logical view retains its canonical physical structural owner");
       for (const supertrait of dispatch.structuralSupers) {
-        assert.equal(rustTargetTypeRefEquals(supertrait.carrier, view.targetCarrier), true,
-          "the exact native structural carrier and binder remain unchanged");
+        assert.equal(rustTargetTypeRefEquals(supertrait.carrier, physical.carrier), true,
+          "the exact physical structural carrier includes its selected error owner and unchanged binder");
         assert.equal(supertrait.genericArguments.every(argument => argument.kind !== "lifetime" ||
           argument.lifetime.kind !== "placeholder" && argument.lifetime.kind !== "call-scoped-elision"), true,
           "supertrait headers contain no unnameable expression lifetimes");
@@ -689,7 +691,12 @@ export function main(): string { return view(new Box<string>("value")).identity(
   });
 }
 
-test("fixed structural callable getters retain the destination component's physical error owner", () => {
+for (const [form, body] of [
+  ["stored-field", "identity = (value: string): string => value;"],
+  ["accessor", "get identity(): (value: string) => string { return (value: string): string => value; }"],
+  ["throwing-accessor", "reject = false; get identity(): (value: string) => string { if (this.reject) throw new RootFailure(\"getter\"); return (value: string): string => value; }"],
+]) test(form === "stored-field" ? "fixed structural callable getters retain the destination component's physical error owner"
+  : `callable ${form} getters retain independent source access and destination invocation errors`, () => {
   const dependencyFile = "node_modules/@acme/views/index.ts";
   const { program } = analyzeRust({ sourcePackages: sourcePackageGraphFixture(["index.ts"], {
     "@acme/views": { files: ["index.ts"], dependencies: [] },
@@ -705,7 +712,7 @@ test("fixed structural callable getters retain the destination component's physi
       import type { View } from "@acme/views";
       export class RootFailure extends Error {}
       export function rejectRoot(): void { throw new RootFailure("root"); }
-      export class Box { identity = (value: string): string => value; }
+      export class Box { ${body} }
       export function view(owner: Box): View { return owner; }
     `,
   } });
@@ -731,4 +738,26 @@ test("fixed structural callable getters retain the destination component's physi
   const physical = rustProgramErrorOwner(rustCallableProtocol(shape.fields[member.storageIndex].carrier)?.error);
   assert.equal(physical?.kind === "physical" && physical.domain === "project" && physical.componentId === error.componentId, true,
     "the physical trait getter and its adapter publish the identical error owner");
+  if (form !== "stored-field") {
+    const getter = member.accessor?.read?.declaration;
+    assert.equal(getter !== undefined && program.source.ast.is.IsGetAccessorDeclaration(getter), true,
+      `${form}: this proof reaches the real accessor route rather than the stored-field control`);
+    const result = program.callableValues.nativeProducers.invocationResultFor(getter);
+    assert.equal(result !== undefined, true, `${form}: the actual native getter publishes its sealed result ABI`);
+    const instantiated = program.projectTypes.instantiateMemberCarrier(getter, logical.sourceCarrier, result);
+    assert.equal(instantiated !== undefined, true, `${form}: the actual checked class instantiates its getter result`);
+    const expected = normalizeRustErrorType(instantiated, { ast: program.source.ast, records: program.records,
+      components: program.sourcePackageComponents, producers: program.callableValues.nativeProducers,
+      definitions: program.typeDefinitions }, getter);
+    assert.equal(expected !== undefined && rustTargetTypeRefEquals(member.readAdapter.sourceCarrier, expected), true,
+      `${form}: adaptation starts from the identical actual physical getter result, not its logical annotation`);
+    const accessError = program.records.errorMemberOwner.get(getter);
+    assert.equal(accessError?.kind === "physical" && accessError.domain === "project" &&
+      accessError.componentId === program.sourcePackageComponents.rootComponentId, true,
+      `${form}: the outer access channel retains the implementing getter's root component`);
+    assert.equal(accessError.componentId !== error.componentId, true,
+      `${form}: access and stored callable invocation never borrow each other's component`);
+    assert.equal(program.records.fallible.get(getter) !== undefined, form === "throwing-accessor",
+      `${form}: the actual outer getter fallibility remains independent of the returned callback`);
+  }
 });

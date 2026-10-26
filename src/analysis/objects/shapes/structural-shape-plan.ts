@@ -633,9 +633,10 @@ function createRustStructuralShapeConstruction(
                 const error = bound?.id === "rust.runtime.RecordField" ? bound.genericArguments[1] : undefined;
                 if (error?.kind !== "type") failTargetAnalysisInvariant("tsonic-rust",
                   "A completed bound structural field requires its original native error carrier.");
-                const callable = rustCallableProtocol(rustOptionElementCarrier(nativeField.type) ?? nativeField.type);
-                const selectedError = rustProgramErrorOwner(error.type)?.kind === "logical" && callable?.error !== undefined
-                  ? callable.error : error.type;
+                const selectedError = rustProgramErrorOwner(error.type)?.kind === "logical"
+                  ? errorForFile(physicalShape.ownerFileName) : error.type;
+                if (selectedError === undefined) failTargetAnalysisInvariant("tsonic-rust",
+                  "A bound structural field requires its own component's native access-error carrier.");
                 boundStorage = Object.freeze({ ...boundStorage,
                   carrier: rustRuntimeRecordFieldTargetType(nativeField.type, selectedError) });
               }
@@ -773,7 +774,7 @@ function createRustStructuralShapeConstruction(
         const template = physicalTemplateFor(definition);
         return template === undefined || template.targetName === definition.targetName && template.componentId === definition.componentId;
       }).map(definition => replacements.get(definition)!));
-      const sourceDefinitions = Object.freeze([...new Set(byStorageKey.values())]);
+      const sourceDefinitions = new Map(byStorageKey);
       const canonical = new Map(finalDefinitions.map(definition => [`${definition.componentId}\0${definition.targetName}`, definition]));
       const canonicalFor = (definition: RustStructuralShapeDefinition): RustStructuralShapeDefinition => {
         const selected = canonical.get(`${definition.componentId}\0${definition.targetName}`);
@@ -795,6 +796,7 @@ function createRustStructuralShapeConstruction(
         const selected = instantiateStructuralDefinition(owner, carrier);
         if (selected !== undefined) {
           physicalInstances.set(key, selected);
+          instances.set(key, selected);
           instanceOwners.set(key, owner);
         }
         return selected;
@@ -816,6 +818,12 @@ function createRustStructuralShapeConstruction(
         if (instance === undefined) throw new Error("Structural physical storage lost its exact template-to-instance correspondence.");
         instances.set(key, instance);
       }
+      const storageOwners = new Map([...byStorageKey].map(([key, definition]) => [key, canonicalFor(replacements.get(definition)!)]));
+      for (const [key, instance] of physicalInstances) {
+        const owner = instanceOwners.get(key);
+        if (owner === undefined) failTargetAnalysisInvariant("tsonic-rust", "An admitted physical instance requires its canonical native owner.");
+        storageOwners.set(structuralStorageKey(instance.carrier, componentForFile), owner);
+      }
       let finalInstances = Object.freeze([...physicalInstances.values()]);
       definitions = finalDefinitions;
       const registerFinal = (definition: RustStructuralShapeDefinition, carrier: TargetTypeRef): RustStructuralShapeDefinition | undefined => {
@@ -824,6 +832,7 @@ function createRustStructuralShapeConstruction(
         const key = closedMetadataKey(carrier);
         instances.set(key, selected);
         instanceOwners.set(key, definition);
+        storageOwners.set(structuralStorageKey(carrier, componentForFile), definition);
         finalInstances = Object.freeze([...physicalInstances.values()]);
         publishedInstances = finalInstances;
         return selected;
@@ -846,18 +855,13 @@ function createRustStructuralShapeConstruction(
         if (carrier === undefined || rustStructuralObjectCarrierValue(carrier) === undefined) return undefined;
         const selected = instances.get(closedMetadataKey(carrier));
         if (selected !== undefined || closed) return selected;
-        const structural = rustStructuralObjectCarrierValue(carrier)!;
-        const implementation = structural.implementation;
-        if (implementation?.kind !== "physical") {
-          const sources = sourceDefinitions.flatMap(definition => {
-            if (definition.componentId !== componentForFile(structural.ownerFileName)) return [];
-            const instance = instantiateStructuralDefinition(definition, carrier);
-            return instance === undefined ? [] : [{ definition, instance }];
-          });
-          if (sources.length !== 1) return undefined;
-          const { definition: sourceDefinition, instance: source } = sources[0]!;
+        const implementation = rustStructuralObjectCarrierValue(carrier)?.implementation;
+        const storageKey = structuralStorageKey(carrier, componentForFile);
+        const sourceDefinition = implementation?.kind === "physical" ? undefined : sourceDefinitions.get(storageKey);
+        if (sourceDefinition !== undefined) {
+          const source = instantiateStructuralDefinition(sourceDefinition, carrier);
           const replacement = replacements.get(sourceDefinition);
-          if (replacement === undefined) return undefined;
+          if (source === undefined || replacement === undefined) return undefined;
           const types = new Map<string, TargetTypeRef>();
           const lifetimes = new Map<string, RustLifetimeRef>();
           for (const [index, parameter] of sourceDefinition.genericParameters.entries()) {
@@ -875,7 +879,8 @@ function createRustStructuralShapeConstruction(
           }
           return selected;
         }
-        const templates = finalDefinitions.filter(definition => {
+        const templates = implementation?.kind !== "physical" ? [storageOwners.get(structuralStorageKey(carrier, componentForFile))]
+          : finalDefinitions.filter(definition => {
             const physical = rustStructuralObjectCarrierValue(definition.carrier)?.implementation;
             return physical?.kind === "physical" && physical.methods.length === implementation.methods.length &&
               physical.methods.every((method, index) => method.sourceName === implementation.methods[index]?.sourceName &&

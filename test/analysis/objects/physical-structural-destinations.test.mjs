@@ -10,6 +10,8 @@ import { rustOptionTargetType, rustOptionElementCarrier } from "../../../dist/ta
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 import { rustNamedTypeCarrierValue } from "../../../dist/target-model/types/carriers/native.js";
 import { rustSourceOptionalTargetType, rustOptionalStorageProjection } from "../../../dist/target-model/types/projections.js";
+import { analyzeRust } from "../../helpers/rust-session.mjs";
+import { selectRustStructuralEmission } from "../../../dist/policy/types/objects/structural-emission.js";
 
 const integer = { kind: "source-primitive", name: "int32" };
 const lifetime = { kind: "parameter", identity: "storage", name: "storage" };
@@ -83,8 +85,7 @@ test("one physical structural finalization preserves logical keys completed inst
   assert.equal(builder.definitionForCarrier(selected.carrier) === selected, true, "the physical key shares the same canonical instance");
   const wider = carrier({ kind: "source-primitive", name: "int64" });
   const wide = builder.definitionForCarrier(wider);
-  assert.equal(wide !== undefined, true, "a later exact logical generic application instantiates the same physical template");
-  assert.equal(rustCallableProtocol(wide.fields[0].carrier).result.name, "int64", "the exact new native argument is retained");
+  assert.equal(wide, undefined, "an unregistered application has no original checked source-template owner edge");
   const wideShape = rustStructuralObjectCarrierValue(wider);
   for (const [label, altered] of [
     ["foreign component", rustStructuralObjectTargetType("/dependency.ts", wideShape.fields)],
@@ -93,12 +94,49 @@ test("one physical structural finalization preserves logical keys completed inst
     ["error owner", rustStructuralObjectTargetType("/root.ts", [field("invoke", rustCallableTargetType(
       [integer], integer, lifetime, physicalError("/dependency.ts")), { bound: true })])],
   ]) assert.equal(builder.definitionForCarrier(altered), undefined, `${label}: exact source correspondence cannot be relaxed`);
+  const completedTemplate = builder.definitionForCarrier(template);
+  assert.equal(completedTemplate !== undefined, true, "the original registered template has its physical replacement");
   const plan = builder.seal();
   assert.equal(plan.definitionForCarrier(instance) === selected, true, "sealing preserves original lookup identity");
-  assert.equal(plan.definitionForCarrier(wider) === wide, true, "sealing preserves the admitted late logical application");
+  assert.equal(plan.definitionForCarrier(wider), undefined, "sealing cannot infer a missing original source owner");
+  assert.equal(plan.definitionForCarrier(completedTemplate.carrier) === completedTemplate, true,
+    "a finalized physical key is already indexed when sealing, without a previous physical lookup");
   assert.equal(plan.definitions.length, 1, "there is one canonical physical definition, not old/new variants");
   assert.throws(() => builder.finalizeMethodStorage(new Map(), physicalError), /exactly once/u,
     "destination error selection cannot be recomputed after publication");
+});
+
+test("checked generic source retention publishes the exact int64 callable-field application before physical sealing", () => {
+  const { program } = analyzeRust({ surfaces: [], files: { "index.ts": `
+    import type { int32, int64 } from "@tsonic/core/types.js";
+    type Contract<Value> = { readonly invoke: (value: Value) => Value };
+    export function narrow(value: Contract<int32>): Contract<int32> { return value; }
+    export function wide(value: Contract<int64>): Contract<int64> { return value; }
+  ` } });
+  const owners = [];
+  for (const width of ["int32", "int64"]) {
+    const sources = program.structuralShapes.definitions.flatMap(definition => definition.sourceCarriers)
+      .filter(carrier => rustStructuralObjectCarrierValue(carrier)?.fields.some(field =>
+        field.sourceName === "invoke" && rustCallableProtocol(field.type)?.parameters[0]?.kind === "source-primitive" &&
+        rustCallableProtocol(field.type)?.parameters[0]?.name === width));
+    assert.equal(sources.length > 0, true, `${width}: the real checked source-retention owner registered its application`);
+    for (const source of sources) {
+      const selected = program.structuralShapes.definitionForCarrier(source);
+      assert.equal(selected !== undefined, true, `${width}: the original registered key resolves without scanning templates`);
+      const field = selected.fields.find(field => field.sourceName === "invoke");
+      const protocol = rustCallableProtocol(field?.carrier);
+      assert.equal(protocol !== undefined, true, `${width}: the admitted callable field remains exact`);
+      assert.equal(protocol.parameters[0].name, width, `${width}: the actual native argument is retained`);
+      assert.equal(protocol.result.name, width, `${width}: the actual native result is retained`);
+      const error = rustProgramErrorOwner(protocol.error);
+      assert.equal(error?.kind === "physical" && error.componentId === selected.componentId, true,
+        `${width}: the one physical replacement supplies the declared component error`);
+      assert.equal(program.records.structuralShape.get(source) === selected, true,
+        `${width}: canonical publication preserves the identical source-to-physical owner`);
+      owners.push(`${selected.componentId}\0${selected.targetName}`);
+    }
+  }
+  assert.equal(new Set(owners).size, 1, "both checked applications retain one original generic template owner");
 });
 
 test("late structural applications reject ambiguous original generic owners", () => {
@@ -116,6 +154,43 @@ test("late structural applications reject ambiguous original generic owners", ()
   assert.equal(builder.definitionForCarrier(ambiguous), undefined,
     "two distinct exact generic source bindings cannot select an arbitrary physical owner");
   assert.equal(builder.definitions.length, 2, "both original owners remain distinct before sealing");
+});
+
+test("bound callable access errors remain independent of their exact invocation errors", () => {
+  const associated = { kind: "associated-type", owner: { kind: "type-parameter", identity: "Input", name: "Input" },
+    trait: { kind: "trait-ref", id: "fixture:Invoke", path: "Invoke", genericArguments: [], associatedConstraints: [] },
+    name: "InvocationError" };
+  const invocationErrors = [rustProgramErrorTargetType(), { kind: "target-named", id: "rust.core.Infallible" },
+    associated, rustJsValueTargetType()];
+  const source = rustStructuralObjectTargetType("/dependency.ts", invocationErrors.map((error, index) =>
+    field(`invoke${index}`, rustCallableTargetType([integer], integer, lifetime, error), { bound: true })));
+  const builder = createRustStructuralShapePlanRegistry();
+  builder.initialize([{ carrier: source }], [], () => "dependency", [], [], new Map());
+  builder.initializeUnions([]);
+  builder.finalizeMethodStorage(new Map(), physicalError);
+  const selected = builder.definitionForCarrier(source);
+  assert.equal(selected !== undefined, true, "the original bound callable source has one exact physical definition");
+  for (const [index, expected] of invocationErrors.entries()) {
+    const field = selected.fields[index];
+    const invocation = rustCallableProtocol(field.carrier).error;
+    assert.equal(rustTargetTypeRefEquals(invocation, index === 0 ? physicalError("/dependency.ts") : expected), true,
+      `field ${index}: inner invocation retains only its own selected error contract`);
+    const bound = rustNamedTypeCarrierValue(field.boundStorage.carrier);
+    assert.equal(bound.id, "rust.runtime.RecordField", `field ${index}: the original bound location representation is retained`);
+    assert.equal(rustTargetTypeRefEquals(bound.genericArguments[0].type, field.carrier), true,
+      `field ${index}: bound storage contains the identical selected callable payload`);
+    assert.equal(rustTargetTypeRefEquals(bound.genericArguments[1].type, physicalError("/dependency.ts")), true,
+      `field ${index}: access has the component's independent error even for pure or non-program invocation`);
+  }
+  const plan = builder.seal();
+  assert.equal(plan.definitionForCarrier(selected.carrier) === selected, true,
+    "physical storage is already published before any post-seal lookup");
+  const emission = selectRustStructuralEmission({ definition: selected, template: plan.definitions[0],
+    genericRequirements: { associatedTypes: [] }, contextConstructors: [], clone: false, copy: false, default: false });
+  assert.equal(emission.kind, "selected", "the existing structural syntax policy admits the completed record");
+  for (const [index, emitted] of emission.value.fields.entries())
+    assert.equal(emitted.carrier === selected.fields[index].boundStorage.carrier, true,
+      `field ${index}: native declaration syntax consumes the same access carrier as record loads and stores`);
 });
 
 test("physical getter completion preserves native source-absence containers and quantified optional identities", () => {

@@ -81,7 +81,8 @@ export function selectRustStructuralEmission(input: RustStructuralEmissionPolicy
       : rustRuntimeNativeMethodTargetType(protocol.parameters, protocol.result, rustProgramErrorTargetType()) : storage;
     const directMethod = field.method === true && field.methodPlan?.kind !== "native-dispatch";
     const carrier = callable === undefined ? undefined : field.storage === "bound" && !directMethod
-      ? rustRuntimeRecordFieldTargetType(callable, rustProgramErrorTargetType()) : callable;
+      ? field.method === true ? rustRuntimeRecordFieldTargetType(callable, rustProgramErrorTargetType())
+        : field.boundStorage?.carrier : callable;
     if (carrier === undefined) return reject("RUST_STRUCTURAL_SHAPE_FIELD_TYPE_MISSING",
       `Structural shape '${definition.targetName}' has a field without an exact renderable Rust carrier.`, "rust.backend.structural-shapes");
     if (field.storage === "stored" || field.storage === "bound") {

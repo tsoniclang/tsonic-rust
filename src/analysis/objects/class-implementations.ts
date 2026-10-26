@@ -109,9 +109,12 @@ export function analyzeRustClassImplementations(
       failTargetAnalysisInvariant("tsonic-rust", "An admitted structural view requires its complete physical getter and native dispatch contract.", view.declaration);
     const nativeTargetCarrier = shape.carrier;
     const fields = view.fields.map(member => {
-      if (member.field === undefined || member.readAdapter === undefined ||
-        rustCallableProtocol(rustOptionElementCarrier(member.field.resultCarrier) ?? member.field.resultCarrier) === undefined) return member;
-      const stored = program.callableValues.projectFieldStorage.get(member.declaration);
+      const result = member.field !== undefined ? member.field.resultCarrier : member.accessor?.read?.resultCarrier;
+      if (result === undefined || member.readAdapter === undefined ||
+        rustCallableProtocol(rustOptionElementCarrier(result) ?? result) === undefined) return member;
+      const stored = member.field !== undefined ? program.callableValues.projectFieldStorage.get(member.declaration)
+        : member.accessor?.read === undefined ? undefined
+          : program.callableValues.nativeProducers.invocationResultFor(member.accessor.read.declaration);
       const instantiated = stored === undefined ? undefined
         : program.projectTypes.instantiateMemberCarrier(member.declaration, view.sourceCarrier, stored);
       if (instantiated === undefined)
