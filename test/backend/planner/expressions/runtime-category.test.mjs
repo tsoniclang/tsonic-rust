@@ -15,5 +15,7 @@ test("selected native category methods borrow automatically without a copied or 
   } };
   assert.deepEqual(planRustRuntimeCategory(value, result, context), expected);
   assert.deepEqual(planRustRuntimeCategory({ kind: "reference", expr: value }, result, context, true), expected);
-  assert.equal(planRustRuntimeCategory(value, { ...result, method: "forged" }, context, true), undefined);
+  assert.equal(result.method, "type_of", "the single producer and literal method contract exclude forged method names");
+  assert.equal(getRustTypeofRuntimeKind({ kind: "type-parameter", identity: "fixture.T", name: "T" },
+    emptyRustTypeDefinitions), undefined, "unsupported native category evidence is rejected before any render plan exists");
 });

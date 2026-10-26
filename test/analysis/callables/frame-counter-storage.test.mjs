@@ -37,6 +37,9 @@ test("native frame counters close once before source revocation and require orig
     return selected.proxy;
   };
   const frames = createRustFrameCallablePlan({ ast: guard(program.source.ast), records: guard(program.records),
+    frameBindingCarriers: new Map(program.callableValues.frames.definitions.flatMap(definition => definition.bindings
+      .filter(binding => definition.activation.slotDeclarations.includes(binding.declaration))
+      .map(binding => [binding.declaration, binding.carrier]))),
     ownership: guard(program.callableOwnership), sourceStorage: guard(storage), nativeNodes: nodes, usedNames: new Set(),
     navigation: guard(source.navigation), projectTypes: guard(program.projectTypes),
     objectRepresentations: guard(program.objectRepresentations) });

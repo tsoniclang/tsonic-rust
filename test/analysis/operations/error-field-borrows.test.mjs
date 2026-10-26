@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRust } from "../../helpers/rust-session.mjs";
-import { BinaryExpression_Left, BinaryExpression_Right, Node_Expression } from "@tsonic/target-api/source";
+import { BinaryExpression_Left, BinaryExpression_Right, Node_Expression, sourceEnclosingCallable } from "@tsonic/target-api/source";
 import { rustSourceFilePlanContext } from "../../helpers/plan-context.mjs";
 import { planBinaryExpression } from "../../../dist/backend/planner/expressions/binary.js";
 import { printRustExpr } from "../../../dist/print/source/index.js";
+import { planRustErrorRegion } from "../../../dist/backend/planner/program/error-regions.js";
 import { borrowedComparisonMutationSource, closedUnionEqualitySource } from "../../../../tsonic/test/fixtures/closed-union-equality.mjs";
 
 const nativeClosedUnionComparisonSource = `
@@ -170,18 +171,34 @@ export function compare(values: readonly string[], expected: string): boolean {
   program.sourceFiles.forEach(visit);
   assert.equal(comparisons.length, 4, "every captured, borrowed, indexed and owned comparison is admitted");
   for (const node of comparisons) {
-    for (const operand of [BinaryExpression_Left(ast, node), BinaryExpression_Right(ast, node)]) {
+    const operands = [BinaryExpression_Left(ast, node), BinaryExpression_Right(ast, node)];
+    for (const operand of operands) {
       const label = ast.kindName(operand);
       assert.equal(program.records.stringComparisonView.get(operand)?.kind, "native-str-reference",
         `${label}: native String and str-backed reads have one pre-seal AsRef view`);
     }
-    const rendered = planBinaryExpression(node, rustSourceFilePlanContext(program, node));
+    const context = rustSourceFilePlanContext(program, node);
+    const declaration = sourceEnclosingCallable(node, ast);
+    assert.equal(declaration !== undefined, true, "the comparison has its actual checked callable owner");
+    const region = planRustErrorRegion(declaration, context);
+    assert.equal(region !== undefined, true, "indexed conversion uses its completed native error region");
+    const rendered = planBinaryExpression(node, { ...context, callableDeclaration: declaration,
+      fallibleBoundary: region.boundary });
     assert.equal(rendered !== undefined, true, "the exact admitted comparison renders");
     const printed = printRustExpr(rendered);
     assert.equal((printed.match(/core::convert::AsRef::<str>::as_ref/gu) ?? []).length, 2,
       "both native operands get their independently selected str view");
     assert.equal(printed.includes(".as_str()"), false, "borrowed str never requires unstable str_as_str");
     assert.equal(printed.includes("to_string"), false, "a native comparison does not manufacture an owned String");
-    assert.equal(printed.includes(".clone()"), false, "pure native string observation does not copy its owner");
+    const consumingCalls = operands.filter(operand => ast.is.IsCallExpression(operand));
+    for (const call of consumingCalls) {
+      const argument = ast.arguments(call)[0];
+      assert.equal(program.records.argumentPassing.get(argument)?.mode, "by-value",
+        "the actual selected String-returning call consumes its argument");
+    }
+    assert.equal((printed.match(/\.clone\(\)/gu) ?? []).length, consumingCalls.length,
+      "only a genuine owning call needs its one retained-input or first-value snapshot");
+    if (consumingCalls.length === 0) assert.equal(printed.includes(".clone()"), false,
+      "pure native string observation does not copy its owner");
   }
 });

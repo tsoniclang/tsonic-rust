@@ -1,6 +1,7 @@
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
 import { failTargetAnalysisInvariant, rejectedTargetStage, resolvedTargetStage } from "@tsonic/target-api/artifacts";
-import { sourceEnclosingCallable } from "@tsonic/target-api/source";
+import { isSourceCallableBodyBoundary, TryStatement_CatchClause,
+  TryStatement_TryBlock } from "@tsonic/target-api/source";
 import type { TargetDiagnostic, TargetStageResult } from "@tsonic/target-api/artifacts";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { RustErrorJoinDeclaration, RustErrorRegionRecords, RustErrorRegionSelection,
@@ -20,7 +21,7 @@ import { substituteRustTargetGenerics } from "../../target-model/types/carriers/
 import { rustNativeCallableCompletion } from "../../policy/types/callables/native-completion.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { normalizeRustErrorType, selectRustPhysicalProgramErrorOwner, type RustErrorTypeContext } from "./error-types.js";
-import { rustNativeErrorJoinReference, rustNativeErrorJoinTargetType } from "../../target-model/types/native-error-joins.js";
+import { rustNativeErrorJoinReference, rustNativeErrorJoinTargetType, type RustNativeErrorSource } from "../../target-model/types/native-error-joins.js";
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
 import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustInfallibleTargetId } from "../../target-model/types/carriers/source-types.js";
@@ -53,6 +54,12 @@ export interface RustAnalyzedErrorRegions extends Pick<RustErrorRegionRecords, "
   complete(initialization: RustInitializationErrorRecords): RustErrorRegionRecords;
 }
 
+export function rustErrorRegionCarrier(selected: RustErrorRegionSelection): TargetTypeRef | undefined {
+  return selected.jsRejection === undefined ? rustNativeErrorJoinTargetType(selected.fileName,
+    [...(selected.localOwner === undefined ? [] : [rustProgramErrorTargetType(selected.localOwner)]),
+      ...selected.sources.map(source => source.errorType)]) : rustJsValueTargetType();
+}
+
 export function selectRustErrorRegion(
   node: Node,
   effects: RustErrorEffectsFact,
@@ -68,14 +75,16 @@ export function selectRustErrorRegion(
   }]);
   const file = input.ast.getSourceFile(node);
   const owner = effects.localErrors ? selectRustPhysicalProgramErrorOwner(node, input) : undefined;
-  const sources = effects.nativeErrors.map((source, index) => {
+  const sources: RustNativeErrorSource<TargetTypeRef>[] = [];
+  for (const source of effects.nativeErrors) {
     const errorType = normalizeRustErrorType(source.errorType, input, node);
-    return errorType === undefined ? undefined : Object.freeze({ identity: source.identity,
-      variant: `Error${index + (effects.localErrors ? 1 : 0)}`, errorType });
-  });
-  if (file === undefined || effects.localErrors && owner === undefined || sources.some(source => source === undefined))
+    if (errorType === undefined) return reject("An error region has no exact normalized native payload carrier.");
+    if (!rustUninhabitedError(errorType)) sources.push(Object.freeze({ identity: source.identity,
+      variant: `Error${sources.length + (effects.localErrors ? 1 : 0)}`, errorType }));
+  }
+  if (file === undefined || effects.localErrors && owner === undefined)
     return reject("An error region has no exact physical package owner or native payload carrier.");
-  const selectedSources = snapshotRustNativeErrorSources(sources as NonNullable<typeof sources[number]>[], isRustTargetTypeRef);
+  const selectedSources = snapshotRustNativeErrorSources(sources, isRustTargetTypeRef);
   if (selectedSources === undefined || selectedSources.length + (owner === undefined ? 0 : 1) > 4096)
     return reject("An error region exceeds its bounded exact native error-source contract.");
   const closure = body ? input.records.targetOperation.get(node) : undefined;
@@ -127,9 +136,7 @@ export function selectRustFrameEntryErrors(
   const region = selectRustErrorRegion(definition.activation.ownerDeclaration, merged, input, false);
   if (region.kind === "rejected") return region;
   const carrierFor = (selected: RustErrorRegionSelection): TargetTypeRef => {
-    const carrier = rustNativeErrorJoinTargetType(selected.fileName,
-      [...(selected.localOwner === undefined ? [] : [rustProgramErrorTargetType(selected.localOwner)]),
-        ...selected.sources.map(source => source.errorType)]);
+    const carrier = rustErrorRegionCarrier(selected);
     if (carrier === undefined) failTargetAnalysisInvariant("tsonic-rust",
       "A completed native frame error region requires its exact closed native carrier.", definition.activation.ownerDeclaration);
     return carrier;
@@ -212,6 +219,7 @@ export function analyzeRustErrorRegions(input: RustErrorTypeContext & {
   readonly binaryHooks: readonly RustBinaryHookPlan[];
 }): TargetStageResult<RustAnalyzedErrorRegions> {
   const regions = new Map<Node, RustErrorRegionSelection>();
+  const localSites = new Map<Node, Node[]>();
   const sourceRegions = new Map<RustSourceErrorEffectEdge, RustSourceErrorRegionSelection>();
   const declarations = new Map<string, readonly RustErrorJoinDeclaration[]>();
   const demandedArities = new Map<string, Set<number>>();
@@ -282,9 +290,20 @@ export function analyzeRustErrorRegions(input: RustErrorTypeContext & {
       reject(node, "A source invocation has inconsistent exact native error channels.");
       return;
     }
-    const operand = regionFor(edge.declaration, { localErrors: source.localErrors,
-      nativeErrors: instantiated as NonNullable<typeof instantiated[number]>[] });
-    if (operand === undefined) return;
+    const declaration = regionFor(edge.declaration, source);
+    if (declaration === undefined) return;
+    const sources: RustNativeErrorSource<TargetTypeRef>[] = [];
+    for (const selected of declaration.sources) {
+      const bound = channels.get(selected.identity);
+      const errorType = bound === undefined ? undefined : normalizeRustErrorType(bound.target.errorType, input, edge.declaration);
+      if (errorType === undefined) {
+        reject(node, "A source invocation requires its identical declared native error arm and closed actual carrier.");
+        return;
+      }
+      inspectCarrier(errorType);
+      sources.push(Object.freeze({ ...selected, errorType }));
+    }
+    const operand = Object.freeze({ ...declaration, sources: Object.freeze(sources) });
     return Object.freeze({ operand,
       local: operand.localOwner === undefined ? undefined : Object.freeze({ kind: "local" as const }),
       channels: Object.freeze(operand.sources.map(selected =>
@@ -323,23 +342,25 @@ export function analyzeRustErrorRegions(input: RustErrorTypeContext & {
       if (adapter.kind === "conversion" && adapter.conversion.kind === "callable-adapter") registerConversion(node, adapter.conversion);
       else if (adapter.kind === "option-map" || adapter.kind === "option-some") registerAdapter(node, adapter.element, depth + 1);
     };
-    const visit = (node: Node): void => {
+    const visit = (node: Node, enclosingRegion: Node): void => {
       if (!input.isNativeNode(node)) return;
+      const localOwner = input.ast.is.IsSourceFile(node) || isSourceCallableBodyBoundary(input.ast, node)
+        ? node : enclosingRegion;
+      const sites = localSites.get(localOwner);
+      if (sites === undefined) localSites.set(localOwner, [node]);
+      else sites.push(node);
       for (const name of [input.names.nameForDeclaration(node), input.names.functionNameForDeclaration(node),
         input.names.callableValueNameForDeclaration(node)]) if (name !== undefined) usedNames.add(name);
       const effects = input.records.errorEffects.get(node);
       if (effects !== undefined) {
         const selected = regionFor(node, effects, true);
         if (selected !== undefined) regions.set(node, selected);
-        // Only callable boundaries and source files plan their error region as a join; a nested block's errors are
-        // unified by its try/catch completion. A settled js-promise body converts each native error into its rejection
-        // value where it occurs, so it forms no join either.
-        const plannedRegion = input.ast.is.IsSourceFile(node) || sourceEnclosingCallable(node, input.ast) === node;
+        const plannedRegion = localOwner === node;
         const asynchronous = input.records.asyncFunction.get(node);
         const settledPromise = asynchronous?.kind === "js-promise" && asynchronous.lowering.kind === "settled";
         const nativeRegion = selected?.jsRejection === undefined || input.promiseBodies.declarations.has(node);
-        if (effects.nativeErrors.length > 0 && plannedRegion && !settledPromise && nativeRegion) {
-          const arity = effects.nativeErrors.length + (effects.localErrors ? 1 : 0);
+        if (selected !== undefined && plannedRegion && !settledPromise && nativeRegion) {
+          const arity = selected.sources.length + (selected.localOwner === undefined ? 0 : 1);
           if (arity > 1) arities.add(arity);
           if (effects.localErrors) registerRuntimeArm(fileName, arity, 0, node);
           if (asynchronous?.kind === "js-promise") clonedArities.add(arity);
@@ -360,9 +381,13 @@ export function analyzeRustErrorRegions(input: RustErrorTypeContext & {
           else if (parameter.kind === "rest") for (const segment of parameter.segments) registerAdapter(node, segment.adapter);
         }
       }
-      input.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+      const protectedBody = input.ast.is.IsTryStatement(node) && TryStatement_CatchClause(input.ast, node) !== undefined
+        ? TryStatement_TryBlock(input.ast, node) : undefined;
+      input.ast.forEachChild(node, child => {
+        if (child !== undefined) visit(child, child === protectedBody ? child : localOwner);
+      });
     };
-    visit(file);
+    visit(file, file);
     const producerArities = input.callables.nativeGenericProducers.errorAritiesFor(fileName);
     if (producerArities === undefined) reject(file, "Native generic producers have no sealed exact error channels.");
     else for (const arity of producerArities) arities.add(arity);
@@ -501,6 +526,19 @@ export function analyzeRustErrorRegions(input: RustErrorTypeContext & {
     complete(initialization: RustInitializationErrorRecords): RustErrorRegionRecords {
       if (closed || !lifecycleSelected) failTargetAnalysisInvariant("tsonic-rust", "The error catalog seals once after initialization and lifecycle composition.");
       closed = true;
+      const localRegions = new Map<Node, RustErrorRegionSelection>();
+      for (const [owner, sites] of localSites) {
+        const file = input.ast.is.IsSourceFile(owner) ? input.ast.getSourceFile(owner) : undefined;
+        const region = file === undefined ? regions.get(owner) : initialization.moduleFor(file)?.region ?? regions.get(owner);
+        if (region === undefined && !input.ast.is.IsSourceFile(owner) && !isSourceCallableBodyBoundary(input.ast, owner))
+          failTargetAnalysisInvariant("tsonic-rust", "A protected try body requires its completed local error-region evidence.", owner);
+        if (region === undefined) continue;
+        for (const node of sites) {
+          if (localRegions.has(node)) failTargetAnalysisInvariant("tsonic-rust", "One local error-region owner publishes each runtime source subject once.", node);
+          localRegions.set(node, region);
+        }
+      }
+      localSites.clear();
       for (const { fileName, usedNames, arities, clonedArities } of fileDemands) {
         for (const arity of demandedArities.get(fileName) ?? []) arities.add(arity);
         declarations.set(fileName, Object.freeze([...arities].sort((left, right) => left - right).map(arity =>
@@ -508,6 +546,7 @@ export function analyzeRustErrorRegions(input: RustErrorTypeContext & {
             clone: clonedArities.has(arity), runtimeErrorArm: runtimeErrorArms.get(fileName)?.get(arity) }))));
       }
       return Object.freeze({ ...reads, lifecycle, initialization,
+        localFor: (node: Node) => localRegions.get(node),
         declarationsFor: (fileName: string) => declarations.get(fileName) ?? empty });
     },
   }));

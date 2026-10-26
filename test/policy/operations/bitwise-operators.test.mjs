@@ -262,8 +262,7 @@ main();
   });
 }
 
-test("JS catch-contained compound failures pin the local protected-region admission gap", () => {
-  // C697: the existing errorRegions owner restores this positive in its in-Keel root group.
+test("JS catch-contained compound failures preserve stores, order and exact RangeError", { timeout: 300_000 }, () => {
   const source = `
 import { check } from "@acme/testing";
 function make(): bigint[] { return [3n]; }
@@ -300,15 +299,11 @@ main();`;
   const { result } = compileRust({ surfaces: ["js"], packages: [acmeTestingPackage()],
     target: { id: "rust", options: { outputType: "bin", crateName: "compound_previous_acquisition" } },
     files: { "index.ts": source } });
-  assert.equal(result.diagnostics.length, 2, "both local protected compound failures retain their source refusals");
-  for (const [index, issue] of result.diagnostics.entries()) {
-    assert.equal(issue.code, "RUST_UNSUPPORTED_AST", `${index}: local region admission refuses before planning`);
-    assert.equal(issue.message,
-      "Fallible operator calls require a finalized fallible lowering context. Node kind: KindBinaryExpression.",
-      `${index}: the refusal identifies the finalized local region gap`);
-  }
-  assert.equal(result.program === undefined && result.plan === undefined && result.artifacts.length === 0, true,
-    "the protected-region refusal never publishes a program, native plan or partial artifacts");
+  assert.equal(result.diagnostics.length, 0,
+    result.diagnostics.slice(0, 8).map(issue => `${issue.code}: ${issue.message}`).join("; "));
+  assert.equal(result.program !== undefined && result.plan !== undefined && result.artifacts.length !== 0, true,
+    "the unchanged stronger-catch source reaches complete native publication and planning");
+  validateGeneratedProject("compound-local-protected-errors", result.artifacts, { run: true });
 });
 
 for (const { name, source, message } of [

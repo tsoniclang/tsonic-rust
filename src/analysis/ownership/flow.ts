@@ -100,6 +100,7 @@ export function analyzeRustOwnershipFlow(input: RustOwnershipFlowInput):
           sourceNodesEqual(ast, value.declaration, point.operation.kind === "capture" ? point.operation.binding : undefined));
         if (capture === undefined || capture.storage !== "value" ||
           liveness.after.get(point.id)!.has(point.operation.binding) ||
+          hasOverlappingArgumentBorrow(point.source, point.operation.binding, input) ||
           !bindingCanTransfer(point.operation.binding, declaration, input, awaitedReads, capturedStorageBindings)) continue;
         const transferred = new Set(captureTransfers.get(point.source));
         transferred.add(capture.declaration);
@@ -203,7 +204,6 @@ function isFunctionScopedLoopRead(reference: Node, binding: Node, input: RustOwn
 }
 
 function hasOverlappingArgumentBorrow(reference: Node, binding: Node, input: RustOwnershipFlowInput): boolean {
-  if (input.mayBorrowArgument === undefined) return false;
   const { ast, navigation } = input.source;
   const invocations = new Set<Node>();
   for (let parent = ast.parent(reference); parent !== undefined && !isSourceCallableBodyBoundary(ast, parent); parent = ast.parent(parent)) {
@@ -218,7 +218,20 @@ function hasOverlappingArgumentBorrow(reference: Node, binding: Node, input: Rus
     if (other.kind !== "authored" || other.end > range.start) return false;
     let argument = use.reference;
     for (let parent = ast.parent(argument); parent !== undefined && !isSourceCallableBodyBoundary(ast, parent); parent = ast.parent(argument)) {
-      if (invocations.has(parent)) return input.mayBorrowArgument!(argument, use.reference);
+      if (invocations.has(parent)) {
+        let operand: Node | undefined = argument;
+        if (argument === Node_Expression(ast, parent)) {
+          for (let transparent = sourceTransparentExpressionOperand(ast, operand); transparent !== undefined;
+            transparent = sourceTransparentExpressionOperand(ast, operand)) operand = transparent;
+          operand = Node_Expression(ast, operand);
+        }
+        if (operand !== undefined) {
+          for (let transparent = sourceTransparentExpressionOperand(ast, operand); transparent !== undefined;
+            transparent = sourceTransparentExpressionOperand(ast, operand)) operand = transparent;
+        }
+        const selected = operand === use.reference ? input.uses.get(use.reference)?.mode : undefined;
+        return selected === "shared" || selected === "mutable" || input.mayBorrowArgument?.(argument, use.reference) === true;
+      }
       argument = parent;
     }
     return false;

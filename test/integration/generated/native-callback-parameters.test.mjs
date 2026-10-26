@@ -78,6 +78,35 @@ main();
   validateGeneratedProject("native-intrinsic-callback-errors", result.artifacts, { run: true });
 });
 
+test("native replacement adapters preserve projected arguments, callback errors and exact effects", { timeout: 300_000 }, () => {
+  const { result } = compileRust({ surfaces: ["js"],
+    target: { id: "rust", options: { outputType: "bin", crateName: "native_replacement_adapter" } },
+    files: { "index.ts": `
+export function main(): void {
+  let calls = 0;
+  const changed = "aa".replace(new RegExp("a", "g"), (matched: string): string => {
+    calls += 1;
+    return matched + "!";
+  });
+  const successfulCalls = calls;
+  if (changed !== "a!a!" || successfulCalls !== 2) throw new Error("replacement projection or effects");
+  let rejected = false;
+  try {
+    "aa".replace(new RegExp("a", "g"), (_matched: string): string => {
+      calls += 1;
+      throw new Error("replacement callback failure");
+    });
+  } catch { rejected = true; }
+  if (!rejected || calls !== 3) throw new Error("replacement callback error or repeated effects");
+}
+main();
+` } });
+  assertNoTargetDiagnostics(result.diagnostics);
+  assert.doesNotMatch(artifactText(result, "src/index.rs"), /Box::new|rt::Callable::new/u,
+    "native replacement adapters retain ordinary closures without erased allocation");
+  validateGeneratedProject("native-replacement-adapter", result.artifacts, { run: true });
+});
+
 test("native callbacks reject implicit precision loss from wide integers", () => {
   const { result } = compileRust({ files: { "index.ts": `
 import type { nativeUint } from "@tsonic/core/types.js";

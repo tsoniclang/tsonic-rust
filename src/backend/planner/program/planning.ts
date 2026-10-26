@@ -19,7 +19,7 @@ import {
 } from "./module-initialization.js";
 import { planRustBinaryErrors, type RustBinaryErrorPlan } from "./binary-errors.js";
 import { planRustBinaryHookCallPlan } from "./binary-hook-contexts.js";
-import { rustErrorBoundaryOperandType } from "../types/error-boundary.js";
+import { rustErrorBoundaryOperandType, rustTargetRuntimeErrorType } from "../types/error-boundary.js";
 import { rustTypeFromCarrier } from "../types/carrier-syntax.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { qualifyRustReferenceType } from "../../target-ast/syntax/type-paths.js";
@@ -486,7 +486,7 @@ function planRustWorkerDispatch(
         value: "Worker process selected an entry absent from the closed generated dispatch table.",
       }],
     };
-    const workerEntryError = errors.lifecycleError(unsupportedWorkerEntryError);
+    const workerEntryError = errors.lifecycleError(unsupportedWorkerEntryError, rustTargetRuntimeErrorType);
     statements.push({
       kind: "let",
       name: entryName,
@@ -510,7 +510,7 @@ function planRustWorkerDispatch(
                   entry.initializerBoundary ?? failRustPlannerInvariant("An admitted task-aware worker requires its selected initializer boundary.", entry.sourceFile),
                   nativeTaskLifecycle, execution), nativeTaskLifecycle.errorType)
               : entry.nativeError ? errors.propagate({ identity: entry.errorIdentity, errorType: entry.operandErrorType }, execution)
-                : errors.lifecycle(execution);
+                : errors.lifecycle(execution, entry.operandErrorType);
             return {
               kind: "if",
               condition: {

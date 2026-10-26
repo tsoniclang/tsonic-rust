@@ -20,7 +20,8 @@ export function resolveRustProviderIndexedAccess(
     context.source.sourceFacts.getFact(subject, providerVirtualDeclarationFactKey) !== undefined))) return undefined;
   const identities = evidence.members.map(member => resolveProviderTypeIdentity(member.subjects, context));
   const rejected: TargetTypeRef = { kind: "opaque", id: "provider-indexed-type-evidence-unavailable" };
-  const owner = resolveRustTargetTypeRef(evidence.owner, context, options);
+  const resolvedOwner = resolveRustTargetTypeRef(evidence.owner, context, options);
+  const owner = resolvedOwner?.kind === "reference" ? resolvedOwner.referent : resolvedOwner;
   const named = rustNamedTypeCarrierValue(owner);
   if (owner === undefined || named === undefined) return rejected;
   let result: TargetTypeRef | undefined;

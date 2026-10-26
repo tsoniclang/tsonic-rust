@@ -1,5 +1,5 @@
 import type { AstReader, Node } from "@tsonic/tsts";
-import { sourceEnclosingCallable, type SourceProgramNavigation } from "@tsonic/target-api/source";
+import { Node_Expression, sourceEnclosingCallable, sourceTransparentExpressionOperand, type SourceProgramNavigation } from "@tsonic/target-api/source";
 import { failTargetAnalysisInvariant, type TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { RustNamePlan } from "../../target-model/names/model.js";
@@ -101,6 +101,16 @@ export function analyzeRustLocalBindings(input: {
     const ownerCallable = sourceEnclosingCallable(node, input.ast);
     const nativelyWritten = input.navigation.declarationUses(node).some(use => {
       if (!rustBindingUseIsEmitted(input.ast, input.records, use.reference, node, ownerCallable)) return false;
+      if (nativeArray !== undefined) {
+        let receiver = use.reference;
+        let access = input.ast.parent(receiver);
+        while (access !== undefined && sourceTransparentExpressionOperand(input.ast, access) === receiver) {
+          receiver = access;
+          access = input.ast.parent(receiver);
+        }
+        if (access !== undefined && Node_Expression(input.ast, access) === receiver &&
+          input.records.nativeArrayStorage.get(access)?.kind === "element") return false;
+      }
       const read = input.records.readOwnership.get(use.reference);
       return summary.bindingWritten && use.role === "write" || read?.readsStorage === true &&
         read.source.kind === "borrow" && read.source.mutable;
@@ -115,8 +125,16 @@ export function analyzeRustLocalBindings(input: {
     input.producer.declaration(node, { kind: "value", name, initializer, carrier,
       nativeCarrier: physical.kind === "selected" ? physical.carrier : carrier,
       initializerCarrier: physical.kind === "selected" ? physical.carrier : undefined, storage, mutable,
-      selfTypedCallable: storage === undefined && operation?.kind === "closure" && rustCallableProtocol(carrier) !== undefined &&
-        rustTargetTypeRefEquals(operation.resultCarrier, carrier), annotated: variable?.Type !== undefined, absenceInitializer });
+      selfTypedInitializer: storage === undefined &&
+        (operation?.kind === "closure" && rustCallableProtocol(carrier) !== undefined &&
+          rustTargetTypeRefEquals(operation.resultCarrier, carrier) ||
+          initializer !== undefined && variable?.Type === undefined && physical.kind === "selected" &&
+          operation?.kind === "source-call" && rustTargetTypeRefEquals(operation.resultCarrier, carrier) &&
+          input.records.contextualValueConversion.get(initializer) === undefined &&
+          input.records.optionProjection.get(initializer) === undefined &&
+          input.records.projectUpcast.get(initializer) === undefined &&
+          input.records.flowReadProjection.get(initializer) === undefined),
+      annotated: variable?.Type !== undefined, absenceInitializer });
   }
   return Object.freeze(issues);
 }

@@ -5,6 +5,7 @@ import test from "node:test";
 import { BinaryExpression_Left, BinaryExpression_Right, Node_Expression } from "@tsonic/target-api/source";
 import { analyzeRust } from "../../helpers/rust-session.mjs";
 import { analyzeRustBorrowEffects, selectRustBorrowRelationship } from "../../../dist/analysis/ownership/effects.js";
+import { validateRustFinalizedOperationAbi } from "../../../dist/policy/operations/members/abi/validation.js";
 
 function analyze(input, maximumNodes) {
   const selected = analyzeRustBorrowEffects(input, input.readUses, maximumNodes);
@@ -653,6 +654,8 @@ test("borrowed conversion effects require exact finalized input and pure native 
     ? [operation.abi.targetReceiver.input, ...operation.abi.targetArguments] : operation.abi.targetArguments;
   const input = inputs.find(selected => selected.conversion?.kind === "semantic");
   assert.equal(input !== undefined, true);
+  assert.equal(validateRustFinalizedOperationAbi(operation.abi), true, "the real producer publishes a coherent native ABI");
+  assert.equal(input.sharedConversion, true, "the canonical finalized input owns its source borrow");
   assert.equal(rustProviderInputBorrowMode(input), "ref");
   assert.equal(program.ownership.reads.get(receiver).borrowedAcross.has(operand), true);
   for (const replacement of [
@@ -663,7 +666,12 @@ test("borrowed conversion effects require exact finalized input and pure native 
     { ...input, conversion: { ...input.conversion, sourceCarrier: { kind: "source-primitive", name: "int32" } } },
     { ...input, conversion: { ...input.conversion, targetCarrier: { kind: "source-primitive", name: "int32" } } },
   ]) {
-    assert.equal(rustProviderInputBorrowMode(replacement) === undefined, true, "inexact native borrow is not inferred");
+    const abi = { ...operation.abi,
+      targetReceiver: operation.abi.targetReceiver.kind === "input" && operation.abi.targetReceiver.input === input
+        ? { kind: "input", input: replacement } : operation.abi.targetReceiver,
+      targetArguments: operation.abi.targetArguments.map(selected => selected === input ? replacement : selected),
+    };
+    assert.equal(validateRustFinalizedOperationAbi(abi), false, "inexact native input is refused before publication");
   }
   for (const changes of [
     { effects: { ...operation.abi.effects, evaluation: "observable" } },
@@ -671,9 +679,6 @@ test("borrowed conversion effects require exact finalized input and pure native 
     { effects: { ...operation.abi.effects, invocation: "fallible" } },
     { result: { ...operation.abi.result, kind: "async" } },
     { sourceArguments: [{ form: "value", sourceIndex: 0 }] },
-    { targetReceiver: operation.abi.targetReceiver.kind === "input"
-      ? { kind: "input", input: { ...operation.abi.targetReceiver.input, mode: "mut-ref" } }
-      : { kind: "none" }, targetArguments: operation.abi.targetArguments.map(selected => ({ ...selected, mode: "mut-ref" })) },
   ]) {
     const records = createRustRecordFixture({
 targetOperation: { get: (node) => {
@@ -684,4 +689,12 @@ targetOperation: { get: (node) => {
     assert.equal(result.kind, "resolved");
     assert.equal(selectRustBorrowRelationship(receiver, operand, result.input, result.effects), false, "unknown observation never extends the source borrow");
   }
+  const mutableInputs = { ...operation.abi,
+    targetReceiver: operation.abi.targetReceiver.kind === "input"
+      ? { kind: "input", input: { ...operation.abi.targetReceiver.input, mode: "mut-ref" } }
+      : { kind: "none" },
+    targetArguments: operation.abi.targetArguments.map(selected => ({ ...selected, mode: "mut-ref" })),
+  };
+  assert.equal(validateRustFinalizedOperationAbi(mutableInputs), false,
+    "a forged mutable observation is refused at its canonical ABI publisher");
 });

@@ -15,6 +15,7 @@ function fixture(options = {}) {
   const physical = { kind: "type", type: { kind: "source-primitive", name: "bool" } };
   const selectedPhysical = options.wrongPhysical ? { kind: "type", type: integer } : physical;
   const carrier = rustNamedTargetType("native.box", "native::Box", options.physicalArguments ? [selectedPhysical, argument] : [argument]);
+  const ownerCarrier = options.missingGeneric ? rustNamedTargetType("native.box", "native::Box") : carrier;
   const memberCarrier = options.noSourceParameters ? integer : { kind: "type-parameter", identity: "T", name: "T" };
   const genericArgument = { kind: "type", type: memberCarrier };
   const generic = rustNamedTargetType("native.box", "native::Box", options.physicalArguments ? [physical, genericArgument] : [genericArgument]);
@@ -37,8 +38,9 @@ function fixture(options = {}) {
     ast: selected.source.ast, source: { ...selected.source, sourceFacts: { getFact: get } }, currentSemantics: selected.semantics,
     sourceStorage: { storageSubjectFor: () => ({ kind: "unresolved" }) },
     semantics: file => selected.source.semantics.forFile(file), semanticsFor: () => selected.semantics,
-    records: createRustRecordFixture({ runtimeCarrier: { get: node => node === selected.evidence.owner ? { carrier: options.missingGeneric
-      ? rustNamedTargetType("native.box", "native::Box") : carrier } : undefined } }),
+    records: createRustRecordFixture({ runtimeCarrier: { get: node => node === selected.evidence.owner ? {
+      carrier: options.referenceOwner ? { kind: "reference", mutable: options.mutableOwner === true, referent: ownerCarrier } : ownerCarrier,
+    } : undefined } }),
   };
   return resolveRustProviderIndexedAccess(selected.node, context, {
     providerTypes: [{ ...owner, targetCarrier: options.wrongOwner ? rustNamedTargetType("native.other", "native::Other") : generic, genericParameters: parameters }],
@@ -56,6 +58,9 @@ test("provider indexed type policy closes native generics and optional propertie
   assert.deepEqual(fixture({ physicalArguments: true }), integer);
   assert.deepEqual(fixture({ noSourceParameters: true }), integer);
   assert.deepEqual(fixture({ noSourceParameters: true, physicalArguments: true }), integer);
+  assert.deepEqual(fixture({ referenceOwner: true }), integer);
+  assert.deepEqual(fixture({ referenceOwner: true, mutableOwner: true }), integer);
+  assert.deepEqual(fixture({ referenceOwner: true, keys: "string", nativeOptional: true }), rustOptionTargetType(integer));
   assert.equal(fixture({ unowned: true }), undefined);
 });
 
@@ -68,5 +73,7 @@ test("provider indexed type policy rejects incomplete, ambiguous and mismatched 
     { keys: "string", missingRelation: true }, { keys: "string", duplicate: true },
     { keys: "string", wrongOwner: true }, { keys: "string", missingGeneric: true },
     { keys: "string", wrongSignature: true }, { keys: "string", wrongKind: true },
+    { referenceOwner: true, wrongOwner: true }, { referenceOwner: true, missingGeneric: true },
+    { referenceOwner: true, physicalArguments: true, wrongPhysical: true },
   ]) assert.deepEqual(fixture(options), { kind: "opaque", id: "provider-indexed-type-evidence-unavailable" }, JSON.stringify(options));
 });

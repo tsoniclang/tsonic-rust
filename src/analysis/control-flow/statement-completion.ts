@@ -6,7 +6,6 @@ import {
   sourceControlTransferTarget, sourceEnclosingCallable, sourceTransparentExpressionOperand,
   sourceLabeledStatementTarget, type SourceLabeledStatementTarget,
   IterationStatement_Statement, LabeledStatement_Statement,
-  TryStatement_TryBlock, TryStatement_CatchClause, CatchClause_Block,
   type TargetSourceProgram,
 } from "@tsonic/target-api/source";
 import type { RustNamePlan } from "../../target-model/names/model.js";
@@ -141,32 +140,18 @@ export function analyzeRustStatementCompletions(input: RustStatementCompletionIn
       records.nativeParticipation.get(node) !== "erased") reject(node, "RUST_STATEMENT_NOT_SUPPORTED", "The Rust target does not support this runtime statement.");
   };
   const frame = (node: Node) => {
+    const existing = frames.get(node);
+    if (existing !== undefined) return existing;
     const owner = sourceEnclosingCallable(node, ast) ?? ast.getSourceFile(node);
     if (owner === undefined) failTargetAnalysisInvariant("tsonic-rust", "A checked runtime statement requires its execution owner.", node);
-    let errorOwner = owner;
-    for (let current = node; current !== owner;) {
-      const parent = ast.parent(current);
-      if (parent === undefined) break;
-      if (ast.is.IsTryStatement(parent) && TryStatement_TryBlock(ast, parent) === current &&
-        CatchClause_Block(ast, TryStatement_CatchClause(ast, parent)) !== undefined) {
-        errorOwner = current;
-        break;
-      }
-      current = parent;
-    }
-    const existing = frames.get(errorOwner);
-    if (existing !== undefined) return existing;
     const sourceFile = ast.is.IsSourceFile(owner) ? ast.getSourceFile(owner) : undefined;
     const generator = records.generator.get(owner);
     const initializer = sourceFile === undefined ? undefined : input.errorRegions.initialization.moduleFor(sourceFile);
-    const region = errorOwner === owner ? initializer?.region ?? input.errorRegions.get(owner)
-      : input.errorRegions.get(errorOwner);
-    if (errorOwner !== owner && region === undefined) failTargetAnalysisInvariant("tsonic-rust",
-      "A protected try body requires its completed local error-region evidence.", errorOwner);
+    const region = input.errorRegions.localFor(node);
     const selected = Object.freeze({ asynchronous: records.asyncFunction.get(owner) !== undefined || generator?.kind === "async" ||
       initializer?.asynchronous === true,
     fallible: region !== undefined && region.kind !== "infallible", region });
-    frames.set(errorOwner, selected);
+    frames.set(node, selected);
     return selected;
   };
   const selectTargets = (node: Node): void => {

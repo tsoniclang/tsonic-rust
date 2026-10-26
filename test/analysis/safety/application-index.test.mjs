@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { compileRust } from "../../helpers/rust-session.mjs";
+import { checkedRustCompileInput } from "../../helpers/rust-session.mjs";
+import { createRustSafetyApplicationFactIndex } from "../../../dist/analysis/safety/application-index.js";
 
 // Membership is decided once by @tsonic/target-api's createTargetSafetyApplicationIndex.
 const header = `import { safety, unsafecontext } from "@tsonic/core/lang.js";
@@ -41,19 +42,22 @@ export function read(value: Value): int32 { return unsafecontext(value.current);
 ];
 
 function membership(body) {
-  const { result, source } = compileRust({ files: { "index.ts": `${header}${body}\n` } });
-  const program = result.program;
-  assert.ok(program, "Rust analysis publishes the program");
+  const { source } = checkedRustCompileInput({ files: { "index.ts": `${header}${body}\n` } });
   const { ast } = source;
+  const sourceFiles = source.sourceFiles.filter(file => !ast.isDeclarationFile(file));
+  assert.equal(sourceFiles.length, 1, "the complete authored safety source is checked");
+  const safetyApplications = createRustSafetyApplicationFactIndex({
+    ast, sourceFiles, sourceFacts: source.sourceFacts, navigation: source.navigation,
+  });
   const nodes = [];
   const visit = node => { nodes.push(node); ast.forEachChild(node, child => { if (child !== undefined) visit(child); }); };
-  program.sourceFiles.forEach(visit);
+  sourceFiles.forEach(visit);
   const find = predicate => {
     const found = nodes.find(predicate);
     assert.ok(found);
     return found;
   };
-  const placements = node => program.safetyApplications.forDeclaration(node)
+  const placements = node => safetyApplications.forDeclaration(node)
     .map(application => `${application.applicationPlacement}:${application.contract}`);
   const parenthesized = nodes.filter(node => ast.is.IsExpressionStatement(node))
     .map(node => ast.as.AsExpressionStatement(node).Expression)
@@ -65,8 +69,8 @@ function membership(body) {
     constructor: placements(find(node => ast.is.IsConstructorDeclaration(node))),
     index: placements(find(node => ast.is.IsIndexSignatureDeclaration(node))),
     parenthesizedOperations: parenthesized.map(expression => ({
-      exact: program.safetyApplications.operationForSubject(expression)?.kind,
-      expression: program.safetyApplications.operationForExpression(expression)?.kind,
+      exact: safetyApplications.operationForSubject(expression)?.kind,
+      expression: safetyApplications.operationForExpression(expression)?.kind,
     })),
   };
 }

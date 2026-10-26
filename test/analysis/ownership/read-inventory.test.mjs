@@ -165,7 +165,7 @@ for (const projection of [false, true]) test(`owned native getter results remain
         kind: "void-expression", operationId: "ownership-read.discard", resultCarrier: rustUnitTargetType(),
       });
       const records = builder.seal([]);
-      const uses = analyzeRustReadUses(ast, storage.nodes, records, emptyRustTypeDefinitions, () => false, program.structuralShapes);
+      const uses = analyzeRustReadUses(ast, storage.nodes, records, emptyRustTypeDefinitions, () => false, program.structuralShapes, () => false);
       const prepared = prepareRustReadOwnership({ storage, nativeNodes: storage.nodes, records, uses,
         flow: { movingReads: new Set(owned ? [element] : []), captureTransfers: new Map() },
         borrowEffects: { pureValues: new Set(), fieldWrites: new Map(), stableBindings: new Set(), nativeWrites: new Map() },
@@ -174,10 +174,20 @@ for (const projection of [false, true]) test(`owned native getter results remain
         capturesFor: () => undefined, invocationTransfersCapture: () => false,
       });
       assert.equal(prepared.kind, "resolved", `${label}: the checked borrow preparation closes before traits`);
+      const early = prepared.readFor(element, { kind: "rejected", diagnostics: [{
+        code: "RUST_CALLABLE_CONTRACT_CLOSURE_REJECTED", category: "error", source: "tsonic-rust",
+        message: "The independent retained-object contract is rejected.",
+      }] });
+      assert.equal(early?.kind, "selected", `${label}: actual native read evidence does not require an invented generic index`);
+      assert.equal(early?.value.kind, owned ? "move" : "borrow", `${label}: the prepared owner retains its exact native read selection`);
+      assert.equal(prepared.readFor({}, { kind: "rejected", diagnostics: [] }), undefined,
+        `${label}: a foreign node never acquires a fabricated transfer from missing inventory`);
       const selected = prepared.complete({ supportsClone: () => true });
       assert.equal(selected.kind, "resolved", `${label}: the complete checked read inventory closes`);
       assert.equal(selected.ownership.uses === uses, true, `${label}: read ownership publishes the identical native-use map without another collection`);
       const read = selected.ownership.reads.get(element);
+      assert.equal(early?.carrier === read?.carrier && early?.value.kind === read?.value.kind, true,
+        `${label}: source admission and physical completion consume the same owning selection`);
       assert.equal(read?.readsStorage, !owned, `${label}: source element syntax does not override the existing native owned-result proof`);
       assert.equal(read?.value.kind, owned ? "move" : "borrow", `${label}: a fresh owned payload is not reborrowed or cloned`);
       assert.equal(read?.source.kind, owned ? "move" : "borrow", `${label}: a native stored place keeps its exact shared lease`);
@@ -336,7 +346,7 @@ async function fixture() {
     storage,
     nativeNodes: storage.nodes,
     records,
-    uses: analyzeRustReadUses(source.ast, storage.nodes, records, emptyRustTypeDefinitions, () => false, program.structuralShapes),
+    uses: analyzeRustReadUses(source.ast, storage.nodes, records, emptyRustTypeDefinitions, () => false, program.structuralShapes, () => false),
     flow: { movingReads: new Set(), captureTransfers: new Map() },
     borrowEffects: { pureValues: new Set(), fieldWrites: new Map(), stableBindings: new Set(), nativeWrites: new Map() },
     borrowEffectsInput: readBorrowEffectsInput(source, program, storage.nodes, records),
@@ -428,7 +438,7 @@ for (const projection of [false, true]) {
         });
       }
       const records = builder.seal([]);
-      const uses = analyzeRustReadUses(ast, storage.nodes, records, emptyRustTypeDefinitions, () => false, program.structuralShapes);
+      const uses = analyzeRustReadUses(ast, storage.nodes, records, emptyRustTypeDefinitions, () => false, program.structuralShapes, () => false);
       const prepared = prepareRustReadOwnership({
         storage, nativeNodes: storage.nodes, records, uses,
         flow: { movingReads: new Set(), captureTransfers: new Map() },

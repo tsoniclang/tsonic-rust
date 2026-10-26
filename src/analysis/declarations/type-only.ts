@@ -75,8 +75,10 @@ export function checkRustAmbientVariableUse(walk: RustFactWalk, declaration: Nod
     walk.context.records.compileTimeSources.erase(qualifier);
     return;
   }
-  const provider = resolveSelectedProviderDeclaration(walk.context, declaration,
-    [{ subject: use.reference, precision: "exact" }]);
+  const reference = walk.context.source.navigation.sourceReferenceFor(use.reference);
+  const subject = reference?.declaration === declaration ? reference.symbol ?? declaration : declaration;
+  const provider = resolveSelectedProviderDeclaration(walk.context, subject,
+    [{ subject: declaration, precision: "exact" }, { subject: use.reference, precision: "exact" }]);
   if (provider.kind !== "missing" || selectedRustProviderGlobal(declaration, walk.context,
     walk.operationOptions.providerExports) !== undefined) return;
   if (use.throughMember && selectRustProviderSourceReceiver(use.reference, undefined,

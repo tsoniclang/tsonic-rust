@@ -56,6 +56,7 @@ export function createRustFrameCallablePlan(input: {
   readonly ast: AstReader;
   readonly records: RustProgramRecords;
   readonly ownership: RustCallableOwnershipPlan;
+  readonly frameBindingCarriers: ReadonlyMap<Node, TargetTypeRef>;
   readonly sourceStorage: SourceStorageQueries;
   readonly nativeNodes: readonly Node[];
   readonly usedNames: ReadonlySet<string>;
@@ -163,10 +164,12 @@ export function createRustFrameCallablePlan(input: {
     const frameBindings: RustFrameCallableBinding[] = [];
     const declarations = frameDeclarations;
     for (const declaration of declarations) {
-      const carrier = input.records.runtimeCarrier.get(declaration)?.carrier;
+      const carrier = activation.slotDeclarations.includes(declaration)
+        ? input.frameBindingCarriers.get(declaration) : input.records.runtimeCarrier.get(declaration)?.carrier;
       const key = carrier === undefined ? undefined : signatureKey(carrier);
       const entry = key === undefined ? undefined : entries.find(candidate => candidate.key === key);
-      if (carrier === undefined || activation.slotDeclarations.includes(declaration) && entry === undefined) {
+      if (carrier === undefined || activation.slotDeclarations.includes(declaration) && (entry === undefined ||
+        entry.implementations.some(implementation => !rustTargetTypeRefEquals(implementation.carrier, carrier)))) {
         issue(declaration, "A native frame binding requires its exact selected carrier and closed entry protocol.");
         continue;
       }
@@ -201,7 +204,8 @@ export function createRustFrameCallablePlan(input: {
     for (const implementation of entries.flatMap(entry => entry.implementations)) {
       for (const capture of implementation.capture.captures) {
         const binding = bindings.get(capture.declaration);
-        if (binding !== undefined && !rustTargetTypeRefEquals(binding.carrier, capture.carrier))
+        if (binding !== undefined && !rustTargetTypeRefEquals(
+          input.records.runtimeCarrier.get(binding.declaration)?.carrier, capture.carrier))
           issue(capture.reference, "A native frame capture differs from its selected activation binding carrier.");
       }
     }
@@ -392,7 +396,7 @@ export function createRustFrameCallablePlan(input: {
       return Object.freeze(rejected);
     },
     sealCounters(constructions: readonly RustProjectConstructionPlan[]): RustFrameCallablePlan {
-      return producer.finalizeCounters(prepareRustRetainedFrameCounters(definitions, input.ast, constructions));
+      return producer.finalizeCounters(() => prepareRustRetainedFrameCounters(definitions, input.ast, constructions));
     },
   });
 }

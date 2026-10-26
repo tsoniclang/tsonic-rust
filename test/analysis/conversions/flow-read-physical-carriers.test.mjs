@@ -3,6 +3,7 @@ import test from "node:test";
 import { analyzeRust } from "../../helpers/rust-session.mjs";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 import { rustSourceOptionalElementCarrier } from "../../../dist/target-model/types/carriers/optional.js";
+import { rustUnionLeaves } from "../../../dist/target-model/types/union-relations.js";
 
 function returnedValues(program) {
   const { ast } = program.source;
@@ -98,4 +99,37 @@ export function retain(value: unknown): unknown {
     assert.equal(projection === undefined || rustSourceOptionalElementCarrier(source) !== undefined ||
       projection.kind !== "option-value", true, "a non-optional closed input is not treated as native Option payload storage");
   }
+});
+
+test("a checked optional callable guard selects its original physical union arm before invocation", () => {
+  const { program } = analyzeRust({ files: { "index.ts": `
+export function inspect(value: string | (() => string) | undefined): void {
+  if (typeof value === "function") value();
+}
+` } });
+  const { ast } = program.source;
+  let observations = 0;
+  const visit = node => {
+    if (ast.is.IsCallExpression(node)) {
+      const callee = ast.as.AsCallExpression(node).Expression;
+      if (ast.is.IsIdentifier(callee) && ast.text(callee) === "value") {
+        const source = program.records.runtimeCarrier.get(callee)?.carrier;
+        const projection = program.records.flowReadProjection.get(callee);
+        const payload = rustSourceOptionalElementCarrier(source);
+        const leaf = payload === undefined ? undefined : rustUnionLeaves(payload, program.typeDefinitions)?.find(member =>
+          member.path[member.path.length - 1]?.variant.name === projection?.variant);
+        assert.equal(projection?.kind, "source-union", "actual checked typeof selection publishes the existing native union projection");
+        assert.equal(rustTargetTypeRefEquals(projection.sourceCarrier, source), true,
+          "the actual optional source identity remains the projection source");
+        assert.equal(leaf !== undefined && rustTargetTypeRefEquals(leaf.carrier, projection.selectedCarrier), true,
+          "the selected callable is the exact native union arm, including its retained lifetime");
+        assert.equal(program.records.targetOperation.get(node) !== undefined, true,
+          "the original call is admitted from the completed physical arm");
+        observations++;
+      }
+    }
+    ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+  };
+  program.sourceFiles.forEach(visit);
+  assert.equal(observations, 1, "the actual guarded invocation is checked once");
 });

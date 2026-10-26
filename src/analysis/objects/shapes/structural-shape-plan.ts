@@ -514,7 +514,6 @@ function createRustStructuralShapeConstruction(
       const leftDefinition = definitionFor(left);
       const rightDefinition = definitionFor(right);
       return leftDefinition !== undefined && rightDefinition !== undefined &&
-        rustTargetTypeRefEquals(leftDefinition.carrier, rightDefinition.carrier) &&
         leftDefinition.componentId === rightDefinition.componentId &&
         leftDefinition.targetName === rightDefinition.targetName &&
         leftDefinition.genericArguments.length === rightDefinition.genericArguments.length &&

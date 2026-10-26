@@ -2,7 +2,7 @@ import type { Node, Type, TypeSignatureInfo } from "@tsonic/tsts";
 import type { SourceFileSemantics } from "@tsonic/target-api/source";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustFactWalk } from "../program/walk.js";
-import { rustOperationContext, rustResolutionContext } from "../program/walk.js";
+import { rustOperationContext } from "../program/walk.js";
 import { resolveRustProjectField } from "../operations/members/project-fields.js";
 import type { RustProjectFieldSelection } from "../../target-model/records/project-fields.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
@@ -15,6 +15,7 @@ import { selectRustCallableValueAdapter } from "../../policy/conversions/callabl
 import { resolveRustTargetTypeRef } from "../source-evidence/types/resolution/source.js";
 import type { RustSourceObjectShape } from "../../target-model/records/source-types.js";
 import { instantiateRustSelectedMemberCarrier } from "../operations/members/member-carriers.js";
+import { rustSourceStorageScope, rustSourceStorageSubjectContext } from "../source-evidence/types/resolution/source-storage-projection.js";
 import type { RustProjectStructuralView } from "../../target-model/records/project-structural-views.js";
 
 export type RustProjectStructuralViewSource = {
@@ -61,7 +62,11 @@ export function selectRustProjectStructuralViewSources(
       const declaredSignatures = declaredType === undefined ? [] : ownerSemantics.types.signatureInfos(declaredType, "call");
       if (declaredSignatures.length !== 1 ||
         ownerSemantics.declarations.signatureDeclaration(declaredSignatures[0]!.signature) !== signatureDeclaration) return undefined;
-      const declared = resolveRustTargetTypeRef(declaredType, rustResolutionContext(walk, nativeDeclaration), walk.operationOptions);
+      const signatureScope = rustSourceStorageScope(walk.context, nativeDeclaration, nativeDeclaration);
+      if (signatureScope.kind !== "resolved") return undefined;
+      const declared = resolveRustTargetTypeRef(declaredType,
+        rustSourceStorageSubjectContext({ ...rustOperationContext(walk, nativeDeclaration),
+          sourceStorageResolution: signatureScope }, undefined), walk.operationOptions);
       const carrier = declared === undefined ? undefined : instantiateRustSelectedMemberCarrier(
         nativeDeclaration, sourceCarrier, sourceType, declared, rustOperationContext(walk, nativeDeclaration), walk.operationOptions);
       const callable = carrier === undefined ? undefined

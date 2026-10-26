@@ -10,7 +10,8 @@ export function rustProviderGlobalDeclarations(
     for (const module of definition.modules) {
       const exported = module.exports.find((candidate) => candidate.id === exportId);
       if (exported !== undefined) {
-        return `declare var ${name}: typeof import(${JSON.stringify(module.moduleSpecifier)})[${JSON.stringify(exported.name)}];`;
+        const exportName = exported.exportKind === "default" ? "default" : exported.name;
+        return `declare var ${name}: typeof import(${JSON.stringify(module.moduleSpecifier)})[${JSON.stringify(exportName)}];`;
       }
     }
     throw new Error(`Provider global '${name}' has no exact export '${exportId}'.`);

@@ -53,7 +53,7 @@ function planVariableDeclaration(declaration: Node, context: RustPlanContext): r
     failRustPlannerInvariant("An admitted local requires its stored native initializer.", declaration);
   return [...initializer?.statements ?? [], { kind: "let", name: binding.name, mutable: binding.mutable,
     attrs: rustBindingLivenessAttributes(declaration, binding.mutable && storage.value !== undefined, context),
-    ...(storage.type === undefined || binding.selfTypedCallable ? {} : { type: storage.type }),
+    ...(storage.type === undefined || binding.selfTypedInitializer ? {} : { type: storage.type }),
     ...(storage.value === undefined ? {} : { init: storage.value }) }];
 }
 
