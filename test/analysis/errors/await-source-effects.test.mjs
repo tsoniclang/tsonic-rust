@@ -96,6 +96,32 @@ function requireNativeFuture(current, name, boundary) {
   return leaves[0];
 }
 
+function assertPureNativeAwait(current, name, producer) {
+  const leaf = requireNativeFuture(current, name, "none");
+  const value = current.context.records.awaitValue.get(current.awaited(name));
+  assert.equal(rustTargetTypeRefEquals(leaf.future.outputCarrier, value.resultCarrier), true,
+    "the native async body preserves its exact output carrier");
+  const source = current.fact(name);
+  assert.equal(source.branches.length, 1, "a native async declaration retains its original pending Future edge");
+  assert.equal(source.branches[0].edge.declaration === current.declaration(producer), true);
+  assert.equal(rustTargetTypeRefEquals(source.branches[0].carrier, leaf.carrier), true);
+  assert.deepEqual(source.branches[0].edge.effects, { localErrors: false, nativeErrors: [] });
+  assert.deepEqual(current.context.records.errorEffects.get(current.awaited(name)),
+    { localErrors: false, nativeErrors: [] });
+}
+
+function assertCompletedValueAwait(current, name) {
+  const value = current.context.records.awaitValue.get(current.awaited(name));
+  assert.equal(value !== undefined, true, "the actual completed primitive await is published");
+  const leaves = rustAwaitSelectionLeaves(value.selection);
+  assert.equal(leaves.length === 1 && leaves[0].future === undefined &&
+    rustTargetTypeRefEquals(leaves[0].carrier, value.resultCarrier), true,
+  "an already-completed primitive is never fabricated into a pending Future");
+  assert.equal(current.fact(name).branches.length, 0);
+  assert.deepEqual(current.context.records.errorEffects.get(current.awaited(name)),
+    { localErrors: false, nativeErrors: [] });
+}
+
 function assertUniformJsAwait(current, name) {
   const expression = current.awaited(name);
   const operand = Node_Expression(current.ast, expression);
@@ -111,9 +137,16 @@ function assertUniformJsAwait(current, name) {
     "no producer-specific Future replaces the actual Promise object");
   assert.equal(current.fact(name).branches.length, 0, "uniform JS rejection does not manufacture a source-native edge");
   const operandEffects = current.context.records.errorEffects.get(operand);
-  assert.equal(operandEffects !== undefined, true, "the eager operand retains its own selected effects");
-  const expected = mergeRustErrorEffects([operandEffects, { localErrors: false,
-    nativeErrors: [{ identity: rustJsRejectionErrorIdentity, errorType: rustJsValueTargetType() }] }]);
+  const rejection = { localErrors: false,
+    nativeErrors: [{ identity: rustJsRejectionErrorIdentity, errorType: rustJsValueTargetType() }] };
+  let expected;
+  if (current.ast.is.IsIdentifier(operand)) {
+    assert.equal(operandEffects === undefined, true, "a bare local reference has no operation-effect record");
+    expected = rejection;
+  } else {
+    assert.equal(operandEffects !== undefined, true, "the eager operation retains its own selected effects");
+    expected = mergeRustErrorEffects([operandEffects, rejection]);
+  }
   const actual = current.context.records.errorEffects.get(expression);
   assert.equal(expected !== undefined && actual !== undefined && rustErrorEffectsEqual(actual, expected), true,
     "await adds exactly the uniform JsValue channel to its original eager effects, never an ambient local channel");
@@ -177,16 +210,11 @@ test("await-source selection rejects an unrelated exact Future branch", () => {
   const pure = fixture(`
     export async function pure(): Promise<number> { return 7; }
     export async function consumer(): Promise<number> { return await pure(); }
+    export async function immediate(): Promise<number> { return await 7; }
   `, { surfaces: [] });
-  const completed = pure.context.records.awaitValue.get(pure.awaited("consumer"));
-  assert.equal(completed !== undefined, true, "the unchanged pure program retains its actual completion");
-  const completedLeaves = rustAwaitSelectionLeaves(completed.selection);
-  assert.equal(completedLeaves.length, 1);
-  assert.equal(completedLeaves[0].future === undefined &&
-    rustTargetTypeRefEquals(completedLeaves[0].carrier, completed.resultCarrier), true,
-  "an already-completed primitive is never fabricated into a pending Future");
-  assert.equal(pure.fact("consumer").branches.length, 0);
-  for (const declaration of [pure.declaration("pure"), pure.declaration("consumer")])
+  assertPureNativeAwait(pure, "consumer", "pure");
+  assertCompletedValueAwait(pure, "immediate");
+  for (const declaration of [pure.declaration("pure"), pure.declaration("consumer"), pure.declaration("immediate")])
     assert.deepEqual(pure.context.records.errorEffects.get(declaration), { localErrors: false, nativeErrors: [] });
 
   const current = fixture("", { files: nativeFutureFiles, surfaces: [] });
@@ -195,7 +223,8 @@ test("await-source selection rejects an unrelated exact Future branch", () => {
     const source = current.context.records.awaitSourceErrorEffects.get(node);
     assert.equal(value !== undefined && source !== undefined, true, "the admitted native fixture retains both complete await records");
     return source.branches.filter(branch => rustAwaitSelectionLeaves(value.selection).some(leaf =>
-      leaf.future?.errorBoundary === "source-native" && rustTargetTypeRefEquals(leaf.carrier, branch.carrier)))
+      leaf.future !== undefined && isRustNativeFutureCarrier(leaf.carrier) &&
+      rustTargetTypeRefEquals(leaf.carrier, branch.carrier)))
       .map(channel => ({ node, channel }));
   });
   assert.equal(witnesses.length > 0, true,
@@ -227,21 +256,14 @@ test("pure source awaits stay pure while caught source errors retain inner corre
   const current = fixture(`
     export async function pure(): Promise<number> { return 7; }
     export async function success(): Promise<number> { return await pure(); }
+    export async function immediate(): Promise<number> { return await 7; }
     export async function failure(callback: () => Promise<number>) { return await callback(); }
     export async function caught(callback: () => Promise<number>): Promise<number> {
       try { return await failure(callback); } catch { return 0; }
     }
   `, { surfaces: [] });
-  const success = current.fact("success");
-  assert.equal(success.branches.length, 0);
-  const completed = current.context.records.awaitValue.get(current.awaited("success"));
-  assert.equal(completed !== undefined, true);
-  const leaves = rustAwaitSelectionLeaves(completed.selection);
-  assert.equal(leaves.length === 1 && leaves[0].future === undefined &&
-    rustTargetTypeRefEquals(leaves[0].carrier, completed.resultCarrier), true,
-  "the unchanged pure body keeps its completed native value, not a fabricated Future");
-  assert.deepEqual(current.context.records.errorEffects.get(current.awaited("success")),
-    { localErrors: false, nativeErrors: [] });
+  assertPureNativeAwait(current, "success", "pure");
+  assertCompletedValueAwait(current, "immediate");
   assert.deepEqual(current.context.records.errorEffects.get(current.declaration("pure")),
     { localErrors: false, nativeErrors: [] });
   requireNativeFuture(current, "caught", "source-program");
