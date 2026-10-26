@@ -284,15 +284,19 @@ for (const surfaces of [[], ["js"]]) {
   });
 }
 
-for (const genericParameters of [[], [{ kind: "lifetime" }]]) {
-  test(`callable fields select their complete member storage (${genericParameters.length === 0 ? "owned" : "borrowed"})`, () => {
+for (const [name, genericParameters, selectedLifetime] of [
+  ["owned", [], "static"],
+  ["borrowed", [{ kind: "lifetime" }], "parameter"],
+  ["class without lifetime parameters retains the selected field lifetime", [], "parameter"],
+]) {
+  test(`callable fields select their complete member storage (${name})`, () => {
     const declaration = {};
     const unrequested = {};
     const definition = { genericParameters };
     const lifetime = { kind: "parameter", identity: "field:environment", name: "environment" };
     const integer = rustSourcePrimitiveTargetType("int32");
     const declared = rustCallableTargetType([integer], integer, lifetime);
-    const physical = genericParameters.length === 0 ? rustCallableTargetType([integer], integer, { kind: "static" }) : declared;
+    const physical = selectedLifetime === "static" ? rustCallableTargetType([integer], integer, { kind: "static" }) : declared;
     const subjects = new Map([declaration, unrequested].map(node => [node, { node, kind: "member", projection: [] }]));
     let queries = 0;
     let selections = 0;
@@ -315,14 +319,18 @@ for (const genericParameters of [[], [{ kind: "lifetime" }]]) {
       assert.equal(open && subjects.get(selected.node) === selected && carrier === declared, true,
         "physical selection keeps the exact declared member correspondence");
       selections += 1;
-      return { kind: "identity", carrier: physical };
+      return rustTargetTypeRefEquals(physical, declared)
+        ? Object.freeze({ kind: "identity", carrier: physical, sources: Object.freeze([]) })
+        : Object.freeze({ kind: "selected", carrier: physical, sources: Object.freeze([]), inputs: Object.freeze([]) });
     });
     const carrier = fields.get(declaration);
     const protocol = rustCallableProtocol(carrier);
     assert.equal(carrier === physical, true, "the field owner publishes the native selector's exact physical carrier without lifetime retagging");
     assert.equal(protocol !== undefined, true, "an uninitialized callable field still has a physical slot");
-    assert.equal(protocol.lifetime.kind, genericParameters.length === 0 ? "static" : "parameter",
+    assert.equal(protocol.lifetime.kind, selectedLifetime,
       "only an actually owning native class closes its field storage lifetime");
+    assert.equal(protocol.lifetime === (selectedLifetime === "parameter" ? lifetime : rustCallableProtocol(physical).lifetime), true,
+      "class metadata cannot replace the exact environment selected for its field");
     assert.equal(fields.get(declaration) === carrier, true, "a completed physical field selection is stable");
     assert.equal(queries, 1, "one complete field domain is queried once");
     assert.equal(selections, 1, "one native storage owner selects the field once");
@@ -363,13 +371,13 @@ for (const [name, wrap, unwrap] of [
   ["tuple", carrier => ({ kind: "tuple", elements: [carrier] }), carrier => carrier.elements[0]],
 ]) {
   test(`nested ${name} callable member storage is materialized and sealed through its actual field domain`, () => {
-    for (const ownsStorage of [true, false]) {
+    for (const [ownsStorage, selectedLifetime] of [[true, "static"], [false, "parameter"], [true, "parameter"]]) {
       const declaration = {};
       const definition = { genericParameters: ownsStorage ? [] : [{ kind: "lifetime" }] };
       const integer = rustSourcePrimitiveTargetType("int32");
       const lifetime = { kind: "parameter", identity: "nested-field:environment", name: "environment" };
       const declared = wrap(rustCallableTargetType([integer], integer, lifetime));
-      const physical = ownsStorage ? wrap(rustCallableTargetType([integer], integer, { kind: "static" })) : declared;
+      const physical = selectedLifetime === "static" ? wrap(rustCallableTargetType([integer], integer, { kind: "static" })) : declared;
       let open = true;
       let calls = 0;
       const fields = prepareRustProjectCallableFieldStorage({ ast: {},
@@ -386,7 +394,9 @@ for (const [name, wrap, unwrap] of [
       }, (_subject, carrier) => {
         calls += 1;
         assert.equal(carrier === declared, true, "the native storage selector receives the complete nested declared carrier");
-        return { kind: "identity", carrier: physical };
+        return rustTargetTypeRefEquals(physical, declared)
+          ? Object.freeze({ kind: "identity", carrier: physical, sources: Object.freeze([]) })
+          : Object.freeze({ kind: "selected", carrier: physical, sources: Object.freeze([]), inputs: Object.freeze([]) });
       });
       const selected = fields.seal();
       assert.equal(selected.kind, "resolved", "every unrequested nested callable field closes before publication");
@@ -394,8 +404,10 @@ for (const [name, wrap, unwrap] of [
       const carrier = selected.value.get(declaration);
       assert.equal(carrier !== undefined, true, "nested callable storage is not skipped by a direct-callable-only guard");
       assert.equal(carrier === physical, true, "the entire selected nested carrier is published without rewriting its native lifetimes");
-      assert.equal(rustCallableProtocol(unwrap(carrier))?.lifetime.kind, ownsStorage ? "static" : "parameter",
+      assert.equal(rustCallableProtocol(unwrap(carrier))?.lifetime.kind, selectedLifetime,
         "the enclosing native field owns storage or retains its actual authored lifetime");
+      if (selectedLifetime === "parameter") assert.equal(rustCallableProtocol(unwrap(carrier)).lifetime === lifetime, true,
+        "absence of class lifetime parameters does not promote nested callable storage to static");
       assert.equal(calls, 1, "one native field selection covers the entire nested shape");
       assert.equal(selected.value.get(declaration) === carrier, true, "the published nested result is an identical stored record");
     }
