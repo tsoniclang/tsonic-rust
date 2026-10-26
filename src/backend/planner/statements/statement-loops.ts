@@ -74,10 +74,8 @@ export function planForOfStatement(
   if (borrowedBinding !== undefined && expressionOverrides !== undefined) {
     for (const reference of borrowedBinding.references) expressionOverrides.set(reference, {
       carrier: fact.elementCarrier,
-      valueForm: "value",
-      expression: { kind: "owned-string-from-borrowed-str", expression: {
-        kind: "method-call", receiver: { kind: "path", path: binding }, method: "as_str", args: [],
-      } },
+      valueForm: "shared-reference",
+      expression: { kind: "path", path: binding },
     });
   }
   const bodyContext = expressionOverrides === undefined ? context : { ...context, expressionOverrides };

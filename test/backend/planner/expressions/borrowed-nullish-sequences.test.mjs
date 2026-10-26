@@ -23,7 +23,7 @@ for (const surfaces of [[], ["js"]]) {
     assert.match(output, /array\.extend_from_slice\(sequence_\d+\)/u);
     const joined = output.slice(output.indexOf("pub fn joinFromHeaders"), output.indexOf("pub fn chooseLazy"));
     assert.match(joined, /for value in [\s\S]*\.iter\(\)/u);
-    assert.match(joined, /result\.push_str\(value\.as_str\(\)\)/u);
+    assert.match(joined, /result\.push_str\(value\)/u);
     assert.doesNotMatch(joined, /iter_cloned|String::from\(value|clone\(/u);
     const root = writeGeneratedProject(`borrowed-nullish-sequences-${surfaces[0] ?? "native"}`, result.artifacts);
     mkdirSync(join(root, "tests"), { recursive: true });
