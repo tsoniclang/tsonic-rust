@@ -698,6 +698,33 @@ export function ordinary(value: number): number { const stored = value; return s
   assert.throws(() => source.ast.kindName(program.sourceFiles[0]), /after publication/u, "the source guard is live");
 });
 
+function verifyRequiredProducerCarrier(program, observations) {
+  const preparation = observations.preparations.find(candidate => candidate.requests.some(request =>
+    program.physicalEmissionContexts.contextFor(request.use) !== undefined &&
+    request.demands.some(demand => demand.kind === "producer")));
+  assert.equal(preparation !== undefined, true, "an original checked construction supplies a real producer demand");
+  const request = preparation.requests.find(candidate => candidate.demands.some(demand => demand.kind === "producer"));
+  const demand = request.demands.find(candidate => candidate.kind === "producer");
+  const physical = preparation.input.nativeProducers.physicalFor(demand.declaration, demand.carrier);
+  assert.equal(physical !== undefined, true, "the native producer has its completed exact physical contract");
+  assert.equal(program.physicalEmissionContexts.carrierFor(request.use, physical) !== undefined, true,
+    "the emitted context prepares the producer's selected physical type under its own bindings");
+  let selections = 0;
+  const missing = prepareRustEmissionContextRequests({ ...preparation.input, sourceOccurrences: [],
+    nativeProducers: { ...preparation.input.nativeProducers, physicalFor(declaration, carrier) {
+      selections++;
+      assert.equal(declaration === demand.declaration && carrier === demand.carrier, true,
+        "the source owner and original logical contract are not reconstructed");
+      return undefined;
+    } } }, [{ ...request, demands: [demand], sourceCarriers: [], physicalCarriers: [] }]);
+  assert.equal(selections, 1, "one canonical producer selection supplies the physical type");
+  assert.equal(missing.kind, "rejected");
+  assert.equal(missing.diagnostics.some(diagnostic => diagnostic.sourceNode === demand.subject &&
+    diagnostic.code === "RUST_PHYSICAL_EMISSION_CONTEXT_NOT_PREPARED"), true,
+  "a missing producer physical contract refuses at the original source before publication");
+  assert.equal(Object.hasOwn(missing, "value"), false, "no logical-signature fallback publishes an incomplete context");
+}
+
 function verifyRequiredMissingOperand(program, observations) {
   const prepared = program.physicalEmissionContexts;
   const operand = prepared.operands.find(operand => operand.origin.kind === "operand");
@@ -748,6 +775,10 @@ const { program } = analyzeRust({ surfaces: ["js"], target: { id: "rust", option
   "index.ts": 'export function contains(input: string): boolean { return input.includes("value"); }',
 } });
 (${verifyRequiredMissingOperand.toString()})(program, observations);
+const produced = analyzeRust({ surfaces: [], target: { id: "rust", options: { outputType: "lib" } }, files: {
+  "index.ts": 'export function capture(value: number): () => number { return () => value; }',
+} });
+(${verifyRequiredProducerCarrier.toString()})(produced.program, observations);
 assert.equal(observations.anchors, 1, "one real observation without a production observer or invented late inputs");
 process.stdout.write("R14_INSTRUMENTED_MISSING_OPERAND_PROOF");
 `;
