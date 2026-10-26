@@ -207,7 +207,7 @@ export function prepareRustReadOwnership(input: {
           readsStorage: storageRead,
           pure: borrowEffects.pureValues.has(node),
           sharedReference: staticStringView || sourceRead.kind === "borrow" && operation?.kind === "reference-operation" &&
-            operation.operation === "load" && !operation.operandCarrier.mutable,
+            operation.operation === "load" && !operation.operandCarrier.mutable && !sourceCopy,
           borrowedAcross: borrowRelationships.get(node) ?? new Set<Node>(),
         }));
       }
