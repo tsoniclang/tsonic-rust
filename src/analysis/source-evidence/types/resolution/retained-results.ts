@@ -5,6 +5,7 @@ import { closeRustRetainedResult } from "../../../callables/retained-result.js";
 import type { RustRetainedEnvironment } from "../../../../target-model/records/retained-environments.js";
 import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "./model.js";
 import { retainRustStructuralInstantiation } from "./structural-instantiations.js";
+import { rustSourceStorageSubjectContext } from "./source-storage-projection.js";
 
 export function resolveRustRetainedResult(
   declaration: Node,
@@ -18,7 +19,8 @@ export function resolveRustRetainedResult(
   const retained = closeRustRetainedResult(declaration, template, parameters, context);
   if (retained?.carrier === undefined) return undefined;
   if (!rustTargetTypeRefEquals(template, retained.carrier) && (sourceType === undefined ||
-    !retainRustStructuralInstantiation(sourceType, template, retained.carrier, context, options, resolving,
+    !retainRustStructuralInstantiation(sourceType, template, retained.carrier,
+      rustSourceStorageSubjectContext(context, undefined), options, resolving,
       context.ast.typeNode(declaration)))) return undefined;
   return Object.freeze({ ...retained, carrier: retained.carrier });
 }
