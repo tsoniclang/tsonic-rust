@@ -22,6 +22,8 @@ import { createRustStructuralEmissionProducer } from "../../../../dist/analysis/
 import { analyzeRustStructuralLivenessEmission } from "../../../../dist/analysis/reachability/structural-emission.js";
 import { createRustNativeLivenessProducer } from "../../../../dist/analysis/program/records/native-liveness.js";
 import { rustTargetTypeRefEquals } from "../../../../dist/target-model/types/equality.js";
+import { rustProgramErrorTargetType } from "../../../../dist/target-model/types/carriers/js.js";
+import { selectRustPhysicalProgramErrorOwnerForFile } from "../../../../dist/analysis/errors/error-types.js";
 
 test("native runtime type applications preserve exact Rust value/error identities and native AST", () => {
   const value = { kind: "source-primitive", name: "int64" };
@@ -129,8 +131,12 @@ test("structural storage renders combined native method and bound-field carriers
   const component = rustProgramPlanContext(base).sourcePackageComponentId;
   const errors = base.records.sourcePackageErrors.get();
   assert.equal(errors.domainsByComponentId.get(component).errorDomain, "runtime", "the actual native package owns the runtime error boundary");
+  const owner = selectRustPhysicalProgramErrorOwnerForFile(base.source.ast.getFileName(base.sourceFiles[0]), base.sourcePackageComponents);
+  assert.equal(owner !== undefined, true, "the bound field retains its actual completed native access-error owner");
   for (const [name, extra, type] of [
-    ["bound scalar", { carrier: scalar, storage: "bound" }, bound(valueType)],
+    ["bound scalar", { carrier: scalar, storage: "bound", boundStorage: {
+      carrier: rustRuntimeRecordFieldTargetType(scalar, rustProgramErrorTargetType(owner)), direct: false,
+    } }, bound(valueType)],
     ["native method", { carrier: callable, storage: "stored", method: true,
       methodPlan: { kind: "native-dispatch", implementation: "stored", receiver: "included", carrier: callable, constructions: [] } }, methodType],
     ["bound native method", { carrier: callable, storage: "bound", method: true,
