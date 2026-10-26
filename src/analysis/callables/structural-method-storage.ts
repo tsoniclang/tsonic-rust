@@ -69,10 +69,26 @@ export function analyzeRustStructuralMethodExposures(input: {
   readonly componentForFile: (fileName: string) => string;
 }): ReadonlyMap<string, RustStructuralMethodExposure> {
   const { ast } = input.source;
-  const candidates = new Map<string, { readonly declarations: Set<Node>; writes: "none" | "present" | "unresolved";
+  const candidates = new Map<string, { readonly slots: Set<string>; readonly declarations: Set<Node>; writes: "none" | "present" | "unresolved";
     boundary: "none" | "export-only" | "opaque"; extracted: boolean; presence: "required" | "optional" }>();
   const keyFor = (carrier: TargetTypeRef, index: number): string =>
     `${structuralStorageKey(rustStructuralGenericCarrier(carrier, "fields").carrier, input.componentForFile)}#${index}`;
+  const connect = (source: string, target: string): void => {
+    const left = candidates.get(source);
+    const right = candidates.get(target);
+    if (left === undefined || right === undefined || left === right) return;
+    const owner = left.slots.size >= right.slots.size ? left : right;
+    const incoming = owner === left ? right : left;
+    for (const slot of incoming.slots) {
+      owner.slots.add(slot);
+      candidates.set(slot, owner);
+    }
+    for (const declaration of incoming.declarations) owner.declarations.add(declaration);
+    if (incoming.writes === "unresolved" || owner.writes === "none") owner.writes = incoming.writes;
+    if (incoming.boundary === "opaque" || owner.boundary === "none") owner.boundary = incoming.boundary;
+    owner.extracted ||= incoming.extracted;
+    if (incoming.presence === "optional") owner.presence = "optional";
+  };
   const retain = (carrier: TargetTypeRef, index: number, declaration: Node): void => {
     const key = keyFor(carrier, index);
     const selected = candidates.get(key);
@@ -95,7 +111,7 @@ export function analyzeRustStructuralMethodExposures(input: {
   for (const shape of input.shapes) for (const field of shape.fields) {
     if (field.method !== true) continue;
     const key = keyFor(shape.carrier, field.storageIndex);
-    if (!candidates.has(key)) candidates.set(key, { declarations: new Set(), writes: "none", boundary: "none", extracted: false, presence: field.presence });
+    if (!candidates.has(key)) candidates.set(key, { slots: new Set([key]), declarations: new Set(), writes: "none", boundary: "none", extracted: false, presence: field.presence });
     for (const declaration of field.declarations) retain(shape.carrier, field.storageIndex, declaration);
   }
   for (const node of input.nativeNodes) {
@@ -105,6 +121,7 @@ export function analyzeRustStructuralMethodExposures(input: {
         retain(operation.resultCarrier, contribution.targetStorageIndex, contribution.property);
       else if (contribution.kind === "spread") for (const field of contribution.fields) {
         if (field.method !== true) continue;
+        connect(keyFor(contribution.sourceValueCarrier, field.sourceStorageIndex), keyFor(operation.resultCarrier, field.targetStorageIndex));
         for (const [carrier, index] of [[contribution.sourceValueCarrier, field.sourceStorageIndex],
           [operation.resultCarrier, field.targetStorageIndex]] as const) {
           const selected = candidates.get(keyFor(carrier, index));
@@ -123,39 +140,8 @@ export function analyzeRustStructuralMethodExposures(input: {
     const view = input.records.objectReferenceView.get(node);
     if (view?.kind === "structural") for (const field of view.fields) {
       if (field.source.valueSemantics.kind !== "method") continue;
-      const destination = candidates.get(keyFor(view.targetCarrier, field.destinationIndex));
-      const source = field.source.storage === "structural-object"
-        ? candidates.get(keyFor(field.source.receiverCarrier, field.source.storageIndex)) : undefined;
-      const shape = input.shapes.find(candidate => rustTargetTypeRefEquals(candidate.carrier, field.source.receiverCarrier));
-      const original = shape?.fields[field.source.storageIndex];
-      const bindings = input.sourceStorage.bindingsForLexicalOwner(node);
-      let complete = source !== undefined && destination !== undefined && original?.method === true &&
-        original.declarations.length !== 0 && bindings.kind === "resolved";
-      if (complete && original !== undefined && bindings.kind === "resolved") {
-        for (const declaration of original.declarations) {
-          const subject = input.sourceStorage.subject(node, "value", [{ kind: "method-value", declaration }]);
-          const producers = subject.kind === "unresolved" ? subject
-            : input.sourceStorage.storageProducersFor(subject.subject, bindings.bindings);
-          if (producers.kind !== "complete" || producers.producers.length === 0) {
-            complete = false;
-            break;
-          }
-          for (const producer of producers.producers) {
-            if (producer.subject.kind !== "value" || producer.subject.projection.length !== 0 ||
-              !ast.is.IsMethodDeclaration(producer.subject.node) || ast.body(producer.subject.node) === undefined) {
-              complete = false;
-              break;
-            }
-            retain(field.source.receiverCarrier, field.source.storageIndex, producer.subject.node);
-            retain(view.targetCarrier, field.destinationIndex, producer.subject.node);
-          }
-          if (!complete) break;
-        }
-      }
-      if (!complete) {
-        if (destination !== undefined) destination.extracted = true;
-        if (source !== undefined) source.extracted = true;
-      }
+      if (field.source.storage === "structural-object")
+        connect(keyFor(field.source.receiverCarrier, field.source.storageIndex), keyFor(view.targetCarrier, field.destinationIndex));
     }
     const method = operation?.kind === "source-call" && operation.target.form === "structural-method"
       ? { carrier: operation.target.receiverCarrier, index: operation.target.storageIndex, expression: Node_Expression(ast, node) }
@@ -173,6 +159,13 @@ export function analyzeRustStructuralMethodExposures(input: {
         else {
           if (producers.kind === "open" && candidate.boundary === "none") candidate.boundary = "export-only";
           for (const producer of producers.producers) {
+            if (producer.subject.kind === "input") {
+              const owner = sourceEnclosingCallable(producer.subject.node, ast);
+              const summary = owner === undefined ? undefined : input.source.navigation.declarationUseSummary(owner);
+              if (summary === undefined || summary.exported || summary.firstClassUseCount !== 0 || summary.hasUnclassifiedValueUse)
+                candidate.boundary = "opaque";
+              continue;
+            }
             if (producer.subject.kind !== "value" || producer.subject.projection.length !== 0 ||
               !ast.is.IsMethodDeclaration(producer.subject.node) || ast.body(producer.subject.node) === undefined) candidate.boundary = "opaque";
             else retain(method.carrier, method.index, producer.subject.node);
@@ -327,22 +320,6 @@ export function createRustStructuralMethodStorage(input: {
           }
         }
       }
-    } else {
-      const method = operation?.kind === "source-call" && operation.target.form === "structural-method" ? operation.target
-        : operation?.kind === "source-field" && operation.storage === "structural-object" && operation.valueSemantics.kind === "method" ? operation : undefined;
-      if (method === undefined) continue;
-      const destination = destinationFor(method.receiverCarrier, method.storageIndex);
-      if (destination === undefined) continue;
-      const selected = records.selectedOperation.get(node)?.provenance;
-      const receiver = asSourceNode(selected?.sourceReceiver, ast);
-      const declaration = asSourceNode(selected?.sourceSelectedDeclaration, ast);
-      if (receiver === undefined || declaration === undefined) {
-        sourceIssues.push({ subject: node, message: "Structural method storage requires its original checked receiver and member." });
-        continue;
-      }
-      const subject = sourceStorage.storageSubjectFor(receiver, [{ kind: "method-value", declaration }]);
-      if (subject.kind === "unresolved") sourceIssues.push({ subject: node, message: subject.reason });
-      else register(node, destination, subject.subject);
     }
   }
   let complete = false;
@@ -460,7 +437,7 @@ export function createRustStructuralMethodStorage(input: {
         if (operation?.kind !== "record-literal" || operation.storage !== "structural-object") continue;
         const definition = structuralShapes.definitionForCarrier(operation.resultCarrier);
         if (definition === undefined) failTargetAnalysisInvariant("tsonic-rust", "An admitted structural literal requires its original checked layout owner.", node);
-        const physical = input.nativeStorage.valueFor(node);
+        const physical = input.nativeStorage.operandFor(node);
         if (physical.kind === "unresolved") return reject(node, physical.reason);
         literals.push({ definition, carrier: physical.carrier });
       }

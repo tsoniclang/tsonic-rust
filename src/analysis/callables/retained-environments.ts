@@ -50,6 +50,17 @@ export function rustRetainedCallLifetimes(
   const projected = new Map<SourceStorageSubject, Map<SourceStorageBindings, TargetTypeRef | undefined>>();
   const lexicalVisits = new Set<Node>();
   const carrierFor = (subject: SourceStorageSubject, bindings: SourceStorageBindings | undefined): TargetTypeRef | undefined => {
+    const operation = records.targetOperation.get(subject.node);
+    if (subject.kind === "value" && subject.projection.length === 0 &&
+      (operation?.kind === "array-literal" || operation?.kind === "tuple-literal")) {
+      const values = operation.kind === "array-literal"
+        ? operation.contributions.flatMap(contribution => contribution.kind === "value" ? [contribution.carrier]
+          : contribution.input.inputs.flatMap(input => input.kind === "empty" ? [] : [input.presentCarrier]))
+        : ast.elements(subject.node).map(element => element === undefined ? undefined : records.runtimeCarrier.get(element)?.carrier);
+      if (!values.every((carrier): carrier is TargetTypeRef => carrier !== undefined)) return undefined;
+      const lifetime = rustRetainedValueLifetime(subject.node, values, walk);
+      return lifetime === undefined ? undefined : reference(lifetime);
+    }
     if (subject.kind === "value" && subject.projection.length === 0 &&
       records.targetOperation.get(subject.node)?.kind === "closure") {
       const captures = records.closureCapture.get(subject.node);
