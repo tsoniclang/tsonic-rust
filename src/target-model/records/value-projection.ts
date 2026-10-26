@@ -14,6 +14,7 @@ export interface RustValueProjection {
   readonly option: RustOptionProjectionFact | undefined;
   readonly fused: Extract<RustFlowReadProjectionFact, { readonly kind: "union-map" }> | undefined;
   readonly borrowable: boolean;
+  readonly borrowedOptionIdentity: boolean;
   readonly borrowConversion: boolean;
   readonly referenceReborrow: boolean;
   readonly contextualIdentity: boolean;

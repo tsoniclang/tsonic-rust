@@ -4,6 +4,7 @@ import { analyzeRust } from "../../helpers/rust-session.mjs";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 import { rustSourceOptionalElementCarrier } from "../../../dist/target-model/types/carriers/optional.js";
 import { rustUnionLeaves } from "../../../dist/target-model/types/union-relations.js";
+import { pointerOwnerNarrowingSource } from "../../../../tsonic/test/fixtures/pointer-owner-narrowing.mjs";
 
 function returnedValues(program) {
   const { ast } = program.source;
@@ -18,6 +19,52 @@ function returnedValues(program) {
   program.sourceFiles.forEach(visit);
   return selected;
 }
+
+for (const surface of ["native", "js"]) test(`borrowed optional round trips preserve the original pointer place on ${surface}`, () => {
+  const { program } = analyzeRust({ surfaces: surface === "native" ? [] : ["js"],
+    files: { "index.ts": pointerOwnerNarrowingSource } });
+  const { ast } = program.source;
+  const arguments_ = [];
+  const visit = node => {
+    if (ast.is.IsCallExpression(node) && ast.text(ast.as.AsCallExpression(node)?.Expression) === "equalptr")
+      arguments_.push(...ast.arguments(node));
+    ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+  };
+  program.sourceFiles.forEach(visit);
+  assert.equal(arguments_.length, 4, "both original native pointer comparisons retain their exact source operands");
+  for (const node of arguments_) {
+    const flow = program.records.flowReadProjection.get(node);
+    const optional = program.records.optionProjection.get(node);
+    const read = program.records.readOwnership.get(node);
+    const selected = program.records.valueProjection.get(node);
+    assert.equal(flow?.kind, "option-value", "the original checked pointer narrowing remains published");
+    assert.equal(optional?.kind, "some", "the native consumer's original optional input remains published");
+    assert.equal(read?.value.kind === "borrow" && !read.value.mutable, true,
+      "the consumer's exact immutable lease, not a renderer guess, permits the place-preserving composition");
+    assert.equal(rustTargetTypeRefEquals(flow.selectedCarrier, optional.sourceCarrier), true,
+      "the unwrap and rewrap share the identical original pointer payload");
+    assert.equal(rustTargetTypeRefEquals(flow.sourceCarrier, optional.resultCarrier), true,
+      "the full carrier including absence and native metadata is identical");
+    assert.equal(selected?.borrowedOptionIdentity, true,
+      "one pre-seal owner selects the complete inverse projection without copying its native pointer");
+  }
+});
+
+test("owned optional returns retain their payload transfer rather than borrowing the original container", () => {
+  const { program } = analyzeRust({ surfaces: [], files: { "index.ts": `
+export function retain(value: string | undefined): string | undefined {
+  if (value === undefined) return undefined;
+  return value;
+}
+` } });
+  const values = returnedValues(program);
+  assert.equal(values.length, 1, "one original owned payload return remains admitted");
+  const selected = program.records.valueProjection.get(values[0]);
+  assert.equal(selected !== undefined, true, "the owned result has its sealed native projection composition");
+  assert.equal(selected.borrowedOptionIdentity, false, "an owned return cannot acquire a borrowed container identity");
+  assert.equal(selected.flow?.kind, "option-value", "the original owned payload selection is retained");
+  assert.equal(selected.option?.kind, "some", "the owned optional result still materializes its payload");
+});
 
 test("checked removal of source absence retains the admitted native payload instead of resolving a replacement type", () => {
   const { program } = analyzeRust({ files: { "index.ts": `

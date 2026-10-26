@@ -80,7 +80,9 @@ function planProjectedExpression(node: Node, context: RustPlanContext, resultUse
   const borrowed = selected.borrowable && !flowOverridden && (override === undefined || override.valueForm === "shared-reference");
   const borrowFlow = borrowed && access !== "value" && selected.contextual === undefined;
   const borrowConversion = borrowed && finalStage !== "source" && selected.borrowConversion;
-  if (fused === undefined && selected.flow !== undefined) value = planRustFlowReadProjection(node, value, selected.flow, context, borrowFlow || borrowConversion);
+  const borrowedOptionIdentity = finalStage === "option" && !flowOverridden && selected.borrowedOptionIdentity;
+  if (fused === undefined && selected.flow !== undefined && !borrowedOptionIdentity)
+    value = planRustFlowReadProjection(node, value, selected.flow, context, borrowFlow || borrowConversion);
   if (selected.upcast !== undefined) value = planRustProjectUpcast(node, value, selected.upcast, context, "borrowed");
   else if (selected.downcast !== undefined) value = planRustProjectDowncast(node, value, selected.downcast, context);
   if (value === undefined) failRustPlannerInvariant("An admitted expression requires its native source-stage projection.", node);
@@ -98,7 +100,7 @@ function planProjectedExpression(node: Node, context: RustPlanContext, resultUse
   if (selected.option?.kind === "none") {
     const absent = planRustAbsentValue(context.valueDestinations?.get(node) ?? selected.option.resultCarrier, context);
     value = selected.preserveAbsenceEffect ? { kind: "evaluate-then", effect: value, discard: selected.absenceDiscard, value: absent } : absent;
-  } else if (selected.option?.kind === "some") value = planRustPresentValue(selected.option.resultCarrier, value, context);
+  } else if (selected.option?.kind === "some" && !borrowedOptionIdentity) value = planRustPresentValue(selected.option.resultCarrier, value, context);
   if (access === "shared-receiver") return value;
   if (access === "shared-place") return borrowFlow ? { kind: "dereference", pointer: value } : value;
   // A contextual conversion to a shared reference (`AsRef::<str>::as_ref(&owned)`) already yields the shared reference;

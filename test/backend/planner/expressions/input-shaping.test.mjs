@@ -26,7 +26,7 @@ const sourceNode = {};
 const identityProjection = Object.freeze({
   exits: false, flow: undefined, upcast: undefined, downcast: undefined,
   object: undefined, contextual: undefined, option: undefined, fused: undefined,
-  borrowable: false, borrowConversion: false, referenceReborrow: false,
+  borrowable: false, borrowedOptionIdentity: false, borrowConversion: false, referenceReborrow: false,
   contextualIdentity: true, contextualConsumesSource: false,
   preserveAbsenceEffect: false, absenceDiscard: "value",
 });

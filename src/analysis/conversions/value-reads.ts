@@ -193,6 +193,12 @@ export function analyzeRustValueReads(program: Omit<RustAnalysisProgram, "reacha
     const borrowable = ownership?.value.kind !== "move" && flow !== undefined && ((flow.kind === "source-union" || flow.kind === "runtime-union") && flow.project === undefined ||
       flow.kind === "option-value" && rustOptionalStorageValue(flow.sourceCarrier) === undefined) && rustOptionElementCarrier(flow.selectedCarrier) === undefined &&
       cast === undefined && downcast === undefined && lifetime === undefined && optional === undefined && object === undefined;
+    const borrowedOptionIdentity = ownership?.value.kind === "borrow" && !ownership.value.mutable && flow?.kind === "option-value" &&
+      optional?.kind === "some" && rustTargetTypeRefEquals(source, flow.sourceCarrier) &&
+      rustTargetTypeRefEquals(flow.selectedCarrier, optional.sourceCarrier) &&
+      rustTargetTypeRefEquals(flow.sourceCarrier, optional.resultCarrier) &&
+      cast === undefined && downcast === undefined && lifetime === undefined && contextual === undefined && conversion === undefined &&
+      object === undefined && indexed === undefined && program.records.callableJoinWrite.get(node) === undefined;
     const plans: { readonly carrier: TargetTypeRef | undefined; readonly value: RustValueProjection }[] = [];
     const candidates = [undefined, input, ...transitions.flatMap(transition => [transition.input, transition.output]), presentGuards.get(node)];
     const seen = new Set<string>();
@@ -216,6 +222,7 @@ export function analyzeRustValueReads(program: Omit<RustAnalysisProgram, "reacha
         downcast: applied.has("cast") ? downcast : undefined, object: applied.has("object") ? object : undefined,
         contextual: applied.has("contextual") ? contextual : undefined, option: applied.has("option") ? optional : undefined,
         fused: applied.has("flow") && applied.has("contextual") ? fused : undefined, borrowable: borrowable && applied.has("flow"),
+        borrowedOptionIdentity: borrowedOptionIdentity && applied.has("flow") && applied.has("option"),
         borrowConversion: borrowable && contextual !== undefined && rustTargetTypeRefEquals(flow?.selectedCarrier, contextual.sourceCarrier) &&
           (runtime?.sourceMode === "ref" || contextual.conversion.kind === "project-union-map"),
         referenceReborrow: referenceReborrow !== undefined,
