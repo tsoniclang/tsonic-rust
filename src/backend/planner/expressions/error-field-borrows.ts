@@ -6,6 +6,7 @@ import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { rustValueBlock } from "../../target-ast/syntax/value-block.js";
 import { planRustBuiltinErrorPropertyRead } from "./builtin-errors.js";
 import { planExpression, planExpressionBeforeContextualConversion } from "./entry.js";
+import { planRustRuntimeCategoryExpression } from "./runtime-category.js";
 
 export function rustErrorFieldHasGuardedBorrow(node: Node, context: RustPlanContext): boolean {
   const selected = context.input.program.records.errorFieldEmission.get(node);
@@ -46,6 +47,8 @@ export function rustErrorFieldComparisonView(node: Node | undefined, expression:
   const selected = context.input.program.records.stringComparisonView.get(node)
     ?? failRustPlannerInvariant("An admitted comparison requires its sealed native string view.", node);
   if (selected.kind === "literal") return { kind: "str-literal", value: selected.value };
+  if (selected.kind === "runtime-category") return context.expressionOverrides?.has(selected.expression) === true
+    ? expression : planRustRuntimeCategoryExpression(selected.expression, context);
   if (selected.kind === "native-str-reference") return {
     kind: "call", path: "core::convert::AsRef::<str>::as_ref",
     args: [selected.inputForm === "shared-reference" ? expression : { kind: "reference", expr: expression }],
