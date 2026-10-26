@@ -17,6 +17,9 @@ export function finalizeRustCallbackOperation(
   argumentCarriers: readonly TargetTypeRef[],
   acceptsConversion: (source: TargetTypeRef, target: TargetTypeRef) => boolean = () => false,
 ): RustCallbackOperationSelection | undefined {
+  const evaluationOnly = new Set(selection.fact.evaluationOnlySourceArgumentIndexes ?? []);
+  const runtimeParameters = (parameters: readonly (TargetTypeRef | undefined)[]) =>
+    parameters.filter((_carrier, index) => !evaluationOnly.has(index));
   const callback = argumentCarriers[selection.callback.sourceArgumentIndex];
   const originalTemplate = selection.parameterCarriers?.[selection.callback.sourceArgumentIndex];
   const callbackTemplate = originalTemplate?.kind === "closure" && rustCallableProtocol(callback) !== undefined
@@ -53,7 +56,7 @@ export function finalizeRustCallbackOperation(
       fact: {
         ...selection.fact,
         resultCarrier,
-        parameterCarriers,
+        parameterCarriers: runtimeParameters(parameterCarriers),
       },
       resultCarrier,
       parameterCarriers,
@@ -69,7 +72,7 @@ export function finalizeRustCallbackOperation(
     }
     return {
       ...selection,
-      fact: { ...selection.fact, parameterCarriers: templates as readonly TargetTypeRef[] },
+      fact: { ...selection.fact, parameterCarriers: runtimeParameters(templates) },
       parameterCarriers: templates,
     };
   }
@@ -92,7 +95,7 @@ export function finalizeRustCallbackOperation(
     fact: {
       ...selection.fact,
       resultCarrier: accumulator,
-      parameterCarriers,
+      parameterCarriers: runtimeParameters(parameterCarriers),
     },
     resultCarrier: accumulator,
     parameterCarriers,

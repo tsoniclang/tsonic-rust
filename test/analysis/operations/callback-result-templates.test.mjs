@@ -4,7 +4,7 @@ import { finalizeRustCallbackOperation } from "../../../dist/policy/operations/m
 import {
   rustCallableTargetType, rustJsArrayTargetType, rustJsErrorTargetType, rustJsPromiseTargetType,
   rustJsValueTargetType, rustOptionTargetType, rustProgramErrorTargetType, rustSourcePrimitiveTargetType,
-  rustStringTargetType, rustUnitTargetType, rustAbsenceTargetType,
+  rustStringTargetType, rustUnitTargetType, rustAbsenceTargetType, isRustAbsenceCarrier,
 } from "../../../dist/target-model/types/index.js";
 import { selectRustCallableConversion } from "../../../dist/policy/conversions/callable.js";
 import { selectRustSourceValueConversion } from "../../../dist/policy/conversions/selection.js";
@@ -14,6 +14,8 @@ import { rustRuntimeErrorTargetType } from "../../../dist/target-model/types/car
 import { selectJsSurfaceOperation } from "../../../dist/policy/operations/source-profiles/js/selection.js";
 import { finalizeRustRegExpReplacementCallbackContract } from "../../../dist/policy/operations/members/regexp-callbacks.js";
 import { analyzeRust } from "../../helpers/rust-session.mjs";
+import { finalizeProviderOperationFact } from "../../../dist/analysis/program/records/provider-operations.js";
+import { emptyRustTypeDefinitions } from "../../../dist/target-model/types/source-union-definitions.js";
 
 const inferred = { kind: "opaque", id: "tsonic.rust.infer" };
 const integer = rustSourcePrimitiveTargetType("uint64");
@@ -221,6 +223,18 @@ test("pure intrinsic callback helpers publish their actual selected native Resul
     assert.equal(selected.fact.errorCarrier, undefined, "a target-runtime boundary has no second provider-native carrier");
     assert.deepEqual(selected.callback.failure.resultError, { kind: "native", carrier: rustRuntimeErrorTargetType() });
     const prepared = { template: selected.fact, callback: selected.callback };
+    const arguments_ = [rustJsValueTargetType(), callback, ...space];
+    const finalized = finalizeRustCallbackOperation(selected, arguments_);
+    assert.equal(finalized !== undefined, true, "the actual source vector closes the selected callback overload");
+    assert.equal(finalized.parameterCarriers.length, arguments_.length, "every source argument keeps its checked carrier");
+    assert.equal(finalized.fact.parameterCarriers.length, arguments_.length - (selected.fact.evaluationOnlySourceArgumentIndexes?.length ?? 0),
+      "the native parameter vector excludes only arguments explicitly selected for evaluation alone");
+    const operation = finalizeProviderOperationFact(finalized.fact, finalized.parameterCarriers,
+      { kind: "compile-time" }, emptyRustTypeDefinitions);
+    assert.equal(operation !== undefined, true, "all four overloads finalize one total exact native operation ABI");
+    const last = operation.abi.sourceArguments.at(-1);
+    assert.equal(last.disposition, isRustAbsenceCarrier(space[0])
+      ? "evaluation-only" : "runtime", "explicit absent space is still evaluated without becoming a native input");
     assert.equal(callbackFallibleTemplate(prepared, effects) === selected.fact, true);
     const result = rustPreparedCallbackResultEffects(prepared, effects.invocationEffects);
     assert.equal(result?.localErrors, true, "a pure callback cannot erase its selected native helper's actual failure");
