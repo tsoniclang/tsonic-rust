@@ -14,7 +14,7 @@ const named = path => ({ kind: "named", path });
 const path = name => ({ kind: "path", path: name });
 const source = (identity, variant, errorType = named("BorrowedError")) => ({ identity, variant, errorType });
 const plan = (sources, options = {}) => planRustNativeErrorJoin({ identity: "region:joined-errors", name: "JoinedErrors",
-  visibility: "private", sources, ...options });
+  visibility: "private", resultShape: sources.length === 0 ? "value" : "result", sources, ...options });
 const first = source("callback:first", "First");
 const second = source("callback:second", "Second");
 
@@ -42,6 +42,18 @@ test("zero native error sources preserve pure code without an error type or item
   assert.equal(joined.items.length, 0);
   assert.equal(joined.inject(first, path("error")) === undefined, true);
   assert.equal(joined.propagate(first, path("result")) === undefined, true);
+});
+
+test("an explicit native Result ABI retains Infallible without inventing error variants", () => {
+  const joined = plan([], { resultShape: "result" });
+  assert.equal(joined.errorType?.kind, "named");
+  assert.equal(joined.errorType?.path, "core::convert::Infallible");
+  assert.equal(joined.items.length, 0, "an empty native error type needs no declaration");
+  assert.equal(joined.mapError(path("error"), "impossible", () => assert.fail("no error source exists")).arms.length, 0,
+    "an actual Result error is eliminated by the empty native match");
+  assert.equal(joined.inject(first, path("error")), undefined, "foreign inhabited errors remain refused");
+  assert.throws(() => plan([first], { resultShape: "value" }), /value ABI/u,
+    "nonempty source errors cannot silently become an infallible value ABI");
 });
 
 test("one exact source moves its error unchanged and propagates without conversion", () => {

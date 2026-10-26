@@ -7,6 +7,7 @@ import { rustProgramErrorTargetType } from "../../target-model/types/carriers/js
 import { rustProducerErrorReference } from "../../target-model/types/carriers/producer-errors.js";
 import { mapRustTargetTypes } from "../../target-model/types/carriers/substitution.js";
 import { rustNativeErrorJoinTargetType } from "../../target-model/types/native-error-joins.js";
+import { rustUninhabitedError } from "../../policy/conversions/callable-physical.js";
 import { selectRustProducerError, type RustProducerErrorContext } from "../callables/producer-errors.js";
 import type { RustSourcePackageComponentClassifications } from "../../target-model/records/source-package-semantics.js";
 
@@ -76,7 +77,15 @@ export function normalizeRustErrorType(
           if (physical === undefined) throw unavailable;
           errors.push(rustProgramErrorTargetType(physical));
         }
-        for (const source of selection.effects.nativeErrors) errors.push(normalize(source.errorType, selection.declaration));
+        const declarationEffects = input.records.errorEffects.get(selection.declaration);
+        if (declarationEffects === undefined || declarationEffects.nativeErrors.length !== selection.effects.nativeErrors.length)
+          throw unavailable;
+        for (const [index, source] of selection.effects.nativeErrors.entries()) {
+          const original = declarationEffects.nativeErrors[index]!;
+          if (original.identity !== source.identity) throw unavailable;
+          if (!rustUninhabitedError(normalize(original.errorType, selection.declaration)))
+            errors.push(normalize(source.errorType, selection.declaration));
+        }
         const file = input.ast.getSourceFile(selection.declaration);
         const joined = file === undefined ? undefined : rustNativeErrorJoinTargetType(input.ast.getFileName(file), errors);
         if (joined === undefined) throw unavailable;
