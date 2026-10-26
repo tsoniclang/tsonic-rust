@@ -60,9 +60,6 @@ function planRustSelectedDirectStorage(operand: Node, selected: Exclude<RustDire
       if (storage === undefined) return undefined;
       if (!directStorageRemainsSelected(receiver, selected.index === undefined ? [] : [selected.index], explicit?.valueForm === "storage", context))
         failRustPlannerInvariant("An admitted provider place requires stable selected receiver storage.", operand);
-      if (selected.receiverProjection !== undefined) storage = { kind: "dereference", pointer: planRustUnionProjection(receiver,
-        storage, selected.receiverProjection.selection,
-        selected.receiverProjection.mutable ? "mutable-reference" : "shared-reference", context) };
       inputs.set(selected.receiverInput, storage);
     }
     return planProviderOperation(context, selected.operation, selected.receiver,
