@@ -26,14 +26,13 @@ export function rustPreparedCallbackResultEffects(
 ): RustErrorEffectsFact | undefined {
   const failure = prepared.callback.failure;
   if (failure.kind === "returned-future") return prepared.template.isFallible ? rustLocalErrorEffects : rustPureErrorEffects;
+  if (prepared.template.isFallible && prepared.template.errorBoundary === "provider-native" &&
+    prepared.template.errorCarrier === undefined) return undefined;
   const selected = callbackFallibleTemplate(prepared, { invocationEffects });
   if (!selected.isFallible) return rustPureErrorEffects;
   if (selected.errorBoundary === "provider-native") return selected.errorCarrier === undefined
     ? undefined : rustCallableInvocationErrorEffects(selected.errorCarrier);
-  return mergeRustErrorEffects([
-    prepared.template.isFallible ? rustLocalErrorEffects : rustPureErrorEffects,
-    invocationEffects,
-  ]);
+  return invocationEffects;
 }
 
 export function createRustCallbackEffectAnalysis(input: {

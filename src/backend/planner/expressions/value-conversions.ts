@@ -4,7 +4,6 @@ import {
 } from "../../../target-model/types/index.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../names/synthetic.js";
 import { applyRustLocalErrorBoundary, rustTargetRuntimeErrorType } from "../types/error-boundary.js";
-import { rustPropagateNativeError } from "../program/fallible-boundaries.js";
 import { registerAliasFromPath, rustCurrentErrorBoundary } from "../program/plan-context.js";
 import { planRustSelectedErrorRegion } from "../program/error-regions.js";
 import { planRustSelectedSourceErrorPropagation } from "./calls/source-errors.js";
@@ -197,11 +196,15 @@ export function lowerRustValueConversion(
           continue;
         }
         const projectionError = selected.projection;
-        const errorType = projectionError === undefined ? undefined : rustTypeFromCarrierInContext(projectionError.errorType, callbackContext);
-        const propagated = region.boundary === undefined || projectionError === undefined || errorType === undefined ? undefined
-          : rustPropagateNativeError(region.boundary, { identity: projectionError.identity, errorType }, projected);
-        if (propagated === undefined) return undefined;
-        callbackArguments.push(propagated);
+        const errorType = projectionError === undefined ? undefined : rustTypeFromCarrierInContext(projectionError.target, callbackContext);
+        const errorName = allocateRustSyntheticName(names, "replacement_argument_error");
+        const converted = projectionError === undefined ? undefined : lowerRustValueConversion(projectionError,
+          { kind: "path", path: errorName }, callbackContext, node);
+        if (region.boundary === undefined || errorType === undefined || converted === undefined) return undefined;
+        callbackArguments.push({ kind: "try", operandErrorType: errorType, resultErrorType: region.boundary.errorType,
+          expr: { kind: "method-call", receiver: projected, method: "map_err",
+            genericArguments: [{ kind: "type", type: errorType }, { kind: "type", type: { kind: "infer" } }],
+            args: [{ kind: "closure", params: [{ name: errorName }], body: converted }] } });
       }
       const callbackExpression: RustExpr = { kind: "path", path: callbackName };
       const invocation: RustExpr = contract.invocation === "invoke"
