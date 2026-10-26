@@ -4,8 +4,14 @@ import type { RustCheckedElementSelectionInput } from "../../model/contracts.js"
 import { isRustCopyCarrier } from "../../constraints/native-traits.js";
 import type { RustNativeIndexSelection } from "./native-indices.js";
 
-export function selectRustNativeArrayElementPlan(ownerName: "Array" | "ReadonlyArray", element: TargetTypeRef,
+type RustNativeArrayReceiver = Extract<TargetTypeRef, { readonly kind: "array" }> |
+  (Extract<TargetTypeRef, { readonly kind: "reference" }> & {
+    readonly referent: Extract<TargetTypeRef, { readonly kind: "slice" }>;
+  });
+
+export function selectRustNativeArrayElementPlan(ownerName: "Array" | "ReadonlyArray", receiver: RustNativeArrayReceiver,
   index: RustNativeIndexSelection, accessMode: RustCheckedElementSelectionInput["accessMode"]): RustProviderOperationTemplate {
+  const element = receiver.kind === "array" ? receiver.element : receiver.referent.element;
   return {
     kind: "provider-operation",
     operationId: `tsonic.rust.native.${ownerName}.index`,
@@ -19,6 +25,6 @@ export function selectRustNativeArrayElementPlan(ownerName: "Array" | "ReadonlyA
     errorBoundary: "none",
     ...((accessMode === "read" || accessMode === "read-write") && !isRustCopyCarrier(element)
       ? { carrierRequirements: [{ carrier: element, requirement: "clone" as const,
-          source: { kind: "receiver" as const, projection: [0] } }] } : {}),
+          source: { kind: "receiver" as const, projection: receiver.kind === "array" ? [0] : [0, 0] } }] } : {}),
   };
 }
