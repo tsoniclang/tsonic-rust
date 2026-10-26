@@ -89,11 +89,11 @@ test("authored callable contracts publish the admitted initializer destination r
 test("closed native scalar contracts and initializer-less later writes retain exact binding storage", () => {
   const { program } = analyzeRust({ surfaces: [], files: { "index.ts": `
     import type { int32, int64 } from "@tsonic/core/types.js";
-    export function read(value: int32): int64 {
-      const wide: int64 = value;
+    export function read(value: int32): [int64, int32] {
+      const wide: int64 = 7n;
       let later: int32;
       later = value;
-      return wide + later;
+      return [wide, later];
     }
   ` } });
   for (const [name, expected] of [["wide", "int64"], ["later", "int32"]]) {
