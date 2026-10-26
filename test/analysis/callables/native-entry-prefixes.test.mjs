@@ -29,7 +29,7 @@ export function read(): number { return new Box<number>(1).read(); }
   program.sourceFiles.forEach(visit);
   const observed = new Map();
   let count = 0;
-  const contexts = prepareRustClassImplementationContexts(program, { implementationContext(declaration, carrier, selected) {
+  const observe = (declaration, carrier, selected) => {
     const keys = observed.get(declaration) ?? new Set();
     const key = closedMetadataKey(carrier);
     assert.equal(keys.has(key), false, "an exact original owner and instance are published only once");
@@ -47,8 +47,14 @@ export function read(): number { return new Box<number>(1).read(); }
     assert.equal(selected.types.set === undefined && selected.lifetimes.set === undefined && selected.names.set === undefined,
       true, "published original-owner correspondence exposes no mutation route");
     count++;
-  } }, []);
+  };
+  const complete = prepareRustClassImplementationContexts(program, { implementationContext: observe }, nodes);
   assert.equal(count > 0, true, "the real generic native class exercises owner-context publication");
+  complete.seal();
+  observed.clear();
+  count = 0;
+  const contexts = prepareRustClassImplementationContexts(program, { implementationContext: observe }, []);
+  assert.equal(count > 0, true, "the separate source-node-free owner prepares its original open class contexts");
   const definition = program.projectTypes.definitions.find(definition => definition.kind === "class" &&
     program.source.ast.text(program.source.ast.name(definition.declaration)) === "Box");
   assert.equal(definition !== undefined, true, "the exact original native class owns its context query");
