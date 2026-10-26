@@ -355,7 +355,7 @@ main();
     artifactText(result, "src/shapes.rs"),
     /pub\(crate\) struct LabelXShape \{\s*pub label: String,\s*pub x: f64,/u,
   );
-  assert.match(text, /rt::ObjectHandle<crate::shapes::LabelXShape>/u);
+  assert.match(text, /rt::ObjectHandle<crate::shapes::LabelXShape, \(\)>/u);
   assert.match(text, /rt::ObjectHandle::new\(crate::shapes::LabelXShape \{/u);
   assert.doesNotMatch(text, /state\.\d/u);
   const run = validateGeneratedProject("inferred-object-bin", result.artifacts, { run: true });

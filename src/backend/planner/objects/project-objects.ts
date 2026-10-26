@@ -588,5 +588,7 @@ export function writeRustProjectDispatchedField(
   };
   const write = roles.write.fallible
     ? rustPropagateLocalError(roles.write.region, roles.write.operandErrorType, writeCall) : writeCall;
-  return write === undefined ? undefined : rustValueBlock([{ name: receiverBinding, value: { kind: "reference", expr: receiver } }], write);
+  const borrowedReceiver: RustExpr = receiver.kind === "reference" && receiver.mutable !== true
+    ? receiver : { kind: "reference", expr: receiver };
+  return write === undefined ? undefined : rustValueBlock([{ name: receiverBinding, value: borrowedReceiver }], write);
 }

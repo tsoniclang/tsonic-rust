@@ -23,6 +23,16 @@ test("nested union payload paths are exact, immutable and independently checked"
   for (const [carrier, arms] of [[inner, [integer, string]], [nested, [boolean, inner]], [duplicate, [integer, inner]]]) {
     assert.equal(registry.registerSourceUnion({ carrier, variants: arms.map((carrier, index) => ({ name: `Variant${index}`, carrier })) }, true), true);
   }
+  const source = 'import type { uint64 } from "@tsonic/core/types.js";\ntype Inner = uint64 | string;\ntype Nested = boolean | Inner;\ntype Duplicate = uint64 | Inner;\nexport function probe(): void {}\n';
+  const analyzed = rustProgramWithTypeEmissions([], { source });
+  for (const definition of analyzed.structuralShapes.unionDefinitions) {
+    for (const carrier of definition.sourceCarriers) {
+      const variants = analyzed.typeDefinitions.sourceUnionVariants(carrier);
+      assert.equal(variants !== undefined, true, "every checked generated union retains its actual payload definitions");
+      assert.equal(registry.registerSourceUnion({ carrier, variants }, false), true,
+        "the fixture retains the complete checked native union domain before sealing");
+    }
+  }
   const definitions = registry.seal();
   const selected = rustUnionProjectionContract(nested, integer, definitions);
   assert.deepEqual(selected.path, [
@@ -56,7 +66,7 @@ test("nested union payload paths are exact, immutable and independently checked"
   const node = fakeStatement({ kindName: "KindIdentifier" });
   const sourceFile = fakeSourceFile({ fileName: "/src/index.ts", statements: [node] });
   const context = rustProgramPlanContext(rustProgramWithTypeEmissions([inner, nested, duplicate, integer, string, boolean], {
-    source: 'import type { uint64 } from "@tsonic/core/types.js";\ntype Inner = uint64 | string;\ntype Nested = boolean | Inner;\ntype Duplicate = uint64 | Inner;\nexport function probe(): void {}\n',
+    source,
     typeDefinitions: definitions,
   }), { sourceFile });
   const expression = { kind: "path", path: "value" };
