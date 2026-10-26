@@ -258,7 +258,7 @@ export function load(path: string): string {
   const load = nativeFunction(result, "load");
   assert.deepEqual(load.params.map(parameter => parameter.type), [nativeBorrow(nativeType("str"))]);
   assert.deepEqual(load.returnType, nativeType("String"));
-  assert.equal(load.errorType.identity, "tsonic-rust-runtime:TsonicError");
+  assert.equal(load.errorType.identity, "rust.node.NodeError");
   const calls = nativeCalls(load.body, "tsonic_rust_node::fs::read_file_sync_string");
   assert.equal(calls.length, 1);
   assert.deepEqual(calls[0].args, [
@@ -324,10 +324,10 @@ export function inspectJson(): boolean {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /let value: js_abi::JsValue = match js_abi::json_parse\("\{\\"tag\\":\\"tsonic\\"\}"\) \{\s*Ok\(value\) => value,\s*Err\(error\) => break 'try_body Err\(rt::TsonicError::from\(error\)\),/u);
+  assert.match(text, /let value: js_abi::JsValue =\s*match js_abi::json_parse\("\{\\"tag\\":\\"tsonic\\"\}"\)\s*\.map_err::<crate::index::NativeErrors2<rt::TsonicError, rt::JsError>, _>\(\s*crate::index::NativeErrors2::<rt::TsonicError, rt::JsError>::Error1,\s*\) \{\s*Ok\(value\) => value,\s*Err\(error\) => break 'try_body Err\(error\),/u);
   assert.match(
     text,
-    /let rendered: String = match js_abi::json_stringify\(&value\) \{\s*Ok\(value\) => value,\s*Err\(error\) => break 'try_body Err\(error\),\s*\}\s*\.unwrap_or_default\(\);/u,
+    /let rendered: String = match js_abi::json_stringify\(&value\)\s*\.map_err\(crate::index::NativeErrors2::<rt::TsonicError, rt::JsError>::Error0\)\s*\{\s*Ok\(value\) => value,\s*Err\(error\) => break 'try_body Err\(error\),\s*\}\s*\.unwrap_or_default\(\);/u,
   );
   assert.match(text, /ok = js_string::includes_from_start\(\s*core::convert::AsRef::<str>::as_ref\(&rendered\),\s*"tsonic",?\s*\);/u);
 });
@@ -714,9 +714,10 @@ main();
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
+  assert.equal(nativeFunction(result, "normalize").errorType.path, "rt::JsError");
   assert.match(
     source,
-    /js_string::replace_all\(core::convert::AsRef::<str>::as_ref\(value\), "a", "b"\)\s*\.map_err\(rt::TsonicError::from\)/u,
+    /fn normalize\(value: &str\) -> Result<String, rt::JsError> \{\s*js_string::replace_all\(core::convert::AsRef::<str>::as_ref\(value\), "a", "b"\)\s*\}/u,
   );
   assert.equal(validateGeneratedProject("concise-program-error", result.artifacts, { run: true }).status, 0);
 });
