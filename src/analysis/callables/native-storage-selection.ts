@@ -50,9 +50,19 @@ import type { RustNativeStorageSelection } from "../../target-model/records/nati
 import { callableValueCarrier } from "./native-storage-values.js";
 import { createRustNativeStorageJoins } from "./native-storage-joins.js";
 import { rustNativeStorageAbsentOrigin, rustNativeStorageErasedUnionCallablePayload, rustNativeStorageFrameFieldCarrier, rustNativeStorageErasedClosureParameter, rustNativeStorageErasedFieldCallable, rustNativeStorageInstanceTypeBindings, rustNativeStorageFrameInstanceBindings } from "./native-storage-carriers.js";
-import type { createRustNativeStorageQueries } from "./native-storage.js";
+import type { createRustNativeStorageQueries, RustNativeInvocationBindingsSelection } from "./native-storage.js";
+import { snapshotRustCallableBindings } from "../../policy/types/callables/generic-bindings.js";
 import type { RustSourceErrorEffectSelection } from "../errors/source-error-effects.js";
 import { selectRustNativeCallbackParameterStorage } from "./native-parameters.js";
+
+type RustNativeStorageRequest = {
+  readonly subject: SourceStorageSubject;
+  readonly bindings: SourceStorageBindings | undefined;
+  readonly scope: Node | undefined;
+} & (
+  | { readonly kind: "value"; readonly carrier: TargetTypeRef; readonly position: "value" | "input" }
+  | { readonly kind: "invocation"; readonly declaration: Node }
+);
 
 export function createRustNativeStorageSelection(
   input: Parameters<typeof createRustNativeStorageQueries>[0],
@@ -69,15 +79,16 @@ export function createRustNativeStorageSelection(
     readonly completeNativeOrigin: (node: Node, declaration: Node, carrier: TargetTypeRef,
       activation: NonNullable<Parameters<RustSourceErrorEffectSelection["bindingsFor"]>[3]>) => TargetTypeRef | undefined;
   },
-): (subject: SourceStorageSubject, carrier: TargetTypeRef, bindings: SourceStorageBindings | undefined, scope: Node | undefined,
-  position?: "value" | "input") => RustNativeStorageSelection {
+) {
   const { inputs, futures, recordMembers, genericInvocationBindingsFor, joinWrites, ownerFor, valueOwnerFor, logicalCarrierFor } = prepared;
   const { boundaries, adaptedReferences, failure: boundaryFailure } = prepared.conversions;
   const unresolved = (reason: string): Extract<RustNativeStorageSelection, { readonly kind: "unresolved" }> =>
     Object.freeze({ kind: "unresolved", reason });
-  return (subject: SourceStorageSubject, carrier: TargetTypeRef,
-    bindings: SourceStorageBindings | undefined, scope: Node | undefined,
-    position: "value" | "input" = "value"): RustNativeStorageSelection => {
+  function evaluate(request: Extract<RustNativeStorageRequest, { readonly kind: "value" }>): RustNativeStorageSelection;
+  function evaluate(request: Extract<RustNativeStorageRequest, { readonly kind: "invocation" }>): RustNativeInvocationBindingsSelection;
+  function evaluate(request: RustNativeStorageRequest): RustNativeStorageSelection | RustNativeInvocationBindingsSelection {
+    const { subject, bindings, scope } = request;
+    const position = request.kind === "value" ? request.position : "value";
     if (bindings === undefined) return unresolved("Native callable storage has no exact declaration-local bindings.");
     const owner = ownerFor(subject.node);
     const availableNativeInputs = scope === undefined ? [] : [...input.native.inputsFor(scope), ...input.native.capturesFor(scope)];
@@ -85,7 +96,8 @@ export function createRustNativeStorageSelection(
     if (environment?.kind === "unresolved") return environment;
     const checked = input.storage.typeFor(subject);
     if (checked.kind === "unresolved") return checked;
-    if (!isRustTargetTypeRef(carrier)) return unresolved("Native callable storage requires a valid selected carrier.");
+    if (request.kind === "value" && !isRustTargetTypeRef(request.carrier))
+      return unresolved("Native callable storage requires a valid selected carrier.");
     let remaining = rustNativeStorageProjectionSteps;
     let reason: string | undefined;
     const selectedInputs = new Set<RustNativeCallableInput>();
@@ -153,6 +165,36 @@ export function createRustNativeStorageSelection(
           source.erased === true)?.carrier;
       return physical ?? fail("Native callable conversion storage has no exact physical adaptation contract.");
     };
+    const boundInvocation = (declaration: Node, invocation: Node, callerBindings: SourceStorageBindings,
+      depth: number): Extract<RustNativeInvocationBindingsSelection, { readonly kind: "resolved" }> | undefined => {
+      if (!step(depth)) return undefined;
+      const operation = input.records.targetOperation.get(invocation);
+      if (operation?.kind !== "source-call") return fail("Native invocation binding requires its original source call.");
+      const implementations = input.storage.invocationImplementationsFor(invocation, callerBindings);
+      if (implementations.kind !== "resolved" || !implementations.exact || implementations.nodes.length !== 1 ||
+        implementations.nodes[0] !== declaration || operation.asyncBody !== undefined && operation.asyncBody.declaration !== declaration)
+        return fail("Native invocation binding requires its identical unique selected implementation.");
+      const activation = input.storage.bindingsForInvocation(declaration, invocation, callerBindings);
+      if (activation.kind === "unresolved") return fail(activation.reason);
+      const generic = genericsFor(declaration, activation.bindings, depth + 1);
+      if (generic.kind === "unresolved") return fail(generic.reason);
+      const types = new Map(generic.bindings.types);
+      const futuresForDeclaration = futures.forDeclaration(declaration);
+      if (futuresForDeclaration.kind === "unresolved") return fail(futuresForDeclaration.reason);
+      for (const formal of [...input.native.inputsFor(declaration), ...input.native.capturesFor(declaration),
+        ...futuresForDeclaration.inputs, ...futuresForDeclaration.captures]) {
+        if (!step(depth)) return undefined;
+        const logical = substituteRustTargetGenerics(formal.carrier, types, generic.bindings.lifetimes, generic.bindings.consts);
+        const physical = visit(logical, formal.subject, activation.bindings, depth + 1, false);
+        const leaf = callableValueCarrier(logical);
+        const selected = physical === undefined || leaf === undefined ? undefined
+          : rustPhysicalPayloadFor(logical, physical, leaf, input.definitions);
+        if (selected === undefined) return undefined;
+        types.set(formal.implementation.identity, selected);
+      }
+      return Object.freeze({ kind: "resolved", storageBindings: activation.bindings,
+        targetBindings: snapshotRustCallableBindings({ types, lifetimes: generic.bindings.lifetimes, consts: generic.bindings.consts }) });
+    };
     const producerResult = (origin: SourceStorageSubject, bindings: SourceStorageBindings,
       current: TargetTypeRef, depth: number): TargetTypeRef | undefined => {
       if (origin.kind !== "value" || origin.projection.length !== 0) return undefined;
@@ -188,27 +230,12 @@ export function createRustNativeStorageSelection(
       const implementations = input.storage.invocationImplementationsFor(origin.node, bindings);
       if (implementations.kind !== "resolved" || !implementations.exact || implementations.nodes.length !== 1) return undefined;
       const declaration = implementations.nodes[0]!;
-      const activation = input.storage.bindingsForInvocation(declaration, origin.node, bindings);
-      if (activation.kind === "unresolved") return fail(activation.reason);
-      const generic = genericsFor(declaration, activation.bindings, depth + 1);
-      if (generic.kind === "unresolved") return fail(generic.reason);
-      const types = new Map(generic.bindings.types);
-      const futuresForDeclaration = futures.forDeclaration(declaration);
-      if (futuresForDeclaration.kind === "unresolved") return fail(futuresForDeclaration.reason);
-      for (const formal of [...input.native.inputsFor(declaration), ...input.native.capturesFor(declaration),
-        ...futuresForDeclaration.inputs, ...futuresForDeclaration.captures]) {
-        if (!step(depth)) return undefined;
-        const logical = substituteRustTargetGenerics(formal.carrier, types, generic.bindings.lifetimes, generic.bindings.consts);
-        const physical = visit(logical, formal.subject, activation.bindings, depth + 1, false);
-        const leaf = callableValueCarrier(logical);
-        const selected = physical === undefined || leaf === undefined ? undefined
-          : rustPhysicalPayloadFor(logical, physical, leaf, input.definitions);
-        if (selected === undefined) return undefined;
-        types.set(formal.implementation.identity, selected);
-      }
+      const bound = boundInvocation(declaration, origin.node, bindings, depth);
+      if (bound === undefined) return undefined;
       const produced = input.producers.invocationResultFor(declaration);
       if (produced === undefined) return undefined;
-      const physical = substituteRustTargetGenerics(produced, types, generic.bindings.lifetimes, generic.bindings.consts);
+      const physical = substituteRustTargetGenerics(produced, bound.targetBindings.types,
+        bound.targetBindings.lifetimes, bound.targetBindings.consts);
       return rustPhysicalPayloadFor(logical, physical, current, input.definitions);
     };
     const absentOrigin = (subject: SourceStorageSubject) => rustNativeStorageAbsentOrigin(input, subject);
@@ -740,7 +767,20 @@ export function createRustNativeStorageSelection(
       return nested === undefined ? undefined : nested
         ? fail("Native callable storage requires its existing physical aggregate layout owner.") : current;
     };
-    const physical = visit(carrier, subject, bindings, 0, false, position);
-    return selectionFor(physical, carrier);
-  };
+    if (request.kind === "invocation")
+      return boundInvocation(request.declaration, subject.node, bindings, 0)
+        ?? unresolved(reason ?? "Native invocation binding has no complete original physical inputs.");
+    const physical = visit(request.carrier, subject, bindings, 0, false, position);
+    return selectionFor(physical, request.carrier);
+  }
+  return Object.freeze({
+    select: (subject: SourceStorageSubject, carrier: TargetTypeRef, bindings: SourceStorageBindings | undefined,
+      scope: Node | undefined, position: "value" | "input" = "value"): RustNativeStorageSelection =>
+      evaluate({ kind: "value", subject, carrier, bindings, scope, position }),
+    boundInvocationFor: (declaration: Node, invocation: Node, callerBindings: SourceStorageBindings): RustNativeInvocationBindingsSelection => {
+      const selected = input.storage.subject(invocation, "value");
+      return selected.kind === "unresolved" ? selected : evaluate({ kind: "invocation", declaration,
+        subject: selected.subject, bindings: callerBindings, scope: ownerFor(invocation) });
+    },
+  });
 }

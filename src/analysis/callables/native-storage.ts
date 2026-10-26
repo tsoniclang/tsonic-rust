@@ -49,10 +49,16 @@ import type { RustTargetGenericBindings } from "../../target-model/types/carrier
 
 import type { RustCallableJoinWrite } from "../../target-model/records/native-storage.js";
 
+export type RustNativeInvocationBindingsSelection =
+  | { readonly kind: "resolved"; readonly storageBindings: SourceStorageBindings;
+      readonly targetBindings: RustTargetGenericBindings }
+  | { readonly kind: "unresolved"; readonly reason: string };
+
 export interface RustNativeStoragePlan {
   readonly issues: readonly RustSourceCallableSpecializationIssue[];
   logicalCarrierFor(subject: SourceStorageSubject, bindings: SourceStorageBindings): TargetTypeRef | undefined;
   genericBindingsFor(declaration: Node, bindings: SourceStorageBindings): RustNativeStorageGenericSelection;
+  boundInvocationFor(declaration: Node, invocation: Node, callerBindings: SourceStorageBindings): RustNativeInvocationBindingsSelection;
   futureEnvironmentFor(declaration: Node): RustNativeFutureEnvironmentSelection;
   readonly parameterFor: (parameter: Node) => RustNativeStorageSelection;
   returnFor(declaration: Node): RustNativeStorageSelection;
@@ -167,12 +173,13 @@ export function createRustNativeStorageQueries(input: {
     return invocationBindingsFor(declaration, invocation, owner);
   };
   const recordMembers = createRustRecordMemberProducers({ ...input, bindingsFor });
-  const select = createRustNativeStorageSelection(input, { inputs, futures, conversions, recordMembers,
+  const selection = createRustNativeStorageSelection(input, { inputs, futures, conversions, recordMembers,
     genericInvocationBindingsFor, joinWrites, ownerFor, valueOwnerFor, logicalCarrierFor,
     completeNativeOrigin: (node, declaration, carrier, activation): TargetTypeRef | undefined => {
       const bindings = sourceErrors.bindingsFor(node, declaration, [carrier], activation);
       return bindings?.complete(carrier, queries);
     } });
+  const select = selection.select;
   const selectReturn = (declaration: Node): RustNativeStorageSelection => {
     const result = input.records.sourceCallableReturn.get(declaration);
     const parameter = result?.borrowedParameter;
@@ -209,6 +216,7 @@ export function createRustNativeStorageQueries(input: {
   const queries: RustNativeStorageQueries = {
     get sourceErrors() { return sourceErrors; },
     logicalCarrierFor,
+    boundInvocationFor: selection.boundInvocationFor,
     issues: witnesses.issues,
     invocationCallableFor: (node: Node) => invocationCallableFor(node, bindingsFor(ownerFor(node))),
     genericBindingsFor(declaration: Node, bindings: SourceStorageBindings): RustNativeStorageGenericSelection {
