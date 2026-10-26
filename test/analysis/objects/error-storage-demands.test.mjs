@@ -220,9 +220,14 @@ export function run(): string {
       }` }, jsEnabled);
     assert.equal(demand.fieldWrites.length, 1);
     const receiver = source.ast.as.AsPropertyAccessExpression(demand.fieldWrites[0]).Expression;
-    const selected = storage.subjectFor(receiver);
+    const subject = storage.subjectFor(receiver);
+    assert.equal(subject.kind, "resolved", "a checked storage identity is not an origin proof");
+    const selected = storage.closedOriginsFor(subject.subject);
     assert.equal(selected.kind, "unresolved");
-    assert.equal(selected.reason, "A demanded source storage relation has no completed correlated producer or absence proof.");
+    assert.equal(selected.reason, "A binding default requires its exact original checked storage input before initialization.");
+    const nativeDemand = demand.storageFor(subject.subject);
+    assert.equal(nativeDemand.kind, "unresolved", "an opaque binding cannot acquire native write permission");
+    assert.equal(nativeDemand.reason, selected.reason, "the native demand preserves the exact source producer refusal");
     assert.equal(storage.failureReason(), selected.reason, "the canonical producer refusal is preserved unchanged");
     assert.equal(demand.nativeConstructors.length, 0, "an opaque projection cannot invent a native constructor");
   });
