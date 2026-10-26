@@ -7,6 +7,7 @@ import { planRustSourcePackageErrors } from "../../dist/backend/planner/program/
 import { createRustSyntheticNameState } from "../../dist/backend/planner/names/synthetic.js";
 import { planBlockLike } from "../../dist/backend/planner/statements/index.js";
 import { analyzeRustProjectEmission } from "../../dist/analysis/project-types/emission.js";
+import { prepareRustProjectGenericMembership } from "../../dist/analysis/project-types/generic-membership.js";
 import { createRustProjectEmissionProducer } from "../../dist/analysis/program/records/project-emission.js";
 import { analyzeRustCarrierReads } from "../../dist/analysis/ownership/carrier-reads.js";
 import { createRustCarrierReadProducer } from "../../dist/analysis/program/records/carrier-reads.js";
@@ -75,7 +76,8 @@ export function rustProgramWithTypeEmissions(carriers, { source = "export functi
         ...program.physicalEmissionContexts.contexts.slice(1)] },
   };
   const projects = createRustProjectEmissionProducer(() => {});
-  analyzeRustProjectEmission({ program: input, nodes: [], producer: projects });
+  analyzeRustProjectEmission({ program: input, nodes: [], producer: projects,
+    memberships: prepareRustProjectGenericMembership(input.declarationGenericRequirements) });
   const admitted = { ...input, records: { ...program.records, ...projects.records } };
   const producer = createRustTypeEmissionProducer(() => {});
   analyzeRustTypeEmission(admitted, [], producer, selectedCarriers, projects);

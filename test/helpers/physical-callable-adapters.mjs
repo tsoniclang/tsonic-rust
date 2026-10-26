@@ -10,6 +10,7 @@ import { createRustErrorEmissionProducer } from "../../dist/analysis/program/rec
 import { analyzeRustCallableEmission } from "../../dist/analysis/conversions/callable-emission.js";
 import { createRustCallableConversionProducer } from "../../dist/analysis/program/records/callable-conversions.js";
 import { analyzeRustProjectEmission } from "../../dist/analysis/project-types/emission.js";
+import { prepareRustProjectGenericMembership } from "../../dist/analysis/project-types/generic-membership.js";
 import { createRustProjectEmissionProducer } from "../../dist/analysis/program/records/project-emission.js";
 import { analyzeRustTypeEmission } from "../../dist/analysis/source-evidence/types/emission.js";
 import { createRustTypeEmissionProducer } from "../../dist/analysis/program/records/type-emission.js";
@@ -75,7 +76,8 @@ export function create(): (value: int32) => int64 {
   const admitted = program.records.callableContract.get(current.node, conversion);
   assert.equal(admitted !== undefined, true, "the native conversion owner admits the exact selected adapter");
   const projects = createRustProjectEmissionProducer(() => {});
-  analyzeRustProjectEmission({ program, nodes: nativeNodes, producer: projects });
+  analyzeRustProjectEmission({ program, nodes: nativeNodes, producer: projects,
+    memberships: prepareRustProjectGenericMembership(program.declarationGenericRequirements) });
   program.records = { ...program.records, ...projects.records };
   const types = createRustTypeEmissionProducer(() => {});
   analyzeRustTypeEmission(program, nativeNodes, types, [admitted.physical.carrier, admitted.physical.error,

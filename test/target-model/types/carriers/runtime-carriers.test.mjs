@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { prepareRustProjectGenericMembership } from "../../../../dist/analysis/project-types/generic-membership.js";
 import {
   rustRuntimeNativeArrayTargetType, rustRuntimeNativeLayoutTargetType,
   rustRuntimeNativeMethodTargetType, rustRuntimeRecordFieldTargetType,
@@ -155,7 +156,8 @@ test("structural storage renders combined native method and bound-field carriers
       declarationGenericRequirements: { ...base.declarationGenericRequirements,
         contractForCarrier: () => ({ typeParameters: [], associatedTypes: [], optionalStorage: [], projectProjections: [] }) } };
     const projects = createRustProjectEmissionProducer(() => {});
-    analyzeRustProjectEmission({ program, nodes: [], producer: projects });
+    analyzeRustProjectEmission({ program, nodes: [], producer: projects,
+      memberships: prepareRustProjectGenericMembership(program.declarationGenericRequirements) });
     const projected = { ...program, records: { ...program.records, ...projects.records } };
     const structural = createRustStructuralEmissionProducer(() => {});
     const issues = analyzeRustStructuralEmission(projected, [], structural, projects);

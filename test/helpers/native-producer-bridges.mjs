@@ -6,6 +6,7 @@ import { sealRustNativeCallableDispatch } from "../../dist/analysis/program/reco
 import { analyzeRustTypeEmission } from "../../dist/analysis/source-evidence/types/emission.js";
 import { createRustTypeEmissionProducer } from "../../dist/analysis/program/records/type-emission.js";
 import { analyzeRustProjectEmission } from "../../dist/analysis/project-types/emission.js";
+import { prepareRustProjectGenericMembership } from "../../dist/analysis/project-types/generic-membership.js";
 import { createRustProjectEmissionProducer } from "../../dist/analysis/program/records/project-emission.js";
 import { planRustNativeCallableProtocol } from "../../dist/backend/planner/declarations/callables/native-protocols.js";
 import { planRustNativeProducerBridge } from "../../dist/backend/planner/declarations/callables/native-producer-bridges.js";
@@ -55,7 +56,8 @@ export function nativeProducerFixture({
   const withProtocols = { ...base, typeDefinitions: definitions, callableValues, structuralShapes,
     records: { ...base.records, nativeProtocol: native.protocol, nativeProtocols: native.inventories } };
   const projects = createRustProjectEmissionProducer(() => {});
-  analyzeRustProjectEmission({ program: withProtocols, nodes: [], producer: projects });
+  analyzeRustProjectEmission({ program: withProtocols, nodes: [], producer: projects,
+    memberships: prepareRustProjectGenericMembership(withProtocols.declarationGenericRequirements) });
   const admitted = { ...withProtocols, records: { ...withProtocols.records, ...projects.records } };
   const emission = createRustTypeEmissionProducer(() => {});
   analyzeRustTypeEmission(admitted, [], emission, [], projects);

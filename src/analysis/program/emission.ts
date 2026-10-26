@@ -134,6 +134,7 @@ import type { RustOwnershipFlow } from "../../target-model/records/ownership-flo
 import { analyzeRustBindingLiveness } from "../control-flow/binding-liveness.js";
 import { analyzeRustLocalBindings } from "../storage/local-bindings.js";
 import type { RustOperationAttempt } from "./operation-attempts.js";
+import type { prepareRustProjectGenericMembership } from "../project-types/generic-membership.js";
 
 export function finalizeRustNativeEmission(
   program: Omit<RustAnalysisProgram, "reachability" | "records"> & { readonly records: RustAnalysisRecords & SourceLiteralIndex },
@@ -142,6 +143,7 @@ export function finalizeRustNativeEmission(
   operationAttempts: Pick<WeakMap<Node, RustOperationAttempt>, "get">,
   callableEntries: Pick<RustCallableEntryConstruction, "get">,
   classContexts: Pick<RustClassImplementationContextConstruction, "forInstance">,
+  projectGenericMemberships: ReturnType<typeof prepareRustProjectGenericMembership>,
 ): TargetStageResult<RustNativeEmissionResult> {
   const { projectTypes, objectRepresentations, typeDefinitions } = program;
   const records = context.records.readers;
@@ -202,7 +204,8 @@ export function finalizeRustNativeEmission(
   const closedErrorValueIssues = analyzeRustClosedErrorValues(program, errorEmission.plan, context.nativeNodes,
     context.records.errorTransportEmissionPlans, context.records.conversionEmissionPlans);
   if (closedErrorValueIssues.length !== 0) return rejectedTargetStage(closedErrorValueIssues);
-  analyzeRustProjectEmission({ program, nodes: context.nativeNodes, producer: context.records.projectEmissionPlans });
+  analyzeRustProjectEmission({ program, nodes: context.nativeNodes, producer: context.records.projectEmissionPlans,
+    memberships: projectGenericMemberships });
   analyzeRustClassImplementations(program, context.records.classEmissionPlans, classContexts);
   context.structuralShapes.seal();
   analyzeRustOptionalStorageCallEmission(program, context.nativeNodes, context.records.projectEmissionPlans);

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { prepareRustProjectGenericMembership } from "../../../dist/analysis/project-types/generic-membership.js";
 import { sourceEnclosingCallable } from "@tsonic/target-api/source";
 import * as optionalStorageEmission from "../../../dist/analysis/project-types/optional-storage-emission.js";
 import { createRustSourceTypeFamilyRegistry } from "../../../dist/analysis/project-types/type-families.js";
@@ -197,7 +198,8 @@ export function read(): string { const value: Named<string> = new Child("ready")
       new Map(), new Map(), program.typeFamilies.normalize);
     let open = true;
     const projects = createRustProjectEmissionProducer(() => assert.equal(open, true, "only the open late producer writes"));
-    analyzeRustProjectEmission({ program, nodes: [], producer: projects });
+    analyzeRustProjectEmission({ program, nodes: [], producer: projects,
+      memberships: prepareRustProjectGenericMembership(program.declarationGenericRequirements) });
     const admitted = { ...program, records: { ...program.records, ...projects.records } };
     assert.equal(projects.records.optionalStorageTypeArguments.get(late) === undefined, true,
       "this exact native instantiation is genuinely introduced at the late worklist boundary");

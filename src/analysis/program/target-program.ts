@@ -17,6 +17,7 @@ import { publishRustNativeTaskUses } from "../callables/native-task-uses.js";
 import { analyzeRustLexicalFunctionEmission } from "../callables/lexical-emission.js";
 import { prepareRustCallableEntryParameters } from "../callables/entry-parameters.js";
 import { prepareRustClassImplementationContexts } from "../objects/class-implementation-contexts.js";
+import { prepareRustProjectGenericMembership } from "../project-types/generic-membership.js";
 import { createRustModuleInitializationPlan } from "../module-initialization/analyze.js";
 import { analyzeRustProviderErrorCarriers } from "./provider-errors.js";
 import { analyzeRustDeclarationGenericRequirements } from "../declarations/generic-requirements.js";
@@ -390,6 +391,7 @@ export function analyzeRustAnalysisProgram(
   }
   const ownership = preparedOwnership.complete(declarationGenericRequirements.index);
   if (ownership.kind === "rejected") return rejectedTargetStage(ownership.diagnostics);
+  const projectGenericMemberships = prepareRustProjectGenericMembership(declarationGenericRequirements.index);
   analyzeRustLexicalFunctionEmission({ program: { records, lexicalFunctions, ownership: ownership.ownership,
     callableValues: context.callableValues }, nodes: context.nativeNodes, producer: context.records.lexicalFunctionPlans });
   const callableEntries = prepareRustCallableEntryParameters({ source: context.source, nodes: context.nativeNodes, records,
@@ -516,7 +518,7 @@ export function analyzeRustAnalysisProgram(
     genericCallableErrors: genericCallableErrors.value,
   };
   const emission = finalizeRustNativeEmission(program, context, genericCallableErrors.value, ownershipFlow.flow,
-    sourceStage.operationAttempts, callableEntries.value, classContexts);
+    sourceStage.operationAttempts, callableEntries.value, classContexts, projectGenericMemberships);
   if (emission.kind === "rejected") return emission;
   context.callableValues.publish();
   const finalFoundation = finalizeRustFoundation(program.foundation, context.records.minimumFoundation());

@@ -3,6 +3,7 @@ import { createRustRecordFixture } from "../../../helpers/records.mjs";
 import { assertNoTargetDiagnostics } from "../../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
+import { prepareRustProjectGenericMembership } from "../../../../dist/analysis/project-types/generic-membership.js";
 import { createRustTypeDefinitionRegistry } from "../../../../dist/analysis/project-types/type-definitions.js";
 import { rustSourceTypeCarrier, rustSourceUnionTargetType, rustStringTargetType, rustSourcePrimitiveTargetType,
   rustOptionTargetType, rustJsPromiseTargetType } from "../../../../dist/target-model/types/index.js";
@@ -338,7 +339,8 @@ export function probe(): void {}
         contextualValueConversion: raw.records.contextualValueConversion, runtimeCarrier: raw.records.runtimeCarrier,
         conversion: raw.records.conversion, ...ownership.records }, base.records) };
     const projects = createRustProjectEmissionProducer(() => {});
-    analyzeRustProjectEmission({ program, nodes: [], producer: projects });
+    analyzeRustProjectEmission({ program, nodes: [], producer: projects,
+      memberships: prepareRustProjectGenericMembership(program.declarationGenericRequirements) });
     const catalogued = { ...program, records: { ...program.records, ...projects.records } };
     const types = createRustTypeEmissionProducer(() => {});
     analyzeRustTypeEmission(catalogued, [], types, [source, target, root, inner, derived, baseCarrier, stringCarrier,

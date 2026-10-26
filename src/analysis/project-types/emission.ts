@@ -2,11 +2,9 @@ import type { Node } from "@tsonic/tsts";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustProjectEmissionProducer } from "../program/records/project-emission.js";
-import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustLifetimeRef } from "../../target-model/lifetimes/model.js";
-import { rustLifetimeKey } from "../../target-model/lifetimes/index.js";
-import { rustTargetGenericReferences, rustSourceTypeCarrierValue, rustSourceUnionCarrierValue } from "../../target-model/types/index.js";
-import type { RustProjectGenericEmission } from "../../target-model/records/project-emission.js";
+import { rustSourceTypeCarrierValue, rustSourceUnionCarrierValue } from "../../target-model/types/index.js";
+import type { prepareRustProjectGenericMembership } from "./generic-membership.js";
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
 import { rustSourceItemIdentity } from "../../target-model/names/source-output-identities.js";
@@ -16,6 +14,7 @@ export function analyzeRustProjectEmission(input: {
   readonly program: Omit<RustAnalysisProgram, "reachability">;
   readonly nodes: readonly Node[];
   readonly producer: RustProjectEmissionProducer;
+  readonly memberships: ReturnType<typeof prepareRustProjectGenericMembership>;
 }): void {
   const { program, producer } = input;
   producer.structuralGenerics(program.declarationGenericRequirements.contractForCarrier);
@@ -85,26 +84,12 @@ export function analyzeRustProjectEmission(input: {
     const outlives: (readonly RustLifetimeRef[])[] = [[]];
     if (representation?.dispatchObjectLifetime !== undefined) outlives.push([representation.dispatchObjectLifetime]);
     for (const selectedIndexes of indexes.values()) {
-      const parameters = selectedIndexes.map(index => definition.genericParameters[index] ??
-        failTargetAnalysisInvariant("tsonic-rust", "A selected native generic parameter is outside its declaration.", definition.declaration));
-      const identities = new Set(parameters.flatMap(parameter => parameter.kind === "type" ? [parameter.identity] : []));
-      const lifetimes = new Set(parameters.flatMap(parameter => parameter.kind === "lifetime" ? [rustLifetimeKey(parameter.lifetime)] : []));
-      const inScope = (carrier: TargetTypeRef): boolean => {
-        const references = rustTargetGenericReferences(carrier);
-        return references.typeIdentities.every(identity => identities.has(identity)) &&
-          references.lifetimes.every(lifetime => lifetime.kind === "bound" || lifetimes.has(rustLifetimeKey(lifetime)));
-      };
-      const selectedParameters: RustProjectGenericEmission["parameters"] = Object.freeze(parameters.map(parameter => {
-        const requirements = parameter.kind === "type" ? source.typeParameters.find(candidate => candidate.identity === parameter.identity) : undefined;
-        if (parameter.kind === "type" && requirements === undefined) failTargetAnalysisInvariant("tsonic-rust", "A source class generic parameter lost its selected requirements.", parameter.declaration);
-        return Object.freeze({ parameter, requirements: requirements?.requirements ?? Object.freeze([]) });
-      }));
-      const optionalStorage = Object.freeze(source.optionalStorage.filter(entry => !entry.captured && inScope(entry.carrier)));
+      const { parameters, optionalStorage, inScope } = input.memberships.forDeclaration(definition, selectedIndexes);
       for (const body of [undefined, true] as const) {
         const associated = body === undefined ? source : program.declarationGenericRequirements.contractFor(definition.declaration, body);
         if (associated === undefined) continue;
         for (const required of outlives) producer.generics(definition, selectedIndexes, required, body, {
-          parameters: selectedParameters, optionalStorage, outlives: Object.freeze(required),
+          parameters, optionalStorage, outlives: Object.freeze(required),
           associated: Object.freeze(associated.associatedTypes.filter(requirement => inScope(requirement.carrier))),
           projections: Object.freeze(associated.projectProjections.filter(requirement => inScope(requirement.sourceCarrier) && inScope(requirement.targetCarrier))),
           markerName: program.projectTypes.stateMarkerFieldName(definition),
