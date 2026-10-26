@@ -28,7 +28,7 @@ export function analyzeRustProjectDispatchEmission(program: Omit<RustAnalysisPro
       message: "A structural supertrait requires a proven native object lifetime for its captured callable storage.",
       evidence: ["target.capability=rust.analysis.project-structural-dispatch"],
     }]);
-    structuralSupers.push(Object.freeze({ carrier: view.targetCarrier, genericArguments }));
+    structuralSupers.push(Object.freeze({ carrier: shape.carrier, genericArguments }));
   }
   const component = program.sourcePackageComponents.componentForFile(definition.fileName);
   if (component === undefined) failTargetAnalysisInvariant("tsonic-rust", "A native project dispatch trait requires its exact source component.", definition.declaration);

@@ -24,6 +24,8 @@ import { inferRustTargetGenericBindings } from "../../../target-model/types/carr
 import { substituteRustTargetGenerics } from "../../../target-model/types/carriers/substitution.js";
 import type { RustSourceObjectShape, RustStructuralFieldImplementation } from "../../../target-model/records/source-types.js";
 import { selectRustStructuralMethodContextCarrier } from "../../../policy/types/objects/structural-emission.js";
+import { selectRustStructuralPhysicalDestinations } from "./physical-destinations.js";
+import { rustProgramErrorOwner } from "../../../target-model/types/carriers/program-errors.js";
 
 
 type RustStructuralMethodLayout = Exclude<RustStructuralMethodPlan, { readonly kind: "fixed" }> |
@@ -58,7 +60,7 @@ export interface RustStructuralShapePlanRegistry extends RustStructuralShapeLayo
   initializeUnions(unions: readonly RustSourceUnionDefinition[]): void;
   completePhysicalCarrier(source: TargetTypeRef, physical: TargetTypeRef): RustStructuralPhysicalCarrierSelection;
   finalizeMethodStorage(selections: ReadonlyMap<RustStructuralShapeLayout,
-    ReadonlyMap<number, RustStructuralMethodStorageSelection>>): void;
+    ReadonlyMap<number, RustStructuralMethodStorageSelection>>, errorForFile: (fileName: string) => TargetTypeRef | undefined): void;
   isInitialized(): boolean;
   readonly completed: RustStructuralShapePlan;
   seal(): RustStructuralShapePlan;
@@ -122,10 +124,10 @@ export function createRustStructuralShapePlanRegistry(): RustStructuralShapePlan
       return construction.completePhysicalCarrier(source, physical);
     },
     finalizeMethodStorage(selections: ReadonlyMap<RustStructuralShapeLayout,
-      ReadonlyMap<number, RustStructuralMethodStorageSelection>>) {
+      ReadonlyMap<number, RustStructuralMethodStorageSelection>>, errorForFile: (fileName: string) => TargetTypeRef | undefined) {
       // A second finalization is refused as such, also after sealing.
       if (construction?.methodStorageFinalized() === true || !sealed && construction !== undefined) {
-        construction.finalizeMethodStorage(selections);
+        construction.finalizeMethodStorage(selections, errorForFile);
         return;
       }
       throw new Error("Structural method storage requires its open initialized shape builder.");
@@ -206,7 +208,7 @@ function createRustStructuralShapeConstruction(
   close(): RustStructuralShapePlan;
   completePhysicalCarrier(source: TargetTypeRef, physical: TargetTypeRef): RustStructuralPhysicalCarrierSelection;
   finalizeMethodStorage(selections: ReadonlyMap<RustStructuralShapeLayout,
-    ReadonlyMap<number, RustStructuralMethodStorageSelection>>): void;
+    ReadonlyMap<number, RustStructuralMethodStorageSelection>>, errorForFile: (fileName: string) => TargetTypeRef | undefined): void;
 } {
   const selections = new Map<TargetTypeRef, ReturnType<typeof rustStructuralGenericCarrier>>();
   const physicalSelection = (carrier: TargetTypeRef): ReturnType<typeof rustStructuralGenericCarrier> => {
@@ -591,8 +593,11 @@ function createRustStructuralShapeConstruction(
       publishedInstances = Object.freeze([...byKey.values()]);
       return Object.freeze({ kind: "resolved", carrier: physical });
     },
-    finalizeMethodStorage(selections) {
+    finalizeMethodStorage(selections, errorForFile) {
       if (methodStorageFinalized) throw new Error("Structural method physical storage finalizes exactly once.");
+      if (typeof errorForFile !== "function") failTargetAnalysisInvariant("tsonic-rust",
+        "Structural physical finalization requires its complete declared-component error selection.");
+      const selectPhysicalCarrier = (carrier: TargetTypeRef): TargetTypeRef => selectRustStructuralPhysicalDestinations(carrier, errorForFile);
       const replacements = new Map<RustStructuralShapeLayout, RustStructuralShapeDefinition>();
       for (const definition of definitions) {
         const fields = selections.get(definition);
@@ -603,10 +608,13 @@ function createRustStructuralShapeConstruction(
           template.template.componentId !== definition.componentId)) continue;
         if (definition.fields.some(field => field.methodPlan?.kind === "fixed") && template === undefined)
           failTargetAnalysisInvariant("tsonic-rust", "A fixed structural method requires its completed physical template before publication.");
-        const carrier = template === undefined ? definition.carrier : rustStructuralGenericCarrier(template.carrier, "fields").carrier;
+        const carrier = selectPhysicalCarrier(template === undefined ? definition.carrier : rustStructuralGenericCarrier(template.carrier, "fields").carrier);
         const physicalShape = rustStructuralObjectCarrierValue(carrier);
         if (physicalShape === undefined) failTargetAnalysisInvariant("tsonic-rust",
           "An admitted structural definition requires its completed native field layout.");
+        const construction = definition.construction === undefined ? undefined : physicalShape.construction === undefined
+          ? failTargetAnalysisInvariant("tsonic-rust", "A completed structural shape requires its exact native construction slot.")
+          : Object.freeze({ ...definition.construction, carrier: physicalShape.construction });
         for (const [index] of fields ?? []) {
           if (definition.fields[index]?.method !== true)
             throw new Error("Structural method storage can replace only an admitted method slot.");
@@ -625,19 +633,27 @@ function createRustStructuralShapeConstruction(
                 const error = bound?.id === "rust.runtime.RecordField" ? bound.genericArguments[1] : undefined;
                 if (error?.kind !== "type") failTargetAnalysisInvariant("tsonic-rust",
                   "A completed bound structural field requires its original native error carrier.");
+                const callable = rustCallableProtocol(rustOptionElementCarrier(nativeField.type) ?? nativeField.type);
+                const selectedError = rustProgramErrorOwner(error.type)?.kind === "logical" && callable?.error !== undefined
+                  ? callable.error : error.type;
                 boundStorage = Object.freeze({ ...boundStorage,
-                  carrier: rustRuntimeRecordFieldTargetType(nativeField.type, error.type) });
+                  carrier: rustRuntimeRecordFieldTargetType(nativeField.type, selectedError) });
               }
               return Object.freeze({ ...field, carrier: nativeField.type, methodPlan: undefined,
                 ...(boundStorage === undefined ? {} : { boundStorage }),
               });
             }
-            const selection = fields?.get(index);
-            if (selection === undefined) {
+            const selected = fields?.get(index);
+            if (selected === undefined) {
               const methodPlan = field.methodPlan;
               if (methodPlan?.kind === "fixed") failTargetAnalysisInvariant("tsonic-rust", "A fixed structural method requires its complete selected native body before publication.", methodPlan.declaration);
-              return Object.freeze({ ...field, methodPlan });
+              return Object.freeze({ ...field, carrier: rustTargetTypeRefEquals(field.carrier, nativeField.type) ? field.carrier : nativeField.type,
+                methodPlan: methodPlan === undefined ? undefined : Object.freeze({ ...methodPlan, carrier: selectPhysicalCarrier(methodPlan.carrier) }) });
             }
+            const selection = Object.freeze({ ...selected, carrier: selectPhysicalCarrier(selected.carrier),
+              constructions: Object.freeze(selected.constructions.map(construction => Object.freeze({ ...construction,
+                physicalCarrier: selectPhysicalCarrier(construction.physicalCarrier), destinationCarrier: selectPhysicalCarrier(construction.destinationCarrier),
+              }))) });
             const destinationCarrier = field.presence === "optional" ? rustOptionElementCarrier(selection.carrier) : selection.carrier;
             const destination = rustCallableProtocol(destinationCarrier);
             if (selection.constructions.some(construction => construction.storageIndex !== index ||
@@ -685,7 +701,8 @@ function createRustStructuralShapeConstruction(
             });
             if (captureIndex !== physical.genericArguments.length || body.receiverFieldIdentities.length !== payload.receiverFields.length)
               failTargetAnalysisInvariant("tsonic-rust", "A fixed structural method requires its complete physical capture argument inventory.", methodPlan.declaration);
-            return Object.freeze({ ...field, methodPlan: Object.freeze({ ...methodPlan, carrier: selection.carrier,
+            return Object.freeze({ ...field, carrier: rustTargetTypeRefEquals(field.carrier, nativeField.type) ? field.carrier : nativeField.type,
+              methodPlan: Object.freeze({ ...methodPlan, carrier: selection.carrier,
               payload, context: selectRustStructuralMethodContextCarrier(payload, body.receiverFieldIdentities),
               factoryReceiver: body.factoryReceiver, constructions }),
             });
@@ -693,12 +710,12 @@ function createRustStructuralShapeConstruction(
         const references = rustTargetGenericReferences(carrier);
         const storedReferences = rustTargetGenericReferences({ kind: "tuple", elements: [
           ...selectedFields.flatMap(field => field.methodPlan?.kind === "fixed" ? [] : [field.methodPlan?.carrier ?? field.carrier]),
-          ...(definition.construction === undefined ? [] : [definition.construction.carrier]),
+          ...(construction === undefined ? [] : [construction.carrier]),
         ] });
         const stateReferences = definition.dispatchName === undefined ? rustTargetGenericReferences({ kind: "tuple", elements: [
           ...selectedFields.flatMap(field => field.methodPlan?.kind === "fixed"
             ? [field.methodPlan.context] : [field.methodPlan?.carrier ?? field.carrier]),
-          ...(definition.construction === undefined ? [] : [definition.construction.carrier]),
+          ...(construction === undefined ? [] : [construction.carrier]),
         ] }) : references;
         const markerArguments = Object.freeze([
           ...stateReferences.lifetimes.filter(lifetime => !storedReferences.lifetimeIdentities.includes(
@@ -718,6 +735,7 @@ function createRustStructuralShapeConstruction(
             identityName: allocateSnakeName(usedFieldNames, "with_context_and_identity"),
             identityParameter: allocateSnakeName(usedFieldNames, "_native_identity") });
         replacements.set(definition, Object.freeze({ ...definition, carrier, fields: selectedFields,
+          ...(construction === undefined ? {} : { construction }),
           genericParameters: Object.freeze([
             ...references.lifetimes.map(lifetime => ({ kind: "lifetime" as const, lifetime: lifetime as Extract<RustLifetimeRef, { kind: "parameter" }> })),
             ...references.typeParameters.map(parameter => ({ kind: "type" as const, identity: parameter.identity, name: parameter.name })),
@@ -744,7 +762,7 @@ function createRustStructuralShapeConstruction(
           candidate.targetName === completed.template.targetName && candidate.componentId === completed.template.componentId);
         const replacement = owner === undefined ? undefined : replacements.get(owner);
         const instance = completed === undefined || replacement === undefined ? undefined
-          : instantiateStructuralDefinition(replacement, completed.carrier);
+          : instantiateStructuralDefinition(replacement, selectPhysicalCarrier(completed.carrier));
         if (instance === undefined) failTargetAnalysisInvariant("tsonic-rust", "An admitted structural contract requires its completed actual native implementation owner.");
         replacements.set(definition, instance);
       }
@@ -755,6 +773,7 @@ function createRustStructuralShapeConstruction(
         const template = physicalTemplateFor(definition);
         return template === undefined || template.targetName === definition.targetName && template.componentId === definition.componentId;
       }).map(definition => replacements.get(definition)!));
+      const sourceDefinitions = new Map(byStorageKey);
       const canonical = new Map(finalDefinitions.map(definition => [`${definition.componentId}\0${definition.targetName}`, definition]));
       const canonicalFor = (definition: RustStructuralShapeDefinition): RustStructuralShapeDefinition => {
         const selected = canonical.get(`${definition.componentId}\0${definition.targetName}`);
@@ -791,13 +810,18 @@ function createRustStructuralShapeConstruction(
             typeIdentities: new Set(sourceReferences.typeIdentities), lifetimeIdentities: new Set(sourceReferences.lifetimeIdentities),
             constIdentities: new Set(sourceReferences.constIdentities),
           });
-        const instanceCarrier = completed !== undefined ? completed.carrier : replacement === undefined || sourceBindings === undefined
+        const instanceCarrier = completed !== undefined ? selectPhysicalCarrier(completed.carrier) : replacement === undefined || sourceBindings === undefined
           ? undefined : substituteRustTargetGenerics(replacement.carrier, sourceBindings.types, sourceBindings.lifetimes, sourceBindings.consts);
         const instance = replacement === undefined || instanceCarrier === undefined ? undefined : instantiatePhysical(replacement, instanceCarrier);
         if (instance === undefined) throw new Error("Structural physical storage lost its exact template-to-instance correspondence.");
         instances.set(key, instance);
       }
       const storageOwners = new Map([...byStorageKey].map(([key, definition]) => [key, canonicalFor(replacements.get(definition)!)]));
+      for (const [key, instance] of physicalInstances) {
+        const owner = instanceOwners.get(key);
+        if (owner === undefined) failTargetAnalysisInvariant("tsonic-rust", "An admitted physical instance requires its canonical native owner.");
+        storageOwners.set(structuralStorageKey(instance.carrier, componentForFile), owner);
+      }
       let finalInstances = Object.freeze([...physicalInstances.values()]);
       definitions = finalDefinitions;
       const registerFinal = (definition: RustStructuralShapeDefinition, carrier: TargetTypeRef): RustStructuralShapeDefinition | undefined => {
@@ -820,7 +844,7 @@ function createRustStructuralShapeConstruction(
       };
       for (const [original, completed] of completedCarriers) for (const selected of completed.values()) {
         const replacement = canonicalFor(replacements.get(original)!);
-        if (registerFinal(replacement, selected.carrier) === undefined)
+        if (registerFinal(replacement, selectPhysicalCarrier(selected.carrier)) === undefined)
           failTargetAnalysisInvariant("tsonic-rust", "A completed structural method requires its admitted native template arguments.");
       }
       finalInstances = Object.freeze([...physicalInstances.values()]);
@@ -830,6 +854,29 @@ function createRustStructuralShapeConstruction(
         const selected = instances.get(closedMetadataKey(carrier));
         if (selected !== undefined || closed) return selected;
         const implementation = rustStructuralObjectCarrierValue(carrier)?.implementation;
+        const storageKey = structuralStorageKey(carrier, componentForFile);
+        const sourceDefinition = implementation?.kind === "physical" ? undefined : sourceDefinitions.get(storageKey);
+        if (sourceDefinition !== undefined) {
+          const source = instantiateStructuralDefinition(sourceDefinition, carrier);
+          const replacement = replacements.get(sourceDefinition);
+          if (source === undefined || replacement === undefined) return undefined;
+          const types = new Map<string, TargetTypeRef>();
+          const lifetimes = new Map<string, RustLifetimeRef>();
+          for (const [index, parameter] of sourceDefinition.genericParameters.entries()) {
+            const argument = source.genericArguments[index];
+            if (parameter.kind === "type" && argument?.kind === "type") types.set(parameter.identity, argument.type);
+            else if (parameter.kind === "lifetime" && argument?.kind === "lifetime") lifetimes.set(rustLifetimeKey(parameter.lifetime), argument.lifetime);
+            else return undefined;
+          }
+          const selected = registerFinal(canonicalFor(replacement),
+            substituteRustTargetGenerics(replacement.carrier, types, lifetimes));
+          if (selected !== undefined) {
+            const key = closedMetadataKey(carrier);
+            instances.set(key, selected);
+            instanceOwners.set(key, canonicalFor(replacement));
+          }
+          return selected;
+        }
         const templates = implementation?.kind !== "physical" ? [storageOwners.get(structuralStorageKey(carrier, componentForFile))]
           : finalDefinitions.filter(definition => {
             const physical = rustStructuralObjectCarrierValue(definition.carrier)?.implementation;

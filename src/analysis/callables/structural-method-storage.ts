@@ -228,7 +228,8 @@ export function createRustStructuralMethodStorage(input: {
   prepareConstructors(components: RustSourcePackageComponentClassifications,
     effectsFor: (declaration: Node) => RustErrorEffectsFact | undefined,
     producers: Pick<RustNativeCallableProducerConstruction, "selectConstructionErrors">): readonly RustSourceCallableSpecializationIssue[];
-  complete(errors: Pick<RustErrorRegionRecords, "producerError">): readonly RustSourceCallableSpecializationIssue[];
+  complete(errors: Pick<RustErrorRegionRecords, "producerError">,
+    errorForFile: (fileName: string) => TargetTypeRef | undefined): readonly RustSourceCallableSpecializationIssue[];
   validateErrors(errors: Pick<RustErrorRegionRecords, "producerError">): void;
   validateRetention(requirements: Pick<RustDeclarationGenericRequirementIndex, "contractFor">,
     families: Pick<RustSourceTypeFamilyRegistry, "implementation">, frames: RustFrameCallablePlan,
@@ -456,7 +457,7 @@ export function createRustStructuralMethodStorage(input: {
       producers.selectConstructionErrors(errors);
       return Object.freeze([]);
     },
-    complete(errors) {
+    complete(errors, errorForFile) {
       if (complete) failTargetAnalysisInvariant("tsonic-rust", "Structural method physical storage completes exactly once.");
       const literals: { readonly definition: RustStructuralMethodShape; readonly carrier: TargetTypeRef }[] = [];
       for (const node of input.nativeNodes) {
@@ -758,7 +759,7 @@ export function createRustStructuralMethodStorage(input: {
             receiverFieldIdentities: Object.freeze(payload.receiverFields.map(capture =>
               input.frozenDataWrites.capturesFieldIdentity(capture.declaration, capture.reference))) }) }));
       }
-      structuralShapes.finalizeMethodStorage(selections);
+      structuralShapes.finalizeMethodStorage(selections, errorForFile);
       for (const expression of new Set([...selections.values()].flatMap(fields =>
         [...fields.values()].flatMap(field => field.constructions.map(construction => construction.expression)))))
         input.nativeCaptures.require(expression);

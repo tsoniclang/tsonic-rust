@@ -55,7 +55,8 @@ import type { RustValueDomainCarrierHost } from "../objects/value-domain-carrier
 import type { RustRetainedEnvironmentQueries } from "../../target-model/records/retained-environments.js";
 import type { RustSourcePackageComponentClassifications } from "../../target-model/records/source-package-semantics.js";
 import type { RustErrorEffectsFact } from "../../target-model/records/error-effects.js";
-import { normalizeRustErrorType, type RustErrorTypeContext } from "../errors/error-types.js";
+import { normalizeRustErrorType, selectRustPhysicalProgramErrorOwnerForFile, type RustErrorTypeContext } from "../errors/error-types.js";
+import { rustProgramErrorTargetType } from "../../target-model/types/carriers/js.js";
 import { asSourceNode } from "@tsonic/target-api/source";
 import type { RustDeclarationGenericRequirementIndex } from "../declarations/generic-requirements.js";
 import type { RustSourceTypeFamilyRegistry } from "../../target-model/types/type-families.js";
@@ -401,7 +402,10 @@ function createRustCallableValueLifecycle(input: RustCallableValuePlanInput,
       if (frameIssues.length !== 0) return frameIssues;
       const constructorIssues = structuralMethodStorage.prepareConstructors(components, effectsFor, nativeProducers);
       if (constructorIssues.length !== 0) return constructorIssues;
-      const storageIssues = structuralMethodStorage.complete(producerErrors);
+      const storageIssues = structuralMethodStorage.complete(producerErrors, fileName => {
+        const owner = selectRustPhysicalProgramErrorOwnerForFile(fileName, components);
+        return owner === undefined ? undefined : rustProgramErrorTargetType(owner);
+      });
       if (storageIssues.length !== 0) return storageIssues;
       parameterStorage = finalizeRustNativeParameterStorage({ ast: input.ast, storage: input.sourceStorage,
         nativeNodes: input.nativeNodes, records: input.records }, nativeStorageQueries);

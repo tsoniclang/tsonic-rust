@@ -30,7 +30,7 @@ test("one generated union owner finalizes checked and physical definitions after
   assert.equal(Object.isFrozen(definitions.generatedUnions()), true);
   assert.equal(definitions.generatedUnions().every(record => Object.isFrozen(record)), true);
   shapes.initializeUnions(definitions.generatedUnions());
-  shapes.finalizeMethodStorage(new Map());
+  shapes.finalizeMethodStorage(new Map(), () => assert.fail("a union-only fixture has no callable property destination"));
   const finalized = shapes.seal();
   assert.equal(finalized.unionDefinitions.length, 1);
   assert.equal(finalized.unionForCarrier(authoredSource.carrier) === finalized.unionForCarrier(physical.carrier), true);

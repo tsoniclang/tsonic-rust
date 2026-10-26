@@ -14,6 +14,7 @@ import { rustRuntimeCallableTargetType } from "../../../dist/target-model/types/
 import { rustCallablePhysicalSignature } from "../../../dist/target-model/conversions/callable-physical.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 import { rustOptionElementCarrier } from "../../../dist/target-model/types/carriers/optional.js";
+const noCallablePropertyError = () => assert.fail("this fixture has no fixed callable property requiring a component error");
 
 function storedMethodExposures(carriers, componentForFile) {
   return new Map(carriers.flatMap(carrier => rustStructuralObjectCarrierValue(carrier).fields.flatMap((field, index) =>
@@ -195,7 +196,7 @@ test("physical method installation completes canonical and already indexed borro
   builder.finalizeMethodStorage(new Map([[definition, new Map([[0,
     { carrier: destinationCarrier, nativeBody: undefined, constructions: [{ object, property, expression, storageIndex: 0,
       physicalCarrier, destinationCarrier, payload: { captures: [], receiverFields: [], receivers: [] } }] },
-  ]])]]));
+  ]])]]), noCallablePropertyError);
   const after = builder.seal();
   assert.equal(after.definitions[0].fields[0].carrier === logical, true, "logical method contract remains unchanged");
   assert.equal(after.definitionForCarrier(owned) === before, false, "the indexed instance is replaced with the completed definition");
@@ -225,7 +226,7 @@ test("physical method installation completes canonical and already indexed borro
     assert.equal(rustTargetTypeRefEquals(physical.error, infallible), true,
       "native construction retains the selected exact error payload");
   }
-  assert.throws(() => builder.finalizeMethodStorage(new Map()), /exactly once/u);
+  assert.throws(() => builder.finalizeMethodStorage(new Map(), noCallablePropertyError), /exactly once/u);
 });
 
 test("completed source aliases publish one exact physical structural instance per native carrier", () => {
@@ -243,7 +244,7 @@ test("completed source aliases publish one exact physical structural instance pe
     assert.equal(selected.carrier === original, true, "source lookup identity is distinct from the single selected native carrier");
   }
   builder.initializeUnions([]);
-  builder.finalizeMethodStorage(new Map());
+  builder.finalizeMethodStorage(new Map(), noCallablePropertyError);
   const plan = builder.seal();
   const physical = plan.definitionForCarrier(original);
   assert.equal(physical !== undefined, true, "the actual physical carrier has its canonical published owner");
@@ -286,7 +287,7 @@ test("physical method witnesses reject mismatched complete signatures before pub
     if (label === "destination") witness.destinationCarrier = rustCallableTargetType(protocol.parameters, floating, lifetime, infallible);
     if (label === "field index") witness.storageIndex = 1;
     const selections = new Map([[definition, new Map([[0, { carrier: destinationCarrier, constructions: [witness], nativeBody: undefined }]])]]);
-    assert.throws(() => builder.finalizeMethodStorage(selections), /Structural method construction requires/u,
+    assert.throws(() => builder.finalizeMethodStorage(selections, noCallablePropertyError), /Structural method construction requires/u,
       `${label}: a whole invalid witness is rejected at the publishing boundary`);
     assert.equal(builder.field(shape, 0) === original, true,
       `${label}: failed admission publishes no partially replaced field`);
@@ -558,7 +559,7 @@ test("a remapped physical method rejects its old source index without partially 
     payload: { captures: [], receiverFields: [], receivers: [] } }];
   assert.throws(() => builder.finalizeMethodStorage(new Map([[definition, new Map([[1,
     { carrier: destinationCarrier, constructions, nativeBody: undefined },
-  ]])]])), /Structural method construction requires its exact destination field/u);
+  ]])]]), noCallablePropertyError), /Structural method construction requires its exact destination field/u);
   for (const [index, field] of originalFields.entries()) {
     assert.equal(builder.field(shape, index) === field, true, `remapped index: destination field ${index} is unchanged`);
     assert.equal(builder.field(shape, index).methodPlan?.constructions.length ?? 0, 0,

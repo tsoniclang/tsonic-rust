@@ -21,11 +21,18 @@ export function selectRustPhysicalProgramErrorOwner(
   input: Pick<RustErrorTypeContext, "ast" | "components">,
 ): Extract<RustProgramErrorOwner, { readonly kind: "physical" }> | undefined {
   const file = input.ast.getSourceFile(declaration);
-  const component = file === undefined ? undefined : input.components.componentForFile(input.ast.getFileName(file));
+  return file === undefined ? undefined : selectRustPhysicalProgramErrorOwnerForFile(input.ast.getFileName(file), input.components);
+}
+
+export function selectRustPhysicalProgramErrorOwnerForFile(
+  fileName: string,
+  components: RustSourcePackageComponentClassifications,
+): Extract<RustProgramErrorOwner, { readonly kind: "physical" }> | undefined {
+  const component = components.componentForFile(fileName);
   if (component === undefined) return undefined;
   if (component.errorDomain === "runtime") return component.errorOwnerComponentId === undefined
     ? Object.freeze({ kind: "physical", domain: "runtime" }) : undefined;
-  const owner = component.errorOwnerComponentId === undefined ? undefined : input.components.forComponent(component.errorOwnerComponentId);
+  const owner = component.errorOwnerComponentId === undefined ? undefined : components.forComponent(component.errorOwnerComponentId);
   return owner?.errorDomain === "project" && owner.errorOwnerComponentId === owner.componentId
     ? Object.freeze({ kind: "physical", domain: "project", componentId: owner.componentId }) : undefined;
 }
