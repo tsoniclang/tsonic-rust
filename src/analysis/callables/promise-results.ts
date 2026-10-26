@@ -572,7 +572,12 @@ export function analyzeRustPromiseResults(input: {
     // needs no ownership decision; any other discarded native future goes through the must-observe rule.
     const spawn = disposition.kind === "discarded" && native && input.jsEnabled && selection.kind === "leaf"
       ? selectRustDiscardedFutureSpawn(input, node) : undefined;
-    if (input.ast.is.IsCallExpression(node) && spawn === undefined) {
+    const operation = input.records.targetOperation.get(node);
+    const body = operation?.kind === "source-call" ? operation.asyncBody?.declaration : undefined;
+    const reachesErased = native && body !== undefined &&
+      [...erasedCallees].some(callee => sourceEnclosingCallable(input.ast.parent(callee), input.ast) === body);
+    if (input.ast.is.IsCallExpression(node) && spawn === undefined &&
+      (!native || disposition.kind === "discarded" || reachesErased)) {
       const selected = ownership.forCall(node);
       if (selected.kind === "unresolved") {
         if (input.nativeStorageValidated)
