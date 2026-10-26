@@ -413,10 +413,11 @@ async function escaped<Region extends Life>(value: Ref<int32, Region>, pending: 
 }
 export const marker = 0;
 ` } });
-  assertRejectedAsyncSource(compilation, [0, 1].flatMap(occurrence => [
-    { code: "TSONIC_BORROWED_ASYNC_RESULT_ESCAPES", kind: "KindCallExpression", text: "forward(value, pending)", occurrence },
-    { code: "RUST_ASYNC_PROMISE_STORAGE_LIFETIME_NOT_PROVEN", kind: "KindCallExpression", text: "forward(value, pending)", occurrence },
-  ]));
+  assertRejectedAsyncSource(compilation, [0, 1].map(occurrence =>
+    ({ code: "RUST_ASYNC_PROMISE_STORAGE_LIFETIME_NOT_PROVEN", kind: "KindCallExpression", text: "forward(value, pending)", occurrence })));
+  for (const diagnostic of compilation.result.diagnostics)
+    assert.equal(diagnostic.message, "A suspending JS Promise body cannot retain a borrowed value across a pending point; its task requires owned storage.",
+      "each original outer call is refused with the complete measured native storage-lifetime reason");
 });
 
 test("a settled JS Promise preserves its exact native borrowed payload inside its owner", { timeout: 300_000 }, () => {
