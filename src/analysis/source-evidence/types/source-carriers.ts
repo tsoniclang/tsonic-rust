@@ -8,6 +8,7 @@ import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import { resolveRustTargetTypeRef } from "./resolution/source.js";
 import { setCarrierFact } from "../../operations/project-calls.js";
 import { rustSourceStorageSubjectContext } from "./resolution/source-storage-projection.js";
+import { resolveRustAuthoredTargetType } from "./resolution/tuples.js";
 
 export function resolveTypeNodeCarrier(walk: RustFactWalk, typeNode: Node | undefined): TargetTypeRef | undefined {
   return resolveTypeNode(walk, typeNode, "storage");
@@ -49,8 +50,8 @@ function resolveTypeNode(walk: RustFactWalk, typeNode: Node | undefined, purpose
     walk.rejectedExpressions.add(typeNode);
     return undefined;
   }
-  if (purpose === "contract") return requiredType === undefined ? undefined : resolveRustTargetTypeRef(requiredType,
-    rustSourceStorageSubjectContext(rustResolutionContext(walk, typeNode), undefined), walk.operationOptions);
+  if (purpose === "contract") return requiredType === undefined ? undefined : resolveRustAuthoredTargetType(typeNode,
+    rustSourceStorageSubjectContext(rustResolutionContext(walk, typeNode), undefined), walk.operationOptions, new Set<object>());
   const existing = walk.context.records.runtimeCarrier.get(typeNode);
   if (existing !== undefined) return existing.carrier;
   const carrier = resolveRustTargetTypeRef(typeNode, rustResolutionContext(walk, typeNode), walk.operationOptions);

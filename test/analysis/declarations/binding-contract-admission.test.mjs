@@ -4,6 +4,7 @@ import { analyzeRust } from "../../helpers/rust-session.mjs";
 import { Node_Initializer } from "@tsonic/target-api/source";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 import * as bindingStorage from "../../../dist/analysis/declarations/binding-storage.js";
+import { rustCallableProtocol } from "../../../dist/target-model/types/carriers/callables.js";
 
 function declaration(program, name) {
   const nodes = [];
@@ -55,4 +56,33 @@ test("closed native scalar contracts and initializer-less later writes retain ex
     if (name === "later") assert.equal(Node_Initializer(program.source.ast, selected), undefined,
       "a legitimate later write does not acquire a fabricated initialization requirement");
   }
+});
+
+test("authored binding aliases retain nested native tuple and callable component evidence", () => {
+  const { program } = analyzeRust({ surfaces: [], files: { "index.ts": `
+    import type { int32, int64 } from "@tsonic/core/types.js";
+    type Wide = int64;
+    type NativeRow = [int32, Wide];
+    type Callback = (value: int32) => Wide;
+    export function copy(value: NativeRow): NativeRow {
+      const row: NativeRow = value;
+      return row;
+    }
+    export function retain(callback: Callback): Callback {
+      const selected: Callback = callback;
+      return selected;
+    }
+  ` } });
+  const row = program.records.runtimeCarrier.get(declaration(program, "row"))?.carrier;
+  assert.equal(row?.kind, "tuple", "the authored alias retains its native tuple representation");
+  for (const [index, expected] of [[0, "int32"], [1, "int64"]]) {
+    assert.equal(row.elements[index].kind, "source-primitive", `element ${index}: exact native scalar representation`);
+    assert.equal(row.elements[index].name, expected, `element ${index}: the authored native width survives alias resolution`);
+  }
+  const callable = rustCallableProtocol(program.records.runtimeCarrier.get(declaration(program, "selected"))?.carrier);
+  assert.equal(callable !== undefined, true, "the checked callable alias has its actual admitted physical signature");
+  assert.equal(callable.parameters[0].kind, "source-primitive", "the native callable input retains its scalar representation");
+  assert.equal(callable.parameters[0].name, "int32", "the callable argument does not inherit the erased checker number");
+  assert.equal(callable.result.kind, "source-primitive", "the native callable output retains its scalar representation");
+  assert.equal(callable.result.name, "int64", "the aliased return component retains its exact native width");
 });
