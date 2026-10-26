@@ -39,7 +39,7 @@ export function selectRustDeclaredBinding(
     const authored = Node_Type(ast, declaration);
     const before = walk.context.diagnostics.length;
     const required = authored === undefined ? undefined : rustGenericCallableValueOwner(ast, declaration,
-      resolveTypeNodeContract(walk, authored));
+      resolveTypeNodeContract(walk, authored, declaration));
     if (authored !== undefined && required === undefined) {
       const reason = "A native binding requires its exact checked authored contract before initializer admission.";
       return walk.context.diagnostics.length === before ? fail(authored, reason)

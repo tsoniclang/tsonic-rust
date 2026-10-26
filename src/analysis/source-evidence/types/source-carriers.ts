@@ -7,18 +7,18 @@ import { appendRustDiagnostic, rustResolutionContext } from "../../program/walk.
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import { resolveRustTargetTypeRef } from "./resolution/source.js";
 import { setCarrierFact } from "../../operations/project-calls.js";
-import { rustSourceStorageSubjectContext } from "./resolution/source-storage-projection.js";
 import { resolveRustAuthoredTargetType } from "./resolution/tuples.js";
 
 export function resolveTypeNodeCarrier(walk: RustFactWalk, typeNode: Node | undefined): TargetTypeRef | undefined {
-  return resolveTypeNode(walk, typeNode, "storage");
+  return resolveTypeNode(walk, typeNode, undefined);
 }
 
-export function resolveTypeNodeContract(walk: RustFactWalk, typeNode: Node | undefined): TargetTypeRef | undefined {
-  return resolveTypeNode(walk, typeNode, "contract");
+export function resolveTypeNodeContract(walk: RustFactWalk, typeNode: Node | undefined,
+  declaration: Node): TargetTypeRef | undefined {
+  return resolveTypeNode(walk, typeNode, declaration);
 }
 
-function resolveTypeNode(walk: RustFactWalk, typeNode: Node | undefined, purpose: "storage" | "contract"): TargetTypeRef | undefined {
+function resolveTypeNode(walk: RustFactWalk, typeNode: Node | undefined, contractOwner: Node | undefined): TargetTypeRef | undefined {
   if (typeNode === undefined) return undefined;
   if (walk.rejectedExpressions.has(typeNode)) return undefined;
   const semantics = walk.context.semanticsFor(typeNode);
@@ -50,8 +50,8 @@ function resolveTypeNode(walk: RustFactWalk, typeNode: Node | undefined, purpose
     walk.rejectedExpressions.add(typeNode);
     return undefined;
   }
-  if (purpose === "contract") return requiredType === undefined ? undefined : resolveRustAuthoredTargetType(typeNode,
-    rustSourceStorageSubjectContext(rustResolutionContext(walk, typeNode), undefined), walk.operationOptions, new Set<object>());
+  if (contractOwner !== undefined) return requiredType === undefined ? undefined : resolveRustAuthoredTargetType(typeNode,
+    { ...rustResolutionContext(walk, contractOwner), callableRepresentation: "signature" }, walk.operationOptions, new Set<object>());
   const existing = walk.context.records.runtimeCarrier.get(typeNode);
   if (existing !== undefined) return existing.carrier;
   const carrier = resolveRustTargetTypeRef(typeNode, rustResolutionContext(walk, typeNode), walk.operationOptions);

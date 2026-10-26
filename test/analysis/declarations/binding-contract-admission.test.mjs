@@ -5,6 +5,8 @@ import { Node_Initializer } from "@tsonic/target-api/source";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 import * as bindingStorage from "../../../dist/analysis/declarations/binding-storage.js";
 import { rustCallableProtocol } from "../../../dist/target-model/types/carriers/callables.js";
+import { isRustMutableJsErrorCarrier, isRustWritableSourceErrorCarrier } from "../../../dist/target-model/types/carriers/source-error.js";
+import { isRustJsArrayCarrier, isRustVecCarrier, rustOnlyTypeGenericArguments } from "../../../dist/target-model/types/index.js";
 
 function declaration(program, name) {
   const nodes = [];
@@ -16,6 +18,48 @@ function declaration(program, name) {
   program.sourceFiles.forEach(visit);
   assert.equal(nodes.length, 1, `${name}: one original checked binding`);
   return nodes[0];
+}
+
+for (const surfaces of [[], ["js"]]) {
+  const profile = surfaces[0] ?? "native";
+  test(`authored Error binding contracts retain original and nested storage demand in ${profile}`, () => {
+    const { program } = analyzeRust({ surfaces, files: { "index.ts": `
+export function run(): string {
+  const original = new Error("before");
+  const alias: Error = original;
+  alias.message = "changed";
+  const values: Error[] = [original];
+  values[0].name = "array";
+  const pair: [Error, Error] = [original, new Error("other")];
+  pair[0].stack = "tuple";
+  const nested: Error[][] = [values];
+  nested[0][0].message = "nested";
+  const readonly: Error = new Error("read");
+  return alias.message + readonly.message;
+}
+` } });
+    const carrier = name => program.records.runtimeCarrier.get(declaration(program, name))?.carrier;
+    const writable = selected => isRustMutableJsErrorCarrier(selected) || isRustWritableSourceErrorCarrier(selected);
+    const element = selected => {
+      assert.equal(profile === "native" ? isRustVecCarrier(selected) : isRustJsArrayCarrier(selected), true,
+        "the existing native collection representation is unchanged");
+      const arguments_ = rustOnlyTypeGenericArguments(selected.genericArguments);
+      assert.equal(arguments_?.length, 1, "an exact native collection has one actual element argument");
+      return arguments_[0];
+    };
+    assert.equal(writable(carrier("original")), true, "the original native allocation retains its proven write capability");
+    assert.equal(writable(carrier("alias")), true, "an authored Error alias retains its original physical write demand");
+    assert.equal(writable(element(carrier("values"))), true,
+      "the declaration's array-element storage subject retains its independent write demand");
+    const pair = carrier("pair");
+    assert.equal(pair?.kind, "tuple", "the authored tuple remains an exact native tuple");
+    assert.equal(writable(pair.elements[0]), true, "the selected tuple component retains write capability");
+    assert.equal(writable(pair.elements[1]), false, "a different tuple component does not inherit unrelated writes");
+    const nested = element(element(carrier("nested")));
+    assert.equal(writable(nested), true, "both nested array projections preserve the original storage subject");
+    assert.equal(carrier("readonly") !== undefined, true, "an independent immutable Error still has exact native storage");
+    assert.equal(writable(carrier("readonly")), false, "an immutable original receives no fabricated write capability");
+  });
 }
 
 test("authored callable contracts publish the admitted initializer destination rather than signature storage", () => {
