@@ -773,7 +773,7 @@ function createRustStructuralShapeConstruction(
         const template = physicalTemplateFor(definition);
         return template === undefined || template.targetName === definition.targetName && template.componentId === definition.componentId;
       }).map(definition => replacements.get(definition)!));
-      const sourceDefinitions = new Map(byStorageKey);
+      const sourceDefinitions = Object.freeze([...new Set(byStorageKey.values())]);
       const canonical = new Map(finalDefinitions.map(definition => [`${definition.componentId}\0${definition.targetName}`, definition]));
       const canonicalFor = (definition: RustStructuralShapeDefinition): RustStructuralShapeDefinition => {
         const selected = canonical.get(`${definition.componentId}\0${definition.targetName}`);
@@ -816,12 +816,6 @@ function createRustStructuralShapeConstruction(
         if (instance === undefined) throw new Error("Structural physical storage lost its exact template-to-instance correspondence.");
         instances.set(key, instance);
       }
-      const storageOwners = new Map([...byStorageKey].map(([key, definition]) => [key, canonicalFor(replacements.get(definition)!)]));
-      for (const [key, instance] of physicalInstances) {
-        const owner = instanceOwners.get(key);
-        if (owner === undefined) failTargetAnalysisInvariant("tsonic-rust", "An admitted physical instance requires its canonical native owner.");
-        storageOwners.set(structuralStorageKey(instance.carrier, componentForFile), owner);
-      }
       let finalInstances = Object.freeze([...physicalInstances.values()]);
       definitions = finalDefinitions;
       const registerFinal = (definition: RustStructuralShapeDefinition, carrier: TargetTypeRef): RustStructuralShapeDefinition | undefined => {
@@ -830,7 +824,6 @@ function createRustStructuralShapeConstruction(
         const key = closedMetadataKey(carrier);
         instances.set(key, selected);
         instanceOwners.set(key, definition);
-        storageOwners.set(structuralStorageKey(carrier, componentForFile), definition);
         finalInstances = Object.freeze([...physicalInstances.values()]);
         publishedInstances = finalInstances;
         return selected;
@@ -853,13 +846,18 @@ function createRustStructuralShapeConstruction(
         if (carrier === undefined || rustStructuralObjectCarrierValue(carrier) === undefined) return undefined;
         const selected = instances.get(closedMetadataKey(carrier));
         if (selected !== undefined || closed) return selected;
-        const implementation = rustStructuralObjectCarrierValue(carrier)?.implementation;
-        const storageKey = structuralStorageKey(carrier, componentForFile);
-        const sourceDefinition = implementation?.kind === "physical" ? undefined : sourceDefinitions.get(storageKey);
-        if (sourceDefinition !== undefined) {
-          const source = instantiateStructuralDefinition(sourceDefinition, carrier);
+        const structural = rustStructuralObjectCarrierValue(carrier)!;
+        const implementation = structural.implementation;
+        if (implementation?.kind !== "physical") {
+          const sources = sourceDefinitions.flatMap(definition => {
+            if (definition.componentId !== componentForFile(structural.ownerFileName)) return [];
+            const instance = instantiateStructuralDefinition(definition, carrier);
+            return instance === undefined ? [] : [{ definition, instance }];
+          });
+          if (sources.length !== 1) return undefined;
+          const { definition: sourceDefinition, instance: source } = sources[0]!;
           const replacement = replacements.get(sourceDefinition);
-          if (source === undefined || replacement === undefined) return undefined;
+          if (replacement === undefined) return undefined;
           const types = new Map<string, TargetTypeRef>();
           const lifetimes = new Map<string, RustLifetimeRef>();
           for (const [index, parameter] of sourceDefinition.genericParameters.entries()) {
@@ -877,8 +875,7 @@ function createRustStructuralShapeConstruction(
           }
           return selected;
         }
-        const templates = implementation?.kind !== "physical" ? [storageOwners.get(structuralStorageKey(carrier, componentForFile))]
-          : finalDefinitions.filter(definition => {
+        const templates = finalDefinitions.filter(definition => {
             const physical = rustStructuralObjectCarrierValue(definition.carrier)?.implementation;
             return physical?.kind === "physical" && physical.methods.length === implementation.methods.length &&
               physical.methods.every((method, index) => method.sourceName === implementation.methods[index]?.sourceName &&

@@ -60,7 +60,7 @@ test("one physical structural finalization preserves logical keys completed inst
   const template = carrier(parameter);
   const instance = carrier(integer);
   const builder = createRustStructuralShapePlanRegistry();
-  builder.initialize([{ carrier: template }, { carrier: instance }], [], () => "root", [],
+  builder.initialize([{ carrier: template }, { carrier: instance }], [], file => file === "/dependency.ts" ? "dependency" : "root", [],
     [{ template, instance }], new Map());
   builder.initializeUnions([]);
   const completed = builder.completePhysicalCarrier(instance, instance);
@@ -85,12 +85,37 @@ test("one physical structural finalization preserves logical keys completed inst
   const wide = builder.definitionForCarrier(wider);
   assert.equal(wide !== undefined, true, "a later exact logical generic application instantiates the same physical template");
   assert.equal(rustCallableProtocol(wide.fields[0].carrier).result.name, "int64", "the exact new native argument is retained");
+  const wideShape = rustStructuralObjectCarrierValue(wider);
+  for (const [label, altered] of [
+    ["foreign component", rustStructuralObjectTargetType("/dependency.ts", wideShape.fields)],
+    ["field role", rustStructuralObjectTargetType("/root.ts", wideShape.fields.map(value => ({ ...value, method: true })))],
+    ["mutability", rustStructuralObjectTargetType("/root.ts", wideShape.fields.map(value => ({ ...value, readonly: false })))],
+    ["error owner", rustStructuralObjectTargetType("/root.ts", [field("invoke", rustCallableTargetType(
+      [integer], integer, lifetime, physicalError("/dependency.ts")), { bound: true })])],
+  ]) assert.equal(builder.definitionForCarrier(altered), undefined, `${label}: exact source correspondence cannot be relaxed`);
   const plan = builder.seal();
   assert.equal(plan.definitionForCarrier(instance) === selected, true, "sealing preserves original lookup identity");
   assert.equal(plan.definitionForCarrier(wider) === wide, true, "sealing preserves the admitted late logical application");
   assert.equal(plan.definitions.length, 1, "there is one canonical physical definition, not old/new variants");
   assert.throws(() => builder.finalizeMethodStorage(new Map(), physicalError), /exactly once/u,
     "destination error selection cannot be recomputed after publication");
+});
+
+test("late structural applications reject ambiguous original generic owners", () => {
+  const input = { kind: "type-parameter", identity: "Input", name: "Input" };
+  const output = { kind: "type-parameter", identity: "Output", name: "Output" };
+  const carrier = result => rustStructuralObjectTargetType("/root.ts",
+    [field("invoke", rustCallableTargetType([input], result, lifetime))]);
+  const builder = createRustStructuralShapePlanRegistry();
+  builder.initialize([{ carrier: carrier(input) }, { carrier: carrier(output) }], [],
+    () => "root", [], [], new Map());
+  builder.initializeUnions([]);
+  builder.finalizeMethodStorage(new Map(), physicalError);
+  const ambiguous = rustStructuralObjectTargetType("/root.ts",
+    [field("invoke", rustCallableTargetType([integer], integer, lifetime))]);
+  assert.equal(builder.definitionForCarrier(ambiguous), undefined,
+    "two distinct exact generic source bindings cannot select an arbitrary physical owner");
+  assert.equal(builder.definitions.length, 2, "both original owners remain distinct before sealing");
 });
 
 test("physical getter completion preserves native source-absence containers and quantified optional identities", () => {
