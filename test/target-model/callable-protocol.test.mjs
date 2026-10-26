@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { rustCallableProtocol, rustCallableTargetType } from "../../dist/target-model/types/carriers/callables.js";
 import { rustTupleTargetType } from "../../dist/policy/types/collections/tuple-carrier.js";
+import { rustProgramErrorTargetType } from "../../dist/target-model/types/carriers/js.js";
 
 const number = { kind: "source-primitive", name: "float64" };
 const boolean = { kind: "source-primitive", name: "bool" };
@@ -9,7 +10,8 @@ const boolean = { kind: "source-primitive", name: "bool" };
 test("callable ABI parameters always retain their native tuple even for homogeneous arguments", () => {
   for (const parameters of [[], [number], [number, number], [number, boolean, number]]) {
     const carrier = rustCallableTargetType(parameters, boolean);
-    assert.deepEqual(rustCallableProtocol(carrier), { parameters, result: boolean, lifetime: { kind: "placeholder" } });
+    assert.deepEqual(rustCallableProtocol(carrier), { parameters, result: boolean,
+      error: rustProgramErrorTargetType(), lifetime: { kind: "placeholder" } });
     assert.equal(carrier.genericArguments[1].type.kind, "tuple");
   }
   assert.equal(rustTupleTargetType([number, number]).name, "fixed-array");
@@ -17,8 +19,7 @@ test("callable ABI parameters always retain their native tuple even for homogene
 
 test("callable ABI rejects a data array in the parameter tuple slot", () => {
   const carrier = rustCallableTargetType([number, number], boolean);
-  const malformed = { ...carrier, genericArguments: [
-    carrier.genericArguments[0], { kind: "type", type: rustTupleTargetType([number, number]) }, carrier.genericArguments[2],
-  ] };
+  const malformed = { ...carrier, genericArguments: carrier.genericArguments.map((argument, index) =>
+    index === 1 ? { kind: "type", type: rustTupleTargetType([number, number]) } : argument) };
   assert.equal(rustCallableProtocol(malformed), undefined);
 });

@@ -35,6 +35,7 @@ import { planRustPropertyValueProjection } from "./property-value-projection.js"
 import { planRustOptionBranch } from "./option-branch.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { rustAutoBorrowedReceiver } from "./auto-borrowed-receivers.js";
+import { rustPropagatedResult } from "../types/fallible-shape.js";
 
 export function applyRustValueConversion(
   context: RustPlanContext,
@@ -170,7 +171,8 @@ export function lowerRustValueConversion(
         [],
       );
       const callbackName = allocateRustSyntheticName(names, "replacement_callback");
-      const argumentsName = allocateRustSyntheticName(names, "replacement_arguments");
+      const argumentsName = allocateRustSyntheticName(names,
+        contract.projections.length === 0 ? "_replacement_arguments" : "replacement_arguments");
       const argumentsExpression: RustExpr = { kind: "path", path: argumentsName };
       const callbackArguments: RustExpr[] = [];
       for (const [index, projection] of contract.projections.entries()) {
@@ -217,7 +219,7 @@ export function lowerRustValueConversion(
       if (value === undefined) return undefined;
       const errorType = selected.targetResultFallible ? region.boundary?.errorType
         ?? failRustPlannerInvariant("A Result-returning helper callback requires its selected error carrier.", node) : undefined;
-      const body = errorType === undefined ? value : {
+      const body = errorType === undefined ? value : rustPropagatedResult(value, errorType) ?? {
             kind: "call" as const,
             path: "Ok",
             genericArguments: [

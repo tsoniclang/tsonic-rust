@@ -44,8 +44,10 @@ export function planRustGenericCallableErrors(
     }
     selections.set(member, Object.freeze({ effects: errors.effects, ...rendered }));
   }
-  const invocationJoin = planRustGenericCallableErrorJoin(definition.ownerFileName, selected.invocation, context);
-  const awaitingJoin = planRustGenericCallableErrorJoin(definition.ownerFileName, selected.awaiting, context);
+  const invocationJoin = planRustGenericCallableErrorJoin(definition.ownerFileName, selected.invocation,
+    selected.effects.invocation === "fallible" ? "result" : "value", context);
+  const awaitingJoin = planRustGenericCallableErrorJoin(definition.ownerFileName, selected.awaiting,
+    selected.effects.awaiting === "fallible" ? "result" : "value", context);
   return Object.freeze({
     effects: selected.effects,
     invocation: invocationJoin, awaiting: awaitingJoin,
@@ -54,7 +56,8 @@ export function planRustGenericCallableErrors(
 }
 
 export function planRustGenericCallableErrorJoin(
-  ownerFileName: string, sources: readonly RustNativeErrorSource<TargetTypeRef>[], context: RustPlanContext,
+  ownerFileName: string, sources: readonly RustNativeErrorSource<TargetTypeRef>[],
+  resultShape: "value" | "result", context: RustPlanContext,
 ): RustNativeErrorJoinPlan {
   const rendered: RustNativeErrorJoinSource[] = [];
   for (const source of sources) {
@@ -69,5 +72,5 @@ export function planRustGenericCallableErrorJoin(
   const external = context.externalCrateNameByFileName.get(ownerFileName);
   return planRustNativeErrorJoin({ identity: `native-error-join:${ownerFileName}:${arity}`,
     name, referencePath: `${external !== undefined && external !== context.crateName ? external : "crate"}::${moduleName}::${name}`,
-    visibility: "public", sources: rendered }) ?? failRustPlannerInvariant("An admitted generic callable error join requires its selected native join plan.");
+    visibility: "public", resultShape, sources: rendered }) ?? failRustPlannerInvariant("An admitted generic callable error join requires its selected native join plan.");
 }

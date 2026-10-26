@@ -1,12 +1,14 @@
 import type { Node } from "@tsonic/tsts";
 import type { RustFinalizedSourceInput } from "../../../target-model/records/finalized-operation.js";
 import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
+import type { RustDirectStorageEmission } from "../../../target-model/records/direct-storage.js";
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import type { RustFinalizedInputPlanOverrides } from "../project/provider-evaluation-scope.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { rustSourceBindingPath } from "../program/plan-context.js";
 import { failRustPlannerInvariant } from "../diagnostics.js";
 import { rustCapturedBinding, type RustExpressionPlanner } from "./typed-locations.js";
+import { planRustUnionProjection } from "./union-mappings.js";
 
 export type RustProviderOperationExpressionPlanner = (context: RustPlanContext,
   fact: Extract<RustTargetOperationFact, { readonly kind: "provider-operation" }>, receiverNode: Node | undefined,
@@ -21,6 +23,15 @@ export function planRustDirectStorageCore(operand: Node, context: RustPlanContex
   const selected = context.input.program.records.directStorage.get(operand)
     ?? failRustPlannerInvariant("An admitted storage query requires its sealed native place selection.", operand);
   if (selected.kind === "unavailable") return undefined;
+  const expression = planRustSelectedDirectStorage(operand, selected, context, inputOverrides, planExpression, planProviderOperation);
+  return expression === undefined || selected.projection === undefined ? expression : { kind: "dereference", pointer: planRustUnionProjection(
+    operand, expression, selected.projection.emission,
+    selected.projection.access === "mutable" ? "mutable-reference" : "shared-reference", context) };
+}
+
+function planRustSelectedDirectStorage(operand: Node, selected: Exclude<RustDirectStorageEmission, { readonly kind: "unavailable" }>,
+  context: RustPlanContext, inputOverrides: ReadonlyMap<RustFinalizedSourceInput, RustExpr> | undefined,
+  planExpression: RustExpressionPlanner, planProviderOperation: RustProviderOperationExpressionPlanner): RustExpr | undefined {
   if (selected.kind === "identifier") {
     const captured = rustCapturedBinding(operand, context);
     if (captured !== undefined) {
@@ -44,7 +55,7 @@ export function planRustDirectStorageCore(operand: Node, context: RustPlanContex
     if (selected.receiverInput !== undefined) {
       const receiver = selected.receiver ?? failRustPlannerInvariant("An admitted provider place requires its native receiver.", operand);
       const explicit = context.expressionOverrides?.get(receiver);
-      const storage = explicit?.valueForm === "storage" ? explicit.expression
+      let storage = explicit?.valueForm === "storage" ? explicit.expression
         : planRustDirectStorageCore(receiver, context, inputOverrides, planExpression, planProviderOperation);
       if (storage === undefined) return undefined;
       if (!directStorageRemainsSelected(receiver, selected.index === undefined ? [] : [selected.index], explicit?.valueForm === "storage", context))

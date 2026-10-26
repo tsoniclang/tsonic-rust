@@ -5,6 +5,7 @@ export interface RustStructuralEmissionPolicyInput {
   readonly definition: RustStructuralShapeDefinition;
   readonly template: RustStructuralShapeDefinition;
   readonly genericRequirements: RustShapeGenericRequirementContract;
+  readonly contextConstructors: readonly ("value" | "identity")[];
   readonly clone: boolean;
   readonly copy: boolean;
   readonly default: boolean;

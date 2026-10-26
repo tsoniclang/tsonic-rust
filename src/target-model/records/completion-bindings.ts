@@ -3,8 +3,9 @@ import type { RustRecordFamily } from "./program.js";
 
 export interface RustCompletionBinding {
   readonly declaration: Node;
-  readonly body: boolean;
-  readonly catch: boolean;
+  readonly body: "unused" | "entry" | "nested-output";
+  readonly catch: "unused" | "entry" | "nested-output";
+  readonly output: "declare" | "assign";
 }
 
 export interface RustCompletionBindingRecords {

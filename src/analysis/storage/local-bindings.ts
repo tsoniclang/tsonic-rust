@@ -125,8 +125,16 @@ export function analyzeRustLocalBindings(input: {
     input.producer.declaration(node, { kind: "value", name, initializer, carrier,
       nativeCarrier: physical.kind === "selected" ? physical.carrier : carrier,
       initializerCarrier: physical.kind === "selected" ? physical.carrier : undefined, storage, mutable,
-      selfTypedCallable: storage === undefined && operation?.kind === "closure" && rustCallableProtocol(carrier) !== undefined &&
-        rustTargetTypeRefEquals(operation.resultCarrier, carrier), annotated: variable?.Type !== undefined, absenceInitializer });
+      selfTypedInitializer: storage === undefined &&
+        (operation?.kind === "closure" && rustCallableProtocol(carrier) !== undefined &&
+          rustTargetTypeRefEquals(operation.resultCarrier, carrier) ||
+          initializer !== undefined && variable?.Type === undefined && physical.kind === "selected" &&
+          operation?.kind === "source-call" && rustTargetTypeRefEquals(operation.resultCarrier, carrier) &&
+          input.records.contextualValueConversion.get(initializer) === undefined &&
+          input.records.optionProjection.get(initializer) === undefined &&
+          input.records.projectUpcast.get(initializer) === undefined &&
+          input.records.flowReadProjection.get(initializer) === undefined),
+      annotated: variable?.Type !== undefined, absenceInitializer });
   }
   return Object.freeze(issues);
 }

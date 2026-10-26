@@ -14,7 +14,7 @@ import { sourcePackageCallbackErrorFiles, sourcePackageCallbackErrorGraph }
   from "../../../../tsonic/test/fixtures/source-package-callback-errors.mjs";
 
 function fixture(text, options = {}) {
-  const context = analyzeRustErrorEffects(text, options);
+  const context = analyzeRustErrorEffects(text, { surfaces: [], ...options });
   const ast = context.ast;
   const declarations = context.callableValues.nativeProducers.producers.map(producer => producer.declaration);
   const declaration = name => {
@@ -189,7 +189,7 @@ test("a mixed completion retains its selected Future's shape rather than the dec
 });
 
 test("bound physical subject selection requires the exact owned storage bindings", () => {
-  const current = fixture("export function retained(callback: () => Promise<number>) { return callback(); }");
+  const current = fixture("export function retained(callback: () => Promise<number>) { return callback(); }", { surfaces: ["js"] });
   const native = current.context.callableValues.native;
   const input = native.inputsFor(current.declaration("retained"))[0];
   const bindings = native.bindingsFor(current.declaration("retained"));

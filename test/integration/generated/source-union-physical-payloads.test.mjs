@@ -4,6 +4,7 @@ import { spawnSync } from "node:child_process";
 import { resolve } from "node:path";
 import { createRustTypeDefinitionRegistry } from "../../../dist/analysis/project-types/type-definitions.js";
 import { createRustGeneratedUnionPlan } from "../../../dist/analysis/objects/shapes/generated-union-plan.js";
+import { createRustStructuralShapePlan } from "../../../dist/analysis/objects/shapes/structural-shape-plan.js";
 import { rustSourceUnionTargetType } from "../../../dist/target-model/types/carriers/source-types.js";
 import { rustFutureTargetType } from "../../../dist/target-model/types/carriers/primitives.js";
 import { rustUnitTargetType, rustNamedTargetType } from "../../../dist/target-model/types/carriers/native.js";
@@ -19,6 +20,7 @@ import { printRustType } from "../../../dist/print/source/types.js";
 import { printRustSourceFile } from "../../helpers/printed-rust-source.mjs";
 import { runCargo, writeGeneratedProject, validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 import { compileRust, artifactText } from "../../helpers/rust-session.mjs";
+import { rustProgramPlanContext, rustProgramWithTypeEmissions } from "../../helpers/plan-context.mjs";
 import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 
 function nativeFixture() {
@@ -134,6 +136,7 @@ export function choose(first: boolean, value: int32): Choice<int32> { return fir
     "facade.ts": `export type { Choice as Selected } from "./definitions.js";
 export { choose } from "./definitions.js";`,
     "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
 import type { Selected as ImportedChoice } from "./facade.js";
 import { choose } from "./facade.js";
 function valid(value: ImportedChoice<int32>): boolean {
@@ -163,18 +166,21 @@ test("canonical authored and generated sums admit opaque futures in native signa
     const registry = createRustTypeDefinitionRegistry();
     const name = origin === "generated" ? "Union2" : "Completion";
     const payloads = [integer, rustFutureTargetType(integer)];
-    const carrier = rustSourceUnionTargetType("/src/definitions.ts", name, [], origin,
+    const carrier = rustSourceUnionTargetType("/src/index.ts", name, [], origin,
       origin === "generated" ? { kind: "physical", types: payloads } : { kind: "source" });
     const definition = { carrier, variants: payloads.map((carrier, index) => ({ name: `Variant${index}`, carrier })) };
     assert.equal(registry.registerSourceUnion(definition, origin === "authored"), true);
     const physical = instantiateRustSourceUnionPayloads(carrier, [integer, opaque], registry);
     assert.equal(physical !== undefined, true);
-    const shapes = createRustGeneratedUnionPlan(origin === "generated" ? [definition] : [], () => "root", new Map());
-    const context = { moduleName: "main", structuralShapesModuleName: "definitions",
-      moduleNameByFileName: new Map([["/src/definitions.ts", "definitions"]]), externalCrateNameByFileName: new Map(),
-      externalStructuralShapeModuleByFileName: new Map(), input: { program: { typeDefinitions: registry.seal(),
-        names: { nameForSourceType: (_file, typeName) => typeName }, structuralShapes: shapes,
-        callableValues: { native: { protocolForSourceItem: () => undefined } } } } };
+    const unions = createRustGeneratedUnionPlan(origin === "generated" ? [definition] : [], () => "root", new Map());
+    const shapes = createRustStructuralShapePlan([], [], () => "root", [], new Map(), [], unions);
+    const program = rustProgramWithTypeEmissions([physical], {
+      source: `type ${name} = number;\nexport function probe(): void {}\n`,
+      typeDefinitions: registry.seal(),
+      structuralShapes: shapes,
+    });
+    const context = rustProgramPlanContext(program, { moduleName: "main", structuralShapesModuleName: "definitions",
+      moduleNameByFileName: new Map([["/src/index.ts", "definitions"]]) });
     const plan = planRustSourceUnionPayloadTemplate(registry.sourceUnionPayloadTemplate(carrier), emptyRustGenerics, rustTypeFromCarrier);
     assert.equal(plan !== undefined, true);
     const declaration = printRustSourceFile(finalizeRustSourceStyle(createRustSourceFile([

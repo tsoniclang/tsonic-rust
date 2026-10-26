@@ -204,11 +204,11 @@ export function finalizeRustNativeEmission(
   analyzeRustClassImplementations(program, context.records.classEmissionPlans, context.nativeNodes, context.structuralShapes);
   context.structuralShapes.seal();
   analyzeRustOptionalStorageCallEmission(program, context.nativeNodes, context.records.projectEmissionPlans);
-  const structuralEmissionIssues = analyzeRustStructuralEmission(program, context.records.structuralEmissionPlans, context.records.projectEmissionPlans);
-  if (structuralEmissionIssues.length !== 0) return rejectedTargetStage(structuralEmissionIssues);
   analyzeRustStoredFields(program, context.nativeNodes, context.records.storedFieldPlans);
   const objectReferenceEmission = analyzeRustObjectReferenceEmission(program, context.nativeNodes, context.records.objectReferenceEmissionPlans);
   if (objectReferenceEmission.issues.length !== 0) return rejectedTargetStage(objectReferenceEmission.issues);
+  const structuralEmissionIssues = analyzeRustStructuralEmission(program, context.nativeNodes, context.records.structuralEmissionPlans, context.records.projectEmissionPlans);
+  if (structuralEmissionIssues.length !== 0) return rejectedTargetStage(structuralEmissionIssues);
   const indexedRecordIssues = analyzeRustIndexedRecords(program, context.nativeNodes, context.records.indexedRecordPlans);
   if (indexedRecordIssues.length !== 0) return rejectedTargetStage(indexedRecordIssues);
   analyzeRustObjectProjections(program, context.nativeNodes, context.records.objectProjectionPlans);
@@ -311,7 +311,8 @@ export function finalizeRustNativeEmission(
   admitRustUnionProjections(program, context.nativeNodes);
   analyzeRustUnionEquality(program, context.nativeNodes, context.records.unionEqualityPlans);
   analyzeRustClosedTypeTests(program, context.nativeNodes, context.records.closedTypeTestPlans);
-  analyzeRustOptionEquality(program, context.nativeNodes, context.records.optionEqualityPlans);
+  const optionEqualityIssues = analyzeRustOptionEquality(program, context.nativeNodes, context.records.optionEqualityPlans);
+  if (optionEqualityIssues.length !== 0) return rejectedTargetStage(optionEqualityIssues);
   analyzeRustIndexedLocations(program, context.nativeNodes, context.records.indexedLocationPlans);
   analyzeRustLocationCallbacks(program, context.nativeNodes, context.records.locationCallbackPlans, context.records);
   analyzeRustErasedInputArguments(program, context.records.erasedInputArgumentPlans);

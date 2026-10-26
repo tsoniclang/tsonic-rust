@@ -4,6 +4,7 @@ import { rustCallableInputProtocol, rustCallableProtocol, rustClosureProtocol } 
 import { rustNamedTargetType, rustNamedTypeCarrierValue } from "../../target-model/types/carriers/native.js";
 import { rustCallableTargetId, rustInfallibleTargetId } from "../../target-model/types/carriers/source-types.js";
 import { isRustNeverCarrier } from "../../target-model/types/carriers/js.js";
+import { rustProgramErrorOwner } from "../../target-model/types/carriers/program-errors.js";
 import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustTypeGenericArguments } from "../../target-model/types/generic-arguments.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
@@ -43,6 +44,7 @@ export function rustCallableConversionPhysical(
     // uninhabited is adapted by eliminating that error.
     const targetError = "error" in target ? target.error : logical.target.kind === "closure" ? rustRuntimeErrorTargetType() : undefined;
     const eliminated = errorPlan === undefined && targetError !== undefined &&
+      rustProgramErrorOwner(targetError)?.kind !== "logical" &&
       !rustTargetTypeRefEquals(actual.error, targetError) && rustUninhabitedError(actual.error);
     const errors: RustNativeErrorSource<TargetTypeRef>[] = [{ identity: "invoke", variant: "Error0",
       errorType: eliminated ? targetError! : errorPlan?.target ?? actual.error }];

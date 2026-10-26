@@ -39,6 +39,10 @@ export function rustNativeCallableOperand(
     return error === undefined ? undefined : Object.freeze({ carrier: lambda.constructionCarrier,
       signature: Object.freeze({ parameters: lambda.nativeClosure.parameters, result: lambda.resultCarrier, error }) });
   }
+  if (lambda?.construction === "native" && lambda.protocol !== undefined) {
+    if (!rustTargetTypeRefEquals(lambda.constructionCarrier, source) || lambda.physicalCarrier === undefined) return undefined;
+    return rustNativeCallablePhysicalSource(source, { kind: "identity", carrier: lambda.physicalCarrier }, input.frames);
+  }
   return rustNativeCallablePhysicalSource(source, input.storage.operandFor(node), input.frames);
 }
 

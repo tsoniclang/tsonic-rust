@@ -70,7 +70,7 @@ function planSelectedRustCallableConversion(
     return errorType === undefined ? undefined : { ...error, errorType };
   });
   const join = joinName === undefined || errorSources.some(error => error === undefined) ? undefined : planRustNativeErrorJoin({
-    identity: rustNativeErrorJoinIdentity(fileName, arity), name: joinName, visibility: "public",
+    identity: rustNativeErrorJoinIdentity(fileName, arity), name: joinName, visibility: "public", resultShape: "result",
     ...(arity > 1 && errorType.kind === "named" ? { referencePath: errorType.path } : {}),
     sources: errorSources as NonNullable<typeof errorSources[number]>[],
   });

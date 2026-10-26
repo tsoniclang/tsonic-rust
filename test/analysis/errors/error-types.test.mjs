@@ -8,17 +8,20 @@ import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equali
 import { rustJsValueTargetType, rustProgramErrorTargetType } from "../../../dist/target-model/types/carriers/js.js";
 import { rustStringTargetType } from "../../../dist/target-model/types/carriers/native.js";
 import { rustProducerErrorReference } from "../../../dist/target-model/types/carriers/producer-errors.js";
+import { rustNativeErrorJoinTargetType, rustNativeErrorJoinReference } from "../../../dist/target-model/types/native-error-joins.js";
+import { selectRustErrorRegion } from "../../../dist/analysis/errors/regions.js";
+import { nativeCallbackParametersSource } from "../../../../tsonic/test/fixtures/native-callback-parameters.mjs";
 
 
-function fixture() {
-  const context = analyzeRustErrorEffects(`
+function fixture(text = `
     class Failure extends Error {}
     export async function pureLeft(): Promise<string> { return "left"; }
     export async function pureRight(): Promise<string> { return "right"; }
     export async function failLeft(): Promise<string> { throw new Failure("left"); }
     export async function failRight(): Promise<string> { throw new Failure("right"); }
     export function forwarded(): Promise<string> { return failLeft(); }
-  `);
+  `, options = {}) {
+  const context = analyzeRustErrorEffects(text, options);
   const classified = analyzeRustSourcePackageComponents(context, "lib", subject => context.records.errorEffects.get(subject));
   assert.equal(classified.kind, "resolved");
   const producers = context.callableValues.nativeProducers;
@@ -31,6 +34,27 @@ function fixture() {
   const error = name => producers.errorFor(producer(name).declaration, name === "forwarded" ? 0 : "body");
   return { input, producer, error };
 }
+
+test("native declaration error demand removes only template-proven impossible channels and retains Result ABI", () => {
+  const current = fixture(nativeCallbackParametersSource, { surfaces: [] });
+  const declaration = current.producer("run").declaration;
+  const effects = current.input.records.errorEffects.get(declaration);
+  assert.equal(effects.nativeErrors.length, 2, "original source channel identities are not erased");
+  const selected = selectRustErrorRegion(declaration, effects, { ...current.input, promiseBodies: { objects: new Map() } }, false);
+  assert.equal(selected.kind, "resolved", "the canonical declaration owns its exact physical error selection");
+  assert.equal(selected.value.kind, "native", "the original native Result call ABI is retained");
+  assert.equal(selected.value.sources.length, 0, "both actual impossible declaration channels need no enum variants");
+  const error = current.input.producers.errorFor(declaration, "invoke");
+  const normalized = normalizeRustErrorType(error, current.input);
+  assert.equal(normalized?.id, "rust.core.Infallible", "native producer and declaration choose the identical error carrier");
+  const generic = current.producer("consume").declaration;
+  const genericError = normalizeRustErrorType(current.input.producers.errorFor(generic, "invoke"), current.input);
+  assert.equal(genericError !== undefined && genericError.id !== "rust.core.Infallible", true,
+    "an unbound callback error remains an actual independent generic channel");
+  const joined = rustNativeErrorJoinTargetType("/native-template.ts", [normalized, normalized]);
+  assert.equal(rustNativeErrorJoinReference(normalizeRustErrorType(joined, current.input))?.errors.length, 2,
+    "a previously selected generic join is never collapsed merely from bound Infallible arguments");
+});
 
 test("native body errors normalize independently from the single JS Promise rejection boundary", () => {
   const current = fixture();

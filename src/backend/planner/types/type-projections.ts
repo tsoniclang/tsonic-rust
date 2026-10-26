@@ -29,17 +29,19 @@ export function rustOptionalStorageCallArguments(node: Node, context: RustTypeRe
 
 export function rustOptionalStorageTypeArguments(
   carrier: TargetTypeRef, context: RustTypeRenderingContext, parameterIndexes?: readonly number[],
+  position: "general" | "parameter" | "return" = "general",
 ): readonly RustCallGenericArgument[] {
   const selected = context.input.program.records.optionalStorageTypeArguments.get(carrier, parameterIndexes);
   if (selected === undefined) failRustPlannerInvariant(`An admitted native type requires its exact sealed optional storage arguments. key=${closedMetadataKey([carrier, parameterIndexes ?? null])}`);
-  return renderOptionalStorageArguments(selected, context);
+  return renderOptionalStorageArguments(selected, context, undefined, position);
 }
 
 function renderOptionalStorageArguments(
   selected: readonly TargetTypeRef[], context: RustTypeRenderingContext, node?: Node,
+  position: "general" | "parameter" | "return" = "general",
 ): readonly RustCallGenericArgument[] {
   return selected.map(carrier => {
-    const type = rustTypeFromCarrierInContext(carrier, context);
+    const type = rustTypeFromCarrierInContext(carrier, context, position);
     if (type === undefined) failRustPlannerInvariant("An admitted optional storage argument requires its exact native type.", node);
     return { kind: "type", type };
   });

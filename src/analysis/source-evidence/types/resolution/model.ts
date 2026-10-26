@@ -11,6 +11,7 @@ import type { RustTargetGenericBindings } from "../../../../target-model/types/c
 import type { RustCallableOwnershipInput } from "../../../callables/ownership-plan.js";
 
 export interface RustClassFrameInstantiation {
+  readonly kind: "selected";
   readonly instance: TargetTypeRef;
   readonly parameters: readonly TargetTypeRef[];
   readonly result: TargetTypeRef;
@@ -22,6 +23,9 @@ export type RustSourceStorageResolution = SourceStorageUnresolved | {
   readonly subject: SourceStorageSubject | undefined;
   readonly bindings: SourceStorageBindings;
 };
+
+export type RustClassFrameInstantiationSelection = RustClassFrameInstantiation |
+  { readonly kind: "rejected"; readonly reason: string };
 
 export interface RustTargetTypeResolutionOptions {
   readonly jsEnabled: boolean;
@@ -37,7 +41,7 @@ export interface RustTargetTypeResolutionOptions {
     selection: RustCallableOwnershipInput,
     logicalCarrier: TargetTypeRef,
     environmentFor: (declaration: Node, excludedCaptures: ReadonlySet<Node>) => readonly TargetTypeRef[] | undefined,
-    classFrameFor: (declaration: Node) => RustClassFrameInstantiation | undefined,
+    classFrameFor: (declaration: Node) => RustClassFrameInstantiationSelection | undefined,
   ) => TargetTypeRef | undefined;
   readonly projectCarrierSupportsObjectIdentity: (carrier: TargetTypeRef) => boolean;
   readonly projectFieldProjection: (property: TypePropertyInfo, owner: TargetTypeRef, ownerType: Type,

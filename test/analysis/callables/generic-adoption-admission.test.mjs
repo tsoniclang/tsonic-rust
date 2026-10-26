@@ -7,9 +7,9 @@ import { sourceNodeIdentity } from "@tsonic/target-api/source";
 
 function diagnosticSummary(result, source) {
   const ast = source.ast;
-  return JSON.stringify(result.diagnostics.map(({ code, message, sourceNode }) => {
+  return JSON.stringify(result.diagnostics.map(({ code, message, sourceNode, evidence }) => {
     const file = sourceNode === undefined ? undefined : ast.getSourceFile(sourceNode);
-    return { code, message, node: sourceNodeIdentity(ast, sourceNode),
+    return { code, message, evidence: evidence?.map(value => value.slice(0, 2048)), node: sourceNodeIdentity(ast, sourceNode),
       text: file === undefined ? undefined : Buffer.from(ast.getSourceText(file))
         .subarray(ast.pos(sourceNode), ast.end(sourceNode)).toString("utf8").trim().slice(0, 160) };
   }));
