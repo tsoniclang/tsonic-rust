@@ -321,6 +321,33 @@ export function createRustStructuralMethodStorage(input: {
         }
       }
     }
+    const view = records.objectReferenceView.get(node);
+    if (view?.kind === "structural") for (const field of view.fields) {
+      if (field.source.storage !== "structural-object" || field.source.valueSemantics.kind !== "method") continue;
+      const destination = destinationFor(view.targetCarrier, field.destinationIndex);
+      if (destination === undefined) continue;
+      const base = sourceStorage.subjectFor(node);
+      const typed = base.kind === "unresolved" ? base : sourceStorage.typeFor(base.subject);
+      if (base.kind === "unresolved" || typed.kind === "unresolved") {
+        sourceIssues.push({ subject: node, message: typed.kind === "unresolved" ? typed.reason : "A native view requires its exact checked source subject." });
+        continue;
+      }
+      const member = rustStructuralObjectCarrierValue(field.source.receiverCarrier)?.fields[field.source.storageIndex];
+      const semantics = sourceStorage.source.semantics.forFile(typed.sourceFile);
+      const properties = semantics.types.propertyInfos(typed.type).filter(property => property.name === member?.sourceName);
+      const declarations = properties.length !== 1 ? [] : [...new Set([properties[0]!.symbol, ...properties[0]!.rootSymbols]
+        .flatMap(symbol => semantics.declarations.symbolDeclarations(symbol)))];
+      if (member?.method !== true || declarations.length === 0) {
+        sourceIssues.push({ subject: node, message: "Structural method view construction requires its exact selected checked member and native source slot." });
+        continue;
+      }
+      for (const declaration of declarations) {
+        const source = sourceStorage.subject(base.subject.node, base.subject.kind,
+          [...base.subject.projection, { kind: "method-value", declaration }]);
+        if (source.kind === "unresolved") sourceIssues.push({ subject: node, message: source.reason });
+        else register(node, destination, source.subject);
+      }
+    }
   }
   let complete = false;
   const producerErrors = new Map<import("../../target-model/types/carriers/producer-errors.js").RustProducerErrorReference, TargetTypeRef>();

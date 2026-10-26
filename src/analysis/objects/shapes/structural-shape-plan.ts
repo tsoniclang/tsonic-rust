@@ -13,7 +13,7 @@ import { rustNativeMemoryLayoutsEqual } from "../../../target-model/operations/n
 import { rustTargetGenericArgumentEquals, rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { closedMetadataKey } from "../../../target-model/metadata/closed-data.js";
 
-import { rustStructuralObjectCarrierValue, rustTargetGenericReferences, rustOptionElementCarrier, rustCallableProtocol, rustProgramErrorTargetType, rustNamedTypeCarrierValue } from "../../../target-model/types/index.js";
+import { rustStructuralObjectCarrierValue, rustTargetGenericReferences, rustOptionElementCarrier, rustOptionTargetType, rustCallableProtocol, rustCallableTargetType, rustProgramErrorTargetType, rustNamedTypeCarrierValue } from "../../../target-model/types/index.js";
 import { rustStructuralMethodStorageCarrier } from "../../../policy/types/objects/member-storage.js";
 import { rustRuntimeRecordFieldTargetType } from "../../../target-model/types/carriers/runtime-carriers.js";
 import { rustCallablePhysicalSignature } from "../../../target-model/conversions/callable-physical.js";
@@ -655,7 +655,11 @@ function createRustStructuralShapeConstruction(
             const constructions = Object.freeze(selection.constructions.map(construction => Object.freeze({ ...construction })));
             if (methodPlan.kind !== "fixed") {
               if (selection.nativeBody !== undefined) failTargetAnalysisInvariant("tsonic-rust", "Only a selected fixed method publishes a native body payload.");
-              return Object.freeze({ ...field, methodPlan: Object.freeze({ ...methodPlan, carrier: selection.carrier, constructions }) });
+              if (destination === undefined) failTargetAnalysisInvariant("tsonic-rust", "A stored structural method requires its exact selected physical invocation protocol.");
+              const valueCarrier = rustCallableTargetType(methodPlan.receiver === "included" ? destination.parameters.slice(1)
+                : destination.parameters, destination.result, destination.lifetime, destination.error);
+              return Object.freeze({ ...field, carrier: field.presence === "optional" ? rustOptionTargetType(valueCarrier) : valueCarrier,
+                methodPlan: Object.freeze({ ...methodPlan, carrier: selection.carrier, constructions }) });
             }
             const physical = rustStructuralObjectCarrierValue(carrier)?.implementation?.methods.find(method => method.sourceName === field.sourceName);
             const body = selection.nativeBody;
