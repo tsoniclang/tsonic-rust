@@ -145,10 +145,11 @@ test("computed member names consume the shared checked key and existing collisio
     strict: true, target: "es2022", module: "esnext",
   }, files: { "/project/index.ts": `
 const key = "some-key" as const;
+const staticKey = "some-key-static" as const;
 class Entry {
   some_key = 3;
   [key](): number { return 1; }
-  static [key](): number { return 2; }
+  static [staticKey](): number { return 2; }
   [7] = 4;
   [""] = 5;
 }
@@ -170,8 +171,30 @@ class Entry {
   assert.equal(names.nameForDeclaration(empty), "value", "a static empty key is represented, not silently omitted");
   const context = { ast: source.ast, names, semanticsFor: source.semantics.forNode };
   assert.equal(rustProjectCallableTargetName(instance, context), "some_key_2", "instance method reads the selected name");
-  assert.equal(rustProjectCallableTargetName(staticMethod, context), "some_key_2_static",
-    "computed static methods retain the accepted static/instance collision rule");
+  assert.equal(rustProjectCallableTargetName(staticMethod, context), "some_key_static",
+    "computed static methods preserve their own checked source key without an invented native suffix");
+  const conflicting = createCompilerSessionFromFiles({ currentDirectory: "/project", compilerOptions: {
+    strict: true, target: "es2022", module: "esnext",
+  }, files: { "/project/index.ts": `
+const key = "some-key" as const;
+class Entry {
+  some_key = 3;
+  [key](): number { return 1; }
+  static [key](): number { return 2; }
+  [7] = 4;
+  [""] = 5;
+}
+` } }).checkSource();
+  assert.equal(conflicting.diagnostics.length, 0, formatDiagnostics(conflicting.diagnostics));
+  const conflictingSource = createTargetSourceProgram(conflicting);
+  const conflictingFile = conflicting.getSourceFile("/project/index.ts");
+  const rejected = createRustNamePlan({ ast: conflictingSource.ast, sourceFiles: [conflictingFile],
+    isNativeNode: nativeMembership(conflictingSource, conflictingFile),
+    semanticsFor: conflictingSource.semantics.forNode, runtimeValueUses: { hasFirstClassUse: () => false } });
+  assert.equal(rejected.diagnostics.length, 1, "the original static/instance collision has one native admission refusal");
+  assert.equal(rejected.diagnostics[0].code, "RUST_AUTHORED_IDENTIFIER_UNREPRESENTABLE");
+  assert.match(rejected.diagnostics[0].message, /same Rust inherent item name \(E0592\)/u,
+    "checked source permission cannot invent two equally named native inherent items");
 });
 
 test("ordinary numeric member names retain the shared source-token key without float64 rounding", () => {

@@ -1,6 +1,9 @@
 import { createRustRecordFixture } from "../../helpers/records.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
+import { createCompilerSessionFromFiles } from "@tsonic/tsts";
+import { createTargetSourceProgram, Node_Initializer } from "@tsonic/target-api/source";
+import { createSourceStorageQuery } from "@tsonic/target-api/analysis";
 import { analyzeRust } from "../../helpers/rust-session.mjs";
 import { receiverFieldStorageCases } from "../../../../tsonic/test/fixtures/receiver-field-storage-cases.mjs";
 import { genericCallableOwnershipCases } from "../../../../tsonic/test/fixtures/generic-callable-ownership.mjs";
@@ -210,13 +213,29 @@ test("monomorphic structural views retain exact carriers without introducing a g
 function structuralFieldSelection({ callable = false, accessor = false, nativeReadonly = true,
   optional = !callable, sourceParameter = type => type,
   destinationParameter = type => type, result = type => type } = {}) {
-  const declaration = { kind: "KindClassDeclaration" };
-  const name = { kind: "KindIdentifier", text: "value" };
-  const member = { kind: "KindPropertyDeclaration", name, parent: declaration };
-  const destination = { kind: "KindPropertySignature", name };
-  const symbol = {};
-  const sourceType = {};
-  const destinationType = {};
+  const checked = createCompilerSessionFromFiles({ currentDirectory: "/structural-view",
+    compilerOptions: { strict: true, target: "es2022", module: "esnext" }, files: {
+      "/structural-view/index.ts": "export class Box<Value> { value!: Value; } export interface View<Value> { value: Value; }",
+    } }).checkSource();
+  assert.equal(checked.diagnostics.length, 0, "structural selection has an actual checked generic owner");
+  const sourceProgram = createTargetSourceProgram(checked);
+  const file = checked.getSourceFile("/structural-view/index.ts");
+  const ast = sourceProgram.ast;
+  const declaration = ast.children(file).find(node => ast.is.IsClassDeclaration(node));
+  const destinationOwner = ast.children(file).find(node => ast.is.IsInterfaceDeclaration(node));
+  assert.equal(declaration !== undefined && destinationOwner !== undefined, true,
+    "the actual source and destination retain distinct checked declarations");
+  const member = ast.members(declaration)[0];
+  const destination = ast.members(destinationOwner)[0];
+  const checkedSemantics = sourceProgram.semantics.forFile(file);
+  const sourceType = checkedSemantics.declarations.declaredType(declaration);
+  const destinationType = checkedSemantics.declarations.declaredType(destinationOwner);
+  const destinationMembers = checkedSemantics.types.structuralMembers(destinationType, destinationType, "read");
+  assert.equal(destinationMembers.kind, "available", "the checked destination owns its member symbol");
+  const symbol = destinationMembers.members[0].destination.property.symbol;
+  const storage = createSourceStorageQuery(sourceProgram, sourceProgram.navigation.sourceFiles);
+  assert.equal(storage.bindingsForLexicalOwner(member).kind, "resolved",
+    "the exact checked generic member owns its real source-storage binding");
   const nativeText = rustStringTargetType();
   const sourceCarrier = callable ? rustCallableTargetType([sourceParameter(parameter)], result(parameter)) : parameter;
   const destinationCarrier = type => callable ? rustCallableTargetType([destinationParameter(type), number], result(type))
@@ -229,9 +248,6 @@ function structuralFieldSelection({ callable = false, accessor = false, nativeRe
     storageIndex: 0, resultCarrier: destinationCarrier(nativeText), readonly: nativeReadonly, presence,
     ...(access === undefined ? {} : { accessor: access }) }] };
   const definition = { declaration };
-  const ast = { kindName: node => node.kind, name: node => node.name, text: node => node.text,
-    parent: node => node.parent, members: node => node === declaration ? [member] : [],
-    parameters: () => [], hasModifierKind: () => false, questionToken: () => undefined };
   const projectTypes = {
     definitionForCarrier: carrier => {
       const selected = rustSourceTypeCarrierValue(carrier);
@@ -259,10 +275,7 @@ function structuralFieldSelection({ callable = false, accessor = false, nativeRe
     registerStructuralObject: (shape, registration) => { registrations.push({ shape, registration }); return true; } };
   const walk = { sourceTypes, operationOptions: { projectTypes, sourceTypes, receiverFieldAliases: { aliasFor: () => undefined } },
     context: { ast, projectTypes, typeDefinitions: emptyRustTypeDefinitions, semanticsFor: () => semantics,
-      sourceStorage: {
-        storageSubjectFor: () => ({ kind: "unresolved", reason: "The fixture has no runtime value subject." }),
-        subject: () => ({ kind: "unresolved", reason: "The fixture has no runtime value subject." }),
-      },
+      source: sourceProgram, sourceStorage: storage,
       records: createRustRecordFixture({runtimeCarrier: { get: () => ({ carrier: sourceCarrier }) }}),
       classValues: { instanceViewRequests() { assert.fail("selection must not depend on earlier requests"); } } } };
   const selectedSource = source(nativeText);
@@ -615,6 +628,21 @@ export function main(): string { return view(new Box<string>("value")).identity(
     const shape = program.structuralShapes.definitionForCarrier(selected.nativeTargetCarrier);
     assert.equal(shape !== undefined, true, "the exact completed native getter carrier is admitted before close");
     for (const name of ["identity", "adapted"]) {
+      const ast = program.source.ast;
+      const sourceField = ast.members(owner.declaration).find(declaration => {
+        const fieldName = ast.name(declaration);
+        return fieldName !== undefined && ast.text(fieldName) === name;
+      });
+      assert.equal(sourceField !== undefined, true, `${name}: the native slot keeps its original checked declaration`);
+      const initializer = Node_Initializer(ast, sourceField);
+      assert.equal(initializer !== undefined, true, `${name}: the stored callable has its actual source initializer`);
+      assert.equal(program.records.runtimeCarrier.get(sourceField) !== undefined, true,
+        `${name}: declaration admission publishes its slot carrier before initializer analysis`);
+      assert.equal(program.records.runtimeCarrier.get(initializer) !== undefined &&
+        program.records.sourceCallableReturn.get(initializer) !== undefined, true,
+        `${name}: the real initializer publishes its own native value and return contract`);
+      const stored = program.callableValues.projectFieldStorage.get(sourceField);
+      assert.equal(stored !== undefined, true, `${name}: physical field storage is completed before publication`);
       const original = rustStructuralObjectCarrierValue(logical.targetCarrier).fields.find(field => field.sourceName === name);
       const native = shape.fields.find(field => field.sourceName === name);
       const member = selected.fields.find(field => field.storageIndex === shape.fields.indexOf(native));

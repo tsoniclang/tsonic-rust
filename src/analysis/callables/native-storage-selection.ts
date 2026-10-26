@@ -255,16 +255,24 @@ export function createRustNativeStorageSelection(
       }
       if (rustCallableProtocol(current) !== undefined) {
         if (boundaryFailure !== undefined) return fail(boundaryFailure);
-        const selectedGetter = (origin: SourceStorageSubject, sourceBindings: SourceStorageBindings, readPosition: "value" | "input"):
-          | { readonly kind: "not-getter" }
+        if (rustFrameCallableValue(current) !== undefined && selectedSubject.kind === "member" &&
+          selectedSubject.projection.length === 0) {
+          const stored = input.frames.bindingFor(selectedSubject.node)?.carrier;
+          return stored !== undefined && rustTargetTypeRefEquals(stored, current) ? stored
+            : fail("A native frame field requires its exact completed physical binding.");
+        }
+        const selectedCallableRead = (origin: SourceStorageSubject, sourceBindings: SourceStorageBindings, readPosition: "value" | "input"):
+          | { readonly kind: "not-read" }
           | { readonly kind: "selected"; readonly carrier: TargetTypeRef }
           | { readonly kind: "unresolved" } => {
           const operation = origin.kind === "value" && origin.projection.length === 0
             ? input.records.targetOperation.get(origin.node) : undefined;
           const property = operation?.kind === "source-field" && operation.storage === "structural-object"
             ? input.structuralShapes.field(operation.receiverCarrier, operation.storageIndex) : undefined;
-          if (operation?.kind !== "source-field" || property?.storage !== "property" || property.method === true)
-            return { kind: "not-getter" };
+          const boundMethod = operation?.kind === "source-method-property" &&
+            (operation.accessMode === "read" || operation.accessMode === "read-write");
+          if (!boundMethod && (operation?.kind !== "source-field" || property?.storage !== "property" || property.method === true))
+            return { kind: "not-read" };
           const conversion = input.records.contextualValueConversion.get(origin.node);
           if (readPosition === "value" && conversion?.conversion.kind === "callable-adapter") {
             const physical = adaptedPhysical(origin, sourceBindings, current, depth);
@@ -278,16 +286,17 @@ export function createRustNativeStorageSelection(
           const carrier = callableValueCarrier(substituteRustTargetGenerics(operation.resultCarrier,
             generics.bindings.types, generics.bindings.lifetimes, generics.bindings.consts));
           const physical = carrier === undefined || !rustCallableInvocationSignaturesMatch(current, carrier)
-            ? undefined : rustCallablePhysicalCarrier(carrier);
+            ? undefined : rustFrameCallableValue(carrier) !== undefined && rustTargetTypeRefEquals(carrier, current)
+              ? carrier : rustCallablePhysicalCarrier(carrier);
           if (physical === undefined) {
-            fail("A structural callable property requires its exact selected getter storage.");
+            fail("A callable property read requires its exact selected native storage.");
             return { kind: "unresolved" };
           }
-          erasedPhysicals.add(physical);
+          if (rustFrameCallableValue(physical) === undefined) erasedPhysicals.add(physical);
           return { kind: "selected", carrier: physical };
         };
-        const directGetter = selectedGetter(selectedSubject, bindings, position);
-        if (directGetter.kind !== "not-getter") return directGetter.kind === "selected" ? directGetter.carrier : undefined;
+        const directRead = selectedCallableRead(selectedSubject, bindings, position);
+        if (directRead.kind !== "not-read") return directRead.kind === "selected" ? directRead.carrier : undefined;
         const selected = input.storage.boundValueFrontierFor(selectedSubject, bindings, boundaries, position);
         if (selected.kind === "unresolved") return fail(selected.reason);
         let physical: TargetTypeRef | undefined;
@@ -301,9 +310,9 @@ export function createRustNativeStorageSelection(
           let candidatePhysical: TargetTypeRef | undefined;
           if (frontier.kind === "boundary") {
             joinable = false;
-            const getter = selectedGetter(origin, frontier.bindings, "value");
-            candidatePhysical = getter.kind === "selected" ? getter.carrier
-              : getter.kind === "not-getter" ? adaptedPhysical(origin, frontier.bindings, current, depth) : undefined;
+            const read = selectedCallableRead(origin, frontier.bindings, "value");
+            candidatePhysical = read.kind === "selected" ? read.carrier
+              : read.kind === "not-read" ? adaptedPhysical(origin, frontier.bindings, current, depth) : undefined;
             if (candidatePhysical === undefined) return undefined;
           } else {
             const candidate = inputs.get(origin);
@@ -676,6 +685,9 @@ export function createRustNativeStorageSelection(
         const checkedProperties = fieldSemantics.types.propertyInfos(selectedType.type);
         const fields = structural.fields.map(field => {
           if (field.method === true || field.accessor !== undefined) return field;
+          const requiresImplementation = containsCallable(field.type, depth + 1);
+          if (requiresImplementation === undefined) return undefined;
+          if (requiresImplementation === false) return field;
           const property = checkedProperties.find(property => property.name === field.sourceName);
           const declarations = property === undefined ? [] : [...new Set([property.symbol, ...property.rootSymbols]
             .flatMap(symbol => fieldSemantics.declarations.symbolDeclarations(symbol)))];

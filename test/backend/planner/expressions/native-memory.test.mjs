@@ -59,6 +59,22 @@ test("native array storage preserves strided element aliases and variable replac
     target: { id: "rust", options: { outputType: "bin" } }, files: { "index.ts": (nativeArrayProofSource + "\nmain();\n") } });
   assert.deepEqual(result.diagnostics, []);
   assert.match(artifactText(result, "src/index.rs"), /NativeArray/u);
+  const program = result.program;
+  const ast = program.source.ast;
+  const bindings = new Map();
+  const pending = program.records.sourceArtifacts.get().map(artifact => artifact.sourceFile);
+  while (pending.length !== 0) {
+    const node = pending.pop();
+    if (ast.is.IsVariableDeclaration(node) && ast.is.IsIdentifier(ast.name(node))) {
+      const name = ast.text(ast.name(node));
+      if (name === "alias" || name === "values") bindings.set(name, program.records.localBinding.get(node));
+    }
+    ast.forEachChild(node, child => { if (child !== undefined) pending.push(child); });
+  }
+  assert.equal(bindings.get("alias")?.mutable, false,
+    "native element locations mutate shared storage through &self, not the alias binding");
+  assert.equal(bindings.get("values")?.mutable, true,
+    "actual replacement still requires the original native array binding to be mutable");
   validateGeneratedProject("native-array-aliases", result.artifacts, { run: true });
 });
 

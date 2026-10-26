@@ -18,12 +18,14 @@ import { rustTargetGenericReferences } from "../../target-model/types/carriers/g
 import { directReturnedValues } from "./native-storage-values.js";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
+import type { RustFrameCallablePlan } from "../../target-model/records/frame-callables.js";
 
 /** The analysis facts the native storage carrier selections read. */
 export interface RustNativeStorageCarrierInput {
   readonly ast: AstReader;
   readonly records: RustProgramRecords;
   readonly definitions: RustTypeDefinitions;
+  readonly frames: Pick<RustFrameCallablePlan, "bindingFor">;
 }
 
 export function rustNativeStorageAbsentOrigin(input: RustNativeStorageCarrierInput, subject: SourceStorageSubject): boolean {
@@ -51,7 +53,7 @@ export function rustNativeStorageErasedUnionCallablePayload(input: RustNativeSto
 export function rustNativeStorageFrameFieldCarrier(input: RustNativeStorageCarrierInput, origin: SourceStorageSubject): TargetTypeRef | undefined {
   const component = origin.projection.length === 1 ? origin.projection[0] : undefined;
   const carrier = origin.kind !== "receiver" || component?.kind !== "member" ? undefined
-    : input.records.runtimeCarrier.get(component.declaration)?.carrier;
+    : input.frames.bindingFor(component.declaration)?.carrier;
   return carrier !== undefined && rustFrameCallableValue(carrier) !== undefined ? carrier : undefined;
 }
 
@@ -72,8 +74,9 @@ export function rustNativeStorageErasedClosureParameter(input: RustNativeStorage
 
 export function rustNativeStorageErasedFieldCallable(input: RustNativeStorageCarrierInput, origin: SourceStorageSubject, current: TargetTypeRef): TargetTypeRef | undefined {
   const component = origin.projection.length === 1 ? origin.projection[0] : undefined;
-  const carrier = origin.kind !== "receiver" || component?.kind !== "member" ? undefined
-    : input.records.runtimeCarrier.get(component.declaration)?.carrier;
+  if (origin.kind !== "receiver" || component?.kind !== "member") return undefined;
+  const binding = input.frames.bindingFor(component.declaration);
+  const carrier = binding === undefined ? input.records.runtimeCarrier.get(component.declaration)?.carrier : binding.carrier;
   return carrier?.kind === "target-named" && carrier.id === rustCallableTargetId &&
     rustCallableInvocationSignaturesMatch(current, carrier) ? carrier : undefined;
 }

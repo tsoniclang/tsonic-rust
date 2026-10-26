@@ -3,7 +3,7 @@ import { rustTargetGenericArgumentEquals, rustTargetTypeRefEquals } from "../../
 import { rustLifetimesEqual } from "../../target-model/lifetimes/index.js";
 import { isRustUnitCarrier } from "../../target-model/types/carriers/js.js";
 import { isRustAbsenceCarrier } from "../../target-model/types/carriers/native.js";
-import { rustEmptyObjectTargetId, rustObjectIdentityTargetId, rustProgramErrorTargetId } from "../../target-model/types/carriers/source-types.js";
+import { rustEmptyObjectTargetId, rustObjectIdentityTargetId, rustProgramErrorTargetId, rustSourceUnionCarrierValue } from "../../target-model/types/carriers/source-types.js";
 
 export function rustNativeRepresentationMatches(source: TargetTypeRef, target: TargetTypeRef): boolean {
   if (rustTargetTypeRefEquals(source, target)) return true;
@@ -14,6 +14,21 @@ export function rustNativeRepresentationMatches(source: TargetTypeRef, target: T
   if (source.kind === "tuple" && target.kind === "tuple") {
     return source.elements.length === target.elements.length &&
       source.elements.every((element, index) => rustNativeRepresentationMatches(element, target.elements[index]!));
+  }
+  const sourceUnion = rustSourceUnionCarrierValue(source);
+  const targetUnion = rustSourceUnionCarrierValue(target);
+  if (sourceUnion !== undefined || targetUnion !== undefined) {
+    if (sourceUnion === undefined || targetUnion === undefined ||
+      sourceUnion.origin !== targetUnion.origin || sourceUnion.fileName !== targetUnion.fileName ||
+      sourceUnion.typeName !== targetUnion.typeName ||
+      sourceUnion.genericArguments.length !== targetUnion.genericArguments.length ||
+      !sourceUnion.genericArguments.every((argument, index) =>
+        nativeArgumentMatches(argument, targetUnion.genericArguments[index]!)) ||
+      sourceUnion.payloads.kind !== "physical" || targetUnion.payloads.kind !== "physical") return false;
+    const sourcePayloads = sourceUnion.payloads.types;
+    const targetPayloads = targetUnion.payloads.types;
+    return sourcePayloads.length === targetPayloads.length && sourcePayloads.every((payload, index) =>
+      rustNativeRepresentationMatches(payload, targetPayloads[index]!));
   }
   if (source.kind !== "target-named" || target.kind !== "target-named") return false;
   if (source.id === rustProgramErrorTargetId || target.id === rustProgramErrorTargetId) return false;

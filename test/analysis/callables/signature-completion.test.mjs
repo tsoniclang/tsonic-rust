@@ -29,7 +29,9 @@ export function apply${generic ? "<Value>" : ""}(callback: (value: ${type}) => $
   const parameter = sourceCallableValueParameters(context.ast, declaration, context.semanticsFor(declaration))[0];
   const resolution = rustResolutionContext(walk, parameter);
   const sourceType = context.semanticsFor(parameter).declarations.declaredValueType(parameter);
-  const carrier = resolveRustTargetType(sourceType, { ...resolution, sourceStorageSubject: undefined,
+  const carrier = resolveRustTargetType(sourceType, { ...resolution,
+    sourceStorageResolution: resolution.sourceStorageResolution?.kind === "resolved"
+      ? { ...resolution.sourceStorageResolution, subject: undefined } : resolution.sourceStorageResolution,
     callableRepresentation: "signature" }, walk.operationOptions, new Set());
   const protocol = rustCallableProtocol(carrier);
   assert.equal(protocol !== undefined, true, "the original checked callable signature resolves exactly");

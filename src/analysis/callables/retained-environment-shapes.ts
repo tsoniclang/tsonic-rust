@@ -134,6 +134,13 @@ export function createRustRetainedEnvironmentQueries(
       const subject = storage.subject(declaration, ast.is.IsConstructorDeclaration(declaration) ? "receiver" : "return");
       const bindings = storage.bindingsForLexicalOwner(declaration);
       if (subject.kind !== "resolved" || bindings.kind !== "resolved") return unresolved();
+      const returned = storage.typeFor(subject.subject);
+      if (returned.kind === "unresolved") return unresolved(returned.reason);
+      const resultTypes = input.source.semantics.forFile(returned.sourceFile).types;
+      const resultType = resultTypes.nonNullableType(returned.type);
+      if (resultType !== undefined && (resultTypes.isNever(resultType) || resultTypes.isVoidLike(resultType) ||
+        resultTypes.isNullish(resultType) || resultTypes.isStringLike(resultType) || resultTypes.isNumberLike(resultType) ||
+        resultTypes.isBooleanLike(resultType) || resultTypes.isBigIntLike(resultType) || resultTypes.isSymbolLike(resultType))) return none;
       const producers = storage.storageProducersFor(subject.subject, bindings.bindings);
       if (producers.kind === "unresolved") return unresolved(producers.reason);
       const visited = new Map<SourceStorageSubject, Set<SourceStorageBindings>>();

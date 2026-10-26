@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { createCompilerSessionFromFiles } from "@tsonic/tsts";
+import { createSourceStorageQuery } from "@tsonic/target-api/analysis";
+import { createTargetSourceProgram } from "@tsonic/target-api/source";
 import { selectRustCallableOwnershipCarrier } from "../../../dist/analysis/callables/ownership-carriers.js";
 import { rustGenericCallableTargetType } from "../../../dist/target-model/types/carriers/generic-callables.js";
 
@@ -14,10 +17,25 @@ const carriers = [
 ];
 
 function input(carrier, selection) {
+  const checked = createCompilerSessionFromFiles({ currentDirectory: "/protocol", files: {
+    "/protocol/index.ts": "const callback = (): number => 0;",
+  }, compilerOptions: { strict: true, target: "es2022", module: "esnext" } }).checkSource();
+  assert.equal(checked.diagnostics.length, 0);
+  const source = createTargetSourceProgram(checked);
+  const file = checked.getSourceFile("/protocol/index.ts");
+  assert.equal(file !== undefined, true);
+  const storage = createSourceStorageQuery(source, [file]);
+  const node = storage.nodes.find(candidate => source.ast.is.IsVariableDeclaration(candidate));
+  const subject = storage.subjectFor(node);
+  const scope = storage.bindingsForLexicalOwner(node);
+  assert.equal(subject.kind === "resolved" && scope.kind === "resolved", true);
   return {
     ast: {}, logicalCarrier: carrier,
-    subject: { kind: "value", node: {}, projection: [] },
-    ownership: { storageFor: () => selection },
+    source: { subject: subject.subject, bindings: scope.bindings },
+    selection: { kind: "storage", producers: storage.storageProducersFor(subject.subject, scope.bindings) },
+    ownership: { failureReason: () => selection.kind === "unresolved" ? selection.reason : undefined,
+      activationForCallable: () => selection.kind === "frame" ? selection.activation : undefined,
+      isCyclicCallable: () => false, isCyclicSlot: () => false },
     environmentFor: () => assert.fail("ordinary storage must not select a frame environment"),
     classFrameFor: () => assert.fail("ordinary storage must not select a class frame instantiation"),
   };

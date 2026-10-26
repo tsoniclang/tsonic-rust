@@ -3,11 +3,12 @@ import type { RustSourcePolicyContext } from "../../../../policy/model/context.j
 import type { RustSourceProfileRegistry } from "../../../../policy/types/model/source-profile.js";
 import type { RustSourceTypeRegistry } from "../../../project-types/source-type-model.js";
 import type { SourceFileSemantics } from "@tsonic/target-api/source";
-import type { SourceStorageSubject } from "@tsonic/target-api/analysis";
+import type { SourceStorageBindings, SourceStorageProducer, SourceStorageSubject, SourceStorageUnresolved } from "@tsonic/target-api/analysis";
 import type { Node, SourceFile, Type, TypePropertyInfo } from "@tsonic/tsts";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import type { RustSourceTypeFamilyImplementation } from "../../../../target-model/types/type-families.js";
 import type { RustTargetGenericBindings } from "../../../../target-model/types/carriers/generic-inference.js";
+import type { RustCallableOwnershipInput } from "../../../callables/ownership-plan.js";
 
 export interface RustClassFrameInstantiation {
   readonly instance: TargetTypeRef;
@@ -15,6 +16,12 @@ export interface RustClassFrameInstantiation {
   readonly result: TargetTypeRef;
   readonly bindings: RustTargetGenericBindings;
 }
+
+export type RustSourceStorageResolution = SourceStorageUnresolved | {
+  readonly kind: "resolved";
+  readonly subject: SourceStorageSubject | undefined;
+  readonly bindings: SourceStorageBindings;
+};
 
 export interface RustTargetTypeResolutionOptions {
   readonly jsEnabled: boolean;
@@ -26,13 +33,15 @@ export interface RustTargetTypeResolutionOptions {
   readonly callableSignatureCarrier: (declaration: Node) => TargetTypeRef | undefined;
   readonly callableParameterCarriers: (declaration: Node) => readonly TargetTypeRef[] | undefined;
   readonly callableStorageCarrier: (
-    subject: SourceStorageSubject,
+    source: Pick<SourceStorageProducer, "subject" | "bindings">,
+    selection: RustCallableOwnershipInput,
     logicalCarrier: TargetTypeRef,
     environmentFor: (declaration: Node, excludedCaptures: ReadonlySet<Node>) => readonly TargetTypeRef[] | undefined,
     classFrameFor: (declaration: Node) => RustClassFrameInstantiation | undefined,
   ) => TargetTypeRef | undefined;
   readonly projectCarrierSupportsObjectIdentity: (carrier: TargetTypeRef) => boolean;
-  readonly projectFieldProjection: (property: TypePropertyInfo, owner: TargetTypeRef, ownerType: Type) => {
+  readonly projectFieldProjection: (property: TypePropertyInfo, owner: TargetTypeRef, ownerType: Type,
+    source: RustSourceStorageResolution | undefined) => {
     readonly output: TargetTypeRef;
     readonly field: NonNullable<RustSourceTypeFamilyImplementation["field"]>;
   } | undefined;
@@ -42,7 +51,7 @@ export interface RustTargetTypeResolutionOptions {
 }
 
 export interface RustTargetTypeResolutionContext extends RustSourcePolicyContext {
-  readonly sourceStorageSubject?: SourceStorageSubject;
+  readonly sourceStorageResolution?: RustSourceStorageResolution;
   readonly currentSourceFile: SourceFile;
   readonly currentSemantics: SourceFileSemantics;
   readonly sourceTypeParameterSubstitutions?: ReadonlyMap<Node, RustSourceTypeArgument>;

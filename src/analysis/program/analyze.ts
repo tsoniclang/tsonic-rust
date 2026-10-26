@@ -27,6 +27,8 @@ import { recordResourceManagementFacts } from "../control-flow/resource-manageme
 import { recordRustDeferredProducerEffects } from "../errors/deferred-producer-effects.js";
 import { resolveRustExternalProjectBase } from "../../policy/types/project/external-project-types.js";
 import { resolveRustTargetTypeRef } from "../source-evidence/types/resolution/source.js";
+import type { TargetTypeRef } from "../../target-model/types/model.js";
+import { rustFrameCallableValue } from "../../target-model/types/carriers/frame-callables.js";
 import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustAnalysisContext } from "./context.js";
 import type { RustFactWalk } from "./walk.js";
@@ -123,9 +125,9 @@ export function analyzeRustProgram(context: RustAnalysisContext, outputType: "bi
     callableParameterCarriers(declaration) {
       return finalizeRustCallableParameterAbis(walk, declaration)?.map(parameter => parameter.parameterCarrier);
     },
-    callableStorageCarrier(subject, logicalCarrier, environmentFor, classFrameFor) {
+    callableStorageCarrier(source, selection, logicalCarrier, environmentFor, classFrameFor) {
       const selected = selectRustCallableOwnershipCarrier({ ast, ownership: context.callableOwnership,
-        subject, logicalCarrier, classFrameFor, environmentFor(component) {
+        source, selection, logicalCarrier, classFrameFor, environmentFor(component) {
           const excluded = new Set([...component.slotDeclarations, component.ownerDeclaration]);
           const environments = component.callableDeclarations.map(declaration => environmentFor(declaration, excluded));
           return environments.some(environment => environment === undefined) ? undefined
@@ -167,14 +169,17 @@ export function analyzeRustProgram(context: RustAnalysisContext, outputType: "bi
       const representation = context.objectRepresentations.representationFor(definition);
       return representation !== undefined && representation.kind !== "value";
     },
-    projectFieldProjection(property, owner, ownerType) {
+    projectFieldProjection(property, owner, ownerType, sourceStorageResolution) {
       const definition = context.projectTypes.definitionForCarrier(owner);
       const declarations = definition === undefined ? []
         : context.semanticsFor(definition.declaration).declarations.symbolDeclarations(property.symbol);
       if (declarations.length !== 1) return undefined;
       const declaration = declarations[0]!;
+      const contextForField = rustOperationContext(walk, declaration);
       const selected = resolveRustProjectField(declaration, owner, ownerType,
-        rustOperationContext(walk, declaration), operationOptions);
+        { ...contextForField, sourceStorageResolution: sourceStorageResolution === undefined
+          ? { kind: "unresolved", reason: "Physical project-field resolution requires its original source storage binding." }
+          : sourceStorageResolution }, operationOptions);
       return selected === undefined ? undefined : {
         output: selected.resultCarrier,
         field: { storage: selected.storage, storageIndex: selected.storageIndex, readonly: property.readonly,
@@ -587,12 +592,23 @@ export function analyzeRustProgram(context: RustAnalysisContext, outputType: "bi
   recordRustLexicalValueEnvironments(walk, lexical);
   analyzeRustNativeHandlers(context.nativeNodes, context.records, { get: context.safetyApplications.operationForExpression },
     context.source.sourceFacts, context.requiredRecords);
+  const frameBindingCarriers = new Map<Node, TargetTypeRef>();
+  for (const activation of callableOwnership.activations) for (const declaration of activation.slotDeclarations) {
+    const carrier = context.records.runtimeCarrier.get(declaration)?.carrier;
+    if (carrier === undefined || rustFrameCallableValue(carrier) === undefined) {
+      appendRustDiagnostic(walk, "RUST_CALLABLE_VALUE_NOT_CLOSED",
+        "A native frame slot requires its completed physical carrier in its original checked declaration scope.",
+        declaration, ["target.capability=rust.callable-value.exact-implementation"]);
+    } else frameBindingCarriers.set(declaration, carrier);
+  }
+  if (context.diagnostics.length !== 0) return undefined;
   const callableValues = context.callableValues.initialize({ ast, sourceFiles: context.sourceFiles, records: context.records,
     flowApplications: context.records.genericFlowApplications,
     nativeNodes: context.nativeNodes, isNativeNode: context.isNativeNode,
     sourcePackages: context.sourcePackages,
     names: context.names, navigation: context.source.navigation, lifetimes: context.sourceLifetimes,
-    classValueAdapters: context.classValues.valueAdapters(), closedSourceFiles, ownership: callableOwnership, sourceStorage: context.sourceStorage,
+    classValueAdapters: context.classValues.valueAdapters(), closedSourceFiles, ownership: callableOwnership,
+    frameBindingCarriers, sourceStorage: context.sourceStorage,
     sourceTypes: walk.sourceTypes,
     projectTypes: context.projectTypes, objectRepresentations: context.objectRepresentations,
     frozenDataWrites: context.frozenDataWrites,

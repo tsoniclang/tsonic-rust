@@ -771,10 +771,22 @@ export function escaped(): (count: number) => number {
     guarded.push(selected);
     return selected.proxy;
   };
-  const frames = createRustFrameCallablePlan({ ast: guard(program.source.ast), records: guard(program.records),
+  const frameInput = { ast: guard(program.source.ast), records: guard(program.records),
+    frameBindingCarriers: new Map(program.callableValues.frames.definitions.flatMap(definition => definition.bindings
+      .filter(binding => definition.activation.slotDeclarations.includes(binding.declaration))
+      .map(binding => [binding.declaration, binding.carrier]))),
     ownership: guard(program.callableOwnership), sourceStorage: guard(sourceStorage), nativeNodes: sourceNodes(program), usedNames: new Set(),
     navigation: guard(source.navigation), projectTypes: guard(program.projectTypes),
-    objectRepresentations: guard(program.objectRepresentations) });
+    objectRepresentations: guard(program.objectRepresentations) };
+  const frames = createRustFrameCallablePlan(frameInput);
+  assert.equal(frames.issues.length, 0, "the original completed native slots agree with every original physical entry");
+  for (const [declaration, carrier] of frameInput.frameBindingCarriers) {
+    assert.equal(frames.bindingFor(declaration)?.carrier === carrier, true, "one exact original completed slot carrier");
+  }
+  const missing = createRustFrameCallablePlan({ ...frameInput, frameBindingCarriers: new Map() });
+  assert.equal(missing.issues.some(issue => frameInput.frameBindingCarriers.has(issue.subject) &&
+    issue.message === "A native frame binding requires its exact selected carrier and closed entry protocol."), true,
+  "a source declaration schema cannot replace the required completed native slot carrier");
   const nodes = sourceNodes(program);
   const witnesses = frames.definitions.flatMap(definition => definition.entries.flatMap(entry => entry.implementations
     .map(implementation => ({ definition, entry, implementation }))));
