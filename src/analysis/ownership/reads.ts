@@ -161,7 +161,7 @@ export function prepareRustReadOwnership(input: {
         const projectBorrows = records.projectDowncast.get(node) !== undefined;
         const constructsContainer = records.optionProjection.get(node)?.kind === "some";
         const sourceRead = selectRustValueReadOwnership({ copy: sourceCopy, clone: sourceClone,
-          transfer: flow.movingReads.has(node) || !storageRead, borrowed: conversionBorrows || projectBorrows || storageRead && projection !== undefined && value?.kind !== "move"
+          transfer: flow.movingReads.has(node) || !storageRead, borrowed: conversionBorrows && borrowed !== undefined || projectBorrows || storageRead && projection !== undefined && value?.kind !== "move"
             ? "shared" : constructsContainer ? undefined : borrowed });
         const operation = records.targetOperation.get(node);
         const binding = records.sourceBinding.get(node);
