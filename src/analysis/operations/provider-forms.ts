@@ -25,6 +25,7 @@ import { rustJsErrorTargetType } from "../../target-model/types/carriers/js.js";
 import { rustCallbackProtocol } from "../../policy/operations/members/callbacks.js";
 import { selectRustSourceValueConversion } from "../../policy/conversions/selection.js";
 import { rustValueConversionContract } from "../../policy/conversions/contracts.js";
+import { rustCallableInvocationErrorEffects } from "../errors/error-effects.js";
 
 export interface RustProviderReadSelection {
   readonly node: Node;
@@ -103,6 +104,24 @@ export function analyzeRustProviderForms(program: Omit<RustAnalysisProgram, "rea
           message: "A generator resume result requires its exact admitted body error correspondence before rendering.",
           evidence: ["target.capability=rust.generator.exact-body-errors"] });
         continue;
+      }
+    }
+    if (nativeResult === undefined && abi.effects.invocation === "fallible" && abi.effects.errorBoundary === "provider-native") {
+      const error = abi.effects.errorCarrier;
+      if (error === undefined)
+        failTargetAnalysisInvariant("tsonic-rust", "An admitted native provider result requires its selected error carrier.", node);
+      const effects = rustCallableInvocationErrorEffects(error);
+      if (!effects.localErrors) {
+        const selected = selectRustErrorRegion(node, effects,
+          { ast, records: program.records, producers: program.callableValues.nativeProducers,
+            definitions: program.typeDefinitions, components: program.sourcePackageComponents, promiseBodies: program.promiseBodies }, false);
+        if (selected.kind === "rejected") {
+          issues.push(...selected.diagnostics);
+          continue;
+        }
+        nativeResult = materializeRustSourceErrorRegion(node, { operand: selected.value, local: undefined,
+          channels: selected.value.sources.map(source => ({ sourceIdentity: source.identity, targetIdentity: source.identity,
+            uninhabited: rustUninhabitedError(source.errorType) })) });
       }
     }
     const attempt = attempts.get(node);
