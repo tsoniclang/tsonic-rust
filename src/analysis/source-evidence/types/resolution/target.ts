@@ -25,7 +25,7 @@ import { selectTsonicFixedArrayFromSource } from "@tsonic/source-core/facts";
 import type { TsonicFixedArrayFact } from "@tsonic/source-core/facts";
 import { resolveRustSemanticConditionalAlias } from "./type-families.js";
 import { resolveRustTypeComponentEvidence } from "./source-evidence.js";
-import { resolveRustSourceMarker } from "./markers.js";
+import { resolveRustJsStringCarrier, resolveRustSourceMarker } from "./markers.js";
 import { resolveRustIndexedField } from "./indexed-fields.js";
 import { resolveRustConstructType } from "./constructors.js";
 import { resolveRustIndexedRecordType } from "./records.js";
@@ -60,6 +60,8 @@ export function resolveRustTargetType(
   authoredTypeRoot?: Node,
 ): TargetTypeRef | undefined {
   if (type === undefined) return undefined;
+  const jsString = resolveRustJsStringCarrier(type, context);
+  if (jsString !== undefined) return jsString;
   if (context.currentSemantics.types.isNonPrimitive(type)) return rustBroadSourceValueTargetType(options.jsEnabled);
   if (resolving.has(type)) {
     const symbol = context.currentSemantics.declarations.typeAliasSymbol(type);

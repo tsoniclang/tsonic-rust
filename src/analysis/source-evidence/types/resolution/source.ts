@@ -1,11 +1,11 @@
 import { resolveRustSourceUnionCarrier, resolveRustUnionValueCarrier } from "./source-unions.js";
 import { ArrayTypeNode_ElementType, Node_Type, TypeReferenceNode_TypeName, TypeOperatorNode_Type, sourceIntegerInduction } from "@tsonic/target-api/source";
-import { rustBigIntTargetType, rustEmptyObjectTargetType, rustJsArrayTargetType, rustJsStringTargetType, rustSourceLocationTargetType, rustRawPointerTargetType, rustAbsenceTargetType, isRustAbsenceCarrier, isRustUnitCarrier, rustNeverTargetType, rustOptionTargetType, rustSourceOptionalTargetType, rustSourcePrimitiveTargetType, rustStringTargetType, rustUnitTargetType, rustVecTargetType } from "../../../../target-model/types/index.js";
+import { rustBigIntTargetType, rustEmptyObjectTargetType, rustJsArrayTargetType, rustSourceLocationTargetType, rustRawPointerTargetType, rustAbsenceTargetType, isRustAbsenceCarrier, isRustUnitCarrier, rustNeverTargetType, rustOptionTargetType, rustSourceOptionalTargetType, rustSourcePrimitiveTargetType, rustStringTargetType, rustUnitTargetType, rustVecTargetType } from "../../../../target-model/types/index.js";
 import { rustTupleTargetType } from "../../../../policy/types/collections/tuple-carrier.js";
 import { asNode } from "../../../../policy/identities/selected-source.js";
 import { denseDefined, resolveProjectSourceCarrier } from "./project.js";
 import { fieldFactKey, functionPointerFactKey, pointerFactKey, structFactKey } from "@tsonic/tsts";
-import { resolveRustSourceMarker } from "./markers.js";
+import { resolveRustJsStringCarrier } from "./markers.js";
 import { resolveSourceProfileCarrierFromArguments } from "../../../../policy/operations/source-profiles/type-carriers.js";
 import { instantiateProviderTargetType, providerCarrierFromRelations } from "../../../../policy/types/project/provider-instantiation.js";
 import { resolveOwnedSourceProfileTypeName, resolveOwnedSourceProfileTypeNameForDeclaration } from "../../../../policy/identities/source-types.js";
@@ -86,9 +86,8 @@ export function resolveRustTargetTypeRef(
     return pointee === undefined ? undefined : rustOptionTargetType(rustSourceLocationTargetType(pointee));
   }
   if (isRustSourceRawPointer(subject, context)) return rustRawPointerTargetType();
-  if (resolveRustSourceMarker(subject, context) === "js-string") {
-    return rustJsStringTargetType();
-  }
+  const jsString = resolveRustJsStringCarrier(subject, context);
+  if (jsString !== undefined) return jsString;
   const fixedArray = context.source.sourceFacts.getFact(subject, tsonicFixedArrayFactKey);
   if (fixedArray !== undefined) {
     return resolveRustFixedArrayTargetType(fixedArray, context, options, new Set<object>());
@@ -207,6 +206,8 @@ export function resolveRustTargetTypeSyntax(
   options: RustTargetTypeResolutionOptions,
   resolving: Set<object>,
 ): TargetTypeRef | undefined {
+  const jsString = resolveRustJsStringCarrier(node, context);
+  if (jsString !== undefined) return jsString;
   const indexed = resolveRustProviderIndexedAccess(node, context, options);
   if (indexed !== undefined) return indexed;
   if (context.ast.is.IsTypeQueryNode(node)) {
