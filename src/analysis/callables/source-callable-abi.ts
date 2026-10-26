@@ -102,10 +102,9 @@ export function selectRustCallableLogicalReturn(
   const generator = walk.context.records.generator.get(declaration);
   const asynchronous = walk.context.records.asyncFunction.get(declaration);
   const authoredReturn = Node_Type(walk.context.ast, declaration);
-  const context = rustResolutionContext(walk, declaration);
+  const context = rustSourceStorageSubjectContext(rustResolutionContext(walk, declaration, "return"), undefined);
   const baseline = selectedCarrier ?? generator?.resultCarrier ?? asynchronous?.outputCarrier ?? resolveRustTargetTypeRef(
-    authoredReturn ?? selectedSourceCallableReturn(walk, declaration),
-    authoredReturn === undefined ? context : rustSourceStorageSubjectContext(context, undefined), walk.operationOptions);
+    authoredReturn ?? selectedSourceCallableReturn(walk, declaration), context, walk.operationOptions);
   return selectedCarrier !== undefined || generator !== undefined || asynchronous !== undefined
     ? baseline === undefined ? { kind: "pending" as const } : { kind: "complete" as const, carrier: baseline }
     : selectRustInferredReturn(walk, declaration, baseline);
@@ -139,7 +138,7 @@ export function selectRustSourceCallableReturn(
   if (nativeReturn?.kind === "pending") return undefined;
   const retained = nativeReturn?.kind !== "complete" ? undefined
     : resolveRustRetainedResult(declaration, sourceReturn, nativeReturn.carrier, parameterCarriers,
-        rustResolutionContext(walk, declaration), walk.operationOptions);
+        rustResolutionContext(walk, declaration, "return"), walk.operationOptions);
   const carrier = asynchronous !== undefined || generator !== undefined ? rawCarrier : retained?.carrier;
   if (carrier === undefined) return undefined;
   let retainedEnvironment = retained?.environment;
