@@ -445,8 +445,9 @@ function projectThisOverrides(
   for (const node of references.get(ownerDeclaration) ?? []) {
     overrides.set(node, {
       carrier: ownerCarrier,
-      valueForm: "value",
-      expression: cloneExpression({ kind: "path", path: bindingName }),
+      valueForm: "storage",
+      storageForm: "plain",
+      expression: { kind: "path", path: bindingName },
     });
   }
   return overrides.size === 0

@@ -184,9 +184,9 @@ main();
 
   assertNoTargetDiagnostics(result.diagnostics);
   const output = artifactText(result, "src/index.rs");
-  assert.match(output, /fn read\([^)]*&str\) -> String/u);
-  assert.match(output, /read\(&value\)/u);
-  assert.match(output, /String::from\(capture\)/u);
+  assert.match(output, /fn read\(capture: String\) -> String \{\s*capture\s*\}/u);
+  assert.match(output, /read\(value\)/u);
+  assert.doesNotMatch(output, /String::from\(capture\)|(?:value|capture)\.clone\(\)/u);
   assert.doesNotMatch(output, /rt::Location::allocate|RefCell/u);
   validateGeneratedProject("captured-string-updates", result.artifacts, { run: true });
 });
