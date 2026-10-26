@@ -50,9 +50,9 @@ export function applyRustValueConversion(
   const contract = context.input.program.records.conversionContract.get(conversion)
     ?? failRustPlannerInvariant("An admitted native value conversion requires its sealed physical contract.", node ?? context.sourceFile);
   // A source string literal borrowed as str is the literal itself ("A"), not as_ref(&String::from("A")).
-  const literal = argument.stage === "source" ? context.input.program.records.literalValue.get(argument.node) : undefined;
-  if (contract.lowering === "borrowed-str-from-owned-string" && (literal?.form === "string" || literal?.form === "template"))
-    return { kind: "str-literal", value: literal.text };
+  const literal = argument.stage === "source" ? context.input.program.records.stringComparisonView.get(argument.node) : undefined;
+  if (contract.lowering === "borrowed-str-from-owned-string" && literal?.kind === "literal")
+    return { kind: "str-literal", value: literal.value };
   const producer = conversion.kind === "callable-input"
     ? planRustCallableInputProducer(argument, contract.source, context, node) : argument;
   if (producer === undefined) return undefined;

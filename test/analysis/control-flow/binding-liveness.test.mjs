@@ -379,6 +379,53 @@ export function inspect(count: int32): int32 {
   }
 });
 
+for (const surfaces of [[], ["js"]]) {
+  for (const [label, condition, body, unused] of [
+    ["erased guard only", 'typeof value === "string"', "total++;", true],
+    ["observed element", 'typeof value === "string"', 'if (value === "seen") total++;', false],
+    ["effectful element", 'typeof observe(value, effects) === "string"', "total++;", false],
+  ]) test(`native iteration preserves the actual binding drop scope: ${label} (${surfaces[0] ?? "native"})`, () => {
+    const { result } = compileRust({ surfaces, files: { "index.ts": `
+class Effects { calls = 0; }
+function observe(value: string, effects: Effects): string { effects.calls++; return value; }
+export function inspect(values: readonly string[], effects: Effects): number {
+  let total = 0;
+  for (const value of values) { if (${condition}) { ${body} } }
+  return total;
+}
+` } });
+    assert.equal(result.diagnostics.length, 0,
+      result.diagnostics.map(issue => `${issue.code}: ${issue.message}`).join("; "));
+    const program = result.program;
+    const ast = program.source.ast;
+    const nodes = [];
+    const visit = node => { nodes.push(node); ast.forEachChild(node, child => { if (child !== undefined) visit(child); }); };
+    program.sourceFiles.forEach(visit);
+    const declaration = nodes.find(node => ast.is.IsVariableDeclaration(node) && ast.text(ast.name(node)) === "value");
+    const loop = nodes.find(node => ast.is.IsForOfStatement(node));
+    const binding = program.records.iterationCompletion.get(loop)?.binding;
+    assert.equal(binding?.kind === "declaration" && binding.declaration === declaration, true,
+      "the renderer consumes the identical completed iteration declaration");
+    assert.equal(program.records.bindingLiveness.get(declaration)?.unused, unused,
+      "only a genuinely erased native use leaves the element unobserved");
+    const output = rustSourceText(result);
+    assert.match(output, /for value in /u, "the authored binding and its per-iteration drop scope remain");
+    assert.equal(/#\[expect\(unused_variables, reason = "authored binding drop scope"\)\]\s*for value in /u.test(output), unused,
+      "the existing exact native liveness expectation follows the completed binding disposition");
+    if (label === "observed element") {
+      const comparison = nodes.find(node => ast.is.IsBinaryExpression(node) &&
+        ast.is.IsIdentifier(ast.as.AsBinaryExpression(node).Left) &&
+        ast.text(ast.as.AsBinaryExpression(node).Left) === "value");
+      const reference = comparison === undefined ? undefined : ast.as.AsBinaryExpression(comparison).Left;
+      assert.equal(reference !== undefined && program.records.readOwnership.get(reference) !== undefined, true,
+        "the selected branch requires its completed native element read");
+      assert.equal(output.includes('"seen"'), true, "the actual element comparison remains in the native body");
+    }
+    if (label === "effectful element") assert.equal(output.match(/\bobserve\(/gu)?.length, 2,
+      "the one authored definition and one effectful operand invocation both remain");
+  });
+}
+
 for (const [label, body, mutable, written] of [
   ["discarded direct write", "(() => owned++); return owned;", false, true],
   ["discarded mutable borrow", "(() => mut(owned)); return owned;", false, false],
