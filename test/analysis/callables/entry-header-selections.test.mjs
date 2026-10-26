@@ -134,3 +134,29 @@ export function main(): number { return new Box().value; }
   assert.equal(reader.get(layer, undefined, undefined) !== undefined, true, "the exact original admitted layer selects its initializer's native header");
   assert.equal(reader.get({ ...layer }, undefined, undefined) === undefined, true, "an equal-shaped foreign construction layer cannot select the entry");
 });
+
+test("static initializer lexical items retain their actual module header placement", () => {
+  const { program } = analyzeRust({ surfaces: [], files: { "index.ts": `
+class Box {
+  static value: number = (() => { function initial(): number { return 7; } return initial(); })();
+}
+export function main(): number { return Box.value; }
+` } });
+  const { ast } = program.source;
+  const file = program.sourceFiles[0];
+  const definition = program.projectTypes.definitions.find(definition => definition.sourceName === "Box");
+  assert.equal(definition !== undefined, true, "the checked class owns its module initialization inventory");
+  assert.equal(program.records.classInitialization.get(definition.declaration).some(entry => entry.kind !== "block"), true,
+    "the original static field initializer is actually emitted at module initialization");
+  let declaration;
+  const visit = node => {
+    if (ast.is.IsFunctionDeclaration(node) && program.records.sourceName.get(node) === "initial") declaration = node;
+    ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+  };
+  visit(definition.declaration);
+  assert.equal(declaration !== undefined, true, "the actual static initializer contains its native lexical function");
+  const reader = program.records.callableLeading.get(declaration).headerSelections;
+  assert.equal(reader.get(file, undefined, undefined) !== undefined, true, "the module-built initializer selects its exact original module header");
+  assert.equal(reader.get(definition.declaration, undefined, undefined) === undefined, true,
+    "a static initializer does not invent an enclosing instance method or constructor header");
+});

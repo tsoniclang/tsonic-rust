@@ -104,6 +104,12 @@ export function createRustCallableEntryHeaderPlacements(input: {
       ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
     };
     for (const node of ast.statements(file)) if (node !== undefined) visit(node);
+    for (const definition of program.projectTypes.definitions) {
+      if (definition.sourceFile !== file || program.records.classDeclaration.get(definition.declaration) === undefined) continue;
+      const initialization = program.records.classInitialization.get(definition.declaration);
+      if (initialization === undefined) failTargetAnalysisInvariant("tsonic-rust", "An emitted class requires its exact module initialization inventory.", definition.declaration);
+      for (const selected of initialization) visit(selected.kind === "block" ? selected.body : selected.initializer);
+    }
     for (const request of program.records.objectLiteralEmissions.get(file) ?? []) {
       if (request.kind === "project" || request.selection.shape.dispatchName !== undefined) continue;
       const shape = request.selection.shape;
