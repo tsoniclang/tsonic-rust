@@ -7,6 +7,7 @@ import {
   createRustSession,
   rustSourceDiagnostics,
 } from "../../helpers/rust-session.mjs";
+import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 
 
 
@@ -84,7 +85,7 @@ export function exact(value: string, month: int32): boolean {
   assert.match(text, /to_utc_string/u);
 });
 
-test("explicit JsString selects the exact UTF-16 lane while native strings stay native", () => {
+test("explicit JsString selects the exact UTF-16 lane while native strings stay native", { timeout: 300_000 }, () => {
   const { result } = compileRust({
     surfaces: ["js"],
     files: {
@@ -113,8 +114,10 @@ export function native(input: string): boolean {
   assert.match(text, /\.exec\(&value\)\?/u);
   assert.match(text, /js_exact_string::to_well_formed/u);
   assert.match(text, /pub fn native\(input: &str\)/u);
-  assert.match(text, /js_abi::regexp_test_native\([^;]*AsRef::<str>::as_ref\(input\),\s*\)\?/su);
+  assert.match(text, /js_abi::regexp_test_native\([^;]*AsRef::<str>::as_ref\(&input\),\s*\)\?/su);
   assert.match(text, /string_replace_regexp_native/u);
+  assert.doesNotMatch(text, /input\.(?:clone|to_string|to_owned)\(\)/u);
+  validateGeneratedProject("native-and-exact-string-profile", result.artifacts);
 });
 
 test("native and exact strings are not implicitly interchangeable", () => {
