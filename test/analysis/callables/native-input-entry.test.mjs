@@ -7,6 +7,35 @@ import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equali
 import { rustRetainedErrorTargetType, rustSourceErrorTargetType, rustWritableSourceErrorTargetType } from "../../../dist/target-model/types/carriers/source-error.js";
 import { selectRustSourceValueConversion } from "../../../dist/policy/conversions/selection.js";
 import { rustCallableProtocol } from "../../../dist/target-model/types/carriers/callables.js";
+import { createTargetSourceProgram } from "@tsonic/target-api/source";
+import { createRustNativeEntryLayouts } from "../../../dist/analysis/callables/entry-layout.js";
+
+test("admitted native entries never omit an unused formal whose selected incoming carrier is missing", () => {
+  const { program, source: checked } = analyzeRust({ surfaces: [], files: { "index.ts": `
+    export function select(unused: number, value: number): number { return value; }
+  ` } });
+  let declaration;
+  const visit = node => {
+    if (program.source.ast.is.IsFunctionDeclaration(node) && program.records.sourceName.get(node) === "select") declaration = node;
+    program.source.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+  };
+  program.sourceFiles.forEach(visit);
+  assert.equal(declaration !== undefined, true, "the exact authored callable is present");
+  const leading = program.records.callableLeading.get(declaration);
+  assert.equal(leading?.genericHeader !== undefined, true, "the real native producer owns a complete early header");
+  const select = createRustNativeEntryLayouts({ source: createTargetSourceProgram(checked), records: program.records,
+    projectTypes: program.projectTypes, structuralShapes: program.structuralShapes, classValues: program.classValues,
+    native: program.callableValues.native });
+  const parameters = new Map(leading.sourceParameters);
+  const original = program.source.ast.parameters(declaration)[0];
+  assert.equal(parameters.delete(original), true, "only the unused formal's actual selected input is withheld");
+  assert.throws(() => select(declaration, leading.parameters, parameters, leading.genericHeader),
+    /An admitted native entry requires every original formal's selected incoming physical carrier/,
+    "the canonical value-parameter inventory cannot publish a shortened native header");
+  const unavailable = select(declaration, leading.parameters, parameters, undefined);
+  assert.equal(unavailable.direct === undefined && unavailable.module === undefined, true,
+    "an unadmitted producer has no fabricated entry and does not force unrelated declaration analysis");
+});
 
 test("every authored formal including unused and default inputs consumes its exact early entry carrier", () => {
   const { program } = analyzeRust({ files: { "index.ts": `

@@ -1,5 +1,5 @@
 import type { Node } from "@tsonic/tsts";
-import type { TargetSourceProgram } from "@tsonic/target-api/source";
+import { sourceCallableValueParameters, type TargetSourceProgram } from "@tsonic/target-api/source";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import { snapshotTargetReadonlyMap } from "@tsonic/target-api/analysis";
 import type { RustCallableLeadingEmission, RustNativeCallableEntries, RustNativeCallableEntry,
@@ -42,6 +42,8 @@ export function createRustNativeEntryLayouts(input: {
       : Object.freeze({ kind: "type", type: Object.freeze({ kind: "type-parameter", identity: parameter.identity, name: parameter.targetName }) });
   return (declaration: Node, leading: RustCallableLeadingEmission["parameters"],
     parameters: ReadonlyMap<Node, TargetTypeRef>, header: RustNativeCallableGenericHeader | undefined): RustNativeCallableEntries => {
+    if (header === undefined) return Object.freeze({ direct: undefined, module: undefined,
+      structuralFixed: snapshotTargetReadonlyMap<RustStructuralShapeDefinition, ReadonlyMap<string, RustNativeCallableEntryFacets>>([]) });
     const { ast } = input.source;
     const lexical = input.records.lexicalFunction.get(declaration);
     const captured = [...(header?.sourceContract.parameters ?? []), ...(header?.implicitLifetimes ?? []), ...(lexical?.genericParameters ?? [])];
@@ -54,10 +56,14 @@ export function createRustNativeEntryLayouts(input: {
     const captures = (extra: readonly RustTargetGenericArgument[]): readonly RustTargetGenericArgument[] => Object.freeze(
       [...new Map([...arguments_, ...extra].map(value => [closedMetadataKey(value), value])).values()]);
     const sourceSlots: RustNativeCallableEntrySlot[] = [];
-    for (const parameter of ast.parameters(declaration)) {
-      if (parameter === undefined) continue;
+    const formals = sourceCallableValueParameters(ast, declaration, input.source.semantics.forNode(declaration));
+    if (formals === undefined) failTargetAnalysisInvariant("tsonic-rust",
+      "An admitted native entry requires its exact checked value parameter inventory.", declaration);
+    for (const parameter of formals) {
       const carrier = parameters.get(parameter);
-      if (carrier !== undefined) sourceSlots.push(Object.freeze({ kind: "source", declaration: parameter, carrier }));
+      if (carrier === undefined) failTargetAnalysisInvariant("tsonic-rust",
+        "An admitted native entry requires every original formal's selected incoming physical carrier.", parameter);
+      sourceSlots.push(Object.freeze({ kind: "source", declaration: parameter, carrier }));
     }
     const tail: RustNativeCallableEntrySlot[] = [...sourceSlots,
       ...(lexical?.captures.map(capture => Object.freeze({ kind: "lexical" as const, capture, carrier: capture.parameterCarrier })) ?? [])];
