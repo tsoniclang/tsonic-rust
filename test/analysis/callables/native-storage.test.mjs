@@ -53,7 +53,8 @@ test("native callback signatures do not masquerade as stored aggregate payloads"
 });
 
 function fixture(text, options = {}) {
-  const { program, source: checked } = analyzeRust({ surfaces: [], files: { "index.ts": text }, ...options });
+  const { program, source: checked, operationAttempts } = analyzeRust({ surfaces: [], files: { "index.ts": text },
+    ...options, captureOperationAttempts: true });
   const checkedSource = createTargetSourceProgram(checked);
   const guardedAst = Proxy.revocable(checkedSource.ast, {});
   const source = { ...checkedSource, ast: guardedAst.proxy };
@@ -68,6 +69,7 @@ function fixture(text, options = {}) {
   const generic = genericRegistry.plan;
   let physical;
   const input = { source, ast: source.ast, storage, nativeNodes, records: program.records, definitions: program.typeDefinitions,
+    operationAttempts,
     frames: program.callableValues.frames,
     capturesFor: declaration => captures.forDeclaration(declaration),
     structuralShapes: program.structuralShapes, projectTypes: program.projectTypes,

@@ -113,6 +113,7 @@ function physicalConstruction(checked, { unavailableReturns = new Set(), constru
     } });
   if (constructionErrorsReady) producers.selectConstructionErrors(new Map());
   queries = createRustNativeStorageQueries({ ast, nativeNodes: input.nativeNodes, storage: sourceStorage, records,
+    operationAttempts: input.operationAttempts,
     frames: context.callableValues.frames,
     capturesFor: declaration => captures.forDeclaration(declaration),
     definitions: context.typeDefinitions, native, producers, generic,
