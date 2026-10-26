@@ -24,6 +24,8 @@ import type { RustSourceParameterAbiFact } from "../../target-model/records/call
 import type { RustProgramRecordBuilder } from "../program/records/model.js";
 import { rustClassCallableMemberOwner, rustClassReceiverCarriers } from "../declarations/classes/receivers.js";
 import { rustSourceStorageSubjectContext } from "../source-evidence/types/resolution/source-storage-projection.js";
+import { selectRustValueCarrierReconciliation } from "../../policy/conversions/value-carrier-reconciliation.js";
+import { rustCallableInvocationSignaturesMatch } from "../../policy/conversions/callable-input.js";
 
 export type RustInferredReturnSelection =
   | { readonly kind: "complete"; readonly carrier: TargetTypeRef }
@@ -134,7 +136,11 @@ function selectReturn(
       : rustOptionElementCarrier(baseline) === undefined ? selected
         : rustSourceOptionalElementCarrier(baseline) === undefined ? rustOptionTargetType(selected)
           : rustSourceOptionalTargetType(selected);
-    if (inferEnvironment) result = selected === undefined ? inferredCallableEnvironment(carriers, baseline) : result;
+    if (inferEnvironment && (selected === undefined ||
+      selected.kind === "target-named" && selected.id === rustCallableTargetId &&
+      rustCallableProtocol(selected) !== undefined && !rustCallableInvocationSignaturesMatch(selected, scalar))) {
+      result = inferredCallableEnvironment(carriers, baseline);
+    }
     if (result === undefined) return { kind: "pending", hint: baseline };
     let local = memo;
     if (local === undefined) walk.inferredReturns.set(walk.context.records, local = new WeakMap());
@@ -149,13 +155,11 @@ function selectReturn(
       const requested = rustCallableProtocol(payload);
       if (payload.kind !== "target-named" || payload.id !== rustCallableTargetId ||
         requested?.lifetime?.kind !== "placeholder") return undefined;
-      const protocols = values.filter(value => rustOptionElementCarrier(target) === undefined ||
-        value === undefined || !isRustAbsenceCarrier(value))
-        .map(value => rustCallableProtocol(rustOptionElementCarrier(value) ?? value));
+      const present = values.filter(value => rustOptionElementCarrier(target) === undefined ||
+        value === undefined || !isRustAbsenceCarrier(value));
+      const protocols = present.map(value => rustCallableProtocol(rustOptionElementCarrier(value) ?? value));
       if (protocols.length === 0 || protocols.some(protocol => protocol?.lifetime === undefined ||
-        protocol.lifetime.kind === "placeholder" || protocol.parameters.length !== requested.parameters.length ||
-        protocol.parameters.some((parameter, index) => !rustTargetTypeRefEquals(parameter, requested.parameters[index])) ||
-        !rustTargetTypeRefEquals(protocol.result, requested.result) || !rustTargetTypeRefEquals(protocol.error, requested.error))) return undefined;
+        protocol.lifetime.kind === "placeholder")) return undefined;
       const lifetimes = new Map(protocols.flatMap(protocol => protocol?.lifetime === undefined
         ? [] : [[rustLifetimeKey(protocol.lifetime), protocol.lifetime] as const]));
       const contract = rustEnclosingStorageContract(declaration, ast, walk.context.sourceLifetimes);
@@ -163,6 +167,9 @@ function selectReturn(
         [...lifetimes.values()].every(source => rustLifetimeOutlives(source, candidate, contract)));
       if (selected.length !== 1) return undefined;
       const refined = rustCallableTargetType(requested.parameters, requested.result, selected[0], requested.error);
+      if (present.some(value => value === undefined || selectRustValueCarrierReconciliation(
+        rustOptionElementCarrier(value) ?? value, refined, walk.context.projectTypes, walk.context.typeDefinitions,
+      ).kind === "incompatible")) return undefined;
       return rustOptionElementCarrier(target) === undefined ? refined
         : rustSourceOptionalElementCarrier(target) === undefined ? rustOptionTargetType(refined)
           : rustSourceOptionalTargetType(refined);
