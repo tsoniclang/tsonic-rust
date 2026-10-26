@@ -184,7 +184,7 @@ export function readEntry(): string {
   assert.match(shapes, /pub struct EntryShape \{/u);
   assert.match(
     shapes,
-    /pub entry: rt::ObjectHandle<OutputDirPagesBuiltShape>,/u,
+    /pub entry: rt::ObjectHandle<OutputDirPagesBuiltShape, \(\)>,/u,
   );
   assert.match(shapes, /pub struct ValueShape \{/u);
   assert.match(shapes, /pub struct ValueShape2 \{/u);
