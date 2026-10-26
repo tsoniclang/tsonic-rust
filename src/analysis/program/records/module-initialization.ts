@@ -7,18 +7,17 @@ export function createRustModuleInitializationRecords(input: {
   readonly issues: readonly RustModuleInitializationIssue[];
   readonly requirements: ReadonlyMap<SourceFile, RustModuleInitializationRequirement>;
   readonly minimumFoundation: RustFoundation;
-  readonly stateIndependentCycles: ReadonlySet<SourceFile>;
+  readonly moduleCycles: readonly import("../../../target-model/records/module-initialization.js").RustModuleCycleSelection[];
 }): RustModuleInitializationPlan {
   const requirements = new WeakMap(input.requirements);
-  const cycles = new WeakSet(input.stateIndependentCycles);
   return Object.freeze({
     issues: input.issues,
+    moduleCycles: input.moduleCycles,
     requirementFor(sourceFile: SourceFile): RustModuleInitializationRequirement {
       const selected = requirements.get(sourceFile);
       if (selected === undefined) failTargetAnalysisInvariant("tsonic-rust", "A module initialization query requires an admitted source file.", sourceFile);
       return selected;
     },
     minimumFoundation: () => input.minimumFoundation,
-    hasStateIndependentCycle: (sourceFile: SourceFile) => cycles.has(sourceFile),
   });
 }

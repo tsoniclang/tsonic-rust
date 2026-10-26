@@ -115,7 +115,7 @@ test("distinct worker initializers and spawned payloads enter the one lifecycle 
     localOwner: undefined, sources: Object.freeze([{ identity: `native-${index}`, variant: "Error0", errorType: index === 0 ? error : workerError }]) })]));
   const selected = analyzeRustInitializationErrors({ ast, sourceFiles: files,
     navigation: { moduleDependencies: () => [], moduleHasTopLevelAwait: () => false },
-    moduleInitialization: { requirementFor: () => ({ kind: "required" }), hasStateIndependentCycle: () => false },
+    moduleInitialization: { requirementFor: () => ({ kind: "required" }), moduleCycles: Object.freeze([]) },
     sourceModules: { targets: () => [worker] },
     components: { rootComponentId: "root", componentForFile: () => component, forComponent: () => component },
     facades: { rootExports: [] }, regions: { get: file => moduleRegions.get(file) },

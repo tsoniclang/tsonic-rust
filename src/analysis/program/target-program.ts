@@ -147,7 +147,7 @@ export function analyzeRustAnalysisProgram(
     outputType: configuration.outputType,
     projectRoot: input.paths.projectRoot,
     entryPoint: input.project.entryPoint,
-  });
+  }, sourceStage.moduleCycles);
   if (moduleInitialization.issues.length > 0) return rejectedTargetStage(moduleInitialization.issues.map(issue => ({
     code: issue.code, category: "error" as const, source: "tsonic-rust", sourceNode: issue.node,
     message: issue.message, evidence: issue.evidence,

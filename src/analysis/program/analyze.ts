@@ -1,5 +1,7 @@
 import { recordRustProgramClassEnvironments } from "../objects/class-environment-admission.js";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
+import { analyzeRustModuleCycles } from "../module-initialization/cycles.js";
+import type { RustModuleCycleSelection } from "../../target-model/records/module-initialization.js";
 import { requireRustRecord } from "./records/required-records.js";
 import { appendMalformedSourceAstDiagnostic, recordClassBodyFacts, recordClassSignatureFacts, recordInterfaceFacts, recordMethodSelfModeFacts } from "../declarations/project-types.js";
 import { appendRustDiagnostic, rustResolutionContext, rustOperationContext } from "./walk.js";
@@ -71,6 +73,7 @@ import { completeRustNativeTaskValues, type RustNativeTaskCompletion } from "../
 import type { RustOperationAttempt } from "./operation-attempts.js";
 
 interface RustSourceStageOutput {
+  readonly moduleCycles: readonly RustModuleCycleSelection[];
   readonly operationAttempts: Pick<WeakMap<Node, RustOperationAttempt>, "get">;
   readonly nativeTasks: SourceNativeTaskGraph;
   readonly nativeTaskCompletions: readonly RustNativeTaskCompletion[];
@@ -181,7 +184,14 @@ export function analyzeRustProgram(context: RustAnalysisContext, outputType: "bi
     projectMethodDispatch: context.projectMethodDispatch,
     projectMethodProperties: context.projectMethodProperties,
   };
+  const cycleSelection = analyzeRustModuleCycles(context);
+  if (cycleSelection.kind === "rejected") {
+    context.diagnostics.push(...cycleSelection.diagnostics);
+    return;
+  }
+  const moduleCycles = cycleSelection.value;
   const walk: RustFactWalk = {
+    moduleCycles,
     context,
     providerRows,
     providerErrorCarriers: collectRustDeclaredProviderErrorCarriers(providerRows, providerSemantics.binaryHooks),
@@ -661,6 +671,7 @@ export function analyzeRustProgram(context: RustAnalysisContext, outputType: "bi
     context.diagnostics.splice(selectedIssuePosition, 0, ...context.diagnostics.splice(effectDiagnosticEnd));
   }
   return Object.freeze({ lexicalFunctions, nativeTasks, nativeTaskCompletions: nativeTaskCompletions.value,
+    moduleCycles: moduleCycles.complete(),
     operationAttempts: walk.operationAttempts,
     sourcePackageComponents: sourcePackageComponents.plan,
     sourceTypes: Object.freeze({ structuralObjectForCarrier: sourceTypes.structuralObjectForCarrier }) });

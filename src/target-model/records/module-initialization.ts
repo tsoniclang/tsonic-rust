@@ -1,5 +1,6 @@
 import type { Node, SourceFile } from "@tsonic/tsts";
 import type { SourceBinaryEntryIssue } from "@tsonic/target-api/analysis";
+import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustFoundation } from "../foundation/model.js";
 
 export type RustModuleInitializationRequirement =
@@ -17,9 +18,14 @@ export interface RustUnsupportedTopLevelStatementIssue {
 
 export type RustModuleInitializationIssue = SourceBinaryEntryIssue | RustUnsupportedTopLevelStatementIssue;
 
+export interface RustModuleCycleSelection {
+  readonly sourceFiles: readonly SourceFile[];
+  readonly issue: TargetDiagnostic & { readonly evidence: readonly string[] };
+}
+
 export interface RustModuleInitializationPlan {
   readonly issues: readonly RustModuleInitializationIssue[];
+  readonly moduleCycles: readonly RustModuleCycleSelection[];
   requirementFor(sourceFile: SourceFile): RustModuleInitializationRequirement;
   minimumFoundation(): RustFoundation;
-  hasStateIndependentCycle(sourceFile: SourceFile): boolean;
 }

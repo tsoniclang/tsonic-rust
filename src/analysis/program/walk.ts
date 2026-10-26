@@ -32,10 +32,12 @@ import { recordRustConversionSelection } from "./records/value-carrier-admission
 import type { RustOperationAttempt } from "./operation-attempts.js";
 import type { RustCallableSignatureState } from "../callables/signature-query.js";
 import type { RustInferredReturnMemo } from "../callables/inferred-return.js";
+import type { RustModuleCycleAnalysis } from "../module-initialization/cycles.js";
 
 export const rustTargetSemanticsExtensionId = "tsonic.rust.policy";
 
 export interface RustFactWalk {
+  readonly moduleCycles: RustModuleCycleAnalysis;
   readonly context: RustAnalysisContext;
   readonly providerRows: readonly RustProviderOperationRow[];
   readonly providerErrorCarriers: readonly TargetTypeRef[];

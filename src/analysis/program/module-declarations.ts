@@ -32,7 +32,9 @@ export function resolveRustModuleBindingValue(
   if (binding?.storage === "native-callable") return binding.value?.carrier;
   if (binding?.storage === "module-cell" || binding?.storage === "native-const") return binding.valueCarrier;
   const projected = walk.resolving.has(root) ? records.bindingProjection.get(declaration) : undefined;
-  return projected !== undefined && "bindingCarrier" in projected ? projected.bindingCarrier : undefined;
+  if (projected !== undefined && "bindingCarrier" in projected) return projected.bindingCarrier;
+  if (walk.resolving.has(root)) walk.moduleCycles.rejectActiveBinding(walk, root);
+  return undefined;
 }
 
 export function recordRustModuleValueDeclarations(walk: RustFactWalk, sourceFile: SourceFile): void {

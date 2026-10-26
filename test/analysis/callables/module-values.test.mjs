@@ -82,7 +82,7 @@ moduleCallableStorage: { get: (node) => {
         return undefined;
     return storage;
 } }}),
-    }, {}, { outputType: "lib", projectRoot: "/src", entryPoint: "index.ts" });
+    }, {}, { outputType: "lib", projectRoot: "/src", entryPoint: "index.ts" }, Object.freeze([]));
     assert.equal(plan.requirementFor(sourceFile).kind, expected);
     assert.equal(plan.minimumFoundation(), expected === "required" ? "std" : "core");
   }
@@ -133,7 +133,7 @@ function modulePatternPlan(kind, { erased = false, prefix = "none", prefixFirst 
     safetyApplications: { operationForExpression: () => undefined },
   }, { forDeclaration: node => node === earlierStatement && prefix === "class-environment"
     ? { environment: { evaluatedConstructorValue: true, staticFields: [] } } : undefined },
-  { outputType: "lib", projectRoot: "/src", entryPoint: "index.ts" });
+  { outputType: "lib", projectRoot: "/src", entryPoint: "index.ts" }, Object.freeze([]));
   return { requirement: plan.requirementFor(sourceFile), declaration, name, bindings, plan };
 }
 

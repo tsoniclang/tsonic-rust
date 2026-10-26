@@ -24,7 +24,7 @@ function fixture() {
     navigation: { moduleDependencies: file => (dependencies.get(file) ?? []).map(sourceFile => ({ sourceFile })),
       moduleHasTopLevelAwait: file => file === dependency },
     moduleInitialization: { requirementFor: file => ({ kind: required.has(file) ? "required" : "not-required" }),
-      hasStateIndependentCycle: () => false },
+      moduleCycles: Object.freeze([]) },
     sourceModules: { targets: () => [worker] },
     components: { rootComponentId: "root", components: [component], forComponent: () => component,
       componentForFile: () => component },
@@ -92,10 +92,16 @@ test("an initialization-only native executable excludes an unused lifecycle chan
 test("module cycles and missing finalized regions reject during analysis rather than native planning", () => {
   const current = fixture();
   current.dependencies.set(current.dependency, [current.root]);
+  const issue = Object.freeze({ code: "RUST_UNSUPPORTED_RUNTIME_MODULE_CYCLE",
+    category: "error", source: "tsonic-rust", sourceNode: current.root,
+    message: "The original source module component has state-dependent runtime initialization.", evidence: Object.freeze([]) });
+  current.input.moduleInitialization.moduleCycles = Object.freeze([Object.freeze({
+    sourceFiles: Object.freeze([current.root, current.dependency]), issue })]);
   const cyclic = analyzeRustInitializationErrors(current.input);
   assert.equal(cyclic.kind, "rejected");
   assert.equal(cyclic.diagnostics.some(diagnostic => diagnostic.code === "RUST_UNSUPPORTED_RUNTIME_MODULE_CYCLE"), true);
-  current.input.moduleInitialization.hasStateIndependentCycle = () => true;
+  assert.equal(cyclic.diagnostics[0] === issue, true, "physical composition consumes the exact early cycle outcome");
+  current.input.moduleInitialization.moduleCycles = Object.freeze([]);
   assert.equal(analyzeRustInitializationErrors(current.input).kind, "resolved");
   current.effects.delete(current.root);
   const missing = analyzeRustInitializationErrors(current.input);
@@ -118,4 +124,39 @@ test("library initialization roots follow checked public exports, with entry fal
   const empty = analyzeRustInitializationErrors(current.input);
   assert.equal(empty.kind, "resolved");
   assert.equal(empty.value.root.modules.length, 0);
+});
+
+test("cycle admission follows actual executable, facade and worker roots and exact runtime presence", () => {
+  const current = fixture();
+  const left = Object.freeze({ fileName: "/src/unused-left.ts" });
+  const right = Object.freeze({ fileName: "/src/unused-right.ts" });
+  current.input.sourceFiles.push(left, right);
+  current.dependencies.set(left, [right]);
+  current.dependencies.set(right, [left]);
+  for (const file of [left, right]) {
+    current.required.add(file);
+    current.effects.set(file, Object.freeze({ kind: "infallible", fileName: file.fileName,
+      localOwner: undefined, sources: Object.freeze([]) }));
+  }
+  const issue = Object.freeze({ code: "RUST_UNSUPPORTED_RUNTIME_MODULE_CYCLE", category: "error", source: "tsonic-rust",
+    sourceNode: left, message: "The exact source component has state-dependent initialization.", evidence: Object.freeze([]) });
+  current.input.moduleInitialization.moduleCycles = Object.freeze([Object.freeze({ sourceFiles: Object.freeze([left, right]), issue })]);
+  assert.equal(analyzeRustInitializationErrors(current.input).kind, "resolved",
+    "unreachable source components do not broaden executable rejection");
+  current.input.outputType = "lib";
+  current.input.facades.rootExports = [{ sourceModuleFileName: left.fileName }];
+  const facade = analyzeRustInitializationErrors(current.input);
+  assert.equal(facade.kind, "rejected", "an actual public facade initializes its exact dependency component");
+  assert.equal(facade.diagnostics[0] === issue, true, "facade composition reads the source owner's exact decision");
+  current.input.facades.rootExports = [{ sourceModuleFileName: current.dependency.fileName }];
+  assert.equal(analyzeRustInitializationErrors(current.input).kind, "resolved", "an unrelated facade does not initialize the unused cycle");
+  current.input.outputType = "bin";
+  current.input.sourceModules.targets = () => [left];
+  const worker = analyzeRustInitializationErrors(current.input);
+  assert.equal(worker.kind, "rejected", "an admitted worker retains its original initialization scope");
+  assert.equal(worker.diagnostics[0] === issue, true, "worker composition consumes the same source decision");
+  current.required.delete(left);
+  current.required.delete(right);
+  assert.equal(analyzeRustInitializationErrors(current.input).kind, "resolved",
+    "erased, ambient, type-only or native-item-only components have no physical runtime initializer to reject");
 });

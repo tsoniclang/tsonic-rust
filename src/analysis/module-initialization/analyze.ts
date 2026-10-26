@@ -14,8 +14,6 @@ import {
 
 import { rustProjectStaticFieldStorage } from "../project-types/object-layout.js";
 import type { RustAnalysisContext } from "../program/context.js";
-import { stronglyConnectedSourceFiles } from "../program/module-graph.js";
-import { rustModuleInitializationIsStateIndependent } from "./independence.js";
 import type { RustClassValuePlan } from "../../target-model/records/class-values.js";
 
 import type { RustModuleInitializationIssue, RustModuleInitializationPlan, RustModuleInitializationRequirement,
@@ -31,6 +29,7 @@ export function createRustModuleInitializationPlan(
   input: RustModuleInitializationPlanInput,
   classValues: RustClassValuePlan,
   entry: { readonly outputType: "bin" | "lib"; readonly projectRoot: string; readonly entryPoint: string },
+  moduleCycles: readonly import("../../target-model/records/module-initialization.js").RustModuleCycleSelection[],
 ): RustModuleInitializationPlan {
   const entryPath = resolve(entry.projectRoot, entry.entryPoint).split("\\").join("/");
   const entrySourceFile = entry.outputType === "lib" ? undefined : input.sourceFiles.find(sourceFile =>
@@ -46,21 +45,7 @@ export function createRustModuleInitializationPlan(
     requirements.set(sourceFile, requirement);
     if (requirement.kind === "required") minimumFoundation = "std";
   }
-  const stateIndependentCycles = new Set<SourceFile>();
-  const components = stronglyConnectedSourceFiles(input.source.navigation, new Set(input.sourceFiles));
-  if (components.kind === "unresolved") {
-    for (const sourceFile of input.sourceFiles) requirements.set(sourceFile, unresolved(sourceFile, components.reason));
-  }
-  for (const component of components.kind === "resolved" ? components.components : []) {
-    const first = component[0];
-    if (first === undefined || component.length === 1 && !input.source.navigation.moduleDependencies(first)
-      .some(dependency => dependency.sourceFile === first)) continue;
-    const members = new Set(component);
-    if (component.every(sourceFile => rustModuleInitializationIsStateIndependent(input, sourceFile, members))) {
-      for (const sourceFile of component) stateIndependentCycles.add(sourceFile);
-    }
-  }
-  return createRustModuleInitializationRecords({ issues, requirements, minimumFoundation, stateIndependentCycles });
+  return createRustModuleInitializationRecords({ issues, requirements, minimumFoundation, moduleCycles });
 }
 
 // The top-level statement kinds the Rust target lowers: declarations that emit items or nothing at runtime, and the

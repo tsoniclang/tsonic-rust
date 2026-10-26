@@ -8,7 +8,6 @@ import type { RustModuleInitializationPlan } from "../../target-model/records/mo
 import type { RustSourceModuleConstructionIndex } from "../../target-model/records/source-modules.js";
 import type { RustSourcePackageFacadeClassifications } from "../../target-model/records/source-package-semantics.js";
 import type { RustSourcePackageComponentClassifications } from "../../target-model/records/source-package-semantics.js";
-import { stronglyConnectedSourceFiles } from "../program/module-graph.js";
 import { selectRustPhysicalProgramErrorOwner } from "./error-types.js";
 import { closedMetadataEquals } from "../../target-model/metadata/closed-data.js";
 import type { RustAnalyzedErrorRegions } from "./regions.js";
@@ -85,17 +84,9 @@ export function analyzeRustInitializationErrors(input: {
       if (selected !== undefined) ordered.push(selected);
     };
     roots.forEach(visit);
-    const components = stronglyConnectedSourceFiles(input.navigation, visited);
-    if (components.kind === "unresolved") reject("RUST_SOURCE_MODULE_GRAPH_NOT_PROVEN", components.reason);
-    for (const component of components.kind === "resolved" ? components.components : []) {
-      const first = component[0];
-      const cyclic = component.length > 1 || first !== undefined && input.navigation.moduleDependencies(first)
-        .some(dependency => dependency.sourceFile === first);
-      const initialized = component.filter(file => modules.has(file));
-      if (!cyclic || initialized.length === 0 || component.every(file => input.moduleInitialization.hasStateIndependentCycle(file))) continue;
-      const names = component.map(file => input.ast.getFileName(file)).sort(compareNames);
-      reject("RUST_UNSUPPORTED_RUNTIME_MODULE_CYCLE",
-        `Runtime ES module dependency component '${names.join(" -> ")}' contains ${initialized.length} module initializer${initialized.length === 1 ? "" : "s"} and cannot be executed without finalized cyclic call, live-binding, and temporal-dead-zone evidence.`, first);
+    for (const cycle of input.moduleInitialization.moduleCycles) {
+      if (cycle.sourceFiles.some(file => visited.has(file)) && cycle.sourceFiles.some(file => modules.has(file)))
+        diagnostics.push(cycle.issue);
     }
     const local = ordered.some(module => module.region.kind === "package" && closedMetadataEquals(module.region.localOwner, owner));
     const native = ordered.filter(module => module.region.kind === "native" ||
