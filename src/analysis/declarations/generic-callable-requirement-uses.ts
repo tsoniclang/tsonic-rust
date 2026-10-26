@@ -256,7 +256,15 @@ export function createRustCallableRequirementVisitor(input: RustCallableRequirem
       const error = addUse(node, objectView.sourceCarrier, ["clone", "static"]);
       if (error !== undefined) return error;
       for (const field of objectView.kind === "structural" ? objectView.fields : []) {
-        const fieldError = addUse(node, field.source.resultCarrier, ["clone", "static"]);
+        let storageCarrier = field.source.resultCarrier;
+        if (field.source.storage === "structural-object") {
+          const selected = input.structuralShapes.field(field.source.receiverCarrier, field.source.storageIndex);
+          if (selected === undefined) return "An object reference view requires its exact completed native field storage.";
+          const method = selected.methodPlan;
+          storageCarrier = method?.kind === "fixed" ? method.context
+            : method !== undefined ? method.carrier : selected.boundStorage?.carrier ?? selected.carrier;
+        }
+        const fieldError = addUse(node, storageCarrier, ["clone", "static"]);
         if (fieldError !== undefined) return fieldError;
       }
       if (objectView.kind === "project") {
