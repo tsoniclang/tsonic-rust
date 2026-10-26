@@ -98,7 +98,6 @@ export function planFunctionDeclarations(
       callableDeclaration: node,
       nameDeclaration: node,
       name: emission.name,
-      exported: emission.exported,
     }, outerContext);
     return Object.freeze(item.helper === undefined ? [item.item] : [item.item, item.helper]);
   }
@@ -112,7 +111,6 @@ export function planFunctionDeclarations(
       callableDeclaration: node,
       nameDeclaration: node,
       name: variant.targetName,
-      exported: false,
       specialization: variant,
     }, outerContext);
     if (item === undefined) {
@@ -128,7 +126,6 @@ export function planNativeModuleFunction(
   declaration: Node,
   callableDeclaration: Node,
   name: string,
-  exported: boolean,
   outerContext: RustPlanContext,
   nativeReceiver: RustNativeMethodReceiver | undefined,
 ): RustFunctionItemPlan {
@@ -136,7 +133,6 @@ export function planNativeModuleFunction(
     callableDeclaration,
     nameDeclaration: declaration,
     name,
-    exported,
     ...(nativeReceiver === undefined ? {} : { nativeReceiver }),
   }, outerContext);
 }
@@ -146,7 +142,6 @@ function planRustFunctionItem(
     readonly callableDeclaration: Node;
     readonly nameDeclaration: Node;
     readonly name?: string;
-    readonly exported: boolean;
     readonly specialization?: RustSourceCallableSpecializationVariant;
     readonly nativeReceiver?: RustNativeMethodReceiver;
   },
@@ -179,11 +174,10 @@ function planRustFunctionItem(
   if (isAsync && generatorFact === undefined && asyncFact === undefined) {
     failRustPlannerInvariant("An admitted callable requires its exact native declaration, return, error and body contracts.", node);
   }
-  const isExported = source.exported;
   const name = source.name ?? emission.name;
   if (name === undefined) failRustPlannerInvariant("An admitted callable requires its exact native declaration name.", node);
   const lexical = outerContext.input.program.records.lexicalFunction.get(node);
-  const visibility = lexical !== undefined ? "private" as const : isExported ? "public" as const : emission.visibility;
+  const visibility = emission.visibility;
   const deadCode = emission.deadCode;
   const declarationAttributes = [...safetyAttributes];
   let context: RustPlanContext = nativeBody === undefined ? functionContext

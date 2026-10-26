@@ -68,7 +68,7 @@ export function createStructuralLiteralImplementation(
       const captures: RustExpr = { kind: "field", name: String(storageIndex),
         receiver: { kind: "method-call", receiver: { kind: "path", path: receiverName }, method: "context", args: [] } };
       const bodyContext = rustCallablePayloadContext(selected.payload, captures, context, "tuple");
-      const planned = planNativeModuleFunction(selected.declaration, selected.declaration, field.targetName, true,
+      const planned = planNativeModuleFunction(selected.declaration, selected.declaration, field.targetName,
         bodyContext, { name: receiverName, carrier: shape.carrier, boundLifetimes, factoryReceiver: selected.factoryReceiver });
       methods.push({ ...planned.item, visibility: "public" },
         ...(planned.helper === undefined ? [] : [{ ...planned.helper, visibility: "public" as const }]));

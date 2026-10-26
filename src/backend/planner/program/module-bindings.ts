@@ -64,7 +64,6 @@ export function planTopLevelVariableStatement(
         declaration,
         binding.callableDeclaration,
         binding.name,
-        binding.value === undefined && visibility === "public",
         context,
         undefined,
       );

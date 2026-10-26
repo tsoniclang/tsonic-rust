@@ -79,7 +79,7 @@ function planImplementation(
   const bodyContext = rustCallablePayloadContext(selected, { kind: "path", path: owner }, helperContext, "named");
   const planned = implementation.creation === "declaration" ? undefined
     : planNativeModuleFunction(implementation.declaration, implementation.declaration,
-        implementation.functionName, true, bodyContext, undefined);
+        implementation.functionName, bodyContext, undefined);
   const helpers = planned === undefined ? [] : planned.helper === undefined ? [planned.item] : [planned.item, planned.helper];
   const contract = emission.requirements;
   const generics = rustGenericCallableEnvironmentGenerics(arguments_, helperContext);
