@@ -14,6 +14,8 @@ const variant = (name: string, ...elements: readonly RustPattern[]): RustPattern
 const unit = (): RustExpr => ({ kind: "tuple-literal", elements: [] });
 
 export function lowerRustCompletionScope(scope: CompletionScope): RustStmt {
+  if (typeof scope.dispatchResultWrapped !== "boolean")
+    failRustSyntaxInvariant("Completion dispatch requires its exact nearest return-result shape.");
   if (!("errorType" in scope) || scope.kind === "try-scope" &&
     (!("bodyErrorType" in scope) || scope.catchClause !== undefined && !("errorType" in scope.catchClause) ||
       scope.finallyClause !== undefined && !("errorType" in scope.finallyClause))) {
@@ -132,10 +134,10 @@ function dispatch(scope: CompletionScope): Extract<RustStmt, { readonly kind: "e
       ? { kind: "unreachable", message: "terminating Tsonic completion scope completed normally" }
       : scope.kind === "try-scope" && (scope.normalBindings?.length ?? 0) > 0 ? path("normal") : unit(),
   }];
-  if (scope.propagate) arms.push(...abruptVariants(scope.errorType !== undefined).map(arm => ({ ...arm, expression: exit(arm.expression) })));
+  if (scope.propagate) arms.push(...abruptVariants(scope.dispatchResultWrapped).map(arm => ({ ...arm, expression: exit(arm.expression) })));
   else {
     if (scope.dispatchReturn) arms.push({ pattern: variant("rt::Completion::Return", binding("value")),
-      expression: exit(scope.errorType === undefined ? path("value") : call("Ok", path("value"))) });
+      expression: exit(scope.dispatchResultWrapped ? call("Ok", path("value")) : path("value")) });
     for (const target of scope.dispatchTargets) {
       const id: RustPattern = { kind: "path", path: String(target.id) };
       arms.push({ pattern: variant("rt::Completion::Break", id),

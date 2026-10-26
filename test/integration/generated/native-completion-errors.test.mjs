@@ -13,6 +13,7 @@ const errorType = { kind: "qualified", owner: { kind: "named", path: "Producer" 
 
 function completionFunction(asynchronous) {
   const scope = { kind: "try-scope", bodyName: "body_flow", flowName: "flow", finallyName: "finally_flow",
+    dispatchResultWrapped: true,
     returnType: { kind: "unit" }, errorType, bodyErrorType: errorType, asynchronous,
     body: { statements: [{ kind: "expr", expr: { kind: "try", expr: callMethod("producer", "invoke"),
       operandErrorType: errorType, resultErrorType: errorType } }] }, bodyTerminates: false,

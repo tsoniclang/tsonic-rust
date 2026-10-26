@@ -53,6 +53,7 @@ function nestedTryScopeSource(returnType, flowName, bodyName) {
           then: {
             statements: [{
               kind: "try-scope",
+              dispatchResultWrapped: true,
               bodyName,
               flowName,
               returnType,
@@ -539,6 +540,7 @@ test("multiline awaited match-arm expressions use a canonical arm block", () => 
       body: {
         statements: [{
           kind: "try-scope",
+          dispatchResultWrapped: true,
           bodyName: "try_body",
           flowName: "try_flow",
           returnType: { kind: "unit" },
@@ -585,6 +587,7 @@ test("multiline synchronous match-arm expressions remain direct", () => {
       body: {
         statements: [{
           kind: "try-scope",
+          dispatchResultWrapped: true,
           bodyName: "try_body",
           flowName: "try_flow",
           returnType: { kind: "unit" },

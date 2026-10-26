@@ -127,6 +127,7 @@ export function planResourceManagedBody(
   context.usedAliases?.add("rt");
   return {
     kind: "resource-scope",
+    dispatchResultWrapped: rustCompletionDispatchResultWrapped(context),
     flowName: allocateRustSyntheticName(context.syntheticNames, "resource_flow"),
     cleanupName: allocateRustSyntheticName(context.syntheticNames, "resource_cleanup"),
     returnType: boundary.returnType,
@@ -146,6 +147,10 @@ export function planResourceManagedBody(
       })),
     terminates,
   };
+}
+
+export function rustCompletionDispatchResultWrapped(context: RustPlanContext): boolean {
+  return context.completionBoundary !== undefined ? context.completionBoundary.fallible : context.returnResult !== undefined;
 }
 
 export function createRustCompletionBoundary(

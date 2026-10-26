@@ -131,6 +131,7 @@ export interface RustPlanContext {
     readonly declaration: Node;
     readonly controllerName: string;
     readonly protocol: RustGeneratorFact;
+    readonly errorUninhabited: boolean;
   };
   readonly expressionOverrides?: ReadonlyMap<Node, RustEffectiveExpressionOverride>;
   readonly valueDestinations?: ReadonlyMap<Node, TargetTypeRef>;

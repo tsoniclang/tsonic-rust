@@ -5,16 +5,15 @@ import type { RustType } from "../../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import { rustReturnTypeFromCarrierInContext, rustTypeFromCarrierInContext } from "../../types/render.js";
 import { failRustPlannerInvariant } from "../../diagnostics.js";
-import { getRustGeneratorProtocol } from "../../../../target-model/types/carriers/callables.js";
 
-export function resolveRustGeneratorBodyErrorType(
+export function resolveRustGeneratorBodyError(
   declaration: Node, context: RustPlanContext,
-): RustType {
-  const outward = context.input.program.records.callableReturn.get(declaration)?.outward;
-  const physical = outward === undefined ? undefined : getRustGeneratorProtocol(outward)?.physical;
-  if (physical === undefined) failRustPlannerInvariant("An admitted generator requires its selected physical error protocol.", declaration);
-  return rustTypeFromCarrierInContext(physical.errorCarrier, context)
+): { readonly errorType: RustType; readonly uninhabited: boolean } {
+  const selected = context.input.program.records.callableReturn.get(declaration)?.generatorError;
+  if (selected === undefined) failRustPlannerInvariant("An admitted generator requires its selected physical error protocol.", declaration);
+  const errorType = rustTypeFromCarrierInContext(selected.carrier, context)
     ?? failRustPlannerInvariant("An admitted generator requires its renderable selected native error carrier.", declaration);
+  return { errorType, uninhabited: selected.uninhabited };
 }
 
 export function resolveRustJsPromiseReturnType(

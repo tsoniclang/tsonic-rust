@@ -10,7 +10,7 @@ import { planRustCallableGenerics, rustCallableSpecialization } from "../callabl
 import { planRustCallableParameterPrelude, planRustCallableParameters } from "../callables/parameters.js";
 import { rustSelfParameter } from "../callables/self-parameter.js";
 import { readRustProjectMethodOverride } from "../../objects/project-objects.js";
-import { resolveRustCallableBodyReturnType, resolveRustCallableOutwardReturnType, resolveRustGeneratorBodyErrorType, resolveRustJsPromiseReturnType } from "../callables/return-types.js";
+import { resolveRustCallableBodyReturnType, resolveRustCallableOutwardReturnType, resolveRustGeneratorBodyError, resolveRustJsPromiseReturnType } from "../callables/return-types.js";
 import { rustDeclarationRequiresUnsafe, rustSafetyAttributesForDeclaration } from "../../safety/explicit-safety.js";
 import { rustLintAttributes } from "../../../target-ast/normalization/lint-policy.js";
 import { planRustErrorRegion } from "../../program/error-regions.js";
@@ -112,8 +112,8 @@ export function planProjectMethod(
   if (errorRegion === undefined) {
     failRustPlannerInvariant("An admitted native method requires its exact body, carrier, parameter and error-region records.", member);
   }
-  const bodyErrorType = generatorFact === undefined ? callableErrorBoundary?.errorType
-    : resolveRustGeneratorBodyErrorType(member, context);
+  const generatorError = generatorFact === undefined ? undefined : resolveRustGeneratorBodyError(member, context);
+  const bodyErrorType = generatorError === undefined ? callableErrorBoundary?.errorType : generatorError.errorType;
   const isUnit = isRustUnitCarrier(returnCarrier);
   const isNever = isRustNeverCarrier(returnCarrier);
   const returnType = isUnit || fallible && isNever
@@ -170,6 +170,7 @@ export function planProjectMethod(
       declaration: member,
       controllerName: generatorControllerName!,
       protocol: generatorFact,
+      errorUninhabited: generatorError!.uninhabited,
     },
     fallibleBoundary: callableErrorBoundary,
     returnResult: bodyErrorType === undefined ? undefined : { errorType: bodyErrorType },

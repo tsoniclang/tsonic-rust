@@ -6,7 +6,7 @@ import {
   Node_Expression,
 } from "@tsonic/target-api/source";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
-import { collectRustCompletionDispatch, createRustCompletionBoundary, tailCompletionExits } from "./resource-management.js";
+import { collectRustCompletionDispatch, createRustCompletionBoundary, tailCompletionExits, rustCompletionDispatchResultWrapped } from "./resource-management.js";
 import { registerAliasFromPath, rustActiveErrorType } from "../program/plan-context.js";
 import { rustLocalErrorOwner, rustInjectLocalError } from "../program/fallible-boundaries.js";
 import { planRustErrorRegion } from "../program/error-regions.js";
@@ -159,6 +159,7 @@ export function planTryStatement(node: Node, context: RustPlanContext): readonly
   const flowName = allocateRustSyntheticName(context.syntheticNames, "try_flow");
   const scope: Extract<RustStmt, { readonly kind: "try-scope" }> = {
     kind: "try-scope",
+    dispatchResultWrapped: rustCompletionDispatchResultWrapped(context),
     bodyName: allocateRustSyntheticName(context.syntheticNames, "try_body"),
     flowName,
     normalBindings,

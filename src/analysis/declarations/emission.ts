@@ -1,6 +1,8 @@
 import type { Node } from "@tsonic/tsts";
 import { failTargetAnalysisInvariant, type TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustAnalysisProgram } from "../program/model.js";
+import { getRustGeneratorProtocol } from "../../target-model/types/carriers/callables.js";
+import { rustUninhabitedError } from "../../policy/conversions/callable-physical.js";
 import type { RustDeclarationEmissionProducer } from "../program/records/declaration-emission.js";
 import { requireRustRecord, type RustRequiredRecord } from "../program/records/required-records.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
@@ -81,8 +83,13 @@ export function analyzeRustDeclarationEmission(input: {
         message: `${destination.reason} Node kind: ${ast.kindName(declaration)}.`, evidence: ["target.capability=rust.backend.value-destination"] });
       continue;
     }
-    input.producer.callable(declaration, { invocation: program.callableValues.nativeProducers.invocationResultFor(declaration),
-      outward: program.callableValues.nativeProducers.outwardReturnFor(declaration),
+    const outward = program.callableValues.nativeProducers.outwardReturnFor(declaration);
+    const generator = outward === undefined ? undefined : getRustGeneratorProtocol(outward)?.physical;
+    if (program.records.generator.get(declaration) !== undefined && generator === undefined)
+      failTargetAnalysisInvariant("tsonic-rust", "An admitted generator requires its selected physical error protocol.", declaration);
+    input.producer.callable(declaration, { invocation: program.callableValues.nativeProducers.invocationResultFor(declaration), outward,
+      generatorError: generator === undefined ? undefined : Object.freeze({ carrier: generator.errorCarrier,
+        uninhabited: rustUninhabitedError(generator.errorCarrier) }),
       destination: destination.kind === "identity" ? Object.freeze({ kind: "identity" })
         : Object.freeze({ kind: "selected", carrier: destination.carrier }) });
     requireRustRecord(input.required, "callableReturn", declaration, "native callable result", "analyzeRustDeclarationEmission");

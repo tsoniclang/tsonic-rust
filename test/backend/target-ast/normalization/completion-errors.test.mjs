@@ -12,6 +12,7 @@ const nativeError = { kind: "qualified", owner: { kind: "named", path: "Producer
   trait: { kind: "named", path: "callback::Invoke" }, member: "Error" };
 const region = (errorType, overrides = {}) => ({
   kind: "try-scope", bodyName: "body_flow", flowName: "flow", returnType: { kind: "unit" },
+  dispatchResultWrapped: errorType !== undefined,
   errorType, bodyErrorType: errorType, asynchronous: false,
   body: { statements: errorType === undefined ? [] : [{ kind: "expr", expr: {
     kind: "try", expr: { kind: "call", path: "produce", args: [] }, operandErrorType: errorType, resultErrorType: errorType,
@@ -149,6 +150,7 @@ test("native syntax boundary forwards only its typed invariant through the sole 
 test("resource completion preserves the concrete selected suppression owner's exact error", () => {
   const errorType = { kind: "named", path: "rt::TsonicError", identity: "package:resource-owner" };
   const scope = { kind: "resource-scope", flowName: "flow", cleanupName: "cleanup", returnType: { kind: "unit" },
+    dispatchResultWrapped: true,
     errorType, asynchronous: false, body: { statements: [] }, cleanup: { statements: [] },
     propagate: false, dispatchReturn: false, dispatchTargets: [], terminates: false };
   const statements = lowerRustCompletionScope(scope).body.statements;
@@ -171,6 +173,7 @@ test("completion-only exact error types retain their imported module aliases", (
     region(undefined, { catchClause: { binding: "error", body: { statements: [] }, errorType: nativeError, terminates: false } }),
     region(undefined, { finallyClause: { body: { statements: [] }, errorType: nativeError, terminates: false } }),
     { kind: "resource-scope", returnType: { kind: "unit" }, errorType: nativeError, body: { statements: [] },
+      dispatchResultWrapped: false,
       cleanup: { statements: [] }, dispatchTargets: [] },
   ]) {
     assert.equal(referenced(scope), true);

@@ -2,10 +2,98 @@ import { assertNoTargetDiagnostics } from "../../../../../tsonic/test/scripts/di
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { nativeFunction, nativeNodes } from "../../../helpers/native-ast.mjs";
-import { acmeTestingPackage, artifactText, compileRust } from "../../../helpers/rust-session.mjs";
+import { acmeTestingPackage, artifactText, compileRust, analyzeRust } from "../../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../../helpers/cargo-projects.mjs";
+import { planGeneratorResumeExpression } from "../../../../dist/backend/planner/expressions/generator-resume.js";
+import { createRustSyntheticNameState } from "../../../../dist/backend/planner/names/synthetic.js";
+import { getRustGeneratorProtocol } from "../../../../dist/target-model/types/carriers/callables.js";
+import { rustTargetTypeRefEquals } from "../../../../dist/target-model/types/equality.js";
+import { rustCompletionDispatchResultWrapped } from "../../../../dist/backend/planner/statements/resource-management.js";
 
 const generatorTypes = `import type { int32 } from "@tsonic/core/types.js";`;
+
+test("generator bodies consume one sealed physical throw disposition across all body forms", () => {
+  const { program } = analyzeRust({ files: { "index.ts": `${generatorTypes}
+    export function* declared(): Generator<int32, int32, int32> { yield 1; return 2; }
+    export class Values { static *items(): Generator<int32, int32, int32> { yield 3; return 4; } }
+    export const expression = function* (): Generator<int32, int32, int32> { yield 5; return 6; };
+  ` } });
+  const ast = program.source.ast;
+  let count = 0;
+  const visit = node => {
+    const generator = program.records.generator.get(node);
+    if (generator !== undefined) {
+      count += 1;
+      const selected = program.records.callableReturn.get(node);
+      const physical = getRustGeneratorProtocol(selected.outward)?.physical;
+      assert.equal(selected.generatorError?.uninhabited, true, "the actual infallible physical generator disposition was sealed once");
+      assert.equal(physical !== undefined && rustTargetTypeRefEquals(selected.generatorError.carrier, physical.errorCarrier), true,
+        "the disposition belongs to that identical physical generator error carrier");
+      const errorType = { kind: "named", path: "core::convert::Infallible" };
+      const context = { syntheticNames: createRustSyntheticNameState(ast, node, []), usedAliases: new Set(),
+        returnResult: { errorType }, functionReturnType: { kind: "primitive", name: "i32" },
+        generator: { declaration: node, controllerName: "generator", protocol: generator, errorUninhabited: selected.generatorError.uninhabited } };
+      const resume = { kind: "path", path: "resume" };
+      const uninhabited = planGeneratorResumeExpression(resume, context).arms[2].expression;
+      assert.equal(uninhabited.kind === "match" && uninhabited.arms.length === 0, true,
+        "the renderer empty-matches the impossible incoming error without introducing Err?");
+      const inhabitedError = { kind: "named", path: "NativeError" };
+      const inhabited = planGeneratorResumeExpression(resume, { ...context, returnResult: { errorType: inhabitedError },
+        generator: { ...context.generator, errorUninhabited: false } }).arms[2].expression;
+      assert.equal(inhabited.kind === "try" && inhabited.operandErrorType === inhabitedError && inhabited.resultErrorType === inhabitedError, true,
+        "an inhabited disposition retains its exact established native error propagation");
+      assert.throws(() => planGeneratorResumeExpression(resume, { ...context,
+        generator: { ...context.generator, errorUninhabited: undefined } }), /native name scope and body error carrier/u,
+        "a missing disposition is never guessed from an error type spelling");
+    }
+    ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+  };
+  for (const file of program.sourceFiles) visit(file);
+  assert.equal(count, 3, "declaration, method and captured-expression body constructors share the required disposition");
+});
+
+test("completion return wrapping follows the nearest actual return target", () => {
+  const result = { errorType: { kind: "named", path: "NativeError" } };
+  assert.equal(rustCompletionDispatchResultWrapped({}), false, "an ordinary native value function stays unwrapped");
+  assert.equal(rustCompletionDispatchResultWrapped({ returnResult: result }), true,
+    "a generator Result ABI remains wrapped without inhabited throw effects");
+  assert.equal(rustCompletionDispatchResultWrapped({ completionBoundary: { fallible: false }, returnResult: result }), false,
+    "a pure nearest Completion boundary takes priority over its outer Result callable");
+  assert.equal(rustCompletionDispatchResultWrapped({ completionBoundary: { fallible: true } }), true,
+    "a fallible nearest Completion boundary retains its own exact Result shape");
+});
+
+for (const form of ["declaration", "method", "expression"]) {
+  test(`generator completion Results preserve nested finally overrides for ${form}`, { timeout: 300_000 }, () => {
+    const body = `
+      try {
+        try { yield seed; return 2; }
+        finally { finalized += 1; }
+      } finally { finalized += 10; return 3; }
+    `;
+    const declaration = form === "declaration"
+      ? `function* values(seed: int32): Generator<int32, int32, int32> { ${body} }`
+      : form === "method" ? `class Values { static *items(seed: int32): Generator<int32, int32, int32> { ${body} } }`
+      : `const values = function* (seed: int32): Generator<int32, int32, int32> { ${body} };`;
+    const invocation = form === "method" ? "Values.items(1)" : "values(1)";
+    const { result } = compileRust({ target: { id: "rust", options: { outputType: "bin", crateName: `generator_finally_${form}` } },
+      files: { "index.ts": `${generatorTypes}
+        let finalized: int32 = 0;
+        ${declaration}
+        export function main(): void {
+          const current = ${invocation};
+          const first = current.next();
+          if (first.done || first.value !== 1) throw new Error("original yield");
+          const last = current.return(30);
+          if (!last.done || last.value !== 3 || finalized !== 11) throw new Error("finally override or cleanup order");
+        }
+        main();
+      ` } });
+    assertNoTargetDiagnostics(result.diagnostics);
+    assert.equal(validateGeneratedProject(`generator-finally-${form}`, result.artifacts, { run: true }).status, 0,
+      "the required native Result retains both cleanup scopes and the authored final override");
+  });
+}
 
 test("sync generators preserve exact yield, return, and next carriers", () => {
   const { result } = compileRust({

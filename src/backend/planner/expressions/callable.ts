@@ -39,7 +39,7 @@ import { planRustCallableLeadingParameters } from "../declarations/callables/lea
 import { applyFinalizedValueConversion } from "./value-conversions.js";
 import { planRustCapturedReceiverFields, planRustCapturedReceivers, rustRecursiveReceiverFieldContext } from "./receiver-captures.js";
 import { planRustErrorRegion } from "../program/error-regions.js";
-import { resolveRustGeneratorBodyErrorType } from "../declarations/callables/return-types.js";
+import { resolveRustGeneratorBodyError } from "../declarations/callables/return-types.js";
 
 function rustCallableCreationIsErased(node: Node, context: RustPlanContext): boolean {
   const participation = context.input.program.records.nativeParticipation.get(node);
@@ -167,7 +167,7 @@ export function planRustCallableExpressionBody(
   const resultIsFallible = emission.resultFallible;
   const bodyIsFallible = emission.bodyFallible;
   const callableErrorBoundary = errorRegion.boundary;
-  const generatorErrorType = generator === undefined ? undefined : resolveRustGeneratorBodyErrorType(node, context);
+  const generatorError = generator === undefined ? undefined : resolveRustGeneratorBodyError(node, context);
   const producerContext = { ...context, callableDeclaration: node, fallibleBoundary: callableErrorBoundary };
   const physicalCarrier = emission.physicalCarrier;
   const invocationErrorCarrier = emission.invocationError;
@@ -214,7 +214,7 @@ export function planRustCallableExpressionBody(
     asyncContext: asynchronous?.kind === "native-future" ||
       asynchronous?.kind === "js-promise" && asynchronous.lowering.kind === "factory" || generator?.kind === "async",
     generator: generator === undefined ? undefined : {
-      declaration: node, controllerName: controllerName!, protocol: generator,
+      declaration: node, controllerName: controllerName!, protocol: generator, errorUninhabited: generatorError!.uninhabited,
     },
   };
   const environment = planRustCapturedEnvironment(node, captureFact.captures, closureContext, {
@@ -391,7 +391,7 @@ export function planRustCallableExpressionBody(
   const bodyContext: RustPlanContext = {
     ...parameterContext,
     functionReturnType: resultType,
-    returnResult: generatorErrorType === undefined ? undefined : { errorType: generatorErrorType },
+    returnResult: generatorError === undefined ? undefined : { errorType: generatorError.errorType },
     functionAbsenceReturnCarrier: sourceReturn?.undefinedReturn === true ? bodyResultCarrier : undefined,
   };
   const plannedBody = ast.kindName(bodyNode) === "KindBlock"

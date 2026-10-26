@@ -98,6 +98,7 @@ function nativeFunctions() {
   const pure = planRustNativeErrorJoin({ identity: "native:pure", name: "UnusedPureError", visibility: "private", resultShape: "value",
     sources: [] });
   const completion = { kind: "try-scope", bodyName: "body_flow", flowName: "flow", finallyName: "finally_flow",
+    dispatchResultWrapped: true,
     returnType: { kind: "unit" }, errorType: join.errorType, bodyErrorType: join.errorType, asynchronous: false,
     body: { statements: [{ kind: "expr", expr: rustPropagateNativeError(region, left, invoke("left")) },
       { kind: "expr", expr: rustPropagateNativeError(region, right, invoke("right")) }] }, bodyTerminates: false,

@@ -6,7 +6,7 @@ import { failRustPlannerInvariant } from "../diagnostics.js";
 
 export function planGeneratorResumeExpression(resume: RustExpr, context: RustPlanContext): RustExpr {
   const activeErrorType = context.returnResult?.errorType;
-  if (context.syntheticNames === undefined || activeErrorType === undefined)
+  if (context.syntheticNames === undefined || activeErrorType === undefined || typeof context.generator?.errorUninhabited !== "boolean")
     failRustPlannerInvariant("An admitted generator resume requires its native name scope and body error carrier.", context.callableDeclaration ?? context.sourceFile);
   const next = allocateRustSyntheticName(context.syntheticNames, "generator_next");
   const returned = allocateRustSyntheticName(context.syntheticNames, "generator_return");
@@ -17,7 +17,8 @@ export function planGeneratorResumeExpression(resume: RustExpr, context: RustPla
     { pattern: { kind: "tuple-variant", path: "rt::GeneratorResume::Return", elements: [{ kind: "binding", name: returned }] },
       expression: planRustReturnExpression({ kind: "path", path: returned }, context) },
     { pattern: { kind: "tuple-variant", path: "rt::GeneratorResume::Throw", elements: [{ kind: "binding", name: error }] },
-      expression: { kind: "try", resultErrorType: activeErrorType, operandErrorType: activeErrorType,
+      expression: context.generator.errorUninhabited ? { kind: "match", expression: { kind: "path", path: error }, arms: [] }
+        : { kind: "try", resultErrorType: activeErrorType, operandErrorType: activeErrorType,
         expr: { kind: "call", path: "Err", args: [{ kind: "path", path: error }] } } },
   ] };
 }

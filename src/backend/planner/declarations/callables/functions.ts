@@ -23,7 +23,7 @@ import {
   planRustCallableParameterPrelude,
   planRustCallableParameters,
 } from "./parameters.js";
-import { resolveRustCallableBodyReturnType, resolveRustCallableOutwardReturnType, resolveRustGeneratorBodyErrorType, resolveRustJsPromiseReturnType } from "./return-types.js";
+import { resolveRustCallableBodyReturnType, resolveRustCallableOutwardReturnType, resolveRustGeneratorBodyError, resolveRustJsPromiseReturnType } from "./return-types.js";
 import { rustDeclarationRequiresUnsafe, rustSafetyAttributesForDeclaration } from "../../safety/explicit-safety.js";
 import { rustLintAttributes } from "../../../target-ast/normalization/lint-policy.js";
 import { wrapRustJsPromiseBody } from "./async-promise.js";
@@ -214,8 +214,8 @@ function planRustFunctionItem(
   if (errorRegion === undefined) {
     failRustPlannerInvariant("An admitted callable requires its exact native declaration, return, error and body contracts.", node);
   }
-  const bodyErrorType = generatorFact === undefined ? callableErrorBoundary?.errorType
-    : resolveRustGeneratorBodyErrorType(node, context);
+  const generatorError = generatorFact === undefined ? undefined : resolveRustGeneratorBodyError(node, context);
+  const bodyErrorType = generatorError === undefined ? callableErrorBoundary?.errorType : generatorError.errorType;
   const isUnit = isRustUnitCarrier(returnCarrier);
   const isNever = isRustNeverCarrier(returnCarrier);
   const returnType = isUnit || fallible && isNever
@@ -264,6 +264,7 @@ function planRustFunctionItem(
       declaration: node,
       controllerName: generatorControllerName!,
       protocol: generatorFact,
+      errorUninhabited: generatorError!.uninhabited,
     },
     fallibleBoundary: callableErrorBoundary,
     returnResult: bodyErrorType === undefined ? undefined : { errorType: bodyErrorType },

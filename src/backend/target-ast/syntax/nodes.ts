@@ -307,6 +307,7 @@ export type RustStmt =
     }
   | {
       readonly kind: "resource-scope";
+      readonly dispatchResultWrapped: boolean;
       readonly flowName: string;
       readonly cleanupName: string;
       readonly returnType: RustType;
@@ -331,6 +332,7 @@ export type RustStmt =
   | { readonly kind: "throw"; readonly error: RustExpr; readonly tail?: true }
   | {
       readonly kind: "try-scope";
+      readonly dispatchResultWrapped: boolean;
       readonly normalBindings?: readonly Extract<RustStmt, { readonly kind: "let" }>[];
       readonly bodyBindings?: readonly Extract<RustStmt, { readonly kind: "let" }>[];
       readonly bodyName: string;
