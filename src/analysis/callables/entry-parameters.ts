@@ -16,6 +16,7 @@ import { closeRustRetainedCallableCarrier } from "../../policy/ownership/retaine
 import { rustStaticLifetime } from "../../target-model/lifetimes/index.js";
 import type { RustGenericCallablePlan } from "./generic-values.js";
 import type { RustNativeGenericEntry } from "../../target-model/records/declaration-emission.js";
+import type { RustGenericCallableImplementation } from "../../target-model/records/generic-callables.js";
 import { rustGenericCallableStorageArguments } from "../../target-model/types/carriers/generic-callable-storage.js";
 
 export function analyzeRustCallableEntryParameters(input: {
@@ -33,9 +34,10 @@ export function analyzeRustCallableEntryParameters(input: {
   const { ast } = input.source;
   const issues: TargetDiagnostic[] = [];
   const headers = new Map<Node, RustNativeCallableGenericHeader>();
-  const genericEntries = new Map<Node, RustNativeGenericEntry>();
+  const genericEntries = new Map<Node, Map<RustGenericCallableImplementation, RustNativeGenericEntry>>();
   for (const definition of input.generic.definitions) for (const implementation of definition.implementations) {
-    if (genericEntries.has(implementation.declaration)) continue;
+    const entries = genericEntries.get(implementation.declaration) ?? new Map<RustGenericCallableImplementation, RustNativeGenericEntry>();
+    if (entries.has(implementation)) continue;
     const environment = input.generic.physical.environmentFor(implementation);
     if (environment === undefined) failTargetAnalysisInvariant("tsonic-rust",
       "An admitted generic native entry requires its completed physical capture environment.", implementation.declaration);
@@ -45,8 +47,9 @@ export function analyzeRustCallableEntryParameters(input: {
     const captures = environment.captures.length + environment.receiverFields.length + environment.receivers.length;
     const statePassing = !helper || captures === 0 ? undefined : !suspended ? "shared-reference" as const
       : implementation.storage === "shared" ? "rc" as const : "value" as const;
-    genericEntries.set(implementation.declaration, Object.freeze({ implementation, environment, suspended, helper, statePassing,
+    entries.set(implementation, Object.freeze({ implementation, environment, suspended, helper, statePassing,
       arguments: rustGenericCallableStorageArguments(definition.signature.environmentParameters, environment.parameters) }));
+    genericEntries.set(implementation.declaration, entries);
   }
   const declarations = new Set(input.nodes.filter(node => ast.is.IsFunctionDeclaration(node) ||
     ast.is.IsFunctionExpression(node) || ast.is.IsArrowFunction(node) || ast.is.IsMethodDeclaration(node) ||
@@ -97,7 +100,8 @@ export function analyzeRustCallableEntryParameters(input: {
       if (parameter.kind === "this") visit(node);
       return Object.freeze({ ...parameter, reads: Object.freeze(reads) });
     });
-    input.producer.leading(node, { parameters: Object.freeze(parameters), genericHeader: headers.get(node), genericEntry: genericEntries.get(node),
+    input.producer.leading(node, { parameters: Object.freeze(parameters), genericHeader: headers.get(node),
+      genericEntries: genericEntries.get(node) ?? new Map<RustGenericCallableImplementation, RustNativeGenericEntry>(),
       sourceParameters: sourceParameters.get(node) ?? new Map<Node, TargetTypeRef>() });
     requireRustRecord(input.required, "callableLeading", node, "native callable entry parameters", "analyzeRustCallableEntryParameters");
   }

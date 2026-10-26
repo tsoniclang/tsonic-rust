@@ -44,7 +44,7 @@ export function analyzeRustGenericEmission(input: {
   for (const definition of generic.definitions) for (const implementation of definition.implementations) {
     if (implementations.has(implementation)) continue;
     implementations.add(implementation);
-    const entry = program.records.callableLeading.get(implementation.declaration)?.genericEntry;
+    const entry = program.records.callableLeading.get(implementation.declaration)?.genericEntries.get(implementation);
     const requirements = program.declarationGenericRequirements.contractFor(implementation.declaration);
     if (entry?.implementation !== implementation || requirements === undefined) failTargetAnalysisInvariant("tsonic-rust",
       "An admitted generic implementation requires its finalized physical environment and generic contract.", implementation.declaration);
