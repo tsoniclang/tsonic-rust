@@ -21,7 +21,6 @@ import { isRustErasedNominalMember } from "../../../../policy/types/objects/sour
 import { rustSourcePropertyTargetType } from "../../../../target-model/types/projections.js";
 import { retainRustSourceUnionInstantiation, rustSourceUnionValueTypes } from "./source-unions.js";
 import { closedMetadataKey } from "../../../../target-model/metadata/closed-data.js";
-import { rustSourceStorageComponentContext, rustSourceStorageSubjectContext } from "./source-storage-projection.js";
 
 export function retainRustStructuralInstantiation(
   sourceType: Type,
@@ -74,8 +73,7 @@ export function retainRustStructuralInstantiation(
       context.ast.kindName(authoredTypeNode) === "KindArrayType" ? ArrayTypeNode_ElementType(context.ast, authoredTypeNode)
       : context.ast.is.IsTypeReferenceNode(authoredTypeNode) ? context.ast.typeArguments(authoredTypeNode)[0] : undefined;
     return arguments_.length === 1 && arguments_[0] !== undefined &&
-      retainRustStructuralInstantiation(arguments_[0], templateElement, element,
-        rustSourceStorageComponentContext(context, { kind: "array-element" }), options, resolving, elementNode);
+      retainRustStructuralInstantiation(arguments_[0], templateElement, element, context, options, resolving, elementNode);
   }
   // A tuple retains each element's instantiation; an element without structural storage is identical in both carriers.
   if (templateCarrier.kind === "tuple" || carrier.kind === "tuple") {
@@ -88,8 +86,7 @@ export function retainRustStructuralInstantiation(
     return infos.every((info, index) => {
       const elementNode = elementNodes?.[index];
       return retainRustStructuralInstantiation(info.type, templateCarrier.elements[index]!, carrier.elements[index]!,
-        rustSourceStorageComponentContext(context, { kind: "tuple-element", index }), options, resolving,
-        elementNode !== undefined && context.ast.kindName(elementNode) !== "KindNamedTupleMember"
+        context, options, resolving, elementNode !== undefined && context.ast.kindName(elementNode) !== "KindNamedTupleMember"
           ? elementNode : undefined);
     });
   }
@@ -137,7 +134,7 @@ export function retainRustStructuralInstantiation(
     }))];
     const declared = authoredNodes.map(authoredTypeNode => resolveRustTypeComponentEvidence({
       authoredTypeNode, selectedType: selected.source.property.type,
-    }, rustSourceStorageSubjectContext(context, undefined), options, resolving));
+    }, context, options, resolving));
     const normalize = rustTypeFamilyNormalizer(options.sourceTypes.typeFamilies);
     const expected = mapRustTargetTypes(targetField.type, normalize);
     // The authored field type keeps an open callable environment: the selected storage either closes it with its own
@@ -160,10 +157,8 @@ export function retainRustStructuralInstantiation(
         !rustTargetTypeRefEquals(rustCarrierWithTargetPlaceholderLifetimes(authored, expected), expected) &&
         (nestedTemplate === undefined || !rustTargetTypeRefEquals(authored, nestedTemplate));
     })) return undefined;
-    if (selected.source.declarations.length === 0 || !selected.source.declarations.every(declaration =>
-      retainRustStructuralInstantiation(selected.source.property.type, field.resultCarrier,
-        targetField.type, rustSourceStorageComponentContext(context, { kind: "member", declaration }),
-        options, resolving, authoredNodes[0]))) return undefined;
+    if (!retainRustStructuralInstantiation(selected.source.property.type, field.resultCarrier,
+      targetField.type, context, options, resolving, authoredNodes[0])) return undefined;
     return {
       ...field,
       declarations: selected.source.declarations,

@@ -4,6 +4,43 @@ import { test } from "node:test";
 import { artifactText, compileRust } from "../../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../../helpers/cargo-projects.mjs";
 
+test("source callable results infer their exact native storage and preserve captured effects", { timeout: 300_000 }, () => {
+  const { result } = compileRust({ surfaces: ["js"],
+    target: { id: "rust", options: { outputType: "bin", crateName: "inferred_callable_storage" } },
+    files: { "index.ts": `export {};
+function make<Value>(done: (value: Value) => void, value: Value): () => void {
+  return () => { done(value); };
+}
+function run(): void {
+  let count = 0;
+  const callback = make((actual: number): void => { count += actual; }, 7);
+  callback();
+  if (count !== 7) throw new Error("captured callback effect");
+}
+run();
+` } });
+  assert.equal(result.diagnostics.length, 0, "the checked callback result is admitted");
+  const source = artifactText(result, "src/index.rs");
+  assert.match(source, /let callback = make/u, "the complete native initializer determines its result type");
+  assert.doesNotMatch(source, /let callback:/u, "no redundant associated-error type is emitted");
+  validateGeneratedProject("inferred-callable-storage", result.artifacts, { run: true });
+});
+
+test("authored callable destinations retain their explicit native storage", () => {
+  const { result } = compileRust({ surfaces: ["js"], files: { "index.ts": `
+function make<Value>(done: (value: Value) => void, value: Value): () => void {
+  return () => { done(value); };
+}
+export function run(): void {
+  const callback: () => void = make((actual: number): void => { void actual; }, 7);
+  callback();
+}
+` } });
+  assert.equal(result.diagnostics.length, 0, "the authored callback destination is admitted");
+  assert.match(artifactText(result, "src/index.rs"), /let callback:/u,
+    "an authored destination is not replaced by initializer inference");
+});
+
 test("local declaration lists preserve source order and independent carriers", { timeout: 300_000 }, () => {
   const { result } = compileRust({
     files: {
