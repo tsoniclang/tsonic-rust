@@ -22,8 +22,7 @@ test("closed runtime values expose exact categories without claiming exhaustive 
   const context = { input: { program: { typeDefinitions: emptyRustTypeDefinitions } } };
   const input = { kind: "path", path: "value" };
   assert.deepEqual(planRustRuntimeCategory(input, selected, context), {
-    kind: "owned-string-from-borrowed-str",
-    expression: { kind: "method-call", receiver: input, method: "type_of", args: [] },
+    kind: "method-call", receiver: input, method: "type_of", args: [],
   });
   assert.equal(selected.method, "type_of", "the one producer publishes only the method admitted by its literal type contract");
   assert.equal(selected.sourceCarrier === source, true, "the actual native source identity is retained, not reconstructed");
@@ -67,10 +66,10 @@ test("optional runtime categories preserve exact single-producer source and payl
     const context = { input: { program: { typeDefinitions: emptyRustTypeDefinitions } }, syntheticNames: {} };
     const input = { kind: "path", path: "value" };
     const planned = planRustRuntimeCategory(input, selected, context);
-    assert.equal(planned.kind, "owned-string-from-borrowed-str");
-    assert.deepEqual(planned.expression.expression, { kind: "reference", expr: input });
-    assert.deepEqual(planned.expression.arms[0].expression, { kind: "str-literal", value: kind });
-    assert.deepEqual(planned.expression.arms[1].expression, { kind: "str-literal", value: "object" });
+    assert.equal(planned.kind, "match");
+    assert.deepEqual(planned.expression, { kind: "reference", expr: input });
+    assert.deepEqual(planned.arms[0].expression, { kind: "str-literal", value: kind });
+    assert.deepEqual(planned.arms[1].expression, { kind: "str-literal", value: "object" });
     assert.equal(selected.sourceCarrier === sourceCarrier, true,
       "the dependent source carrier is the actual optional input, not its nonoptional payload");
     assert.equal(selected.value, getRustTypeofRuntimeKind(value, emptyRustTypeDefinitions),
