@@ -17,6 +17,7 @@ import { mapRustTargetTypes, substituteRustTargetTypeParameters } from "../../ta
 import { rustTypeFamilyNormalizer } from "../project-types/type-family-normalization.js";
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
 import { rustJsArrayEntriesElementTargetType } from "../../target-model/types/carriers/array-entries.js";
+import { rustJsArrayLikeElementTargetType } from "../../target-model/types/carriers/js.js";
 import { rustTargetTypeParameterIdentities } from "../../target-model/types/carriers/generic-references.js";
 
 import { createRustProjectProjectionRequirementCollector } from "./project-projection-requirements.js";
@@ -56,6 +57,7 @@ interface CallableRequirementVisitState {
   readonly projections: ReturnType<typeof createRustProjectProjectionRequirementCollector>;
   readonly addUse: (node: Node, carrier: TargetTypeRef | undefined, requirements: readonly RustGenericRequirement[], nativeStorage?: boolean) => string | undefined;
 }
+
 
 export function createRustCallableRequirementVisitor(input: RustCallableRequirementInput, state: CallableRequirementVisitState): (node: Node) => string | undefined {
   const { ast, declaration, records } = input;
@@ -412,7 +414,8 @@ export function createRustCallableRequirementVisitor(input: RustCallableRequirem
       for (const requirement of providerOperation.carrierRequirements ?? []) {
         const source = requirement.source;
         if (source === undefined || source === null || !isClosedMetadata(source) || !isDenseDataArray(source.projection) ||
-          source.projection.some(index => !Number.isSafeInteger(index) || index < 0) ||
+          source.projection.some(index => index !== "array-element" &&
+            (typeof index !== "number" || !Number.isSafeInteger(index) || index < 0)) ||
           source.kind !== "receiver" && (source.kind !== "argument" ||
             !Number.isSafeInteger(source.sourceIndex) || source.sourceIndex < 0))
           return "A provider carrier requirement has no exact source input and component correspondence.";
@@ -433,8 +436,10 @@ export function createRustCallableRequirementVisitor(input: RustCallableRequirem
         let physicalComponent = logical === undefined ? undefined
           : rustPhysicalPayloadFor(logical, physical.carrier, sourceInput.carrier, input.typeDefinitions);
         for (const index of source.projection) {
-          logicalComponent = logicalComponent === undefined ? undefined : rustTargetTypeChildren(logicalComponent)[index];
-          physicalComponent = physicalComponent === undefined ? undefined : rustTargetTypeChildren(physicalComponent)[index];
+          logicalComponent = logicalComponent === undefined ? undefined : index === "array-element"
+            ? rustJsArrayLikeElementTargetType(logicalComponent) : rustTargetTypeChildren(logicalComponent)[index];
+          physicalComponent = physicalComponent === undefined ? undefined : index === "array-element"
+            ? rustJsArrayLikeElementTargetType(physicalComponent) : rustTargetTypeChildren(physicalComponent)[index];
         }
         if (logicalComponent === undefined || physicalComponent === undefined ||
           !rustTargetTypeRefEquals(logicalComponent, requirement.carrier))
