@@ -682,7 +682,7 @@ test("published callable plans expose no construction capability", () => {
 });
 
 test("published capture environments are the completed required declarations only", () => {
-  const { program } = analyzeRust({ surfaces: [], files: { "index.ts": joinedLibrary } });
+  const { program } = analyzeRust({ surfaces: [], files: { "index.ts": joinedLibrary + "\nfunction unused(): number { return 0; }\n" } });
   const source = program.source;
   const { generic, nativeCaptures } = program.callableValues;
   const implementations = generic.definitions.flatMap(definition => definition.implementations);
@@ -700,7 +700,16 @@ test("published capture environments are the completed required declarations onl
   for (const file of program.records.sourceArtifacts.get().map(artifact => artifact.sourceFile)) visit(file);
   const make = nodes.find(node => source.ast.is.IsFunctionDeclaration(node) &&
     source.ast.name(node) !== undefined && source.ast.text(source.ast.name(node)) === "make");
-  assert.match(nativeCaptures.forDeclaration(make).reason, /required generic or suspended declarations/u);
+  assert.equal(make !== undefined, true, "the ordinary module function is called by the original choose body");
+  const required = nativeCaptures.forDeclaration(make);
+  assert.equal(required.kind, "resolved", "the actually used module function publishes its required physical environment");
+  assert.equal(required.captures.length + required.receiverFields.length + required.receivers.length, 0,
+    "the source function has no physical captures rather than a fabricated pending environment");
+  assert.equal(nativeCaptures.forDeclaration(make) === required, true, "the completed required module environment is stable");
+  const unused = nodes.find(node => source.ast.is.IsFunctionDeclaration(node) &&
+    source.ast.name(node) !== undefined && source.ast.text(source.ast.name(node)) === "unused");
+  assert.equal(unused !== undefined, true, "the unrequired inverse is a real owned unused source declaration");
+  assert.match(nativeCaptures.forDeclaration(unused).reason, /required generic or suspended declarations/u);
   let inspected = 0;
   const foreign = Object.defineProperty({}, "kind", { get() { inspected += 1; throw new Error("not owned"); } });
   assert.match(nativeCaptures.forDeclaration(foreign).reason, /owned source declaration/u);
