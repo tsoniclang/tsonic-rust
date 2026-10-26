@@ -15,7 +15,9 @@ function fixture() {
   const integer = { kind: "source-primitive", name: "int32" };
   const selected = { kind: "type-parameter", identity: "call-site:Value", name: "Value" };
   const context = {
-    currentSemantics: { types: {
+    ast: { kind: () => undefined },
+    source: { sourceFacts: { getFact: () => undefined } },
+    currentSemantics: { facts: { typeSubjects: () => [] }, types: {
       effectiveTypeArguments: () => arguments_,
       typeArgumentBindings: () => bindings,
       isNonPrimitive: () => true,
