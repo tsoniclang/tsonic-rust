@@ -10,6 +10,9 @@ import { analyzeRustPromiseResults, analyzeRustPromiseResultUses } from "../../.
 import { rustAwaitSelectionLeaves } from "../../../dist/target-model/types/await.js";
 import { rustAwaitSelection } from "../../../dist/policy/operations/flow/await.js";
 import { rustJsPromiseTargetType } from "../../../dist/target-model/types/carriers/promises.js";
+import { rustCallableProtocol, rustStructuralMethodCallableCarrier } from "../../../dist/target-model/types/carriers/callables.js";
+import { rustOptionElementCarrier } from "../../../dist/target-model/types/carriers/optional.js";
+import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 
 for (const [name, expected] of [
   ["contradictory projected source carrier", /identical selected source carrier before projection/u],
@@ -296,6 +299,21 @@ await main();` },
     assert.equal(calls.length, 1, "the exact native keep invocation has one source retention decision");
     assert.equal(program.promiseResults.get(calls[0])?.disposition.kind, "stored",
       "the actual stored native result retains its original use classification");
+    for (const shape of program.structuralShapes.instances) for (const field of shape.fields) {
+      if (field.methodPlan?.kind !== "stored") continue;
+      const value = rustCallableProtocol(rustStructuralMethodCallableCarrier(field.carrier, field.presence));
+      const selected = rustCallableProtocol(field.presence === "optional"
+        ? rustOptionElementCarrier(field.methodPlan.carrier) : field.methodPlan.carrier);
+      assert.equal(value !== undefined && selected !== undefined, true,
+        `${name}/${shape.targetName}/${field.sourceName}: the selected native method has its exact field-value protocol`);
+      const parameters = field.methodPlan.receiver === "included" ? selected.parameters.slice(1) : selected.parameters;
+      assert.equal(parameters.length === value.parameters.length && parameters.every((parameter, index) =>
+        rustTargetTypeRefEquals(parameter, value.parameters[index])), true,
+      `${name}/${shape.targetName}/${field.sourceName}: only the selected included receiver is removed from the field-value signature`);
+      assert.equal(rustTargetTypeRefEquals(value.result, selected.result) &&
+        rustTargetTypeRefEquals(value.error, selected.error), true,
+      `${name}/${shape.targetName}/${field.sourceName}: field accessors and stored methods share the exact native result/error channel`);
+    }
   });
 }
 
