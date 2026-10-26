@@ -14,7 +14,9 @@ import {
   rustAbsenceTargetType,
   rustSourceOptionalTargetType,
   rustVecTargetType,
+  rustJsErrorTargetType,
 } from "../../../dist/target-model/types/index.js";
+import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 
 const denseSource = `
 import type { int32 } from "@tsonic/core/types.js";
@@ -233,7 +235,22 @@ export function pad(): string {
 
   assertNoTargetDiagnostics(result.diagnostics);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /pub fn pad\(\) -> Result<String, rt::TsonicError>/u);
+  assert.match(text, /pub fn pad\(\) -> Result<String, rt::JsError>/u);
+  const calls = result.program.physicalEmissionContexts.sourceOccurrences.filter(({ operation }) =>
+    operation.abi.target.form === "free-call" &&
+    ["js_string::pad_start_with", "js_string::pad_end"].includes(operation.abi.target.path));
+  assert.equal(calls.length, 2, "both padding helpers retain their actual native error contract");
+  for (const { node, operation } of calls) {
+    assert.equal(operation.abi.effects.errorBoundary, "provider-native", "a native padding error is not a manufactured package error");
+    assert.equal(rustTargetTypeRefEquals(operation.abi.effects.errorCarrier, rustJsErrorTargetType()), true,
+      "the selected helper exposes the identical native JsError carrier");
+    const propagation = result.program.records.providerForm.get(node, operation.abi)?.nativeResult;
+    assert.equal(propagation !== undefined, true, "both native errors have exact pre-seal propagation evidence");
+    assert.equal(propagation.operand.localOwner === undefined && propagation.operand.sources.length === 1, true,
+      "padding keeps one native channel without introducing a local source error");
+    assert.equal(rustTargetTypeRefEquals(propagation.operand.sources[0].errorType, rustJsErrorTargetType()), true,
+      "the native propagation payload is not widened at emission");
+  }
   assert.match(text, /js_string::pad_start_with\(\s*"7",\s*3\.0,\s*"0",?\s*\)\?/u);
   assert.match(text, /js_string::pad_end\(\s*"x",\s*2\.0,?\s*\)\?/u);
   assert.doesNotMatch(text, /AsRef::<str>::as_ref\("(?:7|x)"\)/u);
