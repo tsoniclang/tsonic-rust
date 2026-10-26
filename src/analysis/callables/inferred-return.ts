@@ -201,10 +201,9 @@ function selectReturn(
           const annotation = reference === undefined ? undefined : Node_Type(ast, reference);
           if (reference !== undefined && (annotation === undefined || expected !== undefined) &&
             (ast.variableDeclarationKind(reference) === "const" || unwritten) && initializer !== undefined) {
-            const contextual = annotation === undefined ? expected
-              : resolveRustTargetTypeRef(annotation, rustResolutionContext(probe, reference), probe.operationOptions);
-            if (annotation !== undefined && contextual === undefined) return undefined;
-            return expressionCarrier(initializer, contextual);
+            if (annotation !== undefined) return referenceFile === undefined ? undefined
+              : resolveExpressionCarrier(probe, expression, referenceFile, expected, role === "retained" ? "operation" : "value");
+            return expressionCarrier(initializer, expected);
           }
         }
         if (ast.is.IsConditionalExpression(expression)) {
