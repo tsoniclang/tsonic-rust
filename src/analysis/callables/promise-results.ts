@@ -547,7 +547,7 @@ export function analyzeRustPromiseResults(input: {
     if (callee !== undefined && input.ast.is.IsIdentifier(callee)) erasedCallees.add(callee);
   }
   const domain = erasedCallees.size === 0 ? { kind: "resolved" as const, domain: { kind: "source" as const } }
-    : createSourceControlFlowDomain(input.source, input.storage.nodes.filter(node => !erasedCallees.has(node)));
+    : createSourceControlFlowDomain(input.source, input.nodes.filter(node => !erasedCallees.has(node)));
   if (domain.kind === "unresolved") return { results, diagnostics: [...diagnostics, {
     code: "RUST_ASYNC_RESULT_USE_NOT_PROVEN", category: "error", source: "tsonic-rust",
     sourceNode: domain.source, message: domain.reason,
