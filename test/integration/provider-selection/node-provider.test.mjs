@@ -381,7 +381,7 @@ main();
   assertNoTargetDiagnostics(result.diagnostics);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /JsValue::from\(label\.clone\(\)\)/u);
-  assert.match(text, /tsonic_rust_node::util::format\("%j", core::slice::from_ref\(&parsed\)\)\?/u);
+  assert.match(text, /tsonic_rust_node::util::format\(\s*"%j",\s*core::slice::from_ref\(&parsed\),?\s*\)\?/u);
   assert.match(text, /js_abi::json_stringify\(&parsed\)\?/u);
   const run = validateGeneratedProject("node-provider-bin", result.artifacts, { run: true });
   assert.equal(run.status, 0);
@@ -495,7 +495,7 @@ export function register(
   assert.deepEqual(arguments_[1].genericArguments[0].type, nativeType("()"));
   const register = nativeFunction(result, "register");
   assert.equal(register.visibility, "public");
-  assert.deepEqual(register.params.map(parameter => parameter.type), [{ kind: "named", path: "RegisterHandler" }]);
+  assert.deepEqual(register.params.map(parameter => parameter.type), [{ kind: "named", path: "RegisterHandler", genericArguments: [] }]);
   const servers = nativeCalls(register.body, "tsonic_rust_node::http::create_server_optional");
   assert.equal(servers.length, 1);
   assert.equal(servers[0].args.length, 3);

@@ -28,7 +28,7 @@ main();
   const main = artifactText(result, "src/main.rs");
   const initializeClock = main.indexOf("tsonic_rust_node::perf_hooks::initialize_clock()");
   const initializeSource = main.indexOf("provider_performance::initialize()");
-  const drain = main.indexOf("tsonic_rust_node::run_with_contexts(");
+  const drain = main.indexOf("tsonic_rust_node::run_entry_with_contexts(");
   assert.ok(initializeClock >= 0 && initializeClock < initializeSource);
   assert.ok(initializeSource >= 0 && initializeSource < drain, main);
   assert.match(artifactText(result, "src/index.rs"), /fn module_init\([\s\S]*?main\(\)/u);
