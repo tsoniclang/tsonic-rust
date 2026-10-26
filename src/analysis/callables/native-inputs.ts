@@ -6,7 +6,7 @@ import { sourceEnclosingCallable, sourceNodeIdentity, Node_Expression, IsTypeSyn
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 
 import type { TargetTypeRef } from "../../target-model/types/model.js";
-import { rustCallableProtocol } from "../../target-model/types/carriers/callables.js";
+import { rustCallableInputProtocol, rustCallableProtocol } from "../../target-model/types/carriers/callables.js";
 import { rustCallableTargetId } from "../../target-model/types/carriers/source-types.js";
 import { rustGenericCallableProtocol, rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
 import { rustOptionElementCarrier } from "../../target-model/types/carriers/optional.js";
@@ -123,7 +123,10 @@ export function createRustNativeCallableInputPlan(input: {
     const owner = input.ast.parent(parameter);
     if (owner === undefined || sourceCallableValueParameters(input.ast, owner,
       input.storage.source.semantics.forNode(owner))?.includes(parameter) !== true) continue;
-    if (!nativeRetainedParameters.has(parameter) && input.ownedRetainedParameter(parameter))
+    const abi = input.records.sourceParameterAbi.get(parameter);
+    const borrowedCallable = abi !== undefined &&
+      rustCallableInputProtocol(rustOptionElementCarrier(abi.parameterCarrier) ?? abi.parameterCarrier) !== undefined;
+    if (!nativeRetainedParameters.has(parameter) && !borrowedCallable && input.ownedRetainedParameter(parameter))
       nativeRetainedParameters.add(parameter);
     if (!input.declaresGenericInputs(owner) || nativeRetainedParameters.has(parameter)) concreteParameters.add(parameter);
   }
