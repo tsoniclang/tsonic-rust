@@ -4,7 +4,7 @@ import { finalizeRustCallbackOperation } from "../../../dist/policy/operations/m
 import {
   rustCallableTargetType, rustJsArrayTargetType, rustJsErrorTargetType, rustJsPromiseTargetType,
   rustJsValueTargetType, rustOptionTargetType, rustProgramErrorTargetType, rustSourcePrimitiveTargetType,
-  rustStringTargetType, rustUnitTargetType,
+  rustStringTargetType, rustUnitTargetType, rustAbsenceTargetType,
 } from "../../../dist/target-model/types/index.js";
 import { selectRustCallableConversion } from "../../../dist/policy/conversions/callable.js";
 import { selectRustSourceValueConversion } from "../../../dist/policy/conversions/selection.js";
@@ -13,6 +13,7 @@ import { rustPreparedCallbackResultEffects } from "../../../dist/analysis/errors
 import { rustRuntimeErrorTargetType } from "../../../dist/target-model/types/carriers/runtime-carriers.js";
 import { selectJsSurfaceOperation } from "../../../dist/policy/operations/source-profiles/js/selection.js";
 import { finalizeRustRegExpReplacementCallbackContract } from "../../../dist/policy/operations/members/regexp-callbacks.js";
+import { analyzeRust } from "../../helpers/rust-session.mjs";
 
 const inferred = { kind: "opaque", id: "tsonic.rust.infer" };
 const integer = rustSourcePrimitiveTargetType("uint64");
@@ -209,17 +210,48 @@ test("native callback Result contracts distinguish generic invocation errors fro
 test("pure intrinsic callback helpers publish their actual selected native Result error", () => {
   const callback = { kind: "closure", args: [rustStringTargetType(), rustJsValueTargetType()],
     result: rustJsValueTargetType(), callTrait: "FnMut" };
-  const selected = selectJsSurfaceOperation({ ownerName: "JSON", memberName: "stringify", operationKind: "call",
-    argumentCarriers: [rustJsValueTargetType(), callback] });
-  assert.equal(selected !== undefined, true, "the selected JSON helper retains its checked callback contract");
-  assert.equal(selected.fact.isFallible, true);
-  assert.equal(selected.fact.errorBoundary, "target-runtime",
-    "the canonical native boundary selects JSON's actual TsonicResult, independently of callback fallibility");
-  assert.equal(selected.fact.errorCarrier, undefined, "a target-runtime boundary has no second provider-native carrier");
-  assert.deepEqual(selected.callback.failure.resultError, { kind: "native", carrier: rustRuntimeErrorTargetType() });
-  const prepared = { template: selected.fact, callback: selected.callback };
   const effects = { invocationEffects: { localErrors: false, nativeErrors: [] } };
-  assert.equal(callbackFallibleTemplate(prepared, effects) === selected.fact, true);
+  for (const space of [[], [number], [rustStringTargetType()], [rustAbsenceTargetType()]]) {
+    const selected = selectJsSurfaceOperation({ ownerName: "JSON", memberName: "stringify", operationKind: "call",
+      argumentCarriers: [rustJsValueTargetType(), callback, ...space] });
+    assert.equal(selected !== undefined, true, "the selected JSON helper retains its checked callback contract");
+    assert.equal(selected.fact.isFallible, true);
+    assert.equal(selected.fact.errorBoundary, "target-runtime",
+      "the canonical native boundary selects JSON's actual TsonicResult, independently of callback fallibility");
+    assert.equal(selected.fact.errorCarrier, undefined, "a target-runtime boundary has no second provider-native carrier");
+    assert.deepEqual(selected.callback.failure.resultError, { kind: "native", carrier: rustRuntimeErrorTargetType() });
+    const prepared = { template: selected.fact, callback: selected.callback };
+    assert.equal(callbackFallibleTemplate(prepared, effects) === selected.fact, true);
+    const result = rustPreparedCallbackResultEffects(prepared, effects.invocationEffects);
+    assert.equal(result?.localErrors, true, "a pure callback cannot erase its selected native helper's actual failure");
+    assert.equal(result.nativeErrors.length, 0, "the fixed helper Result introduces no additional callback error arm");
+    const pure = rustPreparedCallbackResultEffects({ ...prepared, template: { ...selected.fact, isFallible: false,
+      errorBoundary: "none" } }, effects.invocationEffects);
+    assert.equal(pure.localErrors, false, "a genuinely infallible helper remains pure");
+    assert.equal(pure.nativeErrors.length, 0, "a genuinely infallible helper invents no native error");
+  }
+});
+
+test("pure JSON callback overloads retain the helper's completed native Result region", () => {
+  const { program } = analyzeRust({ surfaces: ["js"], files: { "index.ts": `
+    export function inspect(): void {
+      JSON.stringify({ value: 1 }, (_key, value) => value);
+      JSON.stringify({ value: 1 }, (_key, value) => value, 2);
+      JSON.stringify({ value: 1 }, (_key, value) => value, " ");
+      JSON.stringify({ value: 1 }, (_key, value) => value, undefined);
+    }
+  ` } });
+  const occurrences = program.physicalEmissionContexts.sourceOccurrences.filter(({ operation }) =>
+    operation.abi.target.form === "call" && operation.abi.target.path.startsWith("js_abi::json_stringify_with_replacer"));
+  assert.equal(occurrences.length, 4, "each retained overload publishes one exact physical helper occurrence");
+  for (const { node, operation } of occurrences) {
+    assert.equal(operation.abi.effects.errorBoundary, "target-runtime", "the helper keeps its actual native Result owner");
+    const result = program.records.providerForm.get(node, operation.abi)?.nativeResult;
+    assert.equal(result !== undefined, true, "the pre-seal provider owner publishes required Result propagation");
+    assert.equal(result.operand.localOwner !== undefined, true, "the actual serializer error is inhabited even with a pure replacer");
+    assert.equal(result.operand.sources.length, 0, "a pure replacer adds no associated callback failure arm");
+    assert.equal(result.channels.size, 0, "no synthetic second native error channel is manufactured");
+  }
 });
 
 test("reduce finalization closes accumulator placeholders before publishing the immutable native callback contract", () => {

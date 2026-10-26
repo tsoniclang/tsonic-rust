@@ -32,6 +32,7 @@ export function rustPreparedCallbackResultEffects(
   if (!selected.isFallible) return rustPureErrorEffects;
   if (selected.errorBoundary === "provider-native") return selected.errorCarrier === undefined
     ? undefined : rustCallableInvocationErrorEffects(selected.errorCarrier);
+  if (selected.errorBoundary === "target-runtime") return rustLocalErrorEffects;
   return invocationEffects;
 }
 
