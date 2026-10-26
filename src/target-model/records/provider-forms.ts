@@ -2,7 +2,7 @@ import type { Node } from "@tsonic/tsts";
 import type { RustFinalizedOperationAbi } from "./finalized-operation.js";
 import type { RustSourceErrorRegionEmission } from "./error-emission.js";
 import type { RustErrorRegionSelection } from "./error-regions.js";
-import type { TargetTypeRef } from "../types/model.js";
+import type { RustValueConversionContract } from "../conversions/contracts.js";
 
 export interface RustProviderFormEmission {
   readonly read: "copy" | "clone" | "storage";
@@ -14,7 +14,7 @@ export interface RustProviderFormEmission {
     readonly sourceResultFallible: boolean;
     readonly targetResultFallible: boolean;
     readonly invocation: RustSourceErrorRegionEmission | undefined;
-    readonly projection: { readonly identity: string; readonly errorType: TargetTypeRef } | undefined;
+    readonly projection: RustValueConversionContract | undefined;
   } | undefined;
 }
 
