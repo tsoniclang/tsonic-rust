@@ -193,6 +193,32 @@ test("checked generic source retention publishes the exact int64 callable-field 
   assert.equal(new Set(owners).size, 1, "both checked applications retain one original generic template owner");
 });
 
+test("checked nested structural retention preserves member array tuple and optional component ownership", () => {
+  const { program } = analyzeRust({ surfaces: [], files: { "index.ts": `
+import type { int32, int64 } from "@tsonic/core/types.js";
+type Leaf<Value> = { readonly invoke: (value: Value) => Value };
+type Nested<Value> = { readonly values: readonly [Leaf<Value>, readonly Leaf<Value>[]]; readonly maybe?: Leaf<Value> };
+export function narrow(value: Nested<int32>): Nested<int32> { return value; }
+export function wide(value: Nested<int64>): Nested<int64> { return value; }
+` } });
+  for (const width of ["int32", "int64"]) {
+    const applications = program.structuralShapes.definitions.flatMap(definition => definition.sourceCarriers)
+      .filter(carrier => rustStructuralObjectCarrierValue(carrier)?.fields.some(field =>
+        field.sourceName === "invoke" && rustCallableProtocol(field.type)?.parameters[0]?.name === width));
+    assert.equal(applications.length > 0, true, `${width}: nested retention preserves actual checked callable field applications`);
+    for (const application of applications) {
+      const owner = program.structuralShapes.definitionForCarrier(application);
+      const field = owner?.fields.find(field => field.sourceName === "invoke");
+      const protocol = rustCallableProtocol(field?.carrier);
+      assert.equal(owner !== undefined && protocol !== undefined, true, `${width}: the exact source application has a finalized physical owner`);
+      assert.equal(protocol.parameters.length === 1 && protocol.parameters[0].name === width && protocol.result.name === width, true,
+        `${width}: recursion preserves the exact native argument and result instead of a sibling application`);
+      assert.equal(program.structuralShapes.definitionForCarrier(owner.carrier) === owner, true,
+        `${width}: physical and original source keys resolve the same canonical owner`);
+    }
+  }
+});
+
 test("late structural applications reject ambiguous original generic owners", () => {
   const input = { kind: "type-parameter", identity: "Input", name: "Input" };
   const output = { kind: "type-parameter", identity: "Output", name: "Output" };

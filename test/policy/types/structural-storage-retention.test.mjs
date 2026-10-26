@@ -6,6 +6,90 @@ import { rustSourceUnionTargetType, rustSourcePrimitiveTargetType, rustStructura
   rustCallableTargetType, rustVecTargetType, rustOptionTargetType } from "../../../dist/target-model/types/index.js";
 import { createRustTypeDefinitionRegistry } from "../../../dist/analysis/project-types/type-definitions.js";
 
+test("structural retention projects the actual source member and preserves physical purpose and bindings", () => {
+  const sourceType = {};
+  const templateType = {};
+  const sourceDeclaration = {};
+  const templateDeclaration = {};
+  const sourceSymbol = {};
+  const destinationSymbol = {};
+  const scalar = rustSourcePrimitiveTargetType("int64");
+  const field = { sourceName: "value", type: scalar, readonly: true, presence: "required" };
+  const carrier = rustStructuralObjectTargetType("/src/index.ts", [field]);
+  const template = { sourceType: templateType, carrier, fields: [{ ...field, storageIndex: 0,
+    declarations: [templateDeclaration], symbols: [destinationSymbol], resultCarrier: scalar }] };
+  const subject = { node: {}, kind: "input", projection: [{ kind: "tuple-element", index: 2 }] };
+  const bindings = {};
+  const observed = [];
+  const registrations = [];
+  const context = {
+    callableRepresentation: "storage", sourceStorageResolution: { kind: "resolved", subject, bindings },
+    sourceStorage: { subject(node, kind, projection) {
+      observed.push({ node, kind, projection });
+      const member = projection.at(-1);
+      assert.equal(node === subject.node && kind === subject.kind, true, "the original physical subject and kind are preserved");
+      assert.equal(member.kind === "member" ? member.declaration === sourceDeclaration
+        : member.kind === "array-element" || member.kind === "tuple-element", true,
+      "each component uses its exact native aggregate or actual source member identity");
+      return { kind: "resolved", subject: { node, kind, projection } };
+    } },
+    currentSemantics: { types: { aliasApplication: () => undefined, structuralMembers: () => ({ kind: "available",
+      source: { calls: [], constructs: [], indexes: [] }, members: [{ kind: "present",
+        source: { read: "property", declarations: [sourceDeclaration], property: {
+          symbol: sourceSymbol, rootSymbols: [], type: scalar, optional: false, readonly: true } },
+        destination: { read: "property", declarations: [templateDeclaration], property: {
+          symbol: destinationSymbol, type: scalar, optional: false, readonly: true } },
+      }] }) } },
+    ast: { typeNode: () => undefined, kindName: () => "KindPropertySignature",
+      is: { IsMethodDeclaration: () => false, IsGetAccessorDeclaration: () => false, IsSetAccessorDeclaration: () => false } },
+  };
+  const options = { sourceTypes: { structuralObjectForType: () => undefined,
+    structuralObjectForCarrier: () => template, registerStructuralObject(value) {
+      registrations.push(value);
+      return true;
+    } } };
+  assert.equal(retainRustStructuralInstantiation(sourceType, carrier, carrier, context, options), true,
+    "the exact source member retains its canonical structural application");
+  assert.equal(observed.length, 1, "one canonical field projection is selected once");
+  assert.equal(observed[0].projection.length === 2 && observed[0].projection[0] === subject.projection[0], true,
+    "the existing tuple prefix survives member projection");
+  assert.equal(registrations.length === 1 && registrations[0].fields[0].declarations[0] === sourceDeclaration, true,
+    "publication retains the exact original source declaration correspondence");
+  assert.equal(context.sourceStorageResolution.bindings === bindings, true, "source bindings are never reconstructed or replaced");
+  const before = observed.length;
+  assert.equal(retainRustStructuralInstantiation(sourceType, carrier, carrier,
+    { ...context, sourceStorageResolution: { kind: "unresolved", reason: "missing physical scope" } }, options), false,
+  "an unresolved physical scope cannot acquire signature-only permission");
+  assert.equal(retainRustStructuralInstantiation(sourceType, carrier, carrier,
+    { ...context, sourceStorageResolution: { kind: "resolved", subject: undefined, bindings } }, options), false,
+  "a missing physical subject cannot become a logical signature traversal");
+  assert.equal(observed.length, before, "unresolved physical traversals never fabricate a projected subject");
+  assert.equal(retainRustStructuralInstantiation(sourceType, carrier, carrier,
+    { ...context, callableRepresentation: "signature", sourceStorageResolution: undefined }, options), true,
+  "an explicitly logical signature preserves its original admission role");
+  assert.equal(observed.length, before, "signature-only retention does not demand physical storage");
+  const arraySource = {};
+  const arrayContext = { ...context, currentSemantics: { types: { ...context.currentSemantics.types,
+    isArrayLike: type => type === arraySource, isTypeReference: type => type === arraySource,
+    typeArguments: () => [sourceType] } } };
+  assert.equal(retainRustStructuralInstantiation(arraySource, rustVecTargetType(carrier), rustVecTargetType(carrier),
+    arrayContext, options), true, "array retention extends the existing physical prefix before resolving a nested member");
+  assert.equal(observed.at(-1).projection.length === 3 && observed.at(-1).projection[1].kind === "array-element" &&
+    observed.at(-1).projection[2].declaration === sourceDeclaration, true, "array and member components remain ordered and source-owned");
+  const tupleSource = {};
+  const tuple = { kind: "tuple", elements: [carrier] };
+  const tupleContext = { ...context, currentSemantics: { types: { ...context.currentSemantics.types,
+    isTuple: type => type === tupleSource, tupleElementInfos: () => [{ type: sourceType }] } } };
+  assert.equal(retainRustStructuralInstantiation(tupleSource, tuple, tuple, tupleContext, options), true,
+    "tuple retention appends its exact source index before nested field admission");
+  assert.equal(observed.at(-1).projection.length === 3 && observed.at(-1).projection[1].kind === "tuple-element" &&
+    observed.at(-1).projection[1].index === 0 && observed.at(-1).projection[2].declaration === sourceDeclaration, true,
+  "the new tuple index cannot replace the existing original tuple prefix or source member identity");
+  assert.equal(retainRustStructuralInstantiation(tupleSource, tuple, tuple,
+    { ...tupleContext, sourceStorage: { subject: () => ({ kind: "unresolved", reason: "foreign tuple component" }) } }, options), false,
+  "an unproved aggregate component fails closed instead of reusing its parent or signature context");
+});
+
 function unionDefinition(payloads, origin = "generated") {
   const definitions = createRustTypeDefinitionRegistry();
   const carrier = rustSourceUnionTargetType("/src/index.ts", `Union${payloads.length}`,

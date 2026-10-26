@@ -21,6 +21,8 @@ import { isRustErasedNominalMember } from "../../../../policy/types/objects/sour
 import { rustSourcePropertyTargetType } from "../../../../target-model/types/projections.js";
 import { retainRustSourceUnionInstantiation, rustSourceUnionValueTypes } from "./source-unions.js";
 import { closedMetadataKey } from "../../../../target-model/metadata/closed-data.js";
+import type { SourceStorageProjection } from "@tsonic/target-api/analysis";
+import { rustSourceStorageComponentContext } from "./source-storage-projection.js";
 
 export function retainRustStructuralInstantiation(
   sourceType: Type,
@@ -72,8 +74,9 @@ export function retainRustStructuralInstantiation(
     const elementNode = authoredTypeNode === undefined ? undefined :
       context.ast.kindName(authoredTypeNode) === "KindArrayType" ? ArrayTypeNode_ElementType(context.ast, authoredTypeNode)
       : context.ast.is.IsTypeReferenceNode(authoredTypeNode) ? context.ast.typeArguments(authoredTypeNode)[0] : undefined;
-    return arguments_.length === 1 && arguments_[0] !== undefined &&
-      retainRustStructuralInstantiation(arguments_[0], templateElement, element, context, options, resolving, elementNode);
+    const elementContext = structuralComponentContext(context, { kind: "array-element" });
+    return arguments_.length === 1 && arguments_[0] !== undefined && elementContext !== undefined &&
+      retainRustStructuralInstantiation(arguments_[0], templateElement, element, elementContext, options, resolving, elementNode);
   }
   // A tuple retains each element's instantiation; an element without structural storage is identical in both carriers.
   if (templateCarrier.kind === "tuple" || carrier.kind === "tuple") {
@@ -85,8 +88,9 @@ export function retainRustStructuralInstantiation(
       ? context.ast.elements(authoredTypeNode) : undefined;
     return infos.every((info, index) => {
       const elementNode = elementNodes?.[index];
-      return retainRustStructuralInstantiation(info.type, templateCarrier.elements[index]!, carrier.elements[index]!,
-        context, options, resolving, elementNode !== undefined && context.ast.kindName(elementNode) !== "KindNamedTupleMember"
+      const elementContext = structuralComponentContext(context, { kind: "tuple-element", index });
+      return elementContext !== undefined && retainRustStructuralInstantiation(info.type, templateCarrier.elements[index]!, carrier.elements[index]!,
+        elementContext, options, resolving, elementNode !== undefined && context.ast.kindName(elementNode) !== "KindNamedTupleMember"
           ? elementNode : undefined);
     });
   }
@@ -125,16 +129,25 @@ export function retainRustStructuralInstantiation(
       (!ownsBody && (selected.source.property.optional !== selected.destination.property.optional ||
       selected.source.property.readonly !== selected.destination.property.readonly)) ||
       selected.source.read !== selected.destination.read ||
+      selected.source.read === "unavailable" ||
       selected.destination.declarations.length !== field.declarations.length ||
       selected.destination.declarations.some(declaration => !field.declarations.includes(declaration))) return undefined;
-    const authoredNodes = [...new Set(field.declarations.flatMap(declaration => {
+    const authoredEvidence = field.declarations.flatMap(declaration => {
       if (context.ast.is.IsMethodDeclaration(declaration) || context.ast.kindName(declaration) === "KindMethodSignature") return [];
       const type = context.ast.typeNode(declaration);
-      return type === undefined ? [] : [type];
-    }))];
-    const declared = authoredNodes.map(authoredTypeNode => resolveRustTypeComponentEvidence({
-      authoredTypeNode, selectedType: selected.source.property.type,
-    }, context, options, resolving));
+      return type === undefined ? [] : [{ declaration, authoredTypeNode: type }];
+    });
+    const sourceDeclarations = selected.source.declarations.filter(declaration => selected.source.read === "method"
+      ? context.ast.is.IsMethodDeclaration(declaration) || context.ast.kindName(declaration) === "KindMethodSignature"
+      : selected.source.read === "accessor" ? context.ast.is.IsGetAccessorDeclaration(declaration)
+        : !context.ast.is.IsGetAccessorDeclaration(declaration) && !context.ast.is.IsSetAccessorDeclaration(declaration) &&
+          !context.ast.is.IsMethodDeclaration(declaration) && context.ast.kindName(declaration) !== "KindMethodSignature");
+    const memberContexts = sourceDeclarations.map(declaration => structuralComponentContext(context,
+      { kind: selected.source.read === "method" ? "method-value" : "member", declaration }));
+    if (memberContexts.length === 0 || memberContexts.some(selected => selected === undefined)) return undefined;
+    const declared = memberContexts.flatMap(memberContext => authoredEvidence.map(evidence => memberContext === undefined ? undefined
+      : resolveRustTypeComponentEvidence({ authoredTypeNode: evidence.authoredTypeNode, selectedType: selected.source.property.type },
+        memberContext, options, resolving)));
     const normalize = rustTypeFamilyNormalizer(options.sourceTypes.typeFamilies);
     const expected = mapRustTargetTypes(targetField.type, normalize);
     // The authored field type keeps an open callable environment: the selected storage either closes it with its own
@@ -157,8 +170,10 @@ export function retainRustStructuralInstantiation(
         !rustTargetTypeRefEquals(rustCarrierWithTargetPlaceholderLifetimes(authored, expected), expected) &&
         (nestedTemplate === undefined || !rustTargetTypeRefEquals(authored, nestedTemplate));
     })) return undefined;
-    if (!retainRustStructuralInstantiation(selected.source.property.type, field.resultCarrier,
-      targetField.type, context, options, resolving, authoredNodes[0])) return undefined;
+    if (!memberContexts.every(memberContext => memberContext !== undefined &&
+      (authoredEvidence.length === 0 ? [undefined] : authoredEvidence.map(evidence => evidence.authoredTypeNode)).every(authored =>
+        retainRustStructuralInstantiation(selected.source.property.type, field.resultCarrier,
+          targetField.type, memberContext, options, resolving, authored)))) return undefined;
     return {
       ...field,
       declarations: selected.source.declarations,
@@ -174,6 +189,15 @@ export function retainRustStructuralInstantiation(
     ...(construction === undefined ? {} : { construction: { ...construction, carrier: structural.construction ?? construction.carrier } }),
     fields: fields as NonNullable<(typeof fields)[number]>[] }, ownsBody
     ? { kind: "root" } : { kind: "generic-instantiation", template: templateCarrier });
+}
+
+function structuralComponentContext(context: RustTargetTypeResolutionContext,
+  component: SourceStorageProjection): RustTargetTypeResolutionContext | undefined {
+  if (context.callableRepresentation === "signature") return context;
+  const current = context.sourceStorageResolution;
+  if (current?.kind !== "resolved" || current.subject === undefined) return undefined;
+  const selected = rustSourceStorageComponentContext(context, component);
+  return selected.sourceStorageResolution?.kind === "resolved" && selected.sourceStorageResolution.subject !== undefined ? selected : undefined;
 }
 
 function containsStructuralStorage(carrier: TargetTypeRef, options: RustTargetTypeResolutionOptions): boolean | undefined {
