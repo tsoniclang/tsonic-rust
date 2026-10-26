@@ -51,7 +51,8 @@ export function selectRustProviderSourceOccurrence(
     if (slot === undefined) return undefined;
     inputs.push(Object.freeze({ input, slot }));
   }
-  return Object.freeze({ node, operation, slots: Object.freeze(slots), inputs: Object.freeze(inputs),
+  return Object.freeze({ node, operation, receiverProjection: Object.freeze({ kind: "source" as const }),
+    slots: Object.freeze(slots), inputs: Object.freeze(inputs),
     targetOrder: Object.freeze(inputs.map(value => value.slot.key)) });
 }
 
@@ -68,16 +69,21 @@ export function prepareRustProviderSourceOccurrences(input: {
     if (!input.isNativeNode(node) || input.records.compileTimeSource.get(node) === true ||
       input.records.nativeUnreachable.get(node) === true || input.records.nativeParticipation.get(node) === "erased") continue;
     const facts = [input.records.targetOperation.get(node), input.records.compoundWrite.get(node)];
-    const operations = new Set(facts.flatMap(fact => fact?.kind === "provider-operation" || fact?.kind === "runtime-set" ? [fact]
-      : fact?.kind === "union-property" ? fact.variants.flatMap(variant => variant.operation === undefined ? [] : [variant.operation]) : []));
-    if (operations.size === 0) continue;
+    const operations = [...new Set(facts)].flatMap<{
+      readonly operation: RustEmissionProviderOperation;
+      readonly receiverProjection: RustPhysicalEmissionSourceOccurrence["receiverProjection"];
+    }>(fact => fact?.kind === "provider-operation" || fact?.kind === "runtime-set"
+      ? [{ operation: fact, receiverProjection: Object.freeze({ kind: "source" as const }) }]
+      : fact?.kind === "union-property" ? fact.variants.flatMap(variant => variant.operation === undefined ? []
+        : [{ operation: variant.operation, receiverProjection: Object.freeze({ kind: "union-payload" as const, union: fact, variant }) }]) : []);
+    if (operations.length === 0) continue;
     const checked = input.semantics.forNode(node).operations;
     const call = input.ast.is.IsCallExpression(node) || input.ast.is.IsNewExpression(node) ? checked.call(node) : undefined;
     const accessed = input.ast.is.IsDeleteExpression(node) ? Node_Expression(input.ast, node) : node;
     const property = accessed !== undefined && input.ast.is.IsPropertyAccessExpression(accessed) ? checked.propertyAccess(accessed) : undefined;
     const element = accessed !== undefined && input.ast.is.IsElementAccessExpression(accessed) ? checked.elementAccess(accessed) : undefined;
     const originalReceiver = asSourceNode(input.records.selectedOperation.get(node)?.provenance?.sourceReceiver, input.ast);
-    for (const operation of operations) {
+    for (const { operation, receiverProjection } of operations) {
       const setter = operation.kind === "runtime-set" ? rustRuntimeSetSourceInputs(input.ast, node, operation) : undefined;
       const receiver = operation.kind === "runtime-set" ? setter?.receiver
         : originalReceiver ?? call?.sourceReceiver?.expression ?? call?.sourceCalleeAccess?.receiver.expression ?? property?.receiver.expression ?? element?.receiver.expression;
@@ -90,7 +96,7 @@ export function prepareRustProviderSourceOccurrences(input: {
       if (selected === undefined) diagnostics.push({ code: "RUST_PROVIDER_SOURCE_OCCURRENCE_NOT_PREPARED", category: "error",
         source: "tsonic-rust", sourceNode: node, message: "An admitted native operation requires its exact original receiver and source argument occurrences.",
         evidence: ["rust.provider.source-occurrence"] });
-      else occurrences.push(selected);
+      else occurrences.push(Object.freeze({ ...selected, receiverProjection }));
     }
   }
   return diagnostics.length === 0 ? resolvedTargetStage(Object.freeze(occurrences)) : rejectedTargetStage(diagnostics);
