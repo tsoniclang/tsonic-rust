@@ -621,7 +621,17 @@ test("optional chains consume exact TSTS evidence through one finalized Option f
 test("plain identifier binding cannot become a provider-value identity workaround", () => {
   const semantics = readFileSync(join(sourceRoot, "analysis/source-evidence/types/resolution/references.ts"), "utf8");
   const resolver = sourceSection(semantics, "export function resolveIdentifierCarrier(", "export function resolveCallLikeCarrier(");
-  assert.match(resolver, /declarationKind === KindParameter \|\| declarationKind === KindVariableDeclaration/u);
+  const variable = sourceSection(resolver, "if (declarationKind === KindVariableDeclaration) {",
+    "if (declarationKind === KindParameter) {");
+  assert.match(variable, /selectRustDeclaredBinding\(walk, declaration, sourceFile\)/u);
+  assert.match(variable, /selected\.kind === "unresolved" \? undefined : setCarrierFact\(walk, identifier, selected\.carrier\)/u);
+  const parameter = sourceSection(resolver, "if (declarationKind === KindParameter) {\n      const parameter =",
+    "if (declarationKind === KindBindingElement) {");
+  assert.match(parameter, /records\.sourceParameterAbi\.get\(declaration\)/u);
+  assert.match(parameter, /if \(parameter === undefined\) return undefined/u);
+  assert.match(parameter, /setCarrierFact\(walk, identifier, parameter\.valueCarrier\)/u);
+  assert.match(resolver, /records\.bindingProjection\.get\(declaration\)/u);
+  assert.doesNotMatch(resolver, /resolveRustDeclaredBindingStorage/u);
   assert.doesNotMatch(resolver, /providerVirtualDeclarationFactKey|moduleSpecifier|exportName|resolveRustTargetTypeRef/u);
 });
 
