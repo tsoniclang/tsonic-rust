@@ -261,7 +261,7 @@ function physicalLifecycleInputs({ beforeInitialize, afterInitialize }) {
           "the lifecycle fixture contains no foreign native class or constructor identities");
         const classValues = context.classValues.seal(context);
         analyzeRustLexicalFunctionEmission({ program: { records: context.records,
-          lexicalFunctions: context.lexicalFunctions, ownership: program.ownership, callableValues: registry },
+          lexicalFunctions: program.lexicalFunctions, ownership: program.ownership, callableValues: registry },
           nodes: context.nativeNodes, producer: context.records.lexicalFunctionPlans });
         const entryIssues = analyzeRustCallableEntryParameters({ source: context.source, nodes: context.nativeNodes,
           records: context.records, lifetimes: context.sourceLifetimes, nativeStorage: registry.nativeStorage,
