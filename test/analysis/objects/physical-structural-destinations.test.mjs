@@ -70,22 +70,32 @@ test("physical structural destinations preserve source errors and nested compone
     field("associated", callable(associated)), field("js", callable(rustJsValueTargetType())), field("nested", nested),
   ]);
   const selected = rustStructuralObjectCarrierValue(selectRustStructuralPhysicalDestinations(shape, physicalError));
-  for (const index of [0, 1]) {
-    const value = rustOptionElementCarrier(selected.fields[index].type) ?? selected.fields[index].type;
+  for (const sourceName of ["invoke", "optional"]) {
+    const selectedField = selected.fields.find(field => field.sourceName === sourceName);
+    assert.equal(selectedField !== undefined, true, `${sourceName}: the exact canonical field is present`);
+    const value = rustOptionElementCarrier(selectedField.type) ?? selectedField.type;
     const error = rustProgramErrorOwner(rustCallableProtocol(value).error);
-    assert.equal(error?.kind === "physical" && error.componentId === "root", true, `field ${index}: exact owning component`);
+    assert.equal(error?.kind === "physical" && error.componentId === "root", true, `${sourceName}: exact owning component`);
     assert.equal(rustTargetTypeRefEquals(rustCallableProtocol(value).parameters[0], integer), true, "input ABI is unchanged");
     assert.equal(rustTargetTypeRefEquals(rustCallableProtocol(value).result, integer), true, "result ABI is unchanged");
     assert.equal(rustCallableProtocol(value).lifetime.identity, lifetime.identity, "retained lifetime is unchanged");
   }
-  for (const [index, error] of [[2, logical], [3, infallible], [4, associated], [5, rustJsValueTargetType()]]) {
-    assert.equal(rustTargetTypeRefEquals(rustCallableProtocol(selected.fields[index].type).error, error), true,
-      `field ${index}: actual method, pure, associated and JS source errors are never replaced`);
+  for (const [sourceName, error] of [["body", logical], ["pure", infallible], ["associated", associated], ["js", rustJsValueTargetType()]]) {
+    const selectedField = selected.fields.find(field => field.sourceName === sourceName);
+    assert.equal(selectedField !== undefined, true, `${sourceName}: the exact canonical field is present`);
+    assert.equal(rustTargetTypeRefEquals(rustCallableProtocol(selectedField.type).error, error), true,
+      `${sourceName}: actual method, pure, associated and JS source errors are never replaced`);
   }
-  const inner = rustStructuralObjectCarrierValue(selected.fields[6].type);
-  assert.equal(rustProgramErrorOwner(rustCallableProtocol(inner.fields[0].type).error)?.componentId, "dependency",
+  const nestedField = selected.fields.find(field => field.sourceName === "nested");
+  assert.equal(nestedField !== undefined, true, "the exact nested component field is present");
+  const inner = rustStructuralObjectCarrierValue(nestedField.type);
+  const innerInvoke = inner.fields.find(field => field.sourceName === "invoke");
+  assert.equal(innerInvoke !== undefined, true, "the exact nested callable destination is present");
+  assert.equal(rustProgramErrorOwner(rustCallableProtocol(innerInvoke.type).error)?.componentId, "dependency",
     "a nested structural destination never inherits the enclosing component");
-  assert.equal(rustProgramErrorOwner(rustCallableProtocol(rustStructuralObjectCarrierValue(shape).fields[0].type).error)?.kind,
+  const originalInvoke = rustStructuralObjectCarrierValue(shape).fields.find(field => field.sourceName === "invoke");
+  assert.equal(originalInvoke !== undefined, true, "the original exact source callable field is present");
+  assert.equal(rustProgramErrorOwner(rustCallableProtocol(originalInvoke.type).error)?.kind,
     "logical", "the original immutable source carrier is untouched");
   assert.throws(() => selectRustStructuralPhysicalDestinations(shape, () => undefined),
     error => String(error.message).includes("declared component's physical error owner"),
