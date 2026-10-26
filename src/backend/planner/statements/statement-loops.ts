@@ -13,6 +13,7 @@ import { registerAliasFromPath, rustActiveErrorType } from "../program/plan-cont
 import { failRustPlannerInvariant } from "../diagnostics.js";
 import { planBlockLike } from "./planning.js";
 import { planRustBindingPattern } from "../bindings/binding-patterns.js";
+import { rustBindingLivenessAttributes } from "../bindings/liveness.js";
 import { planRustModuleBindingStore, planRustPromotedStorageWrite } from "../expressions/typed-locations.js";
 import { planRustDirectStorage } from "../expressions/update-target.js";
 import { planRustRuntimeSetExpression } from "../expressions/runtime-setters.js";
@@ -218,6 +219,9 @@ export function planForOfStatement(
   }
   return [{
     kind: "for",
+    ...(bindingDeclaration === undefined || resourceBinding ? {} : {
+      attrs: rustBindingLivenessAttributes(bindingDeclaration, false, context),
+    }),
     ...(target.used.value ? { label: target.label } : {}),
     binding: loopBinding,
     ...(loopBindingMutable ? { bindingMutable: true } : {}),

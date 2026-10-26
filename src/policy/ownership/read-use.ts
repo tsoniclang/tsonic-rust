@@ -105,7 +105,13 @@ export function selectRustOperationReadUses(ast: AstReader, node: Node, input: {
     select(input.location.leftExpression, "shared", [input.location.rightExpression]);
     select(input.location.rightExpression, "shared");
   }
-  if (input.computedMember?.evaluateKey) select(input.computedMember.key, "shared");
+  if (input.computedMember?.evaluateKey) {
+    const { receiver, key } = input.computedMember;
+    select(key, "shared");
+    const use = uses.get(receiver);
+    if (use !== undefined && !use.later.slice(use.laterStart).includes(key))
+      select(receiver, use.mode, [key, ...use.later.slice(use.laterStart)], 0, use.stableAcrossEffects);
+  }
   select(input.guard, "shared");
   return uses;
 }

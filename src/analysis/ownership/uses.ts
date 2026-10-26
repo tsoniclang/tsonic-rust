@@ -1,5 +1,5 @@
 import type { AstReader, Node } from "@tsonic/tsts";
-import { BinaryExpression_Left, BinaryExpression_Right, ElementAccessExpression_ArgumentExpression, Node_Expression, sourceTransparentExpressionOperand } from "@tsonic/target-api/source";
+import { BinaryExpression_Left, BinaryExpression_Right, ConditionalExpression_Condition, ElementAccessExpression_ArgumentExpression, ForStatement_Condition, Node_Expression, sourceTransparentExpressionOperand } from "@tsonic/target-api/source";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { RustAnalysisRecords } from "../../target-model/records/analysis.js";
 import { rustFinalizedSourceInputs } from "../../target-model/operations/finalized-inputs.js";
@@ -64,20 +64,28 @@ export function analyzeRustReadUses(ast: AstReader, nodes: readonly Node[], reco
   structuralShapes: Pick<RustStructuralShapePlan, "field">,
   isDirectValueField: (node: Node) => boolean): ReadonlyMap<Node, RustReadUse> {
   const uses = new Map<Node, RustReadUse>();
+  const consumesSource = (node: Node | undefined): boolean => {
+    const conversion = node === undefined ? undefined : records.contextualValueConversion.get(node)?.conversion;
+    const contract = conversion === undefined ? undefined : rustContextualRuntimeConversionContract(conversion, definitions);
+    return contract?.sourceMode === "value" && contract.lowering !== "identity";
+  };
   // A borrowed provider input whose argument is first converted by value (`&JsValue::from(handle)`) consumes the
   // argument's own read, so a later read of the same storage needs its clone.
   const argumentConsumed = (source: { readonly kind: string; readonly sourceIndex?: number }, argumentsList: readonly (Node | undefined)[] | undefined): boolean => {
     const argument = source.kind === "argument" && source.sourceIndex !== undefined ? argumentsList?.[source.sourceIndex] : undefined;
-    const conversion = argument === undefined ? undefined : records.contextualValueConversion.get(argument)?.conversion;
-    return argument !== undefined && ownsExternalArgument(argument) || conversion !== undefined &&
-      rustContextualRuntimeConversionContract(conversion, definitions)?.sourceMode === "value";
+    return argument !== undefined && ownsExternalArgument(argument) || consumesSource(argument);
   };
   for (const node of nodes) {
     const operation = records.targetOperation.get(node);
     const computedMember = records.computedMember.get(node);
     const address = records.rawAddressPlan.get(node);
     const location = records.typedLocationPlan.get(node);
-    const guard = records.optionalChain.get(node)?.guard;
+    const condition = ast.is.IsConditionalExpression(node) ? ConditionalExpression_Condition(ast, node)
+      : ast.is.IsForStatement(node) ? ForStatement_Condition(ast, node)
+        : ast.is.IsIfStatement(node) || ast.is.IsWhileStatement(node) || ast.is.IsDoStatement(node) ? Node_Expression(ast, node)
+          : undefined;
+    const guard = condition !== undefined ? records.nativeGuardResult.get(condition) === undefined ? condition : undefined
+      : records.optionalChain.get(node)?.guard;
     if (operation === undefined && computedMember === undefined && address === undefined && location === undefined && guard === undefined) continue;
     const callable = operation?.kind === "source-call" && operation.target.form === "callable" ? operation.target.carrier : undefined;
     const callTrait = callable?.kind === "closure" ? callable.callTrait ?? "Fn" : undefined;
@@ -113,7 +121,11 @@ export function analyzeRustReadUses(ast: AstReader, nodes: readonly Node[], reco
     const receiver = Node_Expression(ast, node);
     const extendedUse = (subject: Node, use: RustReadUse): RustReadUse => subject !== receiver || assignmentRight === undefined ? use
       : Object.freeze({ ...use, later: Object.freeze([...use.later, assignmentRight]) });
-    for (const [subject, use] of selected) uses.set(subject, extendedUse(subject, use));
+    for (const [subject, use] of selected) {
+      const sourceUse = (use.mode === "shared" || use.mode === "mutable") && consumesSource(subject)
+        ? Object.freeze({ ...use, mode: "value" as const, stableAcrossEffects: false }) : use;
+      uses.set(subject, extendedUse(subject, sourceUse));
+    }
     // A getter read whose method borrows `self` shares its receiver, like a stored field read.
     if (operation?.kind === "source-accessor" && operation.accessMode === "read" && operation.receiver.kind === "instance" &&
       operation.read !== undefined && records.selfMode.get(operation.read.declaration)?.mode === "ref") {

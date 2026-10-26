@@ -199,9 +199,17 @@ export function measure(value: string | number): number {
   const selected = context();
   selected.input.program = program;
   assert.equal(planRustSharedReceiver(subject, expression, selected) === pointer, true, "admitted native flow reference");
+  assert.equal(createRustSharedReferenceArgument(selected, { stage: "source", node: subject, expression }) === pointer, true,
+    "the shared native input consumes the same completed projection reference without rebuilding its raw source view");
+  assert.deepEqual(createRustSharedReferenceArgument(selected, { stage: "finalized", expression }),
+    { kind: "reference", expr: expression }, "a finalized value has no source-projection reference authority");
   selected.flowReadOverrides = new Map([[subject, expression]]);
   assert.deepEqual(planRustSharedReceiver(subject, expression, selected), { kind: "reference", expr: expression });
+  assert.deepEqual(createRustSharedReferenceArgument(selected, { stage: "source", node: subject, expression }),
+    { kind: "reference", expr: expression }, "an overridden flow value retains its actual new borrowing boundary");
   selected.flowReadOverrides = undefined;
   selected.expressionOverrides = new Map([[subject, { expression, carrier: stringCarrier, valueForm: "storage", storageForm: "plain" }]]);
   assert.deepEqual(planRustSharedReceiver(subject, expression, selected), { kind: "reference", expr: expression });
+  assert.deepEqual(createRustSharedReferenceArgument(selected, { stage: "source", node: subject, expression }),
+    { kind: "reference", expr: expression }, "an overridden native storage value never reuses the original payload reference");
 });
