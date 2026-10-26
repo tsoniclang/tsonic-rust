@@ -142,8 +142,9 @@ export function retainRustStructuralInstantiation(
       : selected.source.read === "accessor" ? context.ast.is.IsGetAccessorDeclaration(declaration)
         : !context.ast.is.IsGetAccessorDeclaration(declaration) && !context.ast.is.IsSetAccessorDeclaration(declaration) &&
           !context.ast.is.IsMethodDeclaration(declaration) && context.ast.kindName(declaration) !== "KindMethodSignature");
-    const memberContexts = sourceDeclarations.map(declaration => structuralComponentContext(context,
-      { kind: selected.source.read === "method" ? "method-value" : "member", declaration }));
+    const memberContexts = context.callableRepresentation === "signature" ? [context]
+      : sourceDeclarations.map(declaration => structuralComponentContext(context,
+          { kind: selected.source.read === "method" ? "method-value" : "member", declaration }));
     if (memberContexts.length === 0 || memberContexts.some(selected => selected === undefined)) return undefined;
     const declared = memberContexts.flatMap(memberContext => authoredEvidence.map(evidence => memberContext === undefined ? undefined
       : resolveRustTypeComponentEvidence({ authoredTypeNode: evidence.authoredTypeNode, selectedType: selected.source.property.type },

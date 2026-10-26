@@ -68,6 +68,17 @@ test("structural retention projects the actual source member and preserves physi
     { ...context, callableRepresentation: "signature", sourceStorageResolution: undefined }, options), true,
   "an explicitly logical signature preserves its original admission role");
   assert.equal(observed.length, before, "signature-only retention does not demand physical storage");
+  const logicalSemantics = { types: { ...context.currentSemantics.types, structuralMembers() {
+    const selected = context.currentSemantics.types.structuralMembers();
+    return { ...selected, members: selected.members.map(member => ({ ...member,
+      source: { ...member.source, declarations: [] } })) };
+  } } };
+  assert.equal(retainRustStructuralInstantiation(sourceType, carrier, carrier,
+    { ...context, currentSemantics: logicalSemantics, callableRepresentation: "signature", sourceStorageResolution: undefined }, options), true,
+  "an explicit transformed signature needs checked type correspondence, not a fabricated physical member declaration");
+  assert.equal(retainRustStructuralInstantiation(sourceType, carrier, carrier,
+    { ...context, currentSemantics: logicalSemantics }, options), false,
+  "the same absent source provenance cannot authorize physical member storage");
   const arraySource = {};
   const arrayContext = { ...context, currentSemantics: { types: { ...context.currentSemantics.types,
     isArrayLike: type => type === arraySource, isTypeReference: type => type === arraySource,
