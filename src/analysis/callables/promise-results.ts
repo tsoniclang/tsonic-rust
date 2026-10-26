@@ -1,7 +1,7 @@
 import type { AstReader, Node } from "@tsonic/tsts";
 import { failTargetAnalysisInvariant, type TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import { analyzeSourceGenericAdoption, sourceGenericAdoptionDiagnosticCode, sourceGenericAdoptionDiagnosticMessage,
-  createSourceOwnershipQuery, createSourceStorageBudget, defaultSourceStorageLimits,
+  createSourceControlFlowDomain, createSourceOwnershipQuery, createSourceStorageBudget, defaultSourceStorageLimits,
   type SourceOwnershipPremises, type SourceOwnershipUnresolved, type SourceRetentionSelection,
   type SourceStorageBindings, type SourceStorageProjection, type SourceStorageQueries, type SourceStorageSubject } from "@tsonic/target-api/analysis";
 import { sourceEnclosingCallable, sourceExpressionResultDisposition, sourceCallableValueParameters, type TargetSourceProgram } from "@tsonic/target-api/source";
@@ -518,7 +518,19 @@ export function analyzeRustPromiseResults(input: {
       return Object.freeze({ kind: future ? "may-suspend" : "never", value, contractDeclaration, checkedType: checked.type });
     },
   };
-  const ownership = createSourceOwnershipQuery({ source: input.source, storage: input.storage, budget, premises });
+  const erasedCallees = new Set<Node>();
+  for (const node of input.nodes) {
+    if (input.records.targetOperation.get(node)?.kind !== "reference-operation" || !input.ast.is.IsCallExpression(node)) continue;
+    const callee = input.source.semantics.forNode(node).operations.call(node)?.sourceCallee.expression;
+    if (callee !== undefined && input.ast.is.IsIdentifier(callee)) erasedCallees.add(callee);
+  }
+  const domain = erasedCallees.size === 0 ? { kind: "resolved" as const, domain: { kind: "source" as const } }
+    : createSourceControlFlowDomain(input.source, input.storage.nodes.filter(node => !erasedCallees.has(node)));
+  if (domain.kind === "unresolved") return { results, diagnostics: [...diagnostics, {
+    code: "RUST_ASYNC_RESULT_USE_NOT_PROVEN", category: "error", source: "tsonic-rust",
+    sourceNode: domain.source, message: domain.reason,
+  }] };
+  const ownership = createSourceOwnershipQuery({ source: input.source, storage: input.storage, budget, premises, domain: domain.domain });
   for (const node of input.nodes) {
     if (!input.ast.is.IsCallExpression(node) && !input.ast.is.IsNewExpression(node)) continue;
     const selection = rustAwaitSelection(rustEffectiveValueCarrier(input.records, node), input.definitions);
@@ -538,7 +550,7 @@ export function analyzeRustPromiseResults(input: {
     // needs no ownership decision; any other discarded native future goes through the must-observe rule.
     const spawn = disposition.kind === "discarded" && native && input.jsEnabled && selection.kind === "leaf"
       ? selectRustDiscardedFutureSpawn(input, node) : undefined;
-    if (input.ast.is.IsCallExpression(node) && (!native || disposition.kind === "discarded" && spawn === undefined)) {
+    if (input.ast.is.IsCallExpression(node) && spawn === undefined) {
       const selected = ownership.forCall(node);
       if (selected.kind === "unresolved") {
         if (input.nativeStorageValidated)
