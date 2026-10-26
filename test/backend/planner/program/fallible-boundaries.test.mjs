@@ -24,7 +24,7 @@ const equalJoinPath = "BodyError::<rt::TsonicError, rt::TsonicError, rt::TsonicE
 const path = name => ({ kind: "path", path: name });
 const call = name => ({ kind: "call", path: name, args: [] });
 const join = sources => planRustNativeErrorJoin({ identity: "body:join", name: "BodyError", visibility: "private",
-  sources });
+  resultShape: sources.length === 0 ? "value" : "result", sources });
 
 test("active concrete regions preserve the genuine package owner and exact error type", () => {
   const region = rustPackageFallibleBoundary(owner);

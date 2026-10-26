@@ -4,7 +4,6 @@ import {
 } from "../../../target-model/types/index.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../names/synthetic.js";
 import { applyRustLocalErrorBoundary, rustTargetRuntimeErrorType } from "../types/error-boundary.js";
-import { rustPropagateNativeError } from "../program/fallible-boundaries.js";
 import { registerAliasFromPath, rustCurrentErrorBoundary } from "../program/plan-context.js";
 import { planRustSelectedErrorRegion } from "../program/error-regions.js";
 import { planRustSelectedSourceErrorPropagation } from "./calls/source-errors.js";
@@ -35,6 +34,7 @@ import { planRustPropertyValueProjection } from "./property-value-projection.js"
 import { planRustOptionBranch } from "./option-branch.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { rustAutoBorrowedReceiver } from "./auto-borrowed-receivers.js";
+import { rustPropagatedResult } from "../types/fallible-shape.js";
 
 export function applyRustValueConversion(
   context: RustPlanContext,
@@ -170,7 +170,8 @@ export function lowerRustValueConversion(
         [],
       );
       const callbackName = allocateRustSyntheticName(names, "replacement_callback");
-      const argumentsName = allocateRustSyntheticName(names, "replacement_arguments");
+      const argumentsName = allocateRustSyntheticName(names,
+        contract.projections.length === 0 ? "_replacement_arguments" : "replacement_arguments");
       const argumentsExpression: RustExpr = { kind: "path", path: argumentsName };
       const callbackArguments: RustExpr[] = [];
       for (const [index, projection] of contract.projections.entries()) {
@@ -195,11 +196,15 @@ export function lowerRustValueConversion(
           continue;
         }
         const projectionError = selected.projection;
-        const errorType = projectionError === undefined ? undefined : rustTypeFromCarrierInContext(projectionError.errorType, callbackContext);
-        const propagated = region.boundary === undefined || projectionError === undefined || errorType === undefined ? undefined
-          : rustPropagateNativeError(region.boundary, { identity: projectionError.identity, errorType }, projected);
-        if (propagated === undefined) return undefined;
-        callbackArguments.push(propagated);
+        const errorType = projectionError === undefined ? undefined : rustTypeFromCarrierInContext(projectionError.target, callbackContext);
+        const errorName = allocateRustSyntheticName(names, "replacement_argument_error");
+        const converted = projectionError === undefined ? undefined : lowerRustValueConversion(projectionError,
+          { kind: "path", path: errorName }, callbackContext, node);
+        if (region.boundary === undefined || errorType === undefined || converted === undefined) return undefined;
+        callbackArguments.push({ kind: "try", operandErrorType: errorType, resultErrorType: region.boundary.errorType,
+          expr: { kind: "method-call", receiver: projected, method: "map_err",
+            genericArguments: [{ kind: "type", type: errorType }, { kind: "type", type: { kind: "infer" } }],
+            args: [{ kind: "closure", params: [{ name: errorName }], body: converted }] } });
       }
       const callbackExpression: RustExpr = { kind: "path", path: callbackName };
       const invocation: RustExpr = contract.invocation === "invoke"
@@ -217,7 +222,7 @@ export function lowerRustValueConversion(
       if (value === undefined) return undefined;
       const errorType = selected.targetResultFallible ? region.boundary?.errorType
         ?? failRustPlannerInvariant("A Result-returning helper callback requires its selected error carrier.", node) : undefined;
-      const body = errorType === undefined ? value : {
+      const body = errorType === undefined ? value : rustPropagatedResult(value, errorType) ?? {
             kind: "call" as const,
             path: "Ok",
             genericArguments: [

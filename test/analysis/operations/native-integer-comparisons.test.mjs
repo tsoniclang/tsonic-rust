@@ -10,6 +10,14 @@ function select(operator, first, second, name = "int32", layouts = [], conversio
   const literals = new Map([[left, first], [right, second]]);
   const observations = new Map([[left, layouts[0]], [right, layouts[1]]]);
   const ast = { parent: () => undefined, is: { IsBinaryExpression: node => node === expression, IsParenthesizedExpression: () => false,
+    IsExpressionStatement: () => false, IsReturnStatement: () => false, IsThrowStatement: () => false,
+    IsIfStatement: () => false, IsWhileStatement: () => false, IsDoStatement: () => false,
+    IsForOfStatement: () => false, IsForInStatement: () => false, IsPropertyAccessExpression: () => false,
+    IsElementAccessExpression: () => false, IsCallExpression: () => false, IsNewExpression: () => false,
+    IsAwaitExpression: () => false, IsAsExpression: () => false, IsSatisfiesExpression: () => false,
+    IsNonNullExpression: () => false, IsTypeAssertion: () => false, IsDeleteExpression: () => false,
+    IsVoidExpression: () => false, IsTypeOfExpression: () => false, IsYieldExpression: () => false,
+    IsSpreadElement: () => false, IsExportAssignment: () => false,
     IsIdentifier: () => false, IsStringLiteral: () => false, IsNoSubstitutionTemplateLiteral: () => false },
     as: { AsBinaryExpression: node => node === expression ? { Left: left, Right: right } : undefined } };
   analyzeRustNativeComparisons({ source: { ast }, records: {

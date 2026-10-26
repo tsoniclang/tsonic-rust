@@ -47,7 +47,7 @@ export function planRustBinaryErrors(
     return { identity: source.identity, variant: source.variant, errorType };
   });
   const join = planRustNativeErrorJoin({ identity: "binary-startup-errors", name: "StartupErrors",
-    visibility: "private", sources });
+    visibility: "private", resultShape: "result", sources });
   if (join?.errorType === undefined) {
     failRustPlannerInvariant("Binary startup requires a complete native error composition.");
   }
