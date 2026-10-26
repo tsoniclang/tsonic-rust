@@ -4,6 +4,9 @@ import { analyzeRust, nodejsCapability } from "../../helpers/rust-session.mjs";
 import { analyzeRustErrorEffects } from "../../helpers/rust-error-analysis.mjs";
 import { nativeClosureProducerFixture, nativeClosureProducerFailurePackage } from "../../helpers/native-closure-producers.mjs";
 import { rustNamedTargetType } from "../../../dist/target-model/types/carriers/native.js";
+import { createRustProviderPackage } from "../../../dist/public/provider.js";
+import { rustCallableInvocationErrorEffects } from "../../../dist/analysis/errors/error-effects.js";
+import { validateRustFinalizedOperationAbi } from "../../../dist/policy/operations/members/abi/validation.js";
 
 
 
@@ -60,6 +63,65 @@ function assertChannels(actual, expected, localErrors = false) {
     assert.equal(rustTargetTypeRefEquals(source.errorType, selected.errorType), true, "exact native channel carrier");
   }
 }
+
+test("native provider invocation and its actual ABI conversion publish independent owner effects", () => {
+  const int32 = { kind: "source-primitive", name: "int32" };
+  const nativeUint = { kind: "source-primitive", name: "native-uint" };
+  const errorType = rustNamedTargetType("fixture:ProducerFailure", "ProducerFailure");
+  const expectedNative = rustCallableInvocationErrorEffects(errorType).nativeErrors;
+  assert.equal(expectedNative.length, 1, "the existing native fixture has one distinct error carrier");
+  const source = `import { fail } from "test:producer";
+import type { int32 } from "@tsonic/core/types.js";
+export function call(value: int32): int32 { return fail(value); }`;
+  for (const [label, fallible, converted] of [
+    ["native and conversion", true, true], ["native only", true, false],
+    ["conversion only", false, true], ["neither", false, false],
+  ]) {
+    const target = { form: "call", path: "fail", argModes: ["value"],
+      ...(converted ? { argConversions: [{ kind: "exact-integer", source: int32, target: nativeUint }] } : {}) };
+    const capability = createRustProviderPackage({
+      id: "native-closure-producer-proof", version: "1.0.0", displayName: "Native closure producer proof", crates: [],
+      modules: [{ moduleSpecifier: "test:producer", providerModuleId: "test.producer", exports: [{
+        id: "test:producer::fail", name: "fail", kind: "function", signatures: [{
+          id: "test:producer::fail()", name: "fail", parameters: [{ name: "value", type: int32 }], returnType: int32,
+        }],
+      }] }],
+      operations: [{ exportId: "test:producer::fail", operationKind: "method", target,
+        parameterCarriers: [int32], resultCarrier: int32,
+        ...(fallible ? { isFallible: true, errorBoundary: "provider-native", errorCarrier: errorType } : { isFallible: false }),
+      }],
+    });
+    const current = analyzedFixture(analyzeRustErrorEffects(source, { surfaces: [], packages: [capability] }));
+    const calls = current.calls("fail");
+    assert.equal(calls.length, 1, `${label}: one original checked provider call`);
+    const node = calls[0];
+    const operation = current.program.records.targetOperation.get(node);
+    assert.equal(operation?.kind, "provider-operation", `${label}: the actual selector admitted the provider call`);
+    const abi = operation.abi;
+    assert.equal(validateRustFinalizedOperationAbi(abi), true, `${label}: the canonical finalized ABI is valid`);
+    assert.equal(abi.effects.invocation, fallible ? "fallible" : "infallible", `${label}: native invocation phase`);
+    assert.equal(abi.effects.errorBoundary, fallible ? "provider-native" : "none", `${label}: exact native boundary`);
+    assert.equal(abi.targetArguments.length, 1, `${label}: one actual ABI argument`);
+    const argument = abi.targetArguments[0];
+    assert.equal(argument.source.kind, "argument", `${label}: actual source argument correspondence`);
+    assert.equal(argument.source.sourceIndex, 0, `${label}: the original value argument`);
+    assert.equal(argument.conversion.fallible, converted, `${label}: independent finalized conversion effect`);
+    assert.equal(argument.conversion.kind, converted ? "semantic" : "identity", `${label}: actual finalized conversion shape`);
+    assert.equal(rustTargetTypeRefEquals(argument.sourceCarrier, int32), true, `${label}: authored int32 is retained`);
+    assert.equal(rustTargetTypeRefEquals(argument.parameterCarrier, converted ? nativeUint : int32), true,
+      `${label}: actual native input carrier`);
+    if (converted) {
+      assert.equal(argument.conversion.conversion.kind, "exact-integer", `${label}: supported exact integer conversion`);
+      assert.equal(rustTargetTypeRefEquals(argument.conversion.conversion.source, int32), true, `${label}: exact source evidence`);
+      assert.equal(rustTargetTypeRefEquals(argument.conversion.conversion.target, nativeUint), true, `${label}: exact target evidence`);
+    }
+    if (fallible) assert.equal(rustTargetTypeRefEquals(abi.effects.errorCarrier, errorType), true,
+      `${label}: the provider-native carrier is unchanged`);
+    const expected = fallible ? expectedNative : [];
+    assertChannels(current.effects(node), expected, converted);
+    assertChannels(current.callable("call"), expected, converted);
+  }
+});
 
 for (const surfaces of [[], ["js"]]) {
   test(`native environment writes retain their exact provider error through source callers (${surfaces[0] ?? "native"})`, async () => {
