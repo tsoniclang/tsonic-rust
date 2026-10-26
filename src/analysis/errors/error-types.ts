@@ -10,6 +10,7 @@ import { rustNativeErrorJoinTargetType } from "../../target-model/types/native-e
 import { rustUninhabitedError } from "../../policy/conversions/callable-physical.js";
 import { selectRustProducerError, type RustProducerErrorContext } from "../callables/producer-errors.js";
 import type { RustSourcePackageComponentClassifications } from "../../target-model/records/source-package-semantics.js";
+import { rustErasedCallableInvocationError } from "../../policy/types/callables/native-protocols.js";
 
 export interface RustErrorTypeContext extends RustProducerErrorContext {
   readonly ast: Pick<AstReader, "getSourceFile" | "getFileName">;
@@ -49,6 +50,8 @@ export function normalizeRustErrorType(
   let remaining = 4096;
   const normalize = (type: TargetTypeRef, owner: Node | undefined): TargetTypeRef => mapRustTargetTypes(type, selected => {
     if (--remaining < 0) throw unavailable;
+    const invocationError = rustErasedCallableInvocationError(selected);
+    if (invocationError !== undefined) return normalize(invocationError, owner);
     const program = rustProgramErrorOwner(selected);
     if (program !== undefined) {
       if (program.kind === "logical") {

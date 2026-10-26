@@ -419,7 +419,8 @@ export function analyzeRustErrorRegions(input: RustErrorTypeContext & {
       const carrier = selected.channels.get(reference.channel);
       const bindings = bindRustGenericArguments(selected.producer.environment, reference.genericArguments);
       return carrier === undefined || bindings === undefined ? undefined
-        : substituteRustTargetGenerics(carrier, bindings.types, bindings.lifetimes, bindings.consts);
+        : normalizeRustErrorType(substituteRustTargetGenerics(carrier, bindings.types, bindings.lifetimes, bindings.consts),
+          input, selected.producer.declaration);
     },
   });
   return diagnostics.length > 0 ? rejectedTargetStage(diagnostics) : resolvedTargetStage(Object.freeze({ ...reads,

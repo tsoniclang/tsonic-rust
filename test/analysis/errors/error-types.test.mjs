@@ -11,6 +11,11 @@ import { rustProducerErrorReference } from "../../../dist/target-model/types/car
 import { rustNativeErrorJoinTargetType, rustNativeErrorJoinReference } from "../../../dist/target-model/types/native-error-joins.js";
 import { selectRustErrorRegion } from "../../../dist/analysis/errors/regions.js";
 import { nativeCallbackParametersSource } from "../../../../tsonic/test/fixtures/native-callback-parameters.mjs";
+import { rustCallableTargetType } from "../../../dist/target-model/types/carriers/callables.js";
+import { rustNativeCallableErrorType } from "../../../dist/policy/types/callables/native-protocols.js";
+import { rustStaticLifetime } from "../../../dist/target-model/lifetimes/index.js";
+import { analyzeRust } from "../../helpers/rust-session.mjs";
+import { Node_Expression } from "@tsonic/target-api/source";
 
 
 function fixture(text = `
@@ -32,8 +37,83 @@ function fixture(text = `
   const input = { ast: context.ast, records: context.records, definitions: context.typeDefinitions,
     producers, components: classified.plan };
   const error = name => producers.errorFor(producer(name).declaration, name === "forwarded" ? 0 : "body");
-  return { input, producer, error };
+  return { input, producer, error, native: context.callableValues.native };
 }
+
+test("concrete native Callable invocation errors normalize their bound producer without inventing generic purity", () => {
+  const current = fixture(`
+    export function invoke(callback: () => string): string { return callback(); }
+    export function pure(): string { return "pure"; }
+    export function failed(): string { throw new Error("failure"); }
+  `);
+  const declaration = current.producer("invoke").declaration;
+  const inputs = current.native.inputsFor(declaration);
+  assert.equal(inputs.length, 1, "the checked declaration has its one actual native input");
+  const input = inputs[0];
+  assert.equal(input.protocol.method.binder.parameters.length, 0, "the selected invocation has no hidden lifetime arguments");
+  assert.equal(input.protocol.signature.typeParameters.length, 0, "the selected invocation has no hidden type arguments");
+  const pure = current.input.producers.errorFor(current.producer("pure").declaration, "invoke");
+  const failed = current.input.producers.errorFor(current.producer("failed").declaration, "invoke");
+  for (const [name, error, expected] of [
+    ["pure nested producer", pure, { kind: "target-named", id: "rust.core.Infallible" }],
+    ["failed nested producer", failed, normalizeRustErrorType(failed, current.input)],
+    ["JS rejection", rustJsValueTargetType(), rustJsValueTargetType()],
+  ]) {
+    const implementation = rustCallableTargetType([], rustStringTargetType(), rustStaticLifetime, error);
+    const associated = rustNativeCallableErrorType(input, implementation, "invocation", []);
+    assert.equal(associated !== undefined, true, name + ": the actual native bridge admits the invocation projection");
+    assert.equal(expected !== undefined, true, name + ": the original producer owns its exact error");
+    const normalized = normalizeRustErrorType(associated, current.input);
+    assert.equal(rustTargetTypeRefEquals(normalized, expected), true, name + ": normalization retains the exact bound error");
+    assert.equal(Object.isFrozen(normalized), true, name + ": normalized evidence is immutable");
+    for (const other of [{ ...associated, name: "AwaitError0" }, { ...associated, trait: { ...associated.trait, id: "foreign:Callable" } }]) {
+      assert.equal(normalizeRustErrorType(other, current.input)?.kind, "associated-type",
+        name + ": unrelated associated channels are not projected as invocation errors");
+    }
+  }
+  const unbound = rustNativeCallableErrorType(input, input.implementation, "invocation", []);
+  assert.equal(unbound !== undefined, true, "the original generic input owns its independent invocation channel");
+  assert.equal(rustTargetTypeRefEquals(normalizeRustErrorType(unbound, current.input), unbound), true,
+    "a native implementation binder is never guessed to be infallible");
+});
+
+test("returned native callback calls publish the bound observer and resolver error before sealing", () => {
+  const { program } = analyzeRust({ surfaces: ["js"], files: { "index.ts": `
+    function make<Part>(done: (value: Part) => void, value: Part): () => void {
+      return () => { done(value); };
+    }
+    function wrap<Value>(value: Value): Promise<Value | number> {
+      return new Promise<Value | number>(resolve => {
+        const observer = make((actual: Value): void => { void actual; }, value);
+        const completion = make(resolve, 7);
+        new Set([observer]).forEach(next => { next(); });
+        observer();
+        completion();
+      });
+    }
+    console.log(await wrap(Promise.resolve(5)));
+  ` } });
+  const { ast } = program.source;
+  const found = new Set();
+  const visit = node => {
+    if (ast.is.IsCallExpression(node)) {
+      const callee = Node_Expression(ast, node);
+      const name = callee !== undefined && ast.is.IsIdentifier(callee) ? ast.text(callee) : undefined;
+      if (name === "observer" || name === "completion") {
+        const selected = program.records.sourceCall.get(node);
+        assert.equal(selected !== undefined, true, name + ": the actual call owns its sealed native selection");
+        assert.equal(selected.eliminateInfallible, name === "observer", name + ": only the pure actual creation eliminates Infallible");
+        assert.equal(name === "observer" ? selected.physicalCallableError === undefined
+          : rustTargetTypeRefEquals(selected.physicalCallableError, rustJsValueTargetType()), true,
+        name + ": no program-error transport replaces the actual native channel");
+        found.add(name);
+      }
+    }
+    ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+  };
+  program.sourceFiles.forEach(visit);
+  assert.equal(found.size, 2, "both independent actual creation channels are checked before publication");
+});
 
 test("native declaration error demand removes only template-proven impossible channels and retains Result ABI", () => {
   const current = fixture(nativeCallbackParametersSource, { surfaces: [] });
