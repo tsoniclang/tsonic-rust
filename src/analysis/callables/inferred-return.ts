@@ -23,7 +23,6 @@ import { setCarrierFact } from "../operations/project-calls.js";
 import type { RustSourceParameterAbiFact } from "../../target-model/records/callables-and-resources.js";
 import type { RustProgramRecordBuilder } from "../program/records/model.js";
 import { rustClassCallableMemberOwner, rustClassReceiverCarriers } from "../declarations/classes/receivers.js";
-import { resolveRustCallableStorageCarrier } from "../source-evidence/types/resolution/source-evidence.js";
 import { rustSourceStorageSubjectContext } from "../source-evidence/types/resolution/source-storage-projection.js";
 
 export type RustInferredReturnSelection =
@@ -56,18 +55,7 @@ export function selectRustRetainedReturn(
   declaration: Node,
   baseline: TargetTypeRef,
 ): RustInferredReturnSelection {
-  const inferred = selectReturn(walk, declaration, baseline, "retained");
-  if (inferred.kind === "pending" || walk.context.ast.body(declaration) === undefined) return inferred;
-  const payload = rustOptionElementCarrier(inferred.carrier) ?? inferred.carrier;
-  if (rustCallableProtocol(payload) === undefined) return inferred;
-  const context = rustResolutionContext({ ...walk, currentCallableDeclaration: declaration }, declaration, "return");
-  const selected = resolveRustCallableStorageCarrier(payload, { ...context, callableRepresentation: "storage" },
-    walk.operationOptions, new Set());
-  if (selected === undefined) return { kind: "pending", hint: inferred.carrier };
-  const carrier = rustOptionElementCarrier(inferred.carrier) === undefined ? selected
-    : rustSourceOptionalElementCarrier(inferred.carrier) === undefined ? rustOptionTargetType(selected)
-      : rustSourceOptionalTargetType(selected);
-  return { kind: "complete", carrier };
+  return selectReturn(walk, declaration, baseline, "retained");
 }
 
 function selectReturn(
@@ -239,7 +227,7 @@ function selectReturn(
             if (finalizeRustCallableSignature(probe, target).kind !== "complete") return undefined;
             const sourceFile = ast.getSourceFile(expression);
             if (sourceFile === undefined) return undefined;
-            return resolveExpressionCarrier(probe, expression, sourceFile, expected);
+            return resolveExpressionCarrier(probe, expression, sourceFile, expected, role === "retained" ? "operation" : "value");
           }
         }
         if (kind === "KindPropertyAccessExpression") {
@@ -250,7 +238,8 @@ function selectReturn(
           if (receiverCarrier === undefined) return undefined;
           if (setCarrierFact(probe, receiver, receiverCarrier) === undefined) return undefined;
           const sourceFile = ast.getSourceFile(expression);
-          return sourceFile === undefined ? undefined : resolveExpressionCarrier(probe, expression, sourceFile, expected);
+          return sourceFile === undefined ? undefined : resolveExpressionCarrier(probe, expression, sourceFile, expected,
+            role === "retained" ? "operation" : "value");
         }
         const literalValues = ast.is.IsObjectLiteralExpression(expression)
           ? ast.as.AsObjectLiteralExpression(expression)?.Properties?.Nodes.flatMap(property => {
@@ -276,7 +265,7 @@ function selectReturn(
         }
         const sourceFile = ast.getSourceFile(expression);
         return sourceFile !== undefined
-          ? resolveExpressionCarrier(probe, expression, sourceFile, expected)
+          ? resolveExpressionCarrier(probe, expression, sourceFile, expected, role === "retained" ? "operation" : "value")
           : resolveRustTargetTypeRef(expression, context, probe.operationOptions);
       } finally {
         active.delete(expression);
