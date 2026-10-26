@@ -24,6 +24,8 @@ import { createRustRetainedEnvironmentQueries } from "../../../dist/analysis/cal
 import { compileRust } from "../../helpers/rust-session.mjs";
 import { analyzeRustCheckedContext } from "../../helpers/rust-session-analysis-context.mjs";
 import { analyzeRustAnalysisProgram } from "../../../dist/analysis/program/target-program.js";
+import { analyzeRustCallableEntryParameters } from "../../../dist/analysis/callables/entry-parameters.js";
+import { analyzeRustLexicalFunctionEmission } from "../../../dist/analysis/callables/lexical-emission.js";
 
 
 
@@ -257,6 +259,17 @@ function physicalLifecycleInputs({ beforeInitialize, afterInitialize }) {
           "the late native facts retain every original checked SourceFile identity");
         assert.equal(context.projectTypes.definitions.length === 0 && program.projectTypes.definitions.length === 0, true,
           "the lifecycle fixture contains no foreign native class or constructor identities");
+        const classValues = context.classValues.seal(context);
+        analyzeRustLexicalFunctionEmission({ program: { records: context.records,
+          lexicalFunctions: context.lexicalFunctions, ownership: program.ownership, callableValues: registry },
+          nodes: context.nativeNodes, producer: context.records.lexicalFunctionPlans });
+        const entryIssues = analyzeRustCallableEntryParameters({ source: context.source, nodes: context.nativeNodes,
+          records: context.records, lifetimes: context.sourceLifetimes, nativeStorage: registry.nativeStorage,
+          native: registry.native, nativeProducers: registry.nativeProducers, generic: registry.generic,
+          frames: registry.frames, classValues, projectTypes: context.projectTypes,
+          structuralShapes: context.structuralShapes.completed,
+          producer: context.records.declarationEmission, required: context.requiredRecords });
+        assert.equal(entryIssues.length, 0, "the original lifecycle completes its canonical early native entry owner before sealing");
         sealInput = Object.freeze({ nativeGenerics: context.records.nativeGenericPlans,
           retainedCallableInputs: program.retainedCallableInputs,
           declarationGenericRequirements: program.declarationGenericRequirements,
