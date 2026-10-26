@@ -48,13 +48,14 @@ function storageOwnership(current, registry, subject, declaration) {
     : current.storage.bindingsForDeclaration(declaration);
   const producers = scope.kind === "unresolved" ? scope
     : current.storage.storageProducersFor(subject, scope.bindings);
-  return selectRustCallableOwnership(registry, subject, { kind: "storage", producers });
+  return selectRustCallableOwnership(registry, subject, { kind: "storage", producers }, []);
 }
 
 function physicalInput(current, registry, subject, logicalCarrier) {
   const scope = current.storage.bindingsForLexicalOwner(subject.node);
   assert.equal(scope.kind, "resolved", "physical selection retains its actual original source binding");
   return { ast: current.source.ast, ownership: registry, source: { subject, bindings: scope.bindings },
+    formalInputFor: () => undefined,
     selection: { kind: "storage", producers: current.storage.storageProducersFor(subject, scope.bindings) }, logicalCarrier };
 }
 

@@ -108,7 +108,7 @@ export function resolveRustSuspendedCallableStorage(
   const scope = rustSourceStorageScope(walk.context, declaration, walk.currentCallableDeclaration);
   if (scope.kind === "unresolved") return { kind: "rejected", reason: scope.reason };
   const producers = walk.context.sourceStorage.storageProducersFor(subject.subject, scope.bindings);
-  const ownership = selectRustCallableOwnership(walk.context.callableOwnership, subject.subject, { kind: "storage", producers });
+  const ownership = selectRustCallableOwnership(walk.context.callableOwnership, subject.subject, { kind: "storage", producers }, []);
   if (ownership.kind === "unresolved") return { kind: "rejected", reason: ownership.reason };
   if (ownership.kind === "frame" && ownership.activation.kind === "class") {
     const definition = walk.context.projectTypes.definitionForDeclaration(ownership.activation.ownerDeclaration);

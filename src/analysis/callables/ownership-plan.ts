@@ -1,6 +1,6 @@
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { Node } from "@tsonic/tsts";
-import type { SourceStorageProducersSelection, SourceStorageSubject } from "@tsonic/target-api/analysis";
+import type { SourceStorageProducer, SourceStorageProducersSelection, SourceStorageSubject } from "@tsonic/target-api/analysis";
 import { createRustCallableOwnershipComponentQueries } from "./ownership-components.js";
 import { type RustCallableOwnershipComponentQueries } from "../../target-model/records/callable-ownership.js";
 import type { RustCallableOwnershipComponent } from "../../target-model/records/callable-ownership.js";
@@ -91,6 +91,7 @@ export function selectRustCallableOwnership(
   ownership: RustCallableOwnershipPlan,
   subject: SourceStorageSubject,
   input: RustCallableOwnershipInput,
+  physicalInputs: readonly Pick<SourceStorageProducer, "subject" | "bindings">[],
 ): RustCallableOwnershipSelection {
   const unresolved = (reason: string): RustCallableOwnershipSelection => Object.freeze({ kind: "unresolved", reason });
   const failure = ownership.failureReason();
@@ -108,7 +109,11 @@ export function selectRustCallableOwnership(
   }
   const origins = input.producers;
   if (origins.kind === "unresolved") return unresolved(origins.reason);
-  if (origins.kind !== "complete") return unresolved("An open callable storage domain cannot select one physical activation family.");
+  const closedInput = (origin: Pick<SourceStorageProducer, "subject" | "bindings">): boolean => physicalInputs.some(input =>
+    input.subject === origin.subject && input.bindings === origin.bindings);
+  if (origins.kind === "open" && (origins.boundaries.length === 0 || origins.boundaries.some(boundary =>
+    boundary.kind !== "external-input" || !closedInput(boundary))))
+    return unresolved("An open callable storage domain cannot select one physical activation family.");
   let selected: RustCallableActivation | undefined;
   let ordinaryOrigins = false;
   for (const origin of origins.producers) {

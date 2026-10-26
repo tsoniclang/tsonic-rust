@@ -166,7 +166,7 @@ test("native construction requires its completed original body, captures and own
   const original = selected.sourceStorageResolution;
   const ownershipIssue = selectRustCallableOwnership({ ...context.callableOwnership,
     issues: [...context.callableOwnership.issues, { node: declaration, reason: "actual construction ownership unavailable" }],
-  }, original.subject, { kind: "construction", declaration });
+  }, original.subject, { kind: "construction", declaration }, []);
   assert.equal(ownershipIssue.kind, "unresolved", "an original construction issue is refused by its owning selector");
   assert.equal(ownershipIssue.reason, "actual construction ownership unavailable");
   for (const subject of [{ ...original.subject }, { ...original.subject, projection: [{ kind: "array-element" }] }]) {

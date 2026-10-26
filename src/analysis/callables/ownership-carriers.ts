@@ -2,7 +2,7 @@ import type { AstReader } from "@tsonic/tsts";
 import type { SourceStorageProducer } from "@tsonic/target-api/analysis";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustCallableOrigin } from "../../policy/types/callables/callable-origins.js";
-import { rustCallableProtocol, rustNativeCallableProtocol } from "../../target-model/types/carriers/callables.js";
+import { rustCallableInputTargetType, rustCallableProtocol, rustNativeCallableProtocol } from "../../target-model/types/carriers/callables.js";
 import { rustGenericCallableProtocol, rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
 import { rustFrameCallableTargetType, rustFrameCallableValue } from "../../target-model/types/carriers/frame-callables.js";
 import { selectRustCallableOwnership, type RustCallableOwnershipInput, type RustCallableOwnershipPlan } from "./ownership-plan.js";
@@ -11,6 +11,7 @@ import type { RustClassFrameInstantiationSelection, RustTargetTypeResolutionOpti
 import { substituteRustTargetGenerics } from "../../target-model/types/carriers/substitution.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { appendRustDiagnostic, type RustFactWalk } from "../program/walk.js";
+import { rustCallableInputMatches } from "../../policy/conversions/callable-input.js";
 
 export type RustCallableOwnershipCarrierSelection =
   | { readonly kind: "selected"; readonly carrier: TargetTypeRef }
@@ -28,6 +29,18 @@ export function resolveRustCallableOwnershipCarrier(
   const selected = selectRustCallableOwnershipCarrier({
     ast: walk.context.ast, ownership: walk.context.callableOwnership,
     source, selection, logicalCarrier, classFrameFor,
+    formalInputFor(origin) {
+      const { subject, bindings } = origin;
+      const storage = walk.context.sourceStorage;
+      if (subject.kind !== "input" || subject.projection.length !== 0 || !walk.context.ast.is.IsParameterDeclaration(subject.node)) return undefined;
+      const original = storage.subject(subject.node, "input");
+      const lexical = storage.bindingsForLexicalOwner(subject.node);
+      if (original.kind !== "resolved" || original.subject !== subject || lexical.kind !== "resolved") return undefined;
+      const selectedKey = storage.contextKeyFor([subject], bindings);
+      const lexicalKey = storage.contextKeyFor([subject], lexical.bindings);
+      return selectedKey.kind === "resolved" && lexicalKey.kind === "resolved" && selectedKey.key === lexicalKey.key
+        ? walk.context.records.sourceParameterAbi.get(subject.node)?.valueCarrier : undefined;
+    },
     environmentFor(component) {
       const excluded = new Set([...component.slotDeclarations, component.ownerDeclaration]);
       const environments = component.callableDeclarations.map(declaration => environmentFor(declaration, excluded));
@@ -47,6 +60,7 @@ export function selectRustCallableOwnershipCarrier(input: {
   readonly source: Pick<SourceStorageProducer, "subject" | "bindings">;
   readonly selection: RustCallableOwnershipInput;
   readonly logicalCarrier: TargetTypeRef;
+  readonly formalInputFor: (origin: Pick<SourceStorageProducer, "subject" | "bindings">) => TargetTypeRef | undefined;
   readonly environmentFor: (activation: RustCallableActivation) => readonly TargetTypeRef[] | undefined;
   readonly classFrameFor: (declaration: RustCallableActivation["ownerDeclaration"]) => RustClassFrameInstantiationSelection | undefined;
 }): RustCallableOwnershipCarrierSelection {
@@ -55,9 +69,22 @@ export function selectRustCallableOwnershipCarrier(input: {
     rustGenericCallableProtocol(input.logicalCarrier, generic?.signature.typeParameters);
   if (protocol === undefined)
     return Object.freeze({ kind: "unresolved", reason: "Callable ownership requires a valid native callable signature." });
-  const selection = selectRustCallableOwnership(input.ownership, input.source.subject, input.selection);
+  const origins = input.selection.kind === "storage" && input.selection.producers.kind === "open"
+    ? input.selection.producers.producers : [];
+  const signature = rustCallableInputTargetType(protocol.parameters, protocol.result);
+  const physicalInputs = origins.flatMap(origin => {
+    const carrier = input.formalInputFor(origin);
+    return carrier === undefined || !rustCallableInputMatches(carrier, signature) ? [] : [{ ...origin, carrier }];
+  });
+  const selection = selectRustCallableOwnership(input.ownership, input.source.subject, input.selection, physicalInputs);
   if (selection.kind === "unresolved") return selection;
-  if (selection.kind === "ordinary") return Object.freeze({ kind: "selected", carrier: input.logicalCarrier });
+  if (selection.kind === "ordinary") {
+    if (physicalInputs.length === 0) return Object.freeze({ kind: "selected", carrier: input.logicalCarrier });
+    const carrier = physicalInputs[0]!.carrier;
+    return physicalInputs.length === origins.length && physicalInputs.every(input => rustTargetTypeRefEquals(input.carrier, carrier))
+      ? Object.freeze({ kind: "selected", carrier })
+      : Object.freeze({ kind: "unresolved", reason: "Callable storage requires one exact physical ABI for every input and producer." });
+  }
   if (generic !== undefined && generic.signature.typeParameters.length !== 0)
     return Object.freeze({ kind: "unresolved", reason: "A quantified frame requires its exact generic entry invocation protocol." });
   const origin = rustCallableOrigin(input.ast, selection.activation.activationScope);
