@@ -56,7 +56,10 @@ export function prepareRustProjectCallableFieldStorage(input: {
     const selection = subjectFor(subject.subject, declared);
     if (selection.kind === "unresolved") { failures.set(declaration, selection.reason); return undefined; }
     const owner = input.projectTypes.definitionContainingDeclaration(declaration);
-    const requiredLifetime = owner === undefined ? undefined : input.objectRepresentations.nativeLifetimeFor(owner)?.ownedCallableFieldLifetime;
+    const nativeLifetime = owner === undefined ? undefined : input.objectRepresentations.nativeLifetimeFor(owner);
+    if (owner !== undefined && nativeLifetime === undefined)
+      failTargetAnalysisInvariant("tsonic-rust", "A native member requires its original prepared lifetime contract.", declaration);
+    const requiredLifetime = nativeLifetime?.ownedCallableFieldLifetime;
     const carrier = requiredLifetime === undefined ? selection.carrier : closeRustRetainedCallableCarrier(selection.carrier, requiredLifetime);
     selected.set(declaration, carrier);
     failures.delete(declaration);

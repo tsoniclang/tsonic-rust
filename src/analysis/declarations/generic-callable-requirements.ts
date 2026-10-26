@@ -1,4 +1,5 @@
 import { stringListsEqual, type RequirementUse, type RequirementContractState } from "./generic-requirement-contract.js";
+import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import { substituteElidedLifetime } from "../../target-model/types/carriers/lifetime-elision.js";
 import { rustStaticLifetime } from "../../target-model/lifetimes/index.js";
 
@@ -73,8 +74,11 @@ export function classifyRustCallableRequirements(input: RustCallableRequirementI
     [name, new Set<RustGenericRequirement>()] as const));
   const optionalStorage = createRustOptionalStorageCollector(new Set(exactNames), declared, byParameter);
   const normalizeFamily = rustTypeFamilyNormalizer(input.typeFamilies);
-  if (definition !== undefined) {
-    for (const requirement of input.objectRepresentations.nativeLifetimeFor(definition)?.typeOutlives ?? [])
+  const nativeLifetime = definition === undefined ? undefined : input.objectRepresentations.nativeLifetimeFor(definition);
+  if (definition !== undefined && nativeLifetime === undefined)
+    failTargetAnalysisInvariant("tsonic-rust", "A project declaration requires its original prepared native lifetime contract.", declaration);
+  if (nativeLifetime !== undefined) {
+    for (const requirement of nativeLifetime.typeOutlives)
       if (requirement.lifetime.kind === "static") byParameter.get(requirement.identity)!.add("static");
   }
   const uses: RequirementUse[] = [...input.inheritedBody?.uses ?? []];
@@ -238,7 +242,7 @@ export function classifyRustCallableRequirements(input: RustCallableRequirementI
   if (error !== undefined) {
     return { kind: "rejected", reason: error };
   }
-  if (definition !== undefined && input.objectRepresentations.representationFor(definition)?.dispatchObjectLifetime?.kind === "static") {
+  if (nativeLifetime?.dispatchObjectLifetime?.kind === "static") {
     for (const requirement of optionalStorage.seal()) {
       const storageError = addUse(declaration, requirement.carrier, ["static"]);
       if (storageError !== undefined) return { kind: "rejected", reason: storageError };

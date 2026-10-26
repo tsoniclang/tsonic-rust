@@ -1,4 +1,5 @@
 import type { RustCallableRequirementInput } from "./generic-callable-requirements-model.js";
+import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import { collectRustSourceCallRequirements } from "./generic-call-requirement-uses.js";
 
 import { rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
@@ -537,7 +538,10 @@ export function createRustCallableRequirementVisitor(input: RustCallableRequirem
         if (error !== undefined) return error;
       }
       const classDefinition = input.projectTypes.definitionForDeclaration(node);
-      if (classDefinition !== undefined && input.objectRepresentations.nativeLifetimeFor(classDefinition)?.ownedCallableFieldLifetime?.kind === "static") {
+      const nativeLifetime = classDefinition === undefined ? undefined : input.objectRepresentations.nativeLifetimeFor(classDefinition);
+      if (classDefinition !== undefined && nativeLifetime === undefined)
+        failTargetAnalysisInvariant("tsonic-rust", "A native class field requirement consumes its original prepared lifetime contract.", node);
+      if (classDefinition !== undefined && nativeLifetime?.ownedCallableFieldLifetime?.kind === "static") {
         for (const field of input.projectTypes.objectLayoutForDefinition(classDefinition)?.fields ?? []) {
           const carrier = records.runtimeCarrier.get(field.declaration)?.carrier;
           if (carrier === undefined || rustCallableProtocol(carrier) === undefined) continue;
