@@ -301,22 +301,34 @@ export function checkedRustCompileInput({ files = { "empty.ts": "" }, target, ru
 }
 
 export function compileRust(options) {
-  const { captureRequiredRecords = false, ...compilationOptions } = options;
+  const { captureRequiredRecords = false, captureOperationAttempts = false, ...compilationOptions } = options;
   let program;
   let plan;
   let requiredRecords;
+  let operationAttempts;
   const compileTarget = options.compileTarget ?? compileRustAnalysisTarget;
   const harness = createRustSession({ ...compilationOptions, compileTarget(request) {
     const compiled = compileTarget(request, {
       analyzed(value) { program = value; },
       planned(value) { plan = value; },
     });
-    if (captureRequiredRecords && compiled.kind === "resolved") {
-      const context = analyzeRustCheckedContext(request);
+    if ((captureRequiredRecords || captureOperationAttempts) && compiled.kind === "resolved") {
+      const context = analyzeRustCheckedContext(request, current => {
+        if (!captureOperationAttempts) return current;
+        const original = current.callableValues;
+        return { ...current, callableValues: Object.create(original, {
+          initialize: { value(input) {
+            operationAttempts = input.operationAttempts;
+            return original.initialize(input);
+          } },
+        }) };
+      });
       assert.deepEqual(context.diagnostics.map(({ code, message }) => ({ code, message })), []);
       assert.equal(context.source === request.input.source, true,
         "the independent analysis uses the identical checked source and Nodes");
-      requiredRecords = Object.freeze([...context.requiredRecords]);
+      if (captureRequiredRecords) requiredRecords = Object.freeze([...context.requiredRecords]);
+      if (captureOperationAttempts) assert.equal(operationAttempts !== undefined, true,
+        "the real checked callable initializer supplies its selected operation metadata");
     }
     return compiled;
   } });
@@ -384,12 +396,13 @@ export function compileRust(options) {
     source,
     harness,
     ...(requiredRecords === undefined ? {} : { requiredRecords }),
+    ...(operationAttempts === undefined ? {} : { operationAttempts }),
   };
 }
 
 export function analyzeRust(options) {
   let program;
-  const { source, result, requiredRecords } = compileRust({ ...options, compileTarget(request) {
+  const { source, result, requiredRecords, operationAttempts } = compileRust({ ...options, compileTarget(request) {
     const analysis = analyzeRustAnalysisProgram(request);
     if (analysis.kind === "rejected") return analysis;
     program = analysis.value;
@@ -399,7 +412,8 @@ export function analyzeRust(options) {
     throw new Error(result.diagnostics.map(diagnostic => diagnostic.message).join("\n"));
   }
   assert.ok(program, "The compilation session must invoke target analysis.");
-  return Object.freeze({ source, program, ...(requiredRecords === undefined ? {} : { requiredRecords }) });
+  return Object.freeze({ source, program, ...(requiredRecords === undefined ? {} : { requiredRecords }),
+    ...(operationAttempts === undefined ? {} : { operationAttempts }) });
 }
 
 export function compileRustThroughTargetPack(options) {

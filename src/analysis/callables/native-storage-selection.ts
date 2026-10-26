@@ -52,6 +52,7 @@ import { createRustNativeStorageJoins } from "./native-storage-joins.js";
 import { rustNativeStorageAbsentOrigin, rustNativeStorageErasedUnionCallablePayload, rustNativeStorageFrameFieldCarrier, rustNativeStorageErasedClosureParameter, rustNativeStorageErasedFieldCallable, rustNativeStorageInstanceTypeBindings, rustNativeStorageFrameInstanceBindings } from "./native-storage-carriers.js";
 import type { createRustNativeStorageQueries } from "./native-storage.js";
 import type { RustSourceErrorEffectSelection } from "../errors/source-error-effects.js";
+import { selectRustNativeCallbackParameterStorage } from "./native-parameters.js";
 
 export function createRustNativeStorageSelection(
   input: Parameters<typeof createRustNativeStorageQueries>[0],
@@ -91,6 +92,13 @@ export function createRustNativeStorageSelection(
     const erasedPhysicals = new Set<TargetTypeRef>();
     const sources: RustPhysicalCallableSourceSelection[] = [];
     const fail = (message: string): undefined => { reason ??= message; return undefined; };
+    const selectionFor = (physical: TargetTypeRef | undefined, logical: TargetTypeRef): RustNativeStorageSelection => {
+      const selectedSources = Object.freeze([...sources]);
+      return physical === undefined ? unresolved(reason ?? "Native callable storage has no exact physical selection.")
+        : rustTargetTypeRefEquals(physical, logical) ? Object.freeze({ kind: "identity", carrier: physical, sources: selectedSources })
+          : Object.freeze({ kind: "selected", carrier: physical, inputs: Object.freeze([...selectedInputs]), sources: selectedSources,
+            ...(erasedPhysicals.has(physical) ? { erased: true as const } : {}) });
+    };
     const step = (depth: number): boolean => {
       if (remaining-- > 0 && depth <= rustNativeStorageProjectionDepth) return true;
       fail("Native callable storage exceeds its bounded carrier projection budget.");
@@ -363,14 +371,21 @@ export function createRustNativeStorageSelection(
               // A callable parameter of an owner emitted as a closure value is a concrete runtime callable supplied by
               // the caller; its physical carrier is its declared parameter carrier, with no producer of its own.
               if (concreteParameter !== undefined) {
+                const callback = selectRustNativeCallbackParameterStorage(input, origin, frontier.bindings,
+                  (source, logical, bindings) => selectionFor(visit(logical, source, bindings, depth + 1, false, "input"), logical));
+                if (callback?.kind === "unresolved") return fail(callback.reason);
                 const element = callableValueCarrier(concreteParameter);
-                const declared = element === undefined ? undefined : rustCallablePhysicalCarrier(element);
+                const contract = callback === undefined ? element : callableValueCarrier(callback.carrier);
+                const declared = contract === undefined ? undefined : rustCallablePhysicalCarrier(contract);
                 if (declared === undefined || element === undefined || !rustCallableInvocationSignaturesMatch(current, element))
                   return fail("Native callable storage conflicts with its exact concrete callable parameter.");
+                if (callback?.kind === "selected") for (const selected of callback.inputs) selectedInputs.add(selected);
+                for (const source of callback?.sources ?? []) if (!sources.includes(source)) sources.push(source);
                 joinable = false;
                 if (physical !== undefined && !rustTargetTypeRefEquals(physical, declared))
                   return fail("Native callable storage has distinct physical input alternatives requiring a sealed join.");
-                if (element.kind === "target-named" && element.id === rustCallableTargetId) erasedPhysicals.add(declared);
+                if (callback?.kind === "selected" && callback.erased === true ||
+                  contract?.kind === "target-named" && contract.id === rustCallableTargetId) erasedPhysicals.add(declared);
                 physical = declared;
                 alternatives.set(origin, declared);
                 continue;
@@ -734,10 +749,6 @@ export function createRustNativeStorageSelection(
         ? fail("Native callable storage requires its existing physical aggregate layout owner.") : current;
     };
     const physical = visit(carrier, subject, bindings, 0, false, position);
-    const selectedSources = Object.freeze(sources);
-    return physical === undefined ? unresolved(reason ?? "Native callable storage has no exact physical selection.")
-      : rustTargetTypeRefEquals(physical, carrier) ? Object.freeze({ kind: "identity", carrier, sources: selectedSources })
-        : Object.freeze({ kind: "selected", carrier: physical, inputs: Object.freeze([...selectedInputs]), sources: selectedSources,
-          ...(erasedPhysicals.has(physical) ? { erased: true as const } : {}) });
+    return selectionFor(physical, carrier);
   };
 }

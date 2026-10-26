@@ -80,7 +80,8 @@ function compileObserved(options) {
 }
 
 function construction(text, wrapCaptures = captures => captures, wrapRecords = records => records, wrapStorage = storage => storage) {
-  const { program, source: checked } = analyzeRust({ surfaces: [], files: { "index.ts": text } });
+  const { program, source: checked, operationAttempts } = analyzeRust({ surfaces: [], files: { "index.ts": text },
+    captureOperationAttempts: true });
   const source = createTargetSourceProgram(checked);
   const storage = wrapStorage(createSourceStorageQuery(source, program.records.sourceArtifacts.get().map(artifact => artifact.sourceFile)));
   const records = wrapRecords(program.records);
@@ -93,6 +94,7 @@ function construction(text, wrapCaptures = captures => captures, wrapRecords = r
     node => nativeNodeSet.has(node), rustFixedStructuralMethodDeclarations(source.ast, program.structuralShapes));
   let physical;
   const input = { source, ast: source.ast, storage, nativeNodes, records, definitions: program.typeDefinitions,
+    operationAttempts,
     frames: program.callableValues.frames,
     structuralShapes: program.structuralShapes, projectTypes: program.projectTypes, generic: registry.plan, lexicalFunctions: program.lexicalFunctions,
     lifetimes: program.sourceLifetimes,
