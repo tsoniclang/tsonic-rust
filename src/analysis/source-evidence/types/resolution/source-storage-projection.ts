@@ -7,8 +7,7 @@ export function rustSourceStorageScope(
   node: Node,
   declaration?: Node,
 ): RustSourceStorageResolution {
-  const selected = declaration === undefined ? context.sourceStorage.bindingsForLexicalOwner(node)
-    : context.sourceStorage.bindingsForDeclaration(declaration);
+  const selected = context.sourceStorage.bindingsForLexicalOwner(declaration ?? node);
   return selected.kind === "unresolved" ? selected
     : { kind: "resolved", subject: undefined, bindings: selected.bindings };
 }
