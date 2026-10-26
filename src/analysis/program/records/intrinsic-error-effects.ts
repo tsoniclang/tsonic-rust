@@ -17,28 +17,44 @@ export function createRustIntrinsicErrorEffectsPublication(input: {
   readonly effectsByModule: ReadonlyMap<SourceFile, RustErrorEffectsFact>;
   readonly effectsByRegion: ReadonlyMap<Node, RustErrorEffectsFact>;
   readonly effectsByExpression: ReadonlyMap<Node, RustErrorEffectsFact>;
+  readonly intrinsicEffects: ReadonlyMap<Node, RustErrorEffectsFact>;
   readonly genericInvocations: ReadonlyMap<Node, RustSourceGenericCallableInvocation>;
   readonly completedInvocations: Map<Node, ReturnType<RustSourceGenericCallableInvocation["complete"]>>;
   readonly sourceErrorEdges: ReadonlyMap<Node, readonly RustSourceErrorEffectEdge[]>;
   readonly awaitSourceEdges: ReadonlyMap<Node, readonly RustAwaitSourceErrorBranch[]>;
   readonly mergeEffects: (effects: readonly RustErrorEffectsFact[]) => RustErrorEffectsFact | undefined;
-}): () => void {
+}): {
+  effectsFor(subject: Node): RustErrorEffectsFact | undefined;
+  publish(): void;
+} {
   const { walk, budget, selectSourceErrors, effectsByDeclaration, effectsByModule, effectsByRegion,
     effectsByExpression, genericInvocations, completedInvocations, sourceErrorEdges, awaitSourceEdges, mergeEffects } = input;
   let published = false;
-  return (): void => {
+  const completeError = (error: RustErrorEffectsFact["nativeErrors"][number]) =>
+    selectSourceErrors.complete(error, walk.context.callableValues.nativeStorage);
+  const completeEffects = (effects: RustErrorEffectsFact): RustErrorEffectsFact | undefined => {
+    const nativeErrors: RustErrorEffectsFact["nativeErrors"][number][] = [];
+    for (const error of effects.nativeErrors) {
+      const selected = completeError(error);
+      if (selected === undefined) return undefined;
+      nativeErrors.push(selected);
+    }
+    return mergeEffects([{ localErrors: effects.localErrors, nativeErrors }]);
+  };
+  const requireEffects = (effects: RustErrorEffectsFact): RustErrorEffectsFact => {
+    const selected = completeEffects(effects);
+    if (selected === undefined) throw new Error("Rust pending intrinsic effects lost their exact physical payload correspondence.");
+    return selected;
+  };
+  return Object.freeze({
+    effectsFor(subject: Node): RustErrorEffectsFact | undefined {
+      const effects = input.intrinsicEffects.get(subject);
+      return effects === undefined ? undefined : completeEffects(effects);
+    },
+    publish(): void {
       if (published) throw new Error("Rust intrinsic error applications publish exactly once after physical binding.");
       const failure = budget.run(() => {
-        const physical = walk.context.callableValues.nativeStorage;
-        const completeError = (error: RustErrorEffectsFact["nativeErrors"][number]) => selectSourceErrors.complete(error, physical);
         const completedEdges = new Map<RustSourceErrorEffectEdge, RustSourceErrorEffectEdge>();
-        const completeEffects = (effects: RustErrorEffectsFact): RustErrorEffectsFact => {
-          const errors = effects.nativeErrors.map(completeError);
-          const selected = errors.some(error => error === undefined) ? undefined : mergeEffects([{ localErrors: effects.localErrors,
-            nativeErrors: errors as RustErrorEffectsFact["nativeErrors"] }]);
-          if (selected === undefined) throw new Error("Rust pending intrinsic effects lost their exact physical payload correspondence.");
-          return selected;
-        };
         const completeEdge = (edge: RustSourceErrorEffectEdge): RustSourceErrorEffectEdge => {
           const previous = completedEdges.get(edge);
           if (previous !== undefined) return previous;
@@ -53,23 +69,23 @@ export function createRustIntrinsicErrorEffectsPublication(input: {
               throw new Error("Rust final source error channels require one exact source-to-target correspondence.");
             channels.set(channel.source.identity, channel);
           }
-          const selected = Object.freeze({ ...edge, effects: completeEffects(edge.effects), nativeErrors: Object.freeze([...channels.values()]) });
+          const selected = Object.freeze({ ...edge, effects: requireEffects(edge.effects), nativeErrors: Object.freeze([...channels.values()]) });
           completedEdges.set(edge, selected);
           return selected;
         };
         for (const [declaration, effects] of effectsByDeclaration) {
           requireRustRecord(walk.context.requiredRecords, "errorEffects", declaration, "source-callable", "recordFallibilityFacts");
-          walk.context.records.errorEffectPlans.selected(declaration, completeEffects(effects));
+          walk.context.records.errorEffectPlans.selected(declaration, requireEffects(effects));
         }
         for (const [sourceFile, effects] of effectsByModule) {
           requireRustRecord(walk.context.requiredRecords, "errorEffects", sourceFile, "module", "recordFallibilityFacts");
-          walk.context.records.errorEffectPlans.selected(sourceFile, completeEffects(effects));
+          walk.context.records.errorEffectPlans.selected(sourceFile, requireEffects(effects));
         }
         for (const [region, effects] of effectsByRegion) {
           budget.metadata(effects);
           requireRustRecord(walk.context.requiredRecords, "errorEffects", region,
             "error-region", "recordFallibilityFacts");
-          walk.context.records.errorEffectPlans.selected(region, completeEffects(effects));
+          walk.context.records.errorEffectPlans.selected(region, requireEffects(effects));
         }
         for (const [node, invocation] of genericInvocations) {
           if (!completedInvocations.has(node)) completedInvocations.set(node, invocation.complete(walk.context));
@@ -84,15 +100,15 @@ export function createRustIntrinsicErrorEffectsPublication(input: {
           budget.metadata(effects);
           requireRustRecord(walk.context.requiredRecords, "errorEffects", node,
             "expression", "recordFallibilityFacts");
-          walk.context.records.errorEffectPlans.selected(node, completeEffects(effects));
+          walk.context.records.errorEffectPlans.selected(node, requireEffects(effects));
         }
         for (const node of walk.preparedCallbackCalls.keys()) {
           budget.step();
           const attempt = walk.operationAttempts.get(node);
           if (attempt?.kind !== "checked-call" || attempt.prepared === undefined) continue;
           const callback = attempt.prepared.callbackEffects;
-          const invocationEffects = completeEffects(callback.invocationEffects);
-          const implementationEffects = completeEffects(callback.implementationEffects);
+          const invocationEffects = requireEffects(callback.invocationEffects);
+          const implementationEffects = requireEffects(callback.implementationEffects);
           budget.metadata(invocationEffects);
           budget.metadata(implementationEffects);
           walk.operationAttempts.set(node, { ...attempt, prepared: Object.freeze({ ...attempt.prepared,
@@ -118,5 +134,6 @@ export function createRustIntrinsicErrorEffectsPublication(input: {
       if (failure !== undefined) appendRustDiagnostic(walk, failure.code, failure.message, undefined,
         ["target.capability=rust.native-error.bounded-effects"]);
       published = true;
-  };
+    },
+  });
 }

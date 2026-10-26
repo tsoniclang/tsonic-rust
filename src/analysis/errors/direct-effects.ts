@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import { KindCallExpression, KindNewExpression, KindVariableDeclaration, Node_Expression, asSourceNode,
-  sourceEnclosingCallable } from "@tsonic/target-api/source";
+  sourceEnclosingCallable, sourceNodeIdentity } from "@tsonic/target-api/source";
 import { appendRustDiagnostic, rustOperationContext, type RustFactWalk } from "../program/walk.js";
 import type { RustEffectsWorkBudget } from "./effects-work-budget.js";
 import { rustJsRejectionErrorIdentity, type RustErrorEffectsFact } from "../../target-model/records/error-effects.js";
@@ -25,6 +25,8 @@ import { rustSourceCallCallableStorageCarrier } from "../../policy/operations/me
 import { rustCallableProtocol } from "../../target-model/types/carriers/callables.js";
 import { rustFrameCallableValue } from "../../target-model/types/carriers/frame-callables.js";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
+import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
+import { rustNativeCallableOperand } from "../callables/native-conversions.js";
 
 interface RustDirectErrorEffectsInput {
   readonly walk: RustFactWalk;
@@ -102,9 +104,27 @@ export function createRustDirectErrorEffects(
       ? undefined : walk.context.callableValues.frames.entryFor(frameCarrier);
     if (frameCarrier !== undefined && rustFrameCallableValue(frameCarrier) !== undefined && frame === undefined)
       failTargetAnalysisInvariant("tsonic-rust", "A selected frame invocation requires its one original entry inventory.", node);
-    const invokedError = nativeInput === undefined && frame === undefined
-      ? rustCallableProtocol(rustSourceCallCallableStorageCarrier(operation, walk.context.structuralShapes))?.error : undefined;
-    const invocationEffects = invokedError === undefined ? undefined : rustCallableInvocationErrorEffects(invokedError);
+    const invokedCarrier = nativeInput === undefined && frame === undefined
+      ? rustSourceCallCallableStorageCarrier(operation, walk.context.structuralShapes) : undefined;
+    const invokedError = rustCallableProtocol(invokedCarrier)?.error;
+    let invocationEffects = invokedError === undefined ? undefined : rustCallableInvocationErrorEffects(invokedError);
+    if (callee !== undefined && invokedCarrier !== undefined && invokedError !== undefined) {
+      const pending = Object.freeze({ identity: `pending-runtime-callable-error:${sourceNodeIdentity(ast, node)}`,
+        errorType: invokedError });
+      if (!selectSourceErrors.pending(pending, () => {
+        const source = rustNativeCallableOperand(invokedCarrier, callee, {
+          records: walk.context.records, storage: walk.context.callableValues.nativeStorage,
+          producers: walk.context.callableValues.nativeProducers, frames: walk.context.callableValues.frames,
+        });
+        if (source === undefined) return undefined;
+        const errorType = source.signature.error;
+        return Object.freeze({ identity: rustTargetTypeRefEquals(errorType, rustJsValueTargetType())
+          ? rustJsRejectionErrorIdentity : `runtime-callable-error:${closedMetadataKey(errorType)}`, errorType });
+      }, "completed")) {
+        failTargetAnalysisInvariant("tsonic-rust", "A runtime callable invocation requires one exact pending physical error channel.", node);
+      }
+      invocationEffects = Object.freeze({ localErrors: false, nativeErrors: Object.freeze([pending]) });
+    }
     const providerError = operation?.kind === "provider-operation" && operation.abi.effects.invocation === "fallible" &&
       operation.abi.effects.errorBoundary === "provider-native" ? operation.abi.effects.errorCarrier : undefined;
     const providerEffects = providerError === undefined ? undefined : rustCallableInvocationErrorEffects(providerError);
