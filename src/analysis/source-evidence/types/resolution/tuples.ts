@@ -106,7 +106,7 @@ export function resolveRustAuthoredTargetType(
     return sourceFile === undefined || !context.source.semantics.includes(sourceFile)
       ? undefined
       : resolveRustTargetType(
-        context.semanticsFor(node).types.expressionType(node),
+        context.semanticsFor(node).types.authoredType(node),
         context,
         options,
         resolving,
