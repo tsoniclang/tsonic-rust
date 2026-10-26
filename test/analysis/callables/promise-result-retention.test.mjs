@@ -394,6 +394,31 @@ export const marker = 0;
   ]));
 });
 
+test("forwarded formal native leases preserve both escaping diagnostics despite the rejected object facet", () => {
+  const compilation = compileRust({ surfaces: ["js"], files: { "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+import type { Life, Ref } from "@tsonic/rust/types.js";
+import { load } from "@tsonic/rust/lang.js";
+async function keep<Region extends Life>(value: Ref<int32, Region>, pending: Promise<void>): Promise<int32> {
+  await pending;
+  return load(value);
+}
+async function forward<Region extends Life>(value: Ref<int32, Region>, pending: Promise<void>): Promise<int32> {
+  return await keep(value, pending);
+}
+async function escaped<Region extends Life>(value: Ref<int32, Region>, pending: Promise<void>): Promise<void> {
+  forward(value, pending);
+  const stored = forward(value, pending);
+  await stored;
+}
+export const marker = 0;
+` } });
+  assertRejectedAsyncSource(compilation, [0, 1].flatMap(occurrence => [
+    { code: "TSONIC_BORROWED_ASYNC_RESULT_ESCAPES", kind: "KindCallExpression", text: "forward(value, pending)", occurrence },
+    { code: "RUST_ASYNC_PROMISE_STORAGE_LIFETIME_NOT_PROVEN", kind: "KindCallExpression", text: "forward(value, pending)", occurrence },
+  ]));
+});
+
 test("a settled JS Promise preserves its exact native borrowed payload inside its owner", { timeout: 300_000 }, () => {
   const { result } = compileRust({ surfaces: ["js"], target: { id: "rust", options: { outputType: "lib" } }, files: { "index.ts": `
 import type { int32 } from "@tsonic/core/types.js";
