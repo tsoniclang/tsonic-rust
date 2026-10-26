@@ -5,6 +5,7 @@ import { rustNativeRepresentationMatches } from "../../dist/policy/conversions/n
 import { rustAbsenceTargetType, rustUnitTargetType, rustJsPromiseTargetType, rustCallableTargetType,
   rustProgramErrorTargetType, rustJsErrorTargetType, rustSourcePrimitiveTargetType } from "../../dist/target-model/types/index.js";
 import { rustFutureValueForSourceStorage, rustFutureValueMatchesCarrier, transportRustFutureValue } from "../../dist/analysis/callables/future-values.js";
+import { rustSourceUnionTargetType } from "../../dist/target-model/types/carriers/source-types.js";
 
 test("native representation transport preserves native type, arity and lifetime boundaries", () => {
   const lifetime = { kind: "parameter", identity: "owner::lifetime", name: "scope" };
@@ -41,6 +42,40 @@ test("native representation transport preserves native type, arity and lifetime 
     "an explicit lifetime is not silently rewritten to a distinct elided lifetime");
   assert.equal(rustValueConversionContract({ ...conversion, target: { ...target, genericArguments: [] } }), undefined);
   assert.equal(rustValueConversionContract({ ...conversion, kind: "object-identity-erasure" }), undefined);
+});
+
+test("physical source unions preserve exact identities and directional native payload lifetimes", () => {
+  const integer = rustSourcePrimitiveTargetType("int64");
+  const unsigned = rustSourcePrimitiveTargetType("uint64");
+  const lifetime = { kind: "parameter", identity: "owner::environment", name: "environment" };
+  const payloads = selected => [
+    rustCallableTargetType([], integer, selected),
+    rustCallableTargetType([integer], integer, selected),
+    integer,
+  ];
+  const union = types => rustSourceUnionTargetType("/src/value.ts", "Union3", [], "generated",
+    { kind: "physical", types });
+  const source = union(payloads(lifetime));
+  const target = union(payloads({ kind: "placeholder" }));
+  assert.equal(rustNativeRepresentationMatches(source, target), true);
+  assert.equal(rustNativeRepresentationMatches(target, source), false,
+    "inferred payload lifetimes never manufacture a named environment");
+  assert.equal(rustNativeRepresentationMatches({ kind: "array", rank: 1, element: source },
+    { kind: "array", rank: 1, element: target }), true);
+  for (const invalid of [
+    union(payloads({ kind: "static" })),
+    union(payloads({ kind: "parameter", identity: "other::environment", name: "environment" })),
+    union([target.value.payloads.types[1], target.value.payloads.types[0], integer]),
+    union([...target.value.payloads.types.slice(0, 2), unsigned]),
+    { ...target, value: { ...target.value, fileName: "/src/other.ts" } },
+    { ...target, value: { ...target.value, origin: "authored" } },
+    { ...target, value: { ...target.value, typeName: "Other3" } },
+    { ...target, value: { ...target.value, payloads: { kind: "source" } } },
+    { ...target, value: { ...target.value, payloads: { kind: "physical", types: [integer, , integer] } } },
+    { ...target, value: { ...target.value, extra: true } },
+    integer,
+  ]) assert.equal(rustNativeRepresentationMatches(source, invalid), false,
+    "different, incomplete or malformed native union evidence is not representation identity");
 });
 
 test("future storage selects the JS rejection protocol and retargets only a proven erased native output", () => {

@@ -14,6 +14,7 @@ import { resolveRustTargetTypeRef } from "../../source-evidence/types/resolution
 import { resolveTypeNodeCarrier } from "../../source-evidence/types/source-carriers.js";
 
 import { rustResolutionContext } from "../../program/walk.js";
+import { rustSourceStorageSubjectContext } from "../../source-evidence/types/resolution/source-storage-projection.js";
 
 import type { Node, Type } from "@tsonic/tsts";
 import { sourceCallableValueParameters } from "@tsonic/target-api/source";
@@ -97,7 +98,7 @@ export function resolveObjectLiteralMethodCarrier(
   }
   return resolveRustTargetTypeRef(
     sourcePresentCallableType(selectedType, walk.context.semanticsFor(method)) ?? selectedType,
-    rustResolutionContext(walk, method),
+    rustSourceStorageSubjectContext(rustResolutionContext(walk, method), undefined),
     walk.operationOptions,
   );
 }

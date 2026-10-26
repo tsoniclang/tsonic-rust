@@ -8,5 +8,5 @@ export type RustLocalBindingCompletion =
   | { readonly kind: "function"; readonly initializer: Node; readonly name: string }
   | { readonly kind: "value"; readonly name: string; readonly initializer: Node | undefined;
       readonly carrier: TargetTypeRef; readonly nativeCarrier: TargetTypeRef; readonly initializerCarrier: TargetTypeRef | undefined;
-      readonly storage: RustBindingStorageFact | undefined; readonly mutable: boolean; readonly selfTypedCallable: boolean;
+      readonly storage: RustBindingStorageFact | undefined; readonly mutable: boolean; readonly selfTypedInitializer: boolean;
       readonly annotated: boolean; readonly absenceInitializer: boolean };

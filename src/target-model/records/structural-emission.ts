@@ -29,6 +29,7 @@ export interface RustStructuralFieldEmission {
 
 export interface RustStructuralShapeEmission {
   readonly dispatch: RustConstructorShapeEmission | undefined;
+  readonly contextConstructors: readonly ("value" | "identity")[];
   readonly bases: readonly TargetTypeRef[];
   readonly fields: readonly RustStructuralFieldEmission[];
   readonly derives: readonly ("Clone" | "Copy" | "Default")[];

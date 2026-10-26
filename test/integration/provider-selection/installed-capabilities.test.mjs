@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { acmeSuperbunapiCapability, acmeTestingPackage, artifactText, buildInstalledLayout, compileRust } from "../../helpers/rust-session.mjs";
+import { acmeSuperbunapiCapability, acmeTestingPackage, artifactText, buildInstalledLayout, checkedRustCompileInput, compileRust } from "../../helpers/rust-session.mjs";
 import {
   captureTargetCapabilityContributions,
   selectInstalledTargetCapabilities,
@@ -8,7 +8,6 @@ import {
 } from "../../../../tsonic/packages/host/dist/target/extensions.js";
 import { createRustTargetPack } from "../../../dist/index.js";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
-import { fakeCompileInput } from "../../helpers/fake-compile-input.mjs";
 
 test("superbunapi lowers through the generic capability mechanism", { timeout: 300_000 }, async () => {
   const { result } = compileRust({
@@ -166,7 +165,8 @@ test("simulated installed layout resolves target runtime crates end to end", { t
     ...jsSurface.runtimeContributions(context).references,
     ...nodeCapability.runtimeContributions({ ...context, capability: nodeCapability }).references,
   ];
-  const compiled = targetSession.compile(fakeCompileInput({
+  const compiled = targetSession.compile(checkedRustCompileInput({
+    files: { "index.ts": "export {};\n" },
     target,
     runtimeReferences: references,
   }));

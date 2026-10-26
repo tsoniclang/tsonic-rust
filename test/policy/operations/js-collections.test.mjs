@@ -7,6 +7,10 @@ import {
   rustJsMapTargetType,
   rustJsSetTargetType,
   rustJsArrayTargetType,
+  rustJsRegExpExecArrayTargetType,
+  rustRegExpExecArrayTargetType,
+  rustJsStringTargetType,
+  rustSourceOptionalTargetType,
   rustVecTargetType,
   rustSourcePrimitiveTargetType,
   rustStringTargetType,
@@ -88,7 +92,7 @@ test("owned array reads retain their exact native Clone obligation", () => {
       assert.equal(selectJsSurfaceOperation({ ...request, canRequireClone: () => false }), undefined);
       const selected = selectJsSurfaceOperation({ ...request, canRequireClone: carrier => carrier === parameter });
       assert.deepEqual(selected?.fact.carrierRequirements, [{ carrier: parameter, requirement: "clone",
-        source: { kind: "receiver", projection: [0] } }]);
+        source: { kind: "receiver", projection: ["array-element"] } }]);
       assert.deepEqual(selected?.fact.sourceResultCarrier, parameter);
     }
     const length = selectJsSurfaceOperation({ ownerName, memberName: "length", operationKind: "property",
@@ -96,6 +100,20 @@ test("owned array reads retain their exact native Clone obligation", () => {
     });
     assert.ok(length);
     assert.equal(length.fact.carrierRequirements, undefined);
+  }
+});
+
+test("fixed native RegExp arrays retain their exact stored element requirement", () => {
+  for (const [receiver, element] of [
+    [rustRegExpExecArrayTargetType(), rustSourceOptionalTargetType(rustStringTargetType())],
+    [rustJsRegExpExecArrayTargetType(), rustSourceOptionalTargetType(rustJsStringTargetType())],
+  ]) {
+    const selected = selectJsSurfaceOperation({ ownerName: "Array", memberName: "index", operationKind: "indexer",
+      receiverCarrier: receiver, argumentCarriers: [rustSourcePrimitiveTargetType("int32")] });
+    assert.equal(selected !== undefined, true, receiver.id);
+    assert.deepEqual(selected.fact.carrierRequirements, [{ carrier: element, requirement: "clone",
+      source: { kind: "receiver", projection: ["array-element"] } }]);
+    assert.deepEqual(selected.fact.sourceResultCarrier, element);
   }
 });
 

@@ -44,6 +44,19 @@ export function main(): void {
 main();
 ` } });
     assert.equal(result.diagnostics.length, 0, result.diagnostics.map(diagnostic => `${diagnostic.code}: ${diagnostic.message}`).join("\n"));
+    const { program } = result;
+    const { ast } = program.source;
+    const declarations = program.sourceFiles.flatMap(file => ast.statements(file));
+    for (const [name, canFallThrough] of [
+      ["Relay", true], ["Derived", true], ["DefaultField", true], ["Bare", true],
+      ["Same", false], ["Alias", false], ["Borrowed", true],
+    ]) {
+      const declaration = declarations.find(node => ast.is.IsClassDeclaration(node) && ast.text(ast.name(node)) === name);
+      assert.equal(declaration !== undefined, true, `${name}: original constructor owner`);
+      const construction = program.records.classConstruction.get(declaration);
+      assert.equal(construction?.completesNormally, true, `${name}: source construction completes successfully`);
+      assert.equal(construction.emission.canFallThrough, canFallThrough, `${name}: exact native body completion`);
+    }
     const native = validateGeneratedProject(`constructor-retention-${surface}`, result.artifacts, { run: true });
     assert.equal(native.status, 0, native.stdout + native.stderr);
   });

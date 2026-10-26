@@ -10,8 +10,38 @@ import { planRustUnionProjection } from "../../../../dist/backend/planner/expres
 import { isRustCopyCarrier } from "../../../../dist/policy/constraints/native-traits.js";
 import { validateGeneratedProject } from "../../../helpers/cargo-projects.mjs";
 import { assertNoTargetDiagnostics } from "../../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
+import { BinaryExpression_Left, Node_Expression } from "@tsonic/target-api/source";
 
 const programs = new Map();
+
+test("direct native union places retain the selected payload and exact mutable use", () => {
+  const { program } = analyzeRust({ files: { "index.ts": `
+export function update(body: boolean | unknown[]): void {
+  if (typeof body === "boolean") return;
+  body[0] = 2;
+}
+` } });
+  const ast = program.source.ast;
+  let assignment;
+  const visit = node => {
+    if (ast.is.IsBinaryExpression(node) && ast.operatorKindName(node) === "KindEqualsToken") assignment = node;
+    ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+  };
+  program.sourceFiles.forEach(visit);
+  assert.equal(assignment !== undefined, true, "the original closed-union indexed write is checked");
+  const target = BinaryExpression_Left(ast, assignment);
+  const receiver = Node_Expression(ast, target);
+  const place = program.records.directStorage.get(target);
+  const flow = program.records.flowReadProjection.get(receiver);
+  const emission = program.records.flowReadEmission.get(flow);
+  assert.equal(place?.kind === "provider" && emission?.kind === "union", true,
+    "the existing native place and closed-union owners select this exact receiver");
+  const selectedReceiver = program.records.directStorage.get(receiver);
+  assert.equal(selectedReceiver.projection?.emission === emission.projection, true,
+    "the place transports the same admitted arm and payload correspondence");
+  assert.equal(selectedReceiver.projection.access, "mutable", "the checked write keeps its actual mutable source use");
+  assert.equal(Object.isFrozen(selectedReceiver.projection), true, "the native projection selection is finalized before rendering");
+});
 
 function fixture(storage, module = false) {
   if (!programs.has(module)) programs.set(module, analyzeRust({ files: { "index.ts": module

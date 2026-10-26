@@ -136,6 +136,15 @@ export function analyzeRustConstructionEmission(input: {
         .filter(field => localFieldDeclarations.has(field.declaration) && mutableInLayer(field.declaration, next.definition))
         .map(field => field.declaration)));
     }
+    const root = plan.layers.find(layer => layer.definition === definition);
+    if (root === undefined) failTargetAnalysisInvariant("tsonic-rust",
+      "An admitted construction requires its exact native root layer.", definition.declaration);
+    const body = root.constructor === undefined ? undefined : program.source.ast.body(root.constructor);
+    const sourceExit = body === undefined ? undefined : program.records.statementExit.get(body);
+    if (body !== undefined && sourceExit === undefined) failTargetAnalysisInvariant("tsonic-rust",
+      "An admitted construction requires its completed source body exit.", body);
+    const canFallThrough = plan.completesNormally &&
+      (body === undefined || sourceExit === false || plan.layerHasEarlyReturn(definition));
     input.producer.classDeclaration(definition.declaration, { definition, layers: plan.layers, fields: plan.fields, expressions: plan.expressions,
       points: new Map(plan.points.map(point => [point.node, point])),
       returns: new Map(plan.points.flatMap(point => {
@@ -152,7 +161,7 @@ export function analyzeRustConstructionEmission(input: {
       retainedReferenceIdentities: retainedReferences,
       completesNormally: plan.completesNormally, publishesReceiver: plan.publishesReceiver,
       mutableReceiver: constructionReceiverNeedsMutableBinding(program, plan, preparations),
-      emission: Object.freeze({ frame: plan.emission.frame, exposure: plan.emission.exposure, preparations }) });
+      emission: Object.freeze({ frame: plan.emission.frame, exposure: plan.emission.exposure, preparations, canFallThrough }) });
   }
   return Object.freeze(issues);
 }

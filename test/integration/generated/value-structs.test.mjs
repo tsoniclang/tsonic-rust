@@ -146,16 +146,24 @@ test("stored value-field writes require writable sealed field metadata", () => {
   const field = { sourceName: "count", type: { kind: "source-primitive", name: "uint32" }, presence: "required", readonly: false };
   const carrier = rustStructuralObjectTargetType("/value.ts", [field], "value");
   const stored = { targetName: "count", carrier: field.type, storage: "stored", readonly: false };
-  const context = selected => ({ input: { program: { structuralShapes: { field: () => selected, definitionForCarrier: () => ({}) },
-    frozenDataWrites: { receiverFor: () => undefined } } } });
+  const context = selected => ({ input: { program: { records: {
+    storedField: { get: () => ({ check: undefined, declaration: undefined, path: ["count"], borrowedRead: false, dispatch: undefined }) },
+    structuralFieldStorage: { get: () => selected === undefined ? undefined
+      : { field: selected, value: true, dispatch: false, borrowedRead: false, location: undefined, property: undefined } },
+    structuralShape: { get: () => ({ dispatchName: undefined }) },
+    structuralObjectStorage: { get: () => ({ value: true }) },
+  } } } });
   const write = selected => writeRustStoredObjectField("structural-object", carrier, { kind: "path", path: "value" }, 0,
     "=", { kind: "int-literal", text: "3" }, context(selected));
   assert.deepEqual(write(stored), { kind: "assignment", operator: "=",
     target: { kind: "field", receiver: { kind: "path", path: "value" }, name: "count" },
     value: { kind: "int-literal", text: "3" } });
-  assert.equal(write({ ...stored, readonly: true }), undefined);
-  assert.equal(write({ ...stored, storage: "property" }), undefined);
-  assert.equal(write(undefined), undefined);
+  for (const [selected, message] of [
+    [{ ...stored, readonly: true }, "An admitted stored field requires its exact sealed storage, access role and native emission context."],
+    [{ ...stored, storage: "property" }, "An admitted native value field requires its exact direct storage."],
+    [undefined, "An admitted stored field requires its exact sealed storage, access role and native emission context."],
+  ]) assert.throws(() => write(selected), failure => failure?.diagnostic?.code === "TSONIC_INTERNAL_PLANNER_INVARIANT" &&
+    failure.message === message, "invalid sealed field metadata must fail closed without a writable place");
 });
 
 test("nested value-field writes do not assign the containing frozen property", () => {
@@ -167,10 +175,15 @@ test("nested value-field writes do not assign the containing frozen property", (
     { sourceName: "point", type: nested, presence: "required", readonly: true },
   ], "value");
   let checks = 0;
-  const context = { input: { program: {
-    structuralShapes: { field: () => ({ targetName: "point", carrier: nested, storage: "stored", readonly: true }), definitionForCarrier: () => ({}) },
-    frozenDataWrites: { receiverFor: () => { checks += 1; return "receiver"; } },
-  } } };
+  const context = { input: { program: { records: {
+    storedField: { get: () => { checks += 1; return { check: "receiver" }; } },
+    structuralFieldStorage: { get: () => ({
+      field: { targetName: "point", carrier: nested, storage: "stored", readonly: true },
+      value: true, dispatch: false, borrowedRead: false, location: undefined, property: undefined,
+    }) },
+    structuralShape: { get: () => ({ dispatchName: undefined }) },
+    structuralObjectStorage: { get: () => ({ value: true }) },
+  } } } };
   const receiver = { kind: "path", path: "owner" };
   const value = { kind: "int-literal", text: "3" };
   assert.deepEqual(writeRustStoredObjectField("structural-object", carrier, receiver, 0, "=", value, context, ["x"]), {

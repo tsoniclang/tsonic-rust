@@ -90,6 +90,7 @@ export interface RustAdmittedConstruction {
   readonly publishesReceiver: boolean;
   readonly mutableReceiver: boolean;
   readonly emission: {
+    readonly canFallThrough: boolean;
     readonly frame: RustFrameCallableDefinition | undefined;
     readonly exposure: { readonly declaration: Node; readonly expression: Node; readonly carrier: TargetTypeRef } | undefined;
     readonly preparations: ReadonlyMap<Node, RustConstructionPreparationSelection>;
