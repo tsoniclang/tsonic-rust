@@ -58,18 +58,17 @@ for (const [name, expected] of [
       } } };
       selected = analyzeRustPromiseResults({
         ast: context.ast, source: context.source, genericAdoption: [], storage, nodes: [call], records,
-        reads: { get(node) {
+        readFor(node) {
           if (node !== reference) return undefined;
           reachedRead = true;
-          return { carrier, source: { kind: "move" }, value: { kind: "move" }, snapshot: undefined,
-            stablePlace: true, readsStorage: true, pure: true, sharedReference: false, borrowedAcross: new Set() };
-        } },
+          return { kind: "selected", carrier, value: { kind: "move" } };
+        },
         uses: analyzeRustPromiseResultUses(context.ast, [call]), definitions: context.typeDefinitions,
         nativeStorage: context.callableValues.nativeStorage, native: context.callableValues.native,
         promiseBodies: context.promiseBodies.plan, nativeCaptures: undefined, errorTypes: undefined,
         sourceTypes: { structuralObjectForType() { assert.fail("an unresolved read cannot inspect structural captures"); } },
         sourceLifetimes: context.sourceLifetimes, requirements: { kind: "resolved", index: { contractFor: () => undefined } },
-        retentionIssues: [], families: context.typeFamilies, evidence: {}, jsEnabled: true,
+        nativeStorageValidated: true, families: context.typeFamilies, evidence: {}, jsEnabled: true,
       });
       return { kind: "resolved", value: { artifacts: [] }, diagnostics: selected.diagnostics };
     } });

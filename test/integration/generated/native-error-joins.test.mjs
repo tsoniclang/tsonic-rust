@@ -14,7 +14,7 @@ import { runCargo, writeGeneratedProject } from "../../helpers/cargo-projects.mj
 import { rustRuntimeCratePath } from "../../helpers/rust-session-paths.mjs";
 
 test("native error sums derive Debug conditionally without constraining arbitrary payloads", { timeout: 300_000 }, () => {
-  const joined = planRustNativeErrorJoin({ identity: "fixture:conditional-debug", name: "NativeErrors", visibility: "public",
+  const joined = planRustNativeErrorJoin({ identity: "fixture:conditional-debug", name: "NativeErrors", visibility: "public", resultShape: "result",
     sources: [
       { identity: "first", variant: "First", errorType: { kind: "primitive", name: "i32" } },
       { identity: "second", variant: "Second", errorType: { kind: "primitive", name: "u32" } },
@@ -69,7 +69,7 @@ const local = source("local", "Local", borrowedError);
 const left = source("callback:left", "Left", associatedError("LeftCallback"));
 const right = source("callback:right", "Right", associatedError("RightCallback"));
 const generics = { parameters: [lifetimeParameter, producerParameter("LeftCallback"), producerParameter("RightCallback")], wherePredicates: [] };
-const join = planRustNativeErrorJoin({ identity: "native:joined", name: "JoinedErrors", visibility: "private",
+const join = planRustNativeErrorJoin({ identity: "native:joined", name: "JoinedErrors", visibility: "private", resultShape: "result",
   sources: [local, left, right] });
 
 function nativeFunctions() {
@@ -89,13 +89,13 @@ function nativeFunctions() {
     ] } };
   const single = source("only", "Only", associatedError("Callback"));
   const singleGenerics = { parameters: [producerParameter("Callback")], wherePredicates: [] };
-  const exact = planRustNativeErrorJoin({ identity: "native:single", name: "UnusedSingleError", visibility: "private",
+  const exact = planRustNativeErrorJoin({ identity: "native:single", name: "UnusedSingleError", visibility: "private", resultShape: "result",
     sources: [single] });
   const exactRegion = rustNativeFallibleBoundary(exact);
   assert.equal(exactRegion !== undefined, true);
   const pureGenerics = { parameters: [{ kind: "type", name: "Callback", bounds: [{ kind: "callable", trait: "Fn", binder: [],
     parameters: [], result: number }] }], wherePredicates: [] };
-  const pure = planRustNativeErrorJoin({ identity: "native:pure", name: "UnusedPureError", visibility: "private",
+  const pure = planRustNativeErrorJoin({ identity: "native:pure", name: "UnusedPureError", visibility: "private", resultShape: "value",
     sources: [] });
   const completion = { kind: "try-scope", bodyName: "body_flow", flowName: "flow", finallyName: "finally_flow",
     returnType: { kind: "unit" }, errorType: join.errorType, bodyErrorType: join.errorType, asynchronous: false,
@@ -124,7 +124,7 @@ function packageRegionFunctions() {
     errorTypeIdentity: "fixture:local-failure", errorTypePath: "LocalFailure" };
   const local = source("package:local", "Local", rustErrorType(owner));
   const generics = { parameters: [producerParameter("LeftCallback"), producerParameter("RightCallback")], wherePredicates: [] };
-  const joined = planRustNativeErrorJoin({ identity: "fixture:package-join", name: "PackageErrors", visibility: "private",
+  const joined = planRustNativeErrorJoin({ identity: "fixture:package-join", name: "PackageErrors", visibility: "private", resultShape: "result",
     sources: [local, left, right] });
   const region = rustNativeFallibleBoundary(joined, { owner, source: local });
   assert.equal(region !== undefined, true);
@@ -156,7 +156,7 @@ function genericAssociatedFunctions() {
   const array = source("array", "Array", { kind: "reference", mutable: true, lifetime, referent: {
     kind: "fixed-array", element: number, length: { kind: "path", path: "COUNT" },
   } });
-  const joined = planRustNativeErrorJoin({ identity: "native:gat", name: "AssociatedErrors", visibility: "private",
+  const joined = planRustNativeErrorJoin({ identity: "native:gat", name: "AssociatedErrors", visibility: "private", resultShape: "result",
     sources: [associated, array] });
   return [...joined.items, ...[associated, array].map((selected, index) => ({ kind: "function",
     name: index === 0 ? "inject_associated" : "inject_array", visibility: "private", generics, returnType: joined.errorType,

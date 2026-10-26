@@ -279,6 +279,34 @@ test("capture transfer does not cross a finally observation", async () => {
   assert.equal(selected.flow.captureTransfers.get(closure)?.has(declaration) === true, false);
 });
 
+test("capture transfers retain overlapping selected native operands and receivers", async () => {
+  for (const receiver of [false, true]) {
+    const text = receiver
+      ? "declare class Owner { visit(callback: () => Owner): void; } function run(value: Owner) { ((value)).visit(() => value); }"
+      : "declare function visit(value: string, callback: () => string): void; function run(value: string) { visit(((value)), () => value); }";
+    const { source, storage } = await fixture(text);
+    const { ast } = source;
+    const closure = storage.nodes.find(node => ast.is.IsArrowFunction(node));
+    const reference = references(source, storage, "value").find(node => sourceEnclosingCallable(node, ast) === closure);
+    assert.equal(reference !== undefined, true, "the original checked closure captures the same outer native binding");
+    const declaration = source.navigation.sourceReferenceFor(reference).declaration;
+    const earlier = references(source, storage, "value").find(node => sourceEnclosingCallable(node, ast) !== closure);
+    assert.equal(earlier !== undefined, true, "the exact earlier native operand or receiver remains an independent source read");
+    for (const mode of ["shared", "mutable", "value"]) {
+      const selected = analyzeRustOwnershipFlow({ source, storage, nativeNodes: storage.nodes,
+        uses: new Map([[earlier, { mode, later: [closure], laterStart: 0, stableAcrossEffects: false }]]),
+        sourceCallableFor: () => undefined,
+        capturesFor: owner => owner !== closure ? undefined : { receivers: [], receiverFields: [], captures: [
+          { declaration, reference, carrier: rustStringTargetType(), storage: "value" },
+        ] },
+        isOnceCallable: () => false, canMoveStoredField: () => false, isOwnedOperationResult: () => false });
+      assert.equal(selected.kind, "resolved", "the existing checked source graph and selected native use close once");
+      assert.equal(selected.flow.captureTransfers.get(closure)?.has(declaration) === true, mode === "value",
+        `${receiver ? "receiver" : "argument"}/${mode}: only a genuinely owned earlier input permits the final capture transfer`);
+    }
+  }
+});
+
 test("ownership never converts a missing or exhausted source-flow proof into a move", async () => {
   const { selected } = await fixture("function run(value: string) { return value; }", { limits: { maximumPoints: 1 } });
   assert.equal(selected.kind, "rejected");

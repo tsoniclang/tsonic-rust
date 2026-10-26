@@ -20,7 +20,7 @@ const foreign = { identity: "/pkg/foreign.ts", variant: "Foreign", errorType: {
 const operation = { kind: "call", path: "initialize", args: [] };
 
 function boundary(name, sources, localSource) {
-  const join = planRustNativeErrorJoin({ identity: name, name, visibility: "public", sources });
+  const join = planRustNativeErrorJoin({ identity: name, name, visibility: "public", resultShape: "result", sources });
   assert.equal(join !== undefined, true, "the native syntax join is complete");
   const selected = rustNativeFallibleBoundary(join, localSource === undefined ? undefined : {
     owner: localOwner, source: localSource,

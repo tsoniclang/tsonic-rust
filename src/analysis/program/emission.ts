@@ -311,7 +311,8 @@ export function finalizeRustNativeEmission(
   admitRustUnionProjections(program, context.nativeNodes);
   analyzeRustUnionEquality(program, context.nativeNodes, context.records.unionEqualityPlans);
   analyzeRustClosedTypeTests(program, context.nativeNodes, context.records.closedTypeTestPlans);
-  analyzeRustOptionEquality(program, context.nativeNodes, context.records.optionEqualityPlans);
+  const optionEqualityIssues = analyzeRustOptionEquality(program, context.nativeNodes, context.records.optionEqualityPlans);
+  if (optionEqualityIssues.length !== 0) return rejectedTargetStage(optionEqualityIssues);
   analyzeRustIndexedLocations(program, context.nativeNodes, context.records.indexedLocationPlans);
   analyzeRustLocationCallbacks(program, context.nativeNodes, context.records.locationCallbackPlans, context.records);
   analyzeRustErasedInputArguments(program, context.records.erasedInputArgumentPlans);

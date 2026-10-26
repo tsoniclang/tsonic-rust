@@ -75,45 +75,52 @@ for (const surfaces of [[], ["js"]]) {
     const { program } = analyzeRust(options);
     const { result } = compileRust(options);
     assert.equal(result.diagnostics.length, 0, result.diagnostics.slice(0, 6).map(row => row.message.slice(0, 256)).join("\n"));
-    const native = `use owned_write_${profile}::{createOwnedBox, createOwnedParent, ownedWrite};
-use std::cell::Cell;
-use std::rc::Rc;
+    const native = `#[cfg(test)]
+mod drop_order {
+    use super::{createOwnedBox, createOwnedParent, ownedWrite};
+    use std::cell::Cell;
+    use std::rc::Rc;
 
-#[derive(Debug)]
-struct Probe {
-    digit: u32,
-    trace: Rc<Cell<u32>>,
-}
-
-impl Clone for Probe {
-    fn clone(&self) -> Self {
-        panic!("owned payload must not be cloned")
+    #[derive(Debug)]
+    struct Probe {
+        digit: u32,
+        trace: Rc<Cell<u32>>,
     }
-}
 
-impl Drop for Probe {
-    fn drop(&mut self) {
-        self.trace.set(self.trace.get() * 10 + self.digit);
+    impl Clone for Probe {
+        fn clone(&self) -> Self {
+            panic!("owned payload must not be cloned")
+        }
     }
-}
 
-#[test]
-fn replacement_preserves_the_original_child_through_rhs_and_store() {
-    let trace = Rc::new(Cell::new(0));
-    let payload = |digit| Probe {
-        digit,
-        trace: trace.clone(),
-    };
-    let parent = createOwnedParent(payload(1))${unwrapSuffix(program, "createOwnedParent")};
-    let next = createOwnedBox(payload(2))${unwrapSuffix(program, "createOwnedBox")};
-    ownedWrite(parent.clone(), next.clone(), payload(3))${unwrapSuffix(program, "ownedWrite")};
-    assert_eq!(trace.get(), 13);
-    drop(parent);
-    assert_eq!(trace.get(), 13);
-    drop(next);
-    assert_eq!(trace.get(), 132);
+    impl Drop for Probe {
+        fn drop(&mut self) {
+            self.trace.set(self.trace.get() * 10 + self.digit);
+        }
+    }
+
+    #[test]
+    fn replacement_preserves_the_original_child_through_rhs_and_store() {
+        let trace = Rc::new(Cell::new(0));
+        let payload = |digit| Probe {
+            digit,
+            trace: trace.clone(),
+        };
+        let parent = createOwnedParent(payload(1))${unwrapSuffix(program, "createOwnedParent")};
+        let next = createOwnedBox(payload(2))${unwrapSuffix(program, "createOwnedBox")};
+        ownedWrite(parent.clone(), next.clone(), payload(3))${unwrapSuffix(program, "ownedWrite")};
+        assert_eq!(trace.get(), 13);
+        drop(parent);
+        assert_eq!(trace.get(), 13);
+        drop(next);
+        assert_eq!(trace.get(), 132);
+    }
 }
 `;
-    validateGeneratedProject(`owned-write-drop-${profile}`, [...result.artifacts, { path: "tests/drop_order.rs", text: native }], { run: true });
+    const sourceModule = result.artifacts.find(artifact => artifact.path === "src/index.rs");
+    assert.equal(sourceModule !== undefined, true, "the native control belongs to its actual generated source module");
+    const artifacts = result.artifacts.map(artifact => artifact === sourceModule
+      ? { ...artifact, text: artifact.text + "\n" + native } : artifact);
+    validateGeneratedProject(`owned-write-drop-${profile}`, artifacts, { run: true });
   });
 }
