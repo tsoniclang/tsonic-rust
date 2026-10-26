@@ -308,7 +308,7 @@ export function prepareRustCallableEmissionContexts(
 
 export function prepareRustEmissionContextRequests(
   input: Pick<RustCallableEmissionPreparationInput, "ast" | "records" | "nativeStorage" | "sourceOccurrences" | "errorRegions" |
-    "sourceStorage" | "genericBindingsFor" | "generic" | "emissionRequests" | "initialization">,
+    "sourceStorage" | "genericBindingsFor" | "generic" | "nativeProducers" | "emissionRequests" | "initialization">,
   requests: readonly RustEmissionContextRequest[],
 ): TargetStageResult<RustCallableEmissionPreparation> {
   const contexts: RustPhysicalEmissionContext[] = [];
@@ -400,7 +400,13 @@ export function prepareRustEmissionContextRequests(
         apply(demand.carrier);
         continue;
       }
-      if (demand.kind === "producer") continue;
+      if (demand.kind === "producer") {
+        const physical = input.nativeProducers.physicalFor(demand.declaration, demand.carrier);
+        if (physical === undefined) diagnostics.push(emissionDiagnostic(demand.subject,
+          "An emitted native callable producer requires its exact selected physical carrier."));
+        else apply(physical);
+        continue;
+      }
       const node = demand.subject;
       const selected = demand.kind === "value" ? input.nativeStorage.valueFor(node)
         : demand.kind === "operand" ? input.nativeStorage.operandFor(node)
