@@ -44,6 +44,7 @@ import type { RustPromiseBodies } from "../../target-model/records/callables-and
 import type { RustNativeStoragePlan } from "../callables/native-storage.js";
 import type { RustClassValuePlan } from "../../target-model/records/class-values.js";
 import type { RustStaticRequirementEvidence } from "./generic-carrier-requirements.js";
+import type { RustProjectCallableFieldStorage } from "../callables/project-field-storage.js";
 import { rustSuspendingPromiseBorrowReason } from "../callables/suspension-storage.js";
 
 import type { RustGenericRequirement, RustDeclarationGenericRequirementContract } from "../../target-model/records/generic-requirements.js";
@@ -92,6 +93,7 @@ export function analyzeRustDeclarationGenericRequirements(
   errorRegions: RustAnalyzedErrorRegions,
   promiseBodies: RustPromiseBodies,
   nativeStorage: RustNativeStoragePlan,
+  projectFieldStorage: RustProjectCallableFieldStorage,
   classValues: RustClassValuePlan,
   errorTypes: RustErrorTypeContext,
   borrowFor: (node: Node) => "shared" | "mutable" | undefined,
@@ -195,6 +197,7 @@ export function analyzeRustDeclarationGenericRequirements(
         genericCallables,
         nativeCallables,
         nativeStorage,
+        projectFieldStorage,
         classValues,
         errorRegions,
         errorTypes,
@@ -305,7 +308,7 @@ export function analyzeRustDeclarationGenericRequirements(
   const shapeContracts = new Map<string, RustShapeGenericRequirementContract>();
   const viewContracts = new Map<string, RustShapeGenericRequirementContract>();
   const shapeEvidence: RustStaticRequirementEvidence = { lifetimeContract: undefined, genericCallables,
-    frameCallables, classValues, objectRepresentations, structuralShapes: shapes, projectTypes, records,
+    frameCallables, classValues, objectRepresentations, structuralShapes: shapes, projectTypes, records, projectFieldStorage,
     errorType: (carrier, node) => normalizeRustErrorType(carrier, errorTypes, node) };
   const sourceScopes = new Map<string, Node | undefined>();
   for (const sourceFile of source.sourceFiles) {

@@ -267,7 +267,7 @@ export function inspect<Region extends Life>(loan: Ref<int32, Region>) {
   const evidence = { lifetimeContract: program.sourceLifetimes.contractFor(declaration),
     genericCallables: program.callableValues.generic, frameCallables: program.callableValues.frames,
     classValues: program.classValues, projectTypes: program.projectTypes, objectRepresentations: program.objectRepresentations,
-    structuralShapes: program.structuralShapes, records: program.records };
+    structuralShapes: program.structuralShapes, records: program.records, projectFieldStorage: program.callableValues.projectFieldStorage };
   const carriers = new Map();
   for (const name of ["owned", "borrowed", "ownedAgain", "borrowedAgain"]) {
     assert.equal(variables.has(name), true, `${name}: actual checked declaration exists`);

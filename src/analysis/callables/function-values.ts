@@ -12,7 +12,6 @@ import { rustTypeParameterFromSourceContract } from "../../target-model/types/ca
 import { rustHigherRankedNativeFunctionCarrier } from "./higher-ranked-function.js";
 import { rustResolutionContext } from "../program/walk.js";
 import { resolveRustCallableStorageCarrier } from "../source-evidence/types/resolution/source-evidence.js";
-import { rustRetainedValueLifetime } from "./retained-values.js";
 import { rustFrameCallableValue } from "../../target-model/types/carriers/frame-callables.js";
 
 export function rustSourceClosureValueCarrier(
@@ -36,7 +35,7 @@ export function rustSourceClosureValueCarrier(
   const environment = captures ?? resolveRustCallableEnvironment(declaration, context, walk.operationOptions, new Set(), excluded);
   if (environment === undefined) return undefined;
   if (stored?.lifetime === undefined) return storage;
-  const lifetime = rustRetainedValueLifetime(declaration, environment, walk);
+  const lifetime = walk.operationOptions.callableValueLifetime(declaration, environment, "construction");
   return lifetime === undefined ? undefined : rustCallableTargetType(stored.parameters, stored.result, lifetime, stored.error);
 }
 
@@ -57,7 +56,7 @@ export function rustSourceFunctionValueCarrier(
   if (quantifiedCarrier !== undefined) return quantifiedCarrier;
   const context = rustResolutionContext(walk, declaration);
   const environment = resolveRustCallableEnvironment(declaration, context, walk.operationOptions, new Set());
-  const lifetime = environment === undefined ? undefined : rustRetainedValueLifetime(declaration, environment, walk);
+  const lifetime = environment === undefined ? undefined : walk.operationOptions.callableValueLifetime(declaration, environment, "construction");
   return lifetime === undefined ? undefined
     : rustCallableTargetType(parameters.map(parameter => parameter.parameterCarrier), result, lifetime);
 }

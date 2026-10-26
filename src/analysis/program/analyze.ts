@@ -63,6 +63,7 @@ import { recordRustLexicalValueEnvironments } from "../callables/lexical-value-e
 import type { RustSourceCallableSpecializationIssue } from "../../target-model/records/callable-issues.js";
 import { rustSourceErrorTargetType, rustWritableSourceErrorTargetType } from "../../target-model/types/carriers/source-error.js";
 import { analyzeRustReceiverStorage } from "../project-types/receiver-storage.js";
+import { rustRetainedValueLifetime } from "../callables/retained-values.js";
 import { resolveRustCallableOwnershipCarrier } from "../callables/ownership-carriers.js";
 import { createSourceStorageBudget, defaultSourceStorageLimits, type SourceNativeTaskGraph } from "@tsonic/target-api/analysis";
 import { analyzeRustSourcePackageComponents } from "../source-modules/component-semantics.js";
@@ -127,6 +128,10 @@ export function analyzeRustProgram(context: RustAnalysisContext, outputType: "bi
     },
     callableParameterCarriers(declaration) {
       return finalizeRustCallableParameterAbis(walk, declaration)?.map(parameter => parameter.parameterCarrier);
+    },
+    callableValueLifetime(declaration, captures, role) {
+      return rustRetainedValueLifetime(declaration, captures, { context }, role === "signature" ? { kind: "signature" }
+        : { kind: "construction", projectTypes: context.projectTypes, objectRepresentations: context.objectRepresentations });
     },
     callableStorageCarrier(source, selection, logicalCarrier, environmentFor, classFrameFor) {
       return resolveRustCallableOwnershipCarrier(walk, source, selection, logicalCarrier, environmentFor, classFrameFor);
@@ -281,6 +286,7 @@ export function analyzeRustProgram(context: RustAnalysisContext, outputType: "bi
   if (projectTypes.issues.length > 0) {
     return;
   }
+  context.objectRepresentations.prepareNativeLifetimes(projectTypes);
   context.promiseBodies.initializeNames(context, moduleBindings);
   const methodProperties = context.projectMethodProperties.initialize({
     ast,

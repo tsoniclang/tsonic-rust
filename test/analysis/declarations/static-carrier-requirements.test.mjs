@@ -26,7 +26,7 @@ const contract = fields => Object.freeze({ declaration: {}, typeParameters: [], 
   associatedTypes: [], projectProjections: [], optionalStorage: [], ...fields });
 const evidence = fields => Object.freeze({ lifetimeContract: undefined, genericCallables: undefined, structuralShapes: undefined,
   frameCallables: undefined, classValues: undefined, objectRepresentations: undefined,
-  projectTypes: undefined, records: undefined, ...fields });
+  projectTypes: undefined, records: undefined, projectFieldStorage: undefined, ...fields });
 const selected = (carrier, options = {}) => {
   const parameters = options.parameters ?? [];
   const demands = new Map(parameters.map(parameter => [parameter.identity, new Set()]));
@@ -187,6 +187,25 @@ test("actual source instance fields are read once and cannot be replaced by empt
   assert.equal(selected(carrier).kind, "unresolved", "no field layout is not empty owned storage");
   assert.equal(selected(carrier, { evidence: context(rustStringTargetType()) }).kind, "supported", "actual owned field");
   assert.equal(selected(carrier, { evidence: context(borrowed(scopedLifetime)) }).kind, "unsatisfied", "actual borrowed field");
+});
+
+test("native static field validation consumes selected storage without closing borrowed environments again", () => {
+  const declaration = {};
+  const definition = { declaration, kind: "class", genericParameters: [] };
+  const carrier = rustSourceTypeCarrier("/source.ts", "Owner", "object", []);
+  const field = {};
+  const logical = rustCallableTargetType([], number);
+  const run = physical => selected(carrier, { evidence: evidence({
+    projectTypes: { definitionForCarrier: () => definition,
+      objectLayoutForDefinition: () => ({ fields: [{ declaration: field }], indexSignatures: [] }),
+      isPolymorphic: () => false, directSupertypes: () => [], instantiateMemberCarrier: (_field, _receiver, value) => value },
+    classValues: { forDeclaration: () => undefined },
+    records: { runtimeCarrier: { get: node => node === field ? { carrier: logical } : undefined } },
+    projectFieldStorage: { get: node => node === field ? physical : undefined },
+  }) });
+  assert.equal(run(rustCallableTargetType([], number, staticLifetime)).kind, "supported", "the actual selected owned field is static");
+  assert.equal(run(rustCallableTargetType([], number, scopedLifetime)).kind, "unsatisfied", "a selected concrete borrow is not retagged from its class header");
+  assert.equal(run(undefined).kind, "unresolved", "an unselected logical callable field is not physical static evidence");
 });
 
 test("polymorphic native wrappers use their admitted dispatch object, not a guessed closed class census", () => {
@@ -384,6 +403,7 @@ test("the real frame inventory proves the exact emitted fields without a fictiti
     assert.equal(selected(entry.implementations[0].carrier, { evidence: evidence({
       frameCallables: plan.frames,
       objectRepresentations: program.objectRepresentations, classValues, projectTypes: program.projectTypes, records: program.records,
+      projectFieldStorage: plan.projectFieldStorage,
     }) }).kind, "supported", "all actual bindings and external state are owned");
   }
 });
@@ -402,6 +422,7 @@ test("the real class factory plan preserves lexical environment fields before fi
   assert.equal(environment.captures.length, 1, "the lexical capture is not an empty signature");
   const instance = program.projectTypes.openCarrier(definition);
   const context = evidence({ classValues, projectTypes: program.projectTypes, records: program.records,
+    projectFieldStorage: program.callableValues.selected.projectFieldStorage,
     objectRepresentations: program.objectRepresentations,
     frameCallables: program.callableValues.selected.frames });
   assert.equal(selected(rustClassConstructorTargetType(instance), { evidence: context }).kind, "supported", "owned native factory storage");

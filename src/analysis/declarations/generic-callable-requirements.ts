@@ -74,17 +74,15 @@ export function classifyRustCallableRequirements(input: RustCallableRequirementI
   const optionalStorage = createRustOptionalStorageCollector(new Set(exactNames), declared, byParameter);
   const normalizeFamily = rustTypeFamilyNormalizer(input.typeFamilies);
   if (definition !== undefined) {
-    const dispatchLifetime = input.objectRepresentations.representationFor(definition)?.dispatchObjectLifetime;
-    for (const name of exactNames) {
-      if (dispatchLifetime?.kind === "static") byParameter.get(name)!.add("static");
-    }
+    for (const requirement of input.objectRepresentations.nativeLifetimeFor(definition)?.typeOutlives ?? [])
+      if (requirement.lifetime.kind === "static") byParameter.get(requirement.identity)!.add("static");
   }
   const uses: RequirementUse[] = [...input.inheritedBody?.uses ?? []];
   const dependencies = new Set<string>();
   const staticEvidence = { lifetimeContract: input.sourceLifetimes.contractFor(declaration),
     genericCallables: input.genericCallables, structuralShapes: input.structuralShapes,
     frameCallables: input.frameCallables, classValues: input.classValues,
-    objectRepresentations: input.objectRepresentations, projectTypes: input.projectTypes, records,
+    objectRepresentations: input.objectRepresentations, projectTypes: input.projectTypes, records, projectFieldStorage: input.projectFieldStorage,
     errorType: (carrier: TargetTypeRef, node: Node) => normalizeRustErrorType(carrier, input.errorTypes, node) };
   const classifyUse = (node: Node, carrier: TargetTypeRef,
     requirements: readonly RustGenericRequirement[]): RustCarrierRequirementSelection => {

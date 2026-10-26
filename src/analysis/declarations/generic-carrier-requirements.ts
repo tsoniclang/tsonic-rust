@@ -4,7 +4,8 @@ import type { RustTargetGenericArgument, RustTargetTraitRef, TargetTypeRef } fro
 import type { RustGenericRequirement, RustDeclarationGenericRequirementContract } from "../../target-model/records/generic-requirements.js";
 import type { RustSourceGenericContract, RustLifetimeRef } from "../../target-model/lifetimes/index.js";
 import { rustLifetimeKey, rustStaticLifetime } from "../../target-model/lifetimes/index.js";
-import { substituteElidedLifetime } from "../../target-model/types/carriers/lifetime-elision.js";
+import { rustRequiresCallableFieldStorage } from "../../policy/ownership/retained-storage.js";
+import type { RustProjectCallableFieldStorage } from "../callables/project-field-storage.js";
 import { rustLifetimeOutlives } from "../../policy/constraints/lifetime-outlives.js";
 import type { RustGenericCallablePlan } from "../callables/generic-values.js";
 import type { RustFrameCallablePlan } from "../../target-model/records/frame-callables.js";
@@ -52,6 +53,7 @@ export interface RustStaticRequirementEvidence {
   readonly structuralShapes: RustStructuralShapePlan | undefined;
   readonly projectTypes: RustProjectTypePolicy | undefined;
   readonly records: Pick<RustProgramRecords, "runtimeCarrier"> | undefined;
+  readonly projectFieldStorage: RustProjectCallableFieldStorage | undefined;
   /** Closes a stored field carrier's logical error channels to their admitted native representation. */
   readonly errorType?: (carrier: TargetTypeRef, declaration: Node) => TargetTypeRef | undefined;
 }
@@ -245,7 +247,6 @@ function classifyStaticCarrier(
     }
     const bases = project.directSupertypes(carrier);
     if (bases === undefined) return unresolved("A native object requires its exact physical base layout.");
-    const lifetimeParameters = definition.genericParameters.some(parameter => parameter.kind === "lifetime");
     return every([argumentsFor(source.genericArguments, bound), ...bases.map(base => {
       const baseDefinition = project.definitionForCarrier(base);
       return baseDefinition === undefined ? visit(base, bound)
@@ -261,12 +262,10 @@ function classifyStaticCarrier(
           : frameEntry(definition, frame.entry, bindings, bound);
       }
       const declaredCarrier = evidence?.records?.runtimeCarrier.get(field.declaration)?.carrier;
-      const instantiated = declaredCarrier === undefined ? undefined : project.instantiateMemberCarrier(field.declaration, carrier, declaredCarrier);
-      // A native object without lifetime parameters owns its fields, so an elided lifetime in a stored field can only be
-      // static (the physical field storage selects the same carrier).
-      const owned = instantiated === undefined || lifetimeParameters ? instantiated
-        : substituteElidedLifetime(instantiated, rustStaticLifetime);
-      const selected = owned === undefined || evidence?.errorType === undefined ? owned : evidence.errorType(owned, field.declaration);
+      const physical = declaredCarrier === undefined ? undefined : rustRequiresCallableFieldStorage(declaredCarrier)
+        ? evidence?.projectFieldStorage?.get(field.declaration) : declaredCarrier;
+      const instantiated = physical === undefined ? undefined : project.instantiateMemberCarrier(field.declaration, carrier, physical);
+      const selected = instantiated === undefined || evidence?.errorType === undefined ? instantiated : evidence.errorType(instantiated, field.declaration);
       return selected === undefined ? unresolved("A source field lacks its exact native instance storage carrier.") : visit(selected, bound);
     }), ...(definition.kind === "class" ? [classEnvironment(carrier, false, bound)] : [])]);
   };

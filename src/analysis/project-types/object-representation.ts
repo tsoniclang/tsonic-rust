@@ -1,5 +1,6 @@
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
-import { selectRustObjectRepresentationKind, selectRustDispatchObjectLifetime, selectRustMethodSelfMode } from "../../policy/types/objects/representation.js";
+import { snapshotTargetReadonlyMap } from "@tsonic/target-api/analysis";
+import { selectRustObjectRepresentationKind, selectRustObjectNativeLifetimeContract, selectRustMethodSelfMode } from "../../policy/types/objects/representation.js";
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
 import { sourceNodesEqual, Node_Expression, sourceObjectMemberDeclarations, type SourceDeclarationUse, type SourceExpressionValueFlowSummary, type SourceProgramNavigation, type SourceProgramSemantics } from "@tsonic/target-api/source";
 import type { RustProjectTypeDefinition, RustProjectTypePolicy } from "./index.js";
@@ -8,11 +9,19 @@ import type { RustReceiverFieldAliasQueries } from "./receiver-field-aliases.js"
 import type { RustReceiverFieldCaptureQueries } from "./receiver-captures.js";
 import type { RustReceiverStoragePlan } from "./receiver-storage.js";
 
-import type { RustObjectRepresentation } from "../../target-model/records/object-representation.js";
+import type { RustObjectRepresentation, RustObjectNativeLifetimeContract } from "../../target-model/records/object-representation.js";
+
+export function prepareRustObjectNativeLifetimes(
+  projectTypes: Pick<RustProjectTypePolicy, "definitions" | "isPolymorphic">,
+): ReadonlyMap<RustProjectTypeDefinition, RustObjectNativeLifetimeContract> {
+  return snapshotTargetReadonlyMap(projectTypes.definitions.map(definition => [definition,
+    selectRustObjectNativeLifetimeContract(definition, projectTypes.isPolymorphic(definition))] as const));
+}
 
 export interface RustObjectRepresentationPlan extends RustReceiverFieldAliasQueries {
   readonly receiverCaptures: RustReceiverFieldCaptureQueries;
   readonly representations: readonly RustObjectRepresentation[];
+  nativeLifetimeFor(definition: RustProjectTypeDefinition | undefined): RustObjectNativeLifetimeContract | undefined;
   representationFor(
     definition: RustProjectTypeDefinition | undefined,
   ): RustObjectRepresentation | undefined;
@@ -31,16 +40,19 @@ export interface RustObjectRepresentationAnalysisInput {
   readonly hasPromotedStorage: (declaration: Node) => boolean;
   readonly hasMutableStorageUse: (declaration: Node) => boolean;
   readonly referenceDeclarations?: ReadonlySet<Node>;
+  readonly nativeLifetimes: ReadonlyMap<RustProjectTypeDefinition, RustObjectNativeLifetimeContract>;
 }
 
 export interface RustObjectRepresentationPlanRegistry
   extends RustObjectRepresentationPlan {
-  initialize(input: RustObjectRepresentationAnalysisInput): RustObjectRepresentationPlan;
+  prepareNativeLifetimes(projectTypes: Pick<RustProjectTypePolicy, "definitions" | "isPolymorphic">): void;
+  initialize(input: Omit<RustObjectRepresentationAnalysisInput, "nativeLifetimes">): RustObjectRepresentationPlan;
   seal(): RustObjectRepresentationPlan;
 }
 
 export function createRustObjectRepresentationPlanRegistry(): RustObjectRepresentationPlanRegistry {
   let current: RustObjectRepresentationPlan | undefined;
+  let nativeLifetimes: ReadonlyMap<RustProjectTypeDefinition, RustObjectNativeLifetimeContract> | undefined;
   const requireCurrent = (): RustObjectRepresentationPlan => {
     if (current === undefined) {
       failTargetAnalysisInvariant("tsonic-rust", "Rust object representation plan was read before source analysis initialized it.");
@@ -48,11 +60,20 @@ export function createRustObjectRepresentationPlanRegistry(): RustObjectRepresen
     return current;
   };
   return Object.freeze({
-    initialize(input: RustObjectRepresentationAnalysisInput) {
+    prepareNativeLifetimes(projectTypes: Pick<RustProjectTypePolicy, "definitions" | "isPolymorphic">) {
+      if (nativeLifetimes !== undefined) failTargetAnalysisInvariant("tsonic-rust", "Native object lifetime contracts prepare once before value storage selection.");
+      nativeLifetimes = prepareRustObjectNativeLifetimes(projectTypes);
+    },
+    nativeLifetimeFor(definition: RustProjectTypeDefinition | undefined) {
+      if (nativeLifetimes === undefined) failTargetAnalysisInvariant("tsonic-rust", "Native object lifetime contracts are required before construction lifetime selection.");
+      return definition === undefined ? undefined : nativeLifetimes.get(definition);
+    },
+    initialize(input: Omit<RustObjectRepresentationAnalysisInput, "nativeLifetimes">) {
       if (current !== undefined) {
         failTargetAnalysisInvariant("tsonic-rust", "Rust object representation plan can be initialized only once.");
       }
-      current = createRustObjectRepresentationPlan(input);
+      if (nativeLifetimes === undefined) failTargetAnalysisInvariant("tsonic-rust", "Object representation consumes its prepared native lifetime contracts.");
+      current = createRustObjectRepresentationPlan({ ...input, nativeLifetimes });
       return current;
     },
     seal() {
@@ -87,6 +108,8 @@ export function createRustObjectRepresentationPlan(
   const { origins, escapingSuspendedMethods } = collectProjectObjectOrigins(input);
   const mutatingMethods = collectMutatingProjectMethods(input, receiverCaptures);
   const representations = input.projectTypes.definitions.map((definition) => {
+    const nativeLifetime = input.nativeLifetimes.get(definition);
+    if (nativeLifetime === undefined) failTargetAnalysisInvariant("tsonic-rust", "A native object representation requires its exact original lifetime contract.", definition.declaration);
     const creationFlows = origins.get(definition) ?? [];
     const promotedStorage = creationFlows.some((flow) =>
       flow.aliasDeclarations.some(input.hasPromotedStorage));
@@ -123,7 +146,7 @@ export function createRustObjectRepresentationPlan(
       identityObserved,
       escapes,
       constructionCount: creationFlows.length,
-      dispatchObjectLifetime: selectRustDispatchObjectLifetime(definition, kind),
+      dispatchObjectLifetime: nativeLifetime.dispatchObjectLifetime,
     });
   });
   const byDefinition = new Map(representations.map((representation) =>
@@ -141,6 +164,7 @@ export function createRustObjectRepresentationPlan(
     aliases: receiverAliases.aliases,
     aliasFor: receiverAliases.aliasFor,
     representations: Object.freeze(representations),
+    nativeLifetimeFor: (definition: RustProjectTypeDefinition | undefined) => definition === undefined ? undefined : input.nativeLifetimes.get(definition),
     representationFor(definition: RustProjectTypeDefinition | undefined) {
       return definition === undefined ? undefined : byDefinition.get(definition);
     },

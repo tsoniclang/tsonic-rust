@@ -106,7 +106,10 @@ test("closed captured callable storage keeps its proven native lifetime through 
     ["array", [{ kind: "array", element: stored }]],
     ["nested", [{ kind: "tuple", elements: [{ kind: "array", element: stored }] }]],
   ]) {
-    const lifetime = rustRetainedValueLifetime(declaration, captures, { context });
+    const lifetime = rustRetainedValueLifetime(declaration, captures, { context }, { kind: "construction",
+      projectTypes: { definitionForCarrier: () => undefined, definitionContainingDeclaration: () => undefined,
+        objectLayoutForDefinition: () => undefined },
+      objectRepresentations: { nativeLifetimeFor: () => assert.fail("closed primitive captures require no native object proof") } });
     assert.equal(lifetime?.kind === "static", true, `${name}: owned closed storage never invents an output elision`);
   }
 });

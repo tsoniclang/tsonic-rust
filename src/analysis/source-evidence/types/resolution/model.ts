@@ -9,6 +9,7 @@ import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import type { RustSourceTypeFamilyImplementation } from "../../../../target-model/types/type-families.js";
 import type { RustTargetGenericBindings } from "../../../../target-model/types/carriers/generic-inference.js";
 import type { RustCallableOwnershipInput } from "../../../callables/ownership-plan.js";
+import type { RustLifetimeRef } from "../../../../target-model/lifetimes/index.js";
 
 export interface RustClassFrameInstantiation {
   readonly kind: "selected";
@@ -36,6 +37,8 @@ export interface RustTargetTypeResolutionOptions {
   readonly sourceErrorCarrier: (subject: SourceStorageSubject | undefined) => TargetTypeRef | undefined;
   readonly callableSignatureCarrier: (declaration: Node) => TargetTypeRef | undefined;
   readonly callableParameterCarriers: (declaration: Node) => readonly TargetTypeRef[] | undefined;
+  readonly callableValueLifetime: (declaration: Node, captures: readonly TargetTypeRef[],
+    role: RustSourcePolicyContext["callableRepresentation"]) => RustLifetimeRef | undefined;
   readonly callableStorageCarrier: (
     source: Pick<SourceStorageProducer, "subject" | "bindings">,
     selection: RustCallableOwnershipInput,

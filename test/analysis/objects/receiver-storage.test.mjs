@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRustReceiverStorage } from "../../../dist/analysis/project-types/receiver-storage.js";
-import { createRustObjectRepresentationPlan } from "../../../dist/analysis/project-types/object-representation.js";
+import { createRustObjectRepresentationPlan, prepareRustObjectNativeLifetimes } from "../../../dist/analysis/project-types/object-representation.js";
 
 test("source receiver storage requires no physical carrier or representation decision", () => {
   const nativeNodes = new Set();
@@ -32,6 +32,7 @@ test("physical object analysis consumes the exact presealed receiver storage pla
     publishedFieldWrites: () => [],
   });
   const plan = createRustObjectRepresentationPlan({
+    nativeLifetimes: prepareRustObjectNativeLifetimes({ definitions: [], isPolymorphic: () => false }),
     ast: {}, navigation: {}, semantics: {}, sourceFiles: [], projectTypes: { definitions: [] },
     isNativeNode: node => nativeNodes.has(node),
     receiverStorage, valueWrites: new Set(), hasPromotedStorage: () => false,

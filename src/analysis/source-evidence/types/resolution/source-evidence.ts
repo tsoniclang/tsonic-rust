@@ -22,7 +22,6 @@ import { bindRustCallableEnvironment, resolveRustCallableEnvironment } from "./c
 import { retainRustCallableStructuralStorage } from "./structural-instantiations.js";
 import { resolveRustCallableInputCarrier } from "./callable-inputs.js";
 import { sourceEnclosingCallable, sourceReceiverOwner } from "@tsonic/target-api/source";
-import { rustRetainedValueLifetime } from "../../../callables/retained-values.js";
 import { rustSourceStorageSubjectContext } from "./source-storage-projection.js";
 import type { RustCallableOwnershipInput } from "../../../callables/ownership-plan.js";
 
@@ -223,7 +222,8 @@ function resolveRustCallableSignatureCarrier(
   }
   if (retainedMethod) {
     const environment = resolveRustCallableEnvironment(declaration, context, options, resolving);
-    const lifetime = environment === undefined ? undefined : rustRetainedValueLifetime(declaration, environment, { context });
+    const lifetime = environment === undefined ? undefined
+      : options.callableValueLifetime(declaration, environment, context.callableRepresentation);
     return lifetime === undefined ? undefined : rustCallableTargetType(parameters as readonly TargetTypeRef[], result, lifetime);
   }
   return rustCallableTargetType(parameters as readonly TargetTypeRef[], result);

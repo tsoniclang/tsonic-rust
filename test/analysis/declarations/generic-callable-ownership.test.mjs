@@ -18,7 +18,7 @@ import { createRustTypeDefinitionRegistry } from "../../../dist/analysis/project
 import { createRustProjectTypePolicy } from "../../../dist/analysis/project-types/catalog/resolution.js";
 import { createRustSourceTypeRegistry } from "../../../dist/analysis/project-types/source-type-registry.js";
 import { analyzeRustReceiverStorage } from "../../../dist/analysis/project-types/receiver-storage.js";
-import { createRustObjectRepresentationPlan } from "../../../dist/analysis/project-types/object-representation.js";
+import { createRustObjectRepresentationPlan, prepareRustObjectNativeLifetimes } from "../../../dist/analysis/project-types/object-representation.js";
 import { createRustStructuralShapePlanRegistry } from "../../../dist/analysis/objects/shapes/structural-shape-registry.js";
 import { createRustRetainedEnvironmentQueries } from "../../../dist/analysis/callables/retained-environment-shapes.js";
 import { compileRust } from "../../helpers/rust-session.mjs";
@@ -189,6 +189,7 @@ closureCapture: { get: (node) => {
       sourceFiles: files, isNativeNode, projectTypes };
     const receiverStorage = analyzeRustReceiverStorage(receiverInput);
     const objectRepresentations = createRustObjectRepresentationPlan({ ...receiverInput, receiverStorage,
+      nativeLifetimes: prepareRustObjectNativeLifetimes(projectTypes),
       valueWrites: new Set(), hasPromotedStorage: () => false, hasMutableStorageUse: () => false });
     const structuralShapes = createRustStructuralShapePlanRegistry();
     structuralShapes.initialize(sourceTypes.structuralObjects(), sourceTypes.structuralFieldImplementations(),

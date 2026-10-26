@@ -6,21 +6,15 @@ import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { RustNativeStorageSelection } from "../../target-model/records/native-storage.js";
 import { rustCallableProtocol } from "../../target-model/types/carriers/callables.js";
-import { rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
 import type { RustProjectTypePolicy } from "../project-types/index.js";
-import { rustOwnedStorageChildren } from "../../policy/types/storage/owned-storage.js";
 import type { RustProjectStructuralView } from "../../target-model/records/project-structural-views.js";
 import type { RustStructuralShapePlanRegistry } from "../objects/shapes/structural-shape-registry.js";
 import type { RustSourceCallableSpecializationIssue } from "../../target-model/records/callable-issues.js";
 import { rustCallableTargetForSourceLifetime } from "../../policy/conversions/value-carrier-reconciliation.js";
 import { rustStructuralObjectCarrierValue, rustStructuralObjectTargetType } from "../../target-model/types/carriers/source-types.js";
 import { rustOptionElementCarrier } from "../../target-model/types/carriers/optional.js";
-import { closeRustRetainedCallableCarrier } from "../../policy/ownership/retained-storage.js";
-import { rustStaticLifetime } from "../../target-model/lifetimes/index.js";
-
-const containsCallableStorage = (carrier: TargetTypeRef): boolean => carrier.kind !== "function-pointer" && carrier.kind !== "closure" &&
-  (rustCallableProtocol(carrier) !== undefined || rustGenericCallableValue(carrier) !== undefined ||
-    rustOwnedStorageChildren(carrier).some(containsCallableStorage));
+import { closeRustRetainedCallableCarrier, rustRequiresCallableFieldStorage } from "../../policy/ownership/retained-storage.js";
+import type { RustObjectRepresentationPlan } from "../project-types/object-representation.js";
 
 export interface RustProjectCallableFieldStorage {
   get(declaration: Node): TargetTypeRef | undefined;
@@ -37,6 +31,7 @@ export function prepareRustProjectCallableFieldStorage(input: {
   readonly records: RustProgramRecords;
   readonly storage: SourceStorageQueries;
   readonly projectTypes: RustProjectTypePolicy;
+  readonly objectRepresentations: Pick<RustObjectRepresentationPlan, "nativeLifetimeFor">;
 }, subjectFor: (subject: Extract<ReturnType<SourceStorageQueries["subject"]>, { readonly kind: "resolved" }>["subject"],
   carrier: TargetTypeRef) => RustNativeStorageSelection): RustProjectCallableFieldStorageConstruction {
   const fields = new Set<Node>();
@@ -55,14 +50,14 @@ export function prepareRustProjectCallableFieldStorage(input: {
     const field = fields.has(declaration);
     const declared = !field ? undefined : input.records.runtimeCarrier.get(declaration)?.carrier ??
       input.records.runtimeCarrier.get(Node_Type(input.ast, declaration))?.carrier;
-    if (!field || declared === undefined || !containsCallableStorage(declared)) return undefined;
+    if (!field || declared === undefined || !rustRequiresCallableFieldStorage(declared)) return undefined;
     const subject = input.storage.subject(declaration, "member");
     if (subject.kind === "unresolved") { failures.set(declaration, subject.reason); return undefined; }
     const selection = subjectFor(subject.subject, declared);
     if (selection.kind === "unresolved") { failures.set(declaration, selection.reason); return undefined; }
     const owner = input.projectTypes.definitionContainingDeclaration(declaration);
-    const carrier = owner !== undefined && !owner.genericParameters.some(parameter => parameter.kind === "lifetime")
-      ? closeRustRetainedCallableCarrier(selection.carrier, rustStaticLifetime) : selection.carrier;
+    const requiredLifetime = owner === undefined ? undefined : input.objectRepresentations.nativeLifetimeFor(owner)?.ownedCallableFieldLifetime;
+    const carrier = requiredLifetime === undefined ? selection.carrier : closeRustRetainedCallableCarrier(selection.carrier, requiredLifetime);
     selected.set(declaration, carrier);
     failures.delete(declaration);
     return carrier;
@@ -113,7 +108,7 @@ export function prepareRustProjectCallableFieldStorage(input: {
       for (const declaration of fields.keys()) {
         const declared = input.records.runtimeCarrier.get(declaration)?.carrier ??
           input.records.runtimeCarrier.get(Node_Type(input.ast, declaration))?.carrier;
-        if (declared === undefined || !containsCallableStorage(declared) || select(declaration) !== undefined) continue;
+        if (declared === undefined || !rustRequiresCallableFieldStorage(declared) || select(declaration) !== undefined) continue;
         const storageFailure = input.storage.failureReason();
         issues.push({ code: storageFailure === undefined ? "RUST_CALLABLE_VALUE_NOT_CLOSED" : "RUST_SOURCE_STORAGE_NOT_PROVEN",
           category: "error", source: "tsonic-rust", sourceNode: declaration,

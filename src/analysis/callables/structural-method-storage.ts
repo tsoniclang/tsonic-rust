@@ -35,6 +35,7 @@ import { normalizeRustErrorType, type RustErrorTypeContext } from "../errors/err
 import { rustHasOpenOwnedStorage, selectRustStructuralFactoryReceiver } from "../../policy/ownership/retained-storage.js";
 import type { RustDeclarationGenericRequirementIndex } from "../declarations/generic-requirements.js";
 import { rustFinalContractSupportsStatic } from "../declarations/generic-carrier-requirements.js";
+import type { RustProjectCallableFieldStorage } from "./project-field-storage.js";
 import type { RustSourceTypeFamilyRegistry } from "../../target-model/types/type-families.js";
 
 import type { RustSourceCallableSpecializationIssue } from "../../target-model/records/callable-issues.js";
@@ -233,7 +234,7 @@ export function createRustStructuralMethodStorage(input: {
   validateErrors(errors: Pick<RustErrorRegionRecords, "producerError">): void;
   validateRetention(requirements: Pick<RustDeclarationGenericRequirementIndex, "contractFor">,
     families: Pick<RustSourceTypeFamilyRegistry, "implementation">, frames: RustFrameCallablePlan,
-    classValues: RustClassValuePlan, errorTypes: RustErrorTypeContext): readonly RustSourceCallableSpecializationIssue[];
+    classValues: RustClassValuePlan, errorTypes: RustErrorTypeContext, projectFieldStorage: RustProjectCallableFieldStorage): readonly RustSourceCallableSpecializationIssue[];
 } {
   const { ast, records, sourceStorage, structuralShapes } = input;
   const canonical = new Map(structuralShapes.definitions.map(definition =>
@@ -574,7 +575,7 @@ export function createRustStructuralMethodStorage(input: {
             bound.bindings.types, bound.bindings.lifetimes, bound.bindings.consts));
           const sourceRetained = rustRetainedValueLifetime(subject.node, sourceCaptureCarriers, { context: {
             ast, source: input.sourceStorage.source, records, sourceLifetimes: input.lifetimes, retainedEnvironments: input.retainedEnvironments,
-          } });
+          } }, { kind: "construction", projectTypes: input.projectTypes, objectRepresentations: input.objectRepresentations });
           const retained = sourceRetained === undefined ? undefined
             : bound.bindings.lifetimes.get(rustLifetimeKey(sourceRetained)) ?? sourceRetained;
           if (retained === undefined || destinationLifetime.kind !== "placeholder" && !rustLifetimeOutlives(retained,
@@ -789,7 +790,7 @@ export function createRustStructuralMethodStorage(input: {
     },
     validateRetention(requirements: Pick<RustDeclarationGenericRequirementIndex, "contractFor">,
       families: Pick<RustSourceTypeFamilyRegistry, "implementation">, frames: RustFrameCallablePlan,
-      classValues: RustClassValuePlan, errorTypes: RustErrorTypeContext) {
+      classValues: RustClassValuePlan, errorTypes: RustErrorTypeContext, projectFieldStorage: RustProjectCallableFieldStorage) {
       if (!complete || retentionValidated) failTargetAnalysisInvariant("tsonic-rust", "Structural retention validates once against the completed declaration requirements.");
       const issues: RustSourceCallableSpecializationIssue[] = [];
       for (const requirement of retainedRequirements) {
@@ -810,7 +811,7 @@ export function createRustStructuralMethodStorage(input: {
         const selected = rustFinalContractSupportsStatic(contract, normalized.carrier, families, input.typeDefinitions,
           { lifetimeContract: input.lifetimes.contractFor(owner), genericCallables: input.genericCallables,
             frameCallables: frames, classValues, objectRepresentations: input.objectRepresentations,
-            structuralShapes: structuralShapes.completed, projectTypes: input.projectTypes, records });
+            structuralShapes: structuralShapes.completed, projectTypes: input.projectTypes, records, projectFieldStorage });
         if (selected.kind !== "supported") issues.push({ subject: requirement.declaration, message: selected.reason });
       }
       retentionValidated = issues.length === 0;

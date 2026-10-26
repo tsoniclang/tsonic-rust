@@ -26,7 +26,7 @@ test("structural checked slots preserve exact bases and propagate static member 
     rustStructuralObjectTargetType("/source.ts", [field(numberType)]), checked), undefined);
   const requirements = new Map([["Value", new Set()]]);
   const evidence = { lifetimeContract: undefined, genericCallables: undefined, structuralShapes: undefined,
-    frameCallables: undefined, classValues: undefined, objectRepresentations: undefined,
+    frameCallables: undefined, classValues: undefined, objectRepresentations: undefined, projectFieldStorage: undefined,
     projectTypes: { ...policy, objectLayoutForDefinition: () => ({ fields: [], indexSignatures: [] }),
       isPolymorphic: () => false, directSupertypes: () => [] }, records: undefined };
   assert.equal(classifyCarrierRequirements(structural, ["static"], new Set(["Value"]), requirements,

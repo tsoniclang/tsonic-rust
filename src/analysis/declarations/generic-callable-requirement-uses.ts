@@ -536,10 +536,8 @@ export function createRustCallableRequirementVisitor(input: RustCallableRequirem
         const error = addUse(node, capture.carrier, ["clone"]);
         if (error !== undefined) return error;
       }
-      // A native struct without lifetime parameters owns its fields, so a stored callable field is static and every
-      // type parameter it carries must outlive static.
       const classDefinition = input.projectTypes.definitionForDeclaration(node);
-      if (classDefinition !== undefined && !classDefinition.genericParameters.some(parameter => parameter.kind === "lifetime")) {
+      if (classDefinition !== undefined && input.objectRepresentations.nativeLifetimeFor(classDefinition)?.ownedCallableFieldLifetime?.kind === "static") {
         for (const field of input.projectTypes.objectLayoutForDefinition(classDefinition)?.fields ?? []) {
           const carrier = records.runtimeCarrier.get(field.declaration)?.carrier;
           if (carrier === undefined || rustCallableProtocol(carrier) === undefined) continue;

@@ -1,6 +1,6 @@
 import type { RustProjectTypeDefinition } from "../../../target-model/types/project-types.js";
-import type { RustObjectRepresentationKind } from "../../../target-model/records/object-representation.js";
-import { rustStaticLifetime, type RustLifetimeRef } from "../../../target-model/lifetimes/index.js";
+import type { RustObjectRepresentationKind, RustObjectNativeLifetimeContract } from "../../../target-model/records/object-representation.js";
+import { rustStaticLifetime } from "../../../target-model/lifetimes/index.js";
 import { rustLifetimeOutlives } from "../../constraints/lifetime-outlives.js";
 
 export function selectRustObjectRepresentationKind(input: {
@@ -30,18 +30,19 @@ export function selectRustMethodSelfMode(
   return kind === "value" && mutated ? "mut-ref" : "ref";
 }
 
-export function selectRustDispatchObjectLifetime(
+export function selectRustObjectNativeLifetimeContract(
   definition: RustProjectTypeDefinition,
-  kind: RustObjectRepresentationKind,
-): RustLifetimeRef | undefined {
-  if (kind !== "open-hierarchy") return undefined;
+  polymorphic: boolean,
+): RustObjectNativeLifetimeContract {
   const lifetimes = definition.genericParameters.flatMap((parameter) =>
     parameter.kind === "lifetime" ? [parameter.lifetime] : []);
-  if (lifetimes.length === 0) return rustStaticLifetime;
   const contract = Object.freeze({
     declaration: definition.declaration,
     parameters: definition.genericParameters,
   });
-  return lifetimes.find((candidate) =>
-    lifetimes.every((source) => rustLifetimeOutlives(source, candidate, contract)));
+  const dispatchObjectLifetime = !polymorphic ? undefined : lifetimes.length === 0 ? rustStaticLifetime
+    : lifetimes.find(candidate => lifetimes.every(source => rustLifetimeOutlives(source, candidate, contract)));
+  return Object.freeze({ dispatchObjectLifetime, ownedCallableFieldLifetime: lifetimes.length === 0 ? rustStaticLifetime : undefined,
+    typeOutlives: Object.freeze(dispatchObjectLifetime?.kind !== "static" ? [] : definition.genericParameters.flatMap(parameter =>
+      parameter.kind !== "type" ? [] : [Object.freeze({ identity: parameter.identity, lifetime: dispatchObjectLifetime })])) });
 }

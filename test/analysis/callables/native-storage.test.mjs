@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { selectRustObjectNativeLifetimeContract } from "../../../dist/policy/types/objects/representation.js";
 import { analyzeRust, compileRust, rustSourceText } from "../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 import { createTargetSourceProgram, Node_Initializer, sourceNodesOutsideErasedSubtrees } from "@tsonic/target-api/source";
@@ -302,6 +303,7 @@ for (const [name, genericParameters, selectedLifetime] of [
     let selections = 0;
     let open = true;
     const fields = prepareRustProjectCallableFieldStorage({
+      objectRepresentations: { nativeLifetimeFor: selected => selectRustObjectNativeLifetimeContract(selected, false) },
       ast: new Proxy({}, { get() { throw new Error("A field storage owner must query its complete member subject, not one initializer."); } }),
       records: { runtimeCarrier: { get: node => {
         assert.equal(open, true, "published field readers never read source carrier evidence");
@@ -352,6 +354,7 @@ test("unresolved callable member storage is rejected by its producer before publ
   const integer = rustSourcePrimitiveTargetType("int32");
   const carrier = rustCallableTargetType([], integer);
   const fields = prepareRustProjectCallableFieldStorage({ ast: {},
+    objectRepresentations: { nativeLifetimeFor: selected => selectRustObjectNativeLifetimeContract(selected, false) },
     records: { runtimeCarrier: { get: node => node === declaration ? { carrier } : undefined } },
     storage: { subject: node => ({ kind: "resolved", subject: { node, kind: "member", projection: [] } }),
       failureReason: () => undefined },
@@ -382,6 +385,7 @@ for (const [name, wrap, unwrap] of [
       let open = true;
       let calls = 0;
       const fields = prepareRustProjectCallableFieldStorage({ ast: {},
+        objectRepresentations: { nativeLifetimeFor: selected => selectRustObjectNativeLifetimeContract(selected, false) },
         records: { runtimeCarrier: { get: node => {
           assert.equal(open, true, "sealed readers never query the nested source field again");
           return node === declaration ? { carrier: declared } : undefined;

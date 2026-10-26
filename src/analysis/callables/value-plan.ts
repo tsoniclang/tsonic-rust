@@ -410,7 +410,7 @@ function createRustCallableValueLifecycle(input: RustCallableValuePlanInput,
       const constructorIssues = structuralMethodStorage.prepareConstructors(components, effectsFor, nativeProducers);
       if (constructorIssues.length !== 0) return constructorIssues;
       projectFieldStorage = prepareRustProjectCallableFieldStorage({ ast: input.ast, records: input.records,
-        storage: input.sourceStorage, projectTypes: input.projectTypes },
+        storage: input.sourceStorage, projectTypes: input.projectTypes, objectRepresentations: input.objectRepresentations },
       (subject, carrier) => nativeStorageQueries.subjectFor(subject, carrier));
       const fieldIssues = projectFieldStorage.completeViews(input.structuralViews, input.structuralShapes);
       if (fieldIssues.length !== 0) return fieldIssues;
@@ -491,7 +491,7 @@ function createRustCallableValueLifecycle(input: RustCallableValuePlanInput,
       errorTypes: RustErrorTypeContext) {
       if (structuralMethodStorage === undefined || selectedPlan === undefined)
         failTargetAnalysisInvariant("tsonic-rust", "Structural retention requires completed physical field selection.");
-      return structuralMethodStorage.validateRetention(requirements, families, selectedPlan.frames, classValues, errorTypes);
+      return structuralMethodStorage.validateRetention(requirements, families, selectedPlan.frames, classValues, errorTypes, selectedPlan.projectFieldStorage);
     },
     seal(late: RustCallableValueSealInput): TargetStageResult<RustCallableValuePlan> {
       if (sealResult !== undefined) return sealResult;

@@ -4,7 +4,7 @@ import { sourceEnclosingCallable, sourceNodeIdentity, sourceCallableValueParamet
 import type { RustFactWalk } from "../program/walk.js";
 
 import type { TargetTypeRef } from "../../target-model/types/model.js";
-import { rustRetainedEnvironment, rustRetainedValueLifetime } from "./retained-values.js";
+import { rustRetainedEnvironment } from "./retained-values.js";
 import { rustHasOpenOwnedStorage } from "../../policy/ownership/retained-storage.js";
 import { selectRustSuspendedStorageLifetime } from "../../policy/ownership/suspended-storage.js";
 import { rustEnclosingStorageContract } from "./storage-contracts.js";
@@ -58,7 +58,7 @@ export function rustRetainedCallLifetimes(
           : contribution.input.inputs.flatMap(input => input.kind === "empty" ? [] : [input.presentCarrier]))
         : ast.elements(subject.node).map(element => element === undefined ? undefined : records.runtimeCarrier.get(element)?.carrier);
       if (!values.every((carrier): carrier is TargetTypeRef => carrier !== undefined)) return undefined;
-      const lifetime = rustRetainedValueLifetime(subject.node, values, walk);
+      const lifetime = walk.operationOptions.callableValueLifetime(subject.node, values, "construction");
       return lifetime === undefined ? undefined : reference(lifetime);
     }
     if (subject.kind === "value" && subject.projection.length === 0 &&
@@ -66,7 +66,7 @@ export function rustRetainedCallLifetimes(
       const captures = records.closureCapture.get(subject.node);
       if (captures === undefined) return undefined;
       const carriers = [...captures.captures, ...captures.receiverFields, ...captures.receivers].map(capture => capture.carrier);
-      const lifetime = rustRetainedValueLifetime(subject.node, carriers, walk);
+      const lifetime = walk.operationOptions.callableValueLifetime(subject.node, carriers, "construction");
       return lifetime === undefined ? undefined : reference(lifetime);
     }
     if (subject.kind === "value" && subject.projection.length === 0 && ast.body(subject.node) !== undefined) {
@@ -85,7 +85,7 @@ export function rustRetainedCallLifetimes(
         captured.push(carrier);
       }
       lexicalVisits.delete(subject.node);
-      const lifetime = rustRetainedValueLifetime(subject.node, captured, walk);
+      const lifetime = walk.operationOptions.callableValueLifetime(subject.node, captured, "construction");
       return lifetime === undefined ? undefined : reference(lifetime);
     }
     const root = subject.kind === "input"

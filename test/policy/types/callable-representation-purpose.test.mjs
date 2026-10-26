@@ -67,6 +67,7 @@ function fixture(purpose) {
   };
   const options = {
     jsEnabled: true,
+    callableValueLifetime: () => assert.fail("the primitive signature fixture has no retained native method body"),
     sourceTypes: { structuralObjectForType: () => undefined },
     callableStorageCarrier(selected, selection, logical) {
       storageQueries++;

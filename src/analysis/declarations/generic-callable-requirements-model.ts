@@ -30,6 +30,7 @@ import type { RustProjectStructuralView } from "../../target-model/records/proje
 import type { RustAnalyzedErrorRegions } from "../errors/regions.js";
 
 import type { RustNativeStoragePlan } from "../callables/native-storage.js";
+import type { RustProjectCallableFieldStorage } from "../callables/project-field-storage.js";
 
 export interface RustCallableRequirementInput {
   readonly ownershipFlow: RustOwnershipFlow;
@@ -48,6 +49,7 @@ export interface RustCallableRequirementInput {
   readonly genericCallables: RustGenericCallablePlan;
   readonly nativeCallables: RustNativeCallableInputPlan;
   readonly nativeStorage: RustNativeStoragePlan;
+  readonly projectFieldStorage: RustProjectCallableFieldStorage;
   readonly frameCallables: RustFrameCallablePlan;
   readonly classValues: RustClassValuePlan;
   readonly structuralShapes: RustStructuralShapePlan;

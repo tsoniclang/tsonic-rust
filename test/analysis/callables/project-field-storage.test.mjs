@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { selectRustObjectNativeLifetimeContract } from "../../../dist/policy/types/objects/representation.js";
 import { analyzeRust } from "../../helpers/rust-session.mjs";
 import { createRustRecordFixture } from "../../helpers/records.mjs";
 import { prepareRustProjectCallableFieldStorage } from "../../../dist/analysis/callables/project-field-storage.js";
@@ -14,6 +15,7 @@ import { rustRuntimeCallableTargetType } from "../../../dist/target-model/types/
 import { rustNamedTargetType, rustNamedTypeCarrierValue } from "../../../dist/target-model/types/carriers/native.js";
 import { closeRustRetainedCallableCarrier } from "../../../dist/policy/ownership/retained-storage.js";
 import { rustOptionElementCarrier, rustOptionTargetType } from "../../../dist/target-model/types/carriers/optional.js";
+import { rustCallableConversionSource } from "../../../dist/target-model/conversions/callable-physical.js";
 
 const bool = { kind: "source-primitive", name: "bool" };
 const parameter = { kind: "type-parameter", identity: "Value", name: "Value" };
@@ -40,6 +42,7 @@ test("owned physical callable fields close only their open storage environment a
     const logical = rustCallableTargetType([reference], reference, environment);
     const physical = rustRuntimeCallableTargetType(environment, [reference], completion);
     const construction = prepareRustProjectCallableFieldStorage({ ast: {},
+      objectRepresentations: { nativeLifetimeFor: selected => selectRustObjectNativeLifetimeContract(selected, false) },
       records: createRustRecordFixture({ runtimeCarrier: { get: node => node === declaration ? { carrier: logical } : undefined } }),
       projectTypes: { definitions: [inherited], objectLayoutForDefinition: () => ({ fields: [{ declaration }] }),
         definitionContainingDeclaration: node => node === declaration ? owner : undefined },
@@ -92,6 +95,7 @@ test("physical member selection completes structural getter storage once without
   const subject = Object.freeze({ node: declaration, kind: "member", projection: [] });
   let queries = 0;
   const construction = prepareRustProjectCallableFieldStorage({ ast: {},
+    objectRepresentations: { nativeLifetimeFor: selected => selectRustObjectNativeLifetimeContract(selected, false) },
     records: createRustRecordFixture({ runtimeCarrier: { get: node => node === declaration ? { carrier: logical } : undefined } }),
     projectTypes: { definitions: [owner], definitionContainingDeclaration: () => owner,
       objectLayoutForDefinition: () => ({ fields: [{ declaration }] }),
@@ -138,6 +142,7 @@ for (const [label, carrier, required] of [
   const subject = Object.freeze({ node: declaration, kind: "member", projection: [] });
   let selections = 0;
   const construction = prepareRustProjectCallableFieldStorage({
+    objectRepresentations: { nativeLifetimeFor: selected => selectRustObjectNativeLifetimeContract(selected, false) },
     ast: {}, records: createRustRecordFixture({ runtimeCarrier: { get: node => node === declaration ? { carrier } : undefined } }),
     projectTypes: { definitions: [definition], definitionContainingDeclaration: () => definition,
       objectLayoutForDefinition: () => ({ fields: [{ declaration }] }) },
@@ -180,4 +185,29 @@ for (const surfaces of [[], ["js"]]) test(`checked generic receiver fields publi
   assert.equal(program.callableValues.projectFieldStorage.get(declaration) === physical, true,
     "the published reader retains the single original native storage selection");
   assert.equal(Object.isFrozen(physical), true, "the final native storage is immutable");
+});
+
+for (const surfaces of [[], ["js"]]) test(`checked inherited callable fields publish owned physical storage in ${surfaces[0] ?? "native"}`, () => {
+  const example = receiverFieldCaptureEdges.find(value => value.name === "generic-overridden-fields");
+  assert.equal(example !== undefined, true, "the original inherited native program is the control");
+  const { program } = analyzeRust({ surfaces, files: { "index.ts": example.source } });
+  const { ast } = program.source;
+  const fields = [];
+  const visit = node => {
+    if (ast.is.IsPropertyDeclaration(node) && ast.text(ast.name(node)) === "read") fields.push(node);
+    ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+  };
+  program.sourceFiles.forEach(visit);
+  assert.equal(fields.length, 1, "the inherited field retains one original source declaration");
+  const declaration = fields[0];
+  const owner = program.projectTypes.definitionContainingDeclaration(declaration);
+  assert.equal(owner !== undefined, true, "the physical field retains its original generic class owner");
+  const selected = program.callableValues.projectFieldStorage.get(declaration);
+  assert.equal(rustCallableConversionSource(selected)?.lifetime?.kind, "static", "owned physical storage has no elided environment lifetime");
+  const carrier = program.projectTypes.openCarrier(owner);
+  const emitted = program.records.projectClassFields.get(owner, carrier)?.find(field => field.declaration === declaration);
+  assert.equal(emitted !== undefined, true, "the state layout retains the actual selected field");
+  assert.equal(rustCallableConversionSource(emitted.carrier)?.lifetime?.kind, "static", "state publication preserves the selected owned environment");
+  const instantiated = program.projectTypes.instantiateMemberCarrier(declaration, carrier, selected);
+  assert.equal(rustTargetTypeRefEquals(emitted.carrier, instantiated), true, "the state field is exactly the original physical selection under its receiver bindings");
 });

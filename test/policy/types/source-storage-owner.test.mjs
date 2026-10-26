@@ -64,6 +64,7 @@ for (const expression of ["callback", "holder.callback", "callbacks[0]", '(() =>
       projectTypes: {}, jsEnabled: false, providerTypes: [],
       sourceProfiles: { profileForNode: () => undefined },
       sourceTypes: { structuralObjectForType: () => undefined, carrierForDeclaration: () => undefined },
+      callableValueLifetime: () => assert.fail("the formal callable fixture has no retained native method body"),
       callableStorageCarrier(selected, selection) {
         selections += 1;
         assert.equal(selected.subject === expected.subject, true, "checked type and stored operand share the exact value owner");

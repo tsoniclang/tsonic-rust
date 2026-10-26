@@ -331,6 +331,7 @@ export function analyzeRustAnalysisProgram(
     errorRegions.value,
     context.promiseBodies.plan,
     context.callableValues.nativeStorage,
+    context.callableValues.selected.projectFieldStorage,
     classValues,
     errorTypes,
     preparedOwnership.borrowFor,
@@ -381,7 +382,8 @@ export function analyzeRustAnalysisProgram(
     sourceTypes: sourceStage.sourceTypes,
     sourceLifetimes: context.sourceLifetimes, requirements: declarationGenericRequirements, nativeStorageValidated, families: context.typeFamilies, jsEnabled: context.jsEnabled,
     evidence: { genericCallables: context.callableValues.generic, frameCallables: context.callableValues.selected.frames,
-      classValues, objectRepresentations, structuralShapes: context.structuralShapes.completed, projectTypes: context.projectTypes, records } });
+      classValues, objectRepresentations, structuralShapes: context.structuralShapes.completed, projectTypes: context.projectTypes, records,
+      projectFieldStorage: context.callableValues.selected.projectFieldStorage } });
   if (declarationGenericRequirements.kind === "rejected") {
     const promiseResults = promiseResultsFor(false);
     return rejectedTargetStage([...declarationGenericRequirements.diagnostics, ...promiseResults.diagnostics]);
