@@ -9,6 +9,7 @@ import { rustRuntimeErrorTargetType } from "../../../dist/target-model/types/car
 import { rustNativeErrorJoinTargetType } from "../../../dist/target-model/types/native-error-joins.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 import { rustInfallibleTargetId } from "../../../dist/target-model/types/carriers/source-types.js";
+import { selectRustJsRejectionRegion } from "../../../dist/policy/operations/flow/js-rejection.js";
 
 function selectRegion(nativeErrors, localErrors = false, asynchronous = true) {
   const fileName = "/src/index.ts";
@@ -53,16 +54,24 @@ function selectRegion(nativeErrors, localErrors = false, asynchronous = true) {
 }
 
 test("JS body regions select identity, retained, uninhabited and package conversions once", () => {
-  const region = selectRegion([
+  const nativeErrors = [
     { identity: "js-rejection", errorType: rustJsValueTargetType() },
     { identity: "native", errorType: rustRuntimeErrorTargetType() },
     { identity: "empty", errorType: { kind: "target-named", id: rustInfallibleTargetId } },
-  ], true);
+  ];
+  const region = selectRegion(nativeErrors, true);
   assert.equal(region.jsRejection !== undefined, true);
   assert.equal(region.jsRejection.local.kind, "retained-error");
-  assert.deepEqual(region.jsRejection.sources.map(source => [source.identity, source.conversion.kind]), [
+  const conversions = selectRustJsRejectionRegion(region.localOwner, nativeErrors);
+  assert.equal(conversions !== undefined, true, "every original native channel has its exact policy conversion before inhabited-source selection");
+  assert.deepEqual(conversions.sources.map(source => [source.identity, source.conversion.kind]), [
     ["js-rejection", "identity"], ["native", "retained-error"], ["empty", "uninhabited"],
   ]);
+  assert.deepEqual(region.jsRejection.sources.map(source => [source.identity, source.conversion.kind]), [
+    ["js-rejection", "identity"], ["native", "retained-error"],
+  ]);
+  assert.equal(region.sources.some(source => source.identity === "empty"), false,
+    "an uninhabited payload does not create an unused native error variant");
   assert.equal(region.jsRejection.requiredCarriers.length, 2);
   assert.equal(region.jsRejection.requiredCarriers.some(carrier => rustTargetTypeRefEquals(carrier,
     rustRuntimeErrorTargetType())), true);
