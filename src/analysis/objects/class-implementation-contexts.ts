@@ -12,20 +12,34 @@ import { rustSourceTypeCarrierValue } from "../../target-model/types/carriers/so
 import { rustTargetGenericReferences } from "../../target-model/types/carriers/generic-references.js";
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
 import type { RustProjectTypeDefinition } from "../../target-model/types/project-types.js";
+import type { RustClassImplementationContext } from "../../target-model/records/class-implementations.js";
 
-export function analyzeRustClassImplementationContexts(
+export interface RustClassImplementationContextConstruction {
+  forInstance(definition: RustProjectTypeDefinition, carrier: TargetTypeRef): RustClassImplementationContext;
+  seal(): void;
+}
+
+export function prepareRustClassImplementationContexts(
   program: Pick<RustAnalysisProgram, "projectTypes" | "classValues"> & {
     readonly source: Pick<RustAnalysisProgram["source"], "ast">;
     readonly records: Pick<RustAnalysisProgram["records"], "runtimeCarrier">;
   },
   producer: Pick<RustClassEmissionProducer, "implementationContext">,
   nodes: readonly Node[],
-): void {
-  const contexts = new WeakMap<Node, Set<string>>();
-  const publish = (definition: RustProjectTypeDefinition, carrier: TargetTypeRef): void => {
+): RustClassImplementationContextConstruction {
+  const contexts = new WeakMap<Node, Map<string, RustClassImplementationContext>>();
+  let sealed = false;
+  const forInstance = (definition: RustProjectTypeDefinition, carrier: TargetTypeRef): RustClassImplementationContext => {
     const key = closedMetadataKey(carrier);
-    const instances = contexts.get(definition.declaration) ?? new Set<string>();
-    if (instances.has(key)) return;
+    const instances = contexts.get(definition.declaration) ?? new Map<string, RustClassImplementationContext>();
+    const existing = instances.get(key);
+    if (existing !== undefined) return existing;
+    if (sealed) failTargetAnalysisInvariant("tsonic-rust",
+      "A sealed class implementation context cannot admit a new native instance.", definition.declaration);
+    if (program.projectTypes.definitionForCarrier(carrier) !== definition ||
+      program.projectTypes.definitionForDeclaration(definition.declaration) !== definition)
+      failTargetAnalysisInvariant("tsonic-rust",
+        "A native class implementation context requires its exact original carrier owner.", definition.declaration);
     const arguments_ = rustSourceTypeCarrierValue(carrier)?.genericArguments;
     if (arguments_ === undefined || arguments_.length !== definition.genericParameters.length)
       failTargetAnalysisInvariant("tsonic-rust", "An admitted class implementation requires its exact native generic correspondence.", definition.declaration);
@@ -37,18 +51,20 @@ export function analyzeRustClassImplementationContexts(
       else if (parameter.kind === "lifetime" && argument?.kind === "lifetime") lifetimes.set(rustLifetimeKey(parameter.lifetime), argument.lifetime);
       else failTargetAnalysisInvariant("tsonic-rust", "An admitted class implementation requires exact native generic argument kinds.", definition.declaration);
     }
-    producer.implementationContext(definition.declaration, carrier, Object.freeze({
+    const value = Object.freeze({
       types: snapshotTargetReadonlyMap(types), lifetimes: snapshotTargetReadonlyMap(lifetimes),
       names: snapshotTargetReadonlyMap(generatedTypeParameterNames(rustTargetGenericReferences(carrier).typeParameters,
-        authoredTypeParameterNames(definition.declaration, program.source.ast, new Set(definition.typeParameterIdentities)))) }));
-    instances.add(key);
+        authoredTypeParameterNames(definition.declaration, program.source.ast, new Set(definition.typeParameterIdentities)))) });
+    producer.implementationContext(definition.declaration, carrier, value);
+    instances.set(key, value);
     contexts.set(definition.declaration, instances);
+    return value;
   };
   for (const view of [...program.classValues.constructorViewImplementations, ...program.classValues.instanceViewImplementations]) {
     const definition = program.projectTypes.definitionForDeclaration(view.declaration);
     if (definition === undefined) failTargetAnalysisInvariant("tsonic-rust",
       "An admitted class implementation requires its exact source declaration owner.", view.declaration);
-    publish(definition, view.sourceCarrier);
+    forInstance(definition, view.sourceCarrier);
   }
   const pending = [...program.projectTypes.definitions.map(definition => program.projectTypes.openCarrier(definition)),
     ...program.classValues.instanceViewImplementations.map(view => view.sourceCarrier),
@@ -66,7 +82,8 @@ export function analyzeRustClassImplementationContexts(
     pending.push(...rustTargetTypeChildren(carrier));
     const definition = program.projectTypes.definitionForCarrier(carrier);
     if (definition === undefined) continue;
-    publish(definition, carrier);
+    forInstance(definition, carrier);
     pending.push(...program.projectTypes.directSupertypes(carrier) ?? []);
   }
+  return Object.freeze({ forInstance, seal() { sealed = true; } });
 }

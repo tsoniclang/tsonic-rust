@@ -3,7 +3,7 @@ import test from "node:test";
 import { analyzeRust } from "../../helpers/rust-session.mjs";
 import { selectRustNativeHelperStatePassing, selectRustNativeFrameOwnerPassing, selectRustNativeStructuralReceiverPassing } from "../../../dist/policy/ownership/generic-callables.js";
 import { rustTargetGenericArgumentEquals, rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
-import { analyzeRustClassImplementationContexts } from "../../../dist/analysis/objects/class-implementation-contexts.js";
+import { prepareRustClassImplementationContexts } from "../../../dist/analysis/objects/class-implementation-contexts.js";
 import { rustLifetimeKey } from "../../../dist/target-model/lifetimes/index.js";
 import { closedMetadataKey } from "../../../dist/target-model/metadata/closed-data.js";
 
@@ -13,6 +13,10 @@ class Box<Value> {
   value: Value;
   constructor(value: Value) { this.value = value; }
   read(): Value { return this.value; }
+}
+class Other<Value> {
+  value: Value;
+  constructor(value: Value) { this.value = value; }
 }
 export function read(): number { return new Box<number>(1).read(); }
 ` } });
@@ -25,7 +29,7 @@ export function read(): number { return new Box<number>(1).read(); }
   program.sourceFiles.forEach(visit);
   const observed = new Map();
   let count = 0;
-  analyzeRustClassImplementationContexts(program, { implementationContext(declaration, carrier, selected) {
+  const contexts = prepareRustClassImplementationContexts(program, { implementationContext(declaration, carrier, selected) {
     const keys = observed.get(declaration) ?? new Set();
     const key = closedMetadataKey(carrier);
     assert.equal(keys.has(key), false, "an exact original owner and instance are published only once");
@@ -43,8 +47,36 @@ export function read(): number { return new Box<number>(1).read(); }
     assert.equal(selected.types.set === undefined && selected.lifetimes.set === undefined && selected.names.set === undefined,
       true, "published original-owner correspondence exposes no mutation route");
     count++;
-  } }, nodes);
+  } }, []);
   assert.equal(count > 0, true, "the real generic native class exercises owner-context publication");
+  const definition = program.projectTypes.definitions.find(definition => definition.kind === "class" &&
+    program.source.ast.text(program.source.ast.name(definition.declaration)) === "Box");
+  assert.equal(definition !== undefined, true, "the exact original native class owns its context query");
+  const carrier = program.projectTypes.openCarrier(definition);
+  const instance = nodes.map(node => program.records.runtimeCarrier.get(node)?.carrier).find(selected =>
+    selected !== undefined && program.projectTypes.definitionForCarrier(selected) === definition && !rustTargetTypeRefEquals(selected, carrier));
+  assert.equal(instance !== undefined, true, "the checked source supplies an actual concrete native class instance for later demand");
+  assert.equal(observed.get(definition.declaration)?.has(closedMetadataKey(instance)), false,
+    "the intentionally source-node-free initial context inventory has not admitted that concrete instance");
+  const other = program.projectTypes.definitions.find(definition => definition.kind === "class" &&
+    program.source.ast.text(program.source.ast.name(definition.declaration)) === "Other");
+  assert.equal(other !== undefined && other.genericParameters.length === definition.genericParameters.length, true,
+    "the wrong-owner inverse has the same authored generic arity");
+  assert.throws(() => contexts.forInstance(other, instance), /A native class implementation context requires its exact original carrier owner/u,
+    "matching generic arity cannot substitute a foreign original owner");
+  const initial = count;
+  const concrete = contexts.forInstance(definition, instance);
+  assert.equal(count, initial + 1, "a real late physical instance is admitted once by the original context producer");
+  assert.equal(contexts.forInstance(definition, instance) === concrete, true, "a repeated late request reuses its canonical immutable context");
+  const selected = contexts.forInstance(definition, carrier);
+  const before = count;
+  contexts.seal();
+  contexts.seal();
+  assert.equal(contexts.forInstance(definition, carrier) === selected, true, "a closed context owner reads the exact original instance without recomputation");
+  assert.equal(count, before, "repeated context reads and seals cannot publish the same native instance twice");
+  assert.throws(() => contexts.forInstance(definition, { kind: "source-primitive", name: "bool" }),
+    /A sealed class implementation context cannot admit a new native instance/u,
+    "a closed owner cannot compute or publish a new instance");
 });
 
 test("native async entry captures retain authored phantom type identities even without a stored value", () => {
@@ -131,10 +163,13 @@ export function read(): number { return new Enclosing<number>(7).make().read(); 
   assert.equal(ast.parent(nested) === lexicalOwner.declaration, false, "lexical containment is not native class member ownership");
   const leading = program.records.callableLeading.get(nested);
   assert.equal(leading?.nativeEntry.module !== undefined, true, "the nested object method has its own module helper entry");
+  assert.equal(leading.nativeEntry.direct === leading.nativeEntry.module, true, "the nested object's direct entry cannot acquire an unrelated class receiver");
   assert.equal(leading.nativeEntry.module.body.slots.some(slot => slot.kind === "method-receiver" || slot.kind === "class-environment"),
     false, "an enclosing class never invents class self or static environment for the object method");
   assert.equal(leading.parameters.some(parameter => parameter.kind === "this"), true, "the original object this parameter is retained");
-  assert.equal(lexicalOwner.genericParameters.filter(parameter => parameter.kind === "type").every(parameter =>
+  const ownerParameters = lexicalOwner.genericParameters.filter(parameter => parameter.kind === "type");
+  assert.equal(ownerParameters.length, 1, "the original enclosing Value binder is present before capture preservation is checked");
+  assert.equal(ownerParameters.every(parameter =>
     leading.nativeEntry.module.body.captureArguments.some(argument => argument.kind === "type" &&
       argument.type.kind === "type-parameter" && argument.type.identity === parameter.identity)), true,
   "direct member selection does not erase the actual enclosing generic capture obligations");

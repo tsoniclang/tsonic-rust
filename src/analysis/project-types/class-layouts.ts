@@ -19,9 +19,11 @@ import { analyzeRustProjectRootEmission } from "./root-emission.js";
 import { analyzeRustProjectDispatchEmission } from "./dispatch-emission.js";
 import { analyzeRustProjectPolymorphicEmission } from "./polymorphism-emission.js";
 import { closeRustProjectCallableContracts } from "./callable-contracts.js";
+import type { RustClassImplementationContextConstruction } from "../objects/class-implementation-contexts.js";
 
 export function analyzeRustProjectClassLayouts(program: Omit<RustAnalysisProgram, "reachability">, source: TargetSourceProgram,
-  nodes: readonly Node[], producer: RustProjectClassProducer, reachability: RustReachability): readonly TargetDiagnostic[] {
+  nodes: readonly Node[], producer: RustProjectClassProducer, reachability: RustReachability,
+  classContexts: Pick<RustClassImplementationContextConstruction, "forInstance">): readonly TargetDiagnostic[] {
   const { ast } = program.source;
   const issues: TargetDiagnostic[] = [];
   const members = new Map<RustProjectTypeDefinition, readonly Node[]>();
@@ -156,6 +158,7 @@ export function analyzeRustProjectClassLayouts(program: Omit<RustAnalysisProgram
     if (contracts === undefined) failTargetAnalysisInvariant("tsonic-rust", "An admitted native instance requires its exact checked contract graph.", definition.declaration);
     producer.contracts(carrier, contracts);
     for (const contract of contracts) {
+      classContexts.forInstance(contract.definition, contract.carrier);
       producer.relationship(carrier, contract.definition, contract.carrier);
       for (const member of members.get(contract.definition) ?? []) {
         if (ast.hasModifierKind(member, "static") || !ast.is.IsMethodDeclaration(member) && ast.kindName(member) !== "KindMethodSignature" &&

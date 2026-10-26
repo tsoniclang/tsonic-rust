@@ -7,6 +7,7 @@ import type { RustAnalysisRecords } from "../../target-model/records/analysis.js
 
 import type { RustAnalysisProgram } from "./model.js";
 import type { RustCallableEntryConstruction } from "../callables/entry-parameters.js";
+import type { RustClassImplementationContextConstruction } from "../objects/class-implementation-contexts.js";
 
 import { analyzeRustLocationStorage } from "../storage/location-storage.js";
 
@@ -140,6 +141,7 @@ export function finalizeRustNativeEmission(
   flow: RustOwnershipFlow,
   operationAttempts: Pick<WeakMap<Node, RustOperationAttempt>, "get">,
   callableEntries: Pick<RustCallableEntryConstruction, "get">,
+  classContexts: Pick<RustClassImplementationContextConstruction, "forInstance">,
 ): TargetStageResult<RustNativeEmissionResult> {
   const { projectTypes, objectRepresentations, typeDefinitions } = program;
   const records = context.records.readers;
@@ -201,7 +203,7 @@ export function finalizeRustNativeEmission(
     context.records.errorTransportEmissionPlans, context.records.conversionEmissionPlans);
   if (closedErrorValueIssues.length !== 0) return rejectedTargetStage(closedErrorValueIssues);
   analyzeRustProjectEmission({ program, nodes: context.nativeNodes, producer: context.records.projectEmissionPlans });
-  analyzeRustClassImplementations(program, context.records.classEmissionPlans);
+  analyzeRustClassImplementations(program, context.records.classEmissionPlans, classContexts);
   context.structuralShapes.seal();
   analyzeRustOptionalStorageCallEmission(program, context.nativeNodes, context.records.projectEmissionPlans);
   analyzeRustStoredFields(program, context.nativeNodes, context.records.storedFieldPlans);
@@ -243,7 +245,8 @@ export function finalizeRustNativeEmission(
   if (providerMutableIssues.length !== 0) return rejectedTargetStage(providerMutableIssues);
   const providerEvaluationIssues = analyzeRustProviderEvaluation(program, context.records.providerEvaluationPlans);
   if (providerEvaluationIssues.length !== 0) return rejectedTargetStage(providerEvaluationIssues);
-  const projectClassLayoutIssues = analyzeRustProjectClassLayouts(program, context.source, context.nativeNodes, context.records.projectClassPlans, reachability);
+  const projectClassLayoutIssues = analyzeRustProjectClassLayouts(program, context.source, context.nativeNodes,
+    context.records.projectClassPlans, reachability, classContexts);
   if (projectClassLayoutIssues.length !== 0) return rejectedTargetStage(projectClassLayoutIssues);
   const bindingEmissionIssues = analyzeRustBindingProjectionEmission({ program, nodes: context.nativeNodes, producer: context.records.bindingEmission });
   if (bindingEmissionIssues.length !== 0) return rejectedTargetStage(bindingEmissionIssues);

@@ -16,7 +16,7 @@ import { analyzeRustGenericAdoption, analyzeRustPromiseResults } from "../callab
 import { publishRustNativeTaskUses } from "../callables/native-task-uses.js";
 import { analyzeRustLexicalFunctionEmission } from "../callables/lexical-emission.js";
 import { prepareRustCallableEntryParameters } from "../callables/entry-parameters.js";
-import { analyzeRustClassImplementationContexts } from "../objects/class-implementation-contexts.js";
+import { prepareRustClassImplementationContexts } from "../objects/class-implementation-contexts.js";
 import { createRustModuleInitializationPlan } from "../module-initialization/analyze.js";
 import { analyzeRustProviderErrorCarriers } from "./provider-errors.js";
 import { analyzeRustDeclarationGenericRequirements } from "../declarations/generic-requirements.js";
@@ -146,7 +146,7 @@ export function analyzeRustAnalysisProgram(
   context.structuralShapes.initializeUnions(context.typeDefinitions.generatedUnions());
 
   const classValues = context.classValues.seal(context);
-  analyzeRustClassImplementationContexts({ source: context.source, records: context.records, projectTypes: context.projectTypes, classValues },
+  const classContexts = prepareRustClassImplementationContexts({ source: context.source, records: context.records, projectTypes: context.projectTypes, classValues },
     context.records.classEmissionPlans, context.nativeNodes);
   const moduleInitialization = createRustModuleInitializationPlan(context, classValues, {
     outputType: configuration.outputType,
@@ -514,13 +514,14 @@ export function analyzeRustAnalysisProgram(
     genericCallableErrors: genericCallableErrors.value,
   };
   const emission = finalizeRustNativeEmission(program, context, genericCallableErrors.value, ownershipFlow.flow,
-    sourceStage.operationAttempts, callableEntries.value);
+    sourceStage.operationAttempts, callableEntries.value, classContexts);
   if (emission.kind === "rejected") return emission;
   context.callableValues.publish();
   const finalFoundation = finalizeRustFoundation(program.foundation, context.records.minimumFoundation());
   if (finalFoundation.diagnostics.length !== 0) return rejectedTargetStage(finalFoundation.diagnostics);
   context.sourceStorage.sealFormalMemberWriteDemands();
   callableEntries.value.seal();
+  classContexts.seal();
   context.records.seal(context.requiredRecords);
   return resolvedTargetStage(Object.freeze({
     ...program,
