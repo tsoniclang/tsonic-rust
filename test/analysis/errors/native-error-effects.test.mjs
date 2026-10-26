@@ -146,6 +146,68 @@ for (const surfaces of [[], ["js"]]) {
   });
 }
 
+for (const surfaces of [[], ["js"]]) {
+  test(`source error signature inference keeps substituted caller binders rigid (${surfaces[0] ?? "native"})`, () => {
+    const current = analyzedFixture(analyzeRustErrorEffects(`
+      function invoke<Part>(callback: (value: Part) => void, value: Part): void {
+        callback(value);
+      }
+      export function forward<Value>(value: Value): void {
+        invoke((actual: Value): void => { void actual; }, value);
+      }
+    `, { surfaces }));
+    const program = current.program;
+    const callee = current.declaration("invoke");
+    const caller = current.declaration("forward");
+    const calls = current.calls("invoke");
+    assert.equal(calls.length, 1, "the real checked generic invocation is unique");
+    const call = calls[0];
+    const selected = program.records.selectedCall.get(call);
+    const operation = program.records.targetOperation.get(call);
+    assert.equal(operation?.kind, "source-call", "the witness follows selected source-call analysis");
+    const parameters = selected?.member.genericParameters?.filter(parameter => parameter.kind === "type");
+    assert.equal(parameters?.length, 1, "invoke has one authored type binder");
+    const formalIdentity = parameters[0].targetIdentity;
+    const arguments_ = operation.targetGenericArguments?.filter(argument => argument.kind === "type");
+    assert.equal(arguments_?.length, 1, "the invocation has one selected type argument");
+    const callerCarrier = arguments_[0].type;
+    assert.equal(callerCarrier.kind, "type-parameter", "Part is substituted by the enclosing caller's Value");
+    const callerIdentity = callerCarrier.identity;
+    assert.notEqual(callerIdentity, formalIdentity, "the caller and callee own distinct binders");
+    const inputs = program.callableValues.native.inputsFor(callee);
+    assert.equal(inputs.length, 1, "the callee has its actual callable input");
+    const formalReferences = rustTargetGenericReferences(inputs[0].carrier);
+    assert.equal(formalReferences.typeIdentities.includes(formalIdentity), true,
+      "the original callable pattern contains Part");
+    assert.equal(formalReferences.typeIdentities.includes(callerIdentity), false,
+      "the original callable pattern does not own Value");
+    const callerBindings = program.callableValues.native.bindingsFor(caller);
+    assert.equal(callerBindings !== undefined, true, "the real caller has source bindings");
+    const activation = program.sourceStorage.bindingsForInvocation(callee, call, callerBindings);
+    assert.equal(activation.kind, "resolved", "the source owner selects the actual invocation activation");
+    const generic = program.callableValues.nativeStorage.genericBindingsFor(callee, activation.bindings);
+    assert.equal(generic.kind, "resolved", "the existing native owner selects the invocation generic environment");
+    assert.equal(rustTargetTypeRefEquals(generic.bindings.types.get(formalIdentity), callerCarrier), true,
+      "the selected environment already binds Part to Value");
+    assert.equal(generic.bindings.types.has(callerIdentity), false,
+      "the incoming environment does not propose re-inferring the caller binder");
+    const effects = current.callable("invoke");
+    assert.equal(effects.nativeErrors.length, 1, "the callable parameter contributes its exact native error channel");
+    const selection = createRustSourceErrorEffectSelection({ context: program });
+    assert.equal(selection.register(effects.nativeErrors), true, "the original native error source is registered");
+    const bound = selection.bindingsFor(call, callee, effects.nativeErrors.map(error => error.errorType), {
+      storageBindings: activation.bindings, genericBindings: generic.bindings,
+    });
+    assert.equal(bound !== undefined, true, "the real source error activation binds without changing caller ownership");
+    assert.equal(bound.types.has(callerIdentity), false,
+      "signature inference must not add the substituted caller-only binder to its solution");
+    assert.equal(rustTargetTypeRefEquals(bound.types.get(formalIdentity), callerCarrier), true,
+      "the original Part-to-Value binding remains exact");
+    assert.equal(rustTargetTypeRefEquals(bound.substitute(callerCarrier), callerCarrier), true,
+      "caller-owned Value stays rigid in subsequent error-carrier substitution");
+  });
+}
+
 test("concrete callback errors retain exact producer declarations rather than the recipient package", () => {
   const current = fixture(`
     export class RootFailure extends Error { code = 7; }

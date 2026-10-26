@@ -124,15 +124,20 @@ export function createRustSourceErrorEffectSelection(walk: { readonly context: R
       const supplied = rustGenericCallableProtocol(actualCarrier) ?? rustCallableProtocol(actualCarrier) ??
         rustNativeCallableProtocol(actualCarrier);
       if (formal === undefined || supplied === undefined) return false;
-      const template = substituteRustTargetGenerics({ kind: "tuple", elements: [...formal.parameters, formal.result] },
-        types, lifetimes, consts);
+      const formalSignature: TargetTypeRef = { kind: "tuple", elements: [...formal.parameters, formal.result] };
+      const formalReferences = rustTargetGenericReferences(formalSignature);
+      const template = substituteRustTargetGenerics(formalSignature, types, lifetimes, consts);
       const references = rustTargetGenericReferences(template);
-      if (references.typeIdentities.length === 0 && references.lifetimeIdentities.length === 0 &&
-        references.constIdentities.length === 0) return true;
+      const typeIdentities = new Set(references.typeIdentities.filter(identity =>
+        formalReferences.typeIdentities.includes(identity) && !types.has(identity)));
+      const lifetimeIdentities = new Set(references.lifetimeIdentities.filter(identity =>
+        formalReferences.lifetimeIdentities.includes(identity) && !lifetimes.has(identity)));
+      const constIdentities = new Set(references.constIdentities.filter(identity =>
+        formalReferences.constIdentities.includes(identity) && !consts.has(identity)));
+      if (typeIdentities.size === 0 && lifetimeIdentities.size === 0 && constIdentities.size === 0) return true;
       const inferred = inferRustTargetGenericBindings(template,
         { kind: "tuple", elements: [...supplied.parameters, supplied.result] }, {
-          typeIdentities: new Set(references.typeIdentities), lifetimeIdentities: new Set(references.lifetimeIdentities),
-          constIdentities: new Set(references.constIdentities),
+          typeIdentities, lifetimeIdentities, constIdentities,
         });
       if (inferred === undefined) return false;
       for (const [identity, carrier] of types) types.set(identity,
