@@ -3,6 +3,7 @@ import { collectRustSourceCallRequirements } from "./generic-call-requirement-us
 
 import { rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
 import { rustFrameCallableValue } from "../../target-model/types/carriers/frame-callables.js";
+import { rustOptionElementCarrier } from "../../target-model/types/carriers/optional.js";
 
 import { rustCallableInputProtocol, rustCallableProtocol, rustLocationTargetType } from "../../target-model/types/carriers/callables.js";
 
@@ -255,7 +256,15 @@ export function createRustCallableRequirementVisitor(input: RustCallableRequirem
       const error = addUse(node, objectView.sourceCarrier, ["clone", "static"]);
       if (error !== undefined) return error;
       for (const field of objectView.kind === "structural" ? objectView.fields : []) {
-        const fieldError = addUse(node, field.source.resultCarrier, ["clone", "static"]);
+        let storageCarrier = field.source.resultCarrier;
+        if (field.source.storage === "structural-object") {
+          const selected = input.structuralShapes.field(field.source.receiverCarrier, field.source.storageIndex);
+          if (selected === undefined) return "An object reference view requires its exact completed native field storage.";
+          const method = selected.methodPlan;
+          storageCarrier = method?.kind === "fixed" ? method.context
+            : method !== undefined ? method.carrier : selected.boundStorage?.carrier ?? selected.carrier;
+        }
+        const fieldError = addUse(node, storageCarrier, ["clone", "static"]);
         if (fieldError !== undefined) return fieldError;
       }
       if (objectView.kind === "project") {
@@ -488,6 +497,11 @@ export function createRustCallableRequirementVisitor(input: RustCallableRequirem
       if (captures === undefined) {
         return "A Rust closure has no exact capture classification.";
       }
+      const conversion = records.contextualValueConversion.get(node)?.conversion;
+      const destination = conversion?.kind === "callable-adapter" ? conversion.target : operation.resultCarrier;
+      const constructionCarrier = rustOptionElementCarrier(destination) ?? destination;
+      const retainedAdapter = conversion?.kind === "callable-adapter" &&
+        rustCallableProtocol(constructionCarrier)?.lifetime?.kind === "static";
       const required: readonly RustGenericRequirement[] =
         rustClosureProtocol(operation.resultCarrier) === undefined && rustGenericCallableValue(operation.resultCarrier) === undefined &&
           rustFrameCallableValue(operation.resultCarrier) === undefined
@@ -495,19 +509,24 @@ export function createRustCallableRequirementVisitor(input: RustCallableRequirem
           rustCallableProtocol(operation.resultCarrier)?.lifetime?.kind === "static"
           ? ["clone", "static"]
           : ["clone"];
+      const addCaptureUse = (reference: Node, carrier: TargetTypeRef, requirements: readonly RustGenericRequirement[]): string | undefined => {
+        const error = addUse(reference, carrier, requirements, true);
+        return error ?? (retainedAdapter && !requirements.includes("static")
+          ? addUse(reference, carrier, ["static"], true) : undefined);
+      };
       for (const capture of captures.receivers) {
-        const error = addUse(capture.reference, capture.carrier, required, true);
+        const error = addCaptureUse(capture.reference, capture.carrier, required);
         if (error !== undefined) return error;
       }
       for (const capture of captures.receiverFields) {
-        const error = addUse(capture.reference, capture.carrier, required.filter(requirement => requirement !== "clone"), true);
+        const error = addCaptureUse(capture.reference, capture.carrier, required.filter(requirement => requirement !== "clone"));
         if (error !== undefined) return error;
       }
       for (const capture of captures.captures) {
-        const error = addUse(capture.reference, capture.carrier,
+        const error = addCaptureUse(capture.reference, capture.carrier,
           capture.storage === "cell" || capture.storage === "borrow-cell" || copiedCapture(capture) ||
             input.ownershipFlow.captureTransfers.get(node)?.has(capture.declaration) === true
-            ? required.filter(requirement => requirement !== "clone") : required, true);
+            ? required.filter(requirement => requirement !== "clone") : required);
         if (error !== undefined) return error;
       }
     }

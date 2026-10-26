@@ -56,7 +56,9 @@ export function analyzeRustStringComparisonViews(program: Omit<RustAnalysisProgr
       if (comparison.kind === "ordinary") {
         const shared = binary.left === node ? binary.leftShared : binary.right === node ? binary.rightShared
           : failTargetAnalysisInvariant("tsonic-rust", "A native string comparison view requires its exact finalized binary operand.", node);
-        selected = { kind: "native-str-reference", inputForm: shared ? "shared-reference" : "value" };
+        selected = program.records.targetOperation.get(value)?.kind === "typeof"
+          ? { kind: "runtime-category", expression: value }
+          : { kind: "native-str-reference", inputForm: shared ? "shared-reference" : "value" };
       }
     }
     if (parent !== undefined && operation?.kind === "operator-token" &&

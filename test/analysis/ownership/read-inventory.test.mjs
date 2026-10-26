@@ -23,6 +23,48 @@ function readBorrowEffectsInput(source, program, nodes, records) {
     structuralShapes: program.structuralShapes, frozenDataWrites: program.frozenDataWrites };
 }
 
+test("selected native indexed String leases retain shared acquisition without changing owned getter results", () => {
+  const sources = [
+    ["plain borrowed input", "number", "parseInt(values[0], 10)", true],
+    ["non-null borrowed input", "number", "parseInt(values[0]!, 10)", true],
+    ["observable later input", "number", "parseInt(values[0], radix())", false],
+    ["mutating later input", "number", "parseInt(values[0], replacingRadix(values))", false],
+    ["owned result", "string", "values[0]!", false],
+  ];
+  for (const [label, result, expression, borrowed] of sources) {
+    const { program } = analyzeRust({ surfaces: ["js"], files: { "index.ts": `
+function radix(): number { return 10; }
+function replacingRadix(values: string[]): number { values[0] = "changed"; return 10; }
+export function read(values: string[]): ${result} { return ${expression}; }
+` } });
+    const ast = program.source.ast;
+    let element;
+    const visit = node => {
+      if (ast.is.IsElementAccessExpression(node)) element = node;
+      ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+    };
+    program.sourceFiles.forEach(visit);
+    assert.equal(element !== undefined, true, `${label}: the original checked element is retained`);
+    const selected = program.records.borrowedElement.get(element);
+    assert.equal(selected !== undefined, borrowed, `${label}: only the complete admitted native guard is a stored read`);
+    const read = program.records.readOwnership.get(element);
+    assert.equal(read !== undefined, true, `${label}: source acquisition is finalized`);
+    assert.equal(read.readsStorage, borrowed, `${label}: an owned provider result is not a borrowed native place`);
+    assert.equal(read.source.kind, borrowed ? "borrow" : "move", `${label}: source acquisition consumes the actual selected recipe`);
+    assert.equal(read.value.kind, borrowed ? "borrow" : "move", `${label}: value acquisition retains the same native lease`);
+    assert.equal(read.snapshot.kind, "clone", `${label}: an independently required String snapshot remains owned`);
+    if (selected !== undefined) {
+      const receiver = program.records.readOwnership.get(selected.receiver);
+      assert.equal(receiver?.source.kind, "borrow", `${label}: transparent input retains its selected source lease`);
+      assert.equal(receiver?.value.kind, "borrow", `${label}: transparent input retains its selected value lease`);
+      const use = program.ownership.uses.get(selected.receiver);
+      assert.equal(use?.mode, "shared", `${label}: actual native consumer is shared`);
+      assert.equal(use.later.slice(use.laterStart).every(later => receiver.borrowedAcross.has(later)), true,
+        `${label}: every later operand retains the existing proven borrow relationship`);
+    }
+  }
+});
+
 test("native place demands distinguish vector writes, shared interior writes and untouched reads", () => {
   const sources = [
     ["vector", `type Body = boolean | unknown[];

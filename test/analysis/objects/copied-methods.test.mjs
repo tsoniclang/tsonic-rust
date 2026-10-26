@@ -95,7 +95,7 @@ for (const receiverDependent of [false, true]) {
         selectedOperation: { get: node => node === readNode
           ? { provenance: { sourceReceiver: copyNode, sourceSelectedDeclaration: method } } : undefined },
         objectReferenceView: missing } },
-      sourceTypes: { structuralObjectForType: type => ({ fields: type === original
+      sourceTypes: { structuralObjectForCarrier: carrier => ({ fields: carrier === original
         ? [{ storageIndex: 0, method: true, declarations: [method] }]
         : [{ storageIndex: 0 }, { storageIndex: 1, method: true, declarations: [method] }] }) } }, [root], () => "app");
     for (const [carrier, index] of [[original, 0], [template, 1], [instance, 1]]) {

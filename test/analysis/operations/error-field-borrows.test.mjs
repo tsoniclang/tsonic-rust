@@ -8,6 +8,7 @@ import { printRustExpr } from "../../../dist/print/source/index.js";
 import { planRustErrorRegion } from "../../../dist/backend/planner/program/error-regions.js";
 import { rustStrTargetType } from "../../../dist/target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
+import { rustErrorFieldComparisonView } from "../../../dist/backend/planner/expressions/error-field-borrows.js";
 import { borrowedComparisonMutationSource, closedUnionEqualitySource } from "../../../../tsonic/test/fixtures/closed-union-equality.mjs";
 
 const nativeClosedUnionComparisonSource = `
@@ -16,6 +17,33 @@ class Token { value: int32 = 3; }
 type TextOrToken = string | Token;
 export function path(value: TextOrToken): boolean { return value === "/" && "/" === value; }
 `;
+
+test("native category views preserve exact transparent source and an already acquired override", () => {
+  const { program } = analyzeRust({ surfaces: ["js"], files: { "index.ts": `
+export function observe(value: unknown): boolean { return (typeof value) === "string"; }
+export function owned(value: unknown): string { return typeof value; }
+` } });
+  const { ast } = program.source;
+  let comparison;
+  let owning;
+  const visit = node => {
+    const view = program.records.stringComparisonView.get(node);
+    if (view?.kind === "runtime-category") comparison = { node, view };
+    if (ast.kindName(node) === "KindTypeOfExpression" && ast.is.IsReturnStatement(ast.parent(node))) owning = node;
+    ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+  };
+  program.sourceFiles.forEach(visit);
+  assert.equal(comparison !== undefined && owning !== undefined, true, "both actual observing and owning categories retain their source occurrences");
+  assert.equal(program.records.targetOperation.get(comparison.view.expression)?.kind, "typeof",
+    "the view names the selected actual typeof expression through its transparent parenthesis");
+  assert.equal(program.records.stringComparisonView.get(owning)?.kind, "value", "an owning source result does not acquire a comparison-only borrow");
+  const acquired = { kind: "path", path: "acquired_category" };
+  const context = { ...rustSourceFilePlanContext(program, comparison.node), expressionOverrides: new Map([
+    [comparison.view.expression, { expression: acquired, valueForm: "value" }],
+  ]) };
+  assert.equal(rustErrorFieldComparisonView(comparison.node, acquired, undefined, context) === acquired, true,
+    "an already acquired native result is reused exactly, never replayed from its operand");
+});
 
 for (const [label, expression, view] of [
   ["parenthesized", '((("17")))', "value"],
