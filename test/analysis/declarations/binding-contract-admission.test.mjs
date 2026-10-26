@@ -43,6 +43,10 @@ export function run(): string {
     const element = selected => {
       assert.equal(profile === "native" ? isRustVecCarrier(selected) : isRustJsArrayCarrier(selected), true,
         "the existing native collection representation is unchanged");
+      if (profile === "native") {
+        assert.equal(selected.element !== undefined, true, "an exact native Vec has its actual element carrier");
+        return selected.element;
+      }
       const arguments_ = rustOnlyTypeGenericArguments(selected.genericArguments);
       assert.equal(arguments_?.length, 1, "an exact native collection has one actual element argument");
       return arguments_[0];
