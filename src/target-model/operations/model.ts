@@ -512,6 +512,7 @@ export interface RustCallbackOperationTemplate {
   readonly shape: "direct" | "map" | "reduce";
   readonly resultProjection?: "awaited";
   readonly sourceArgumentIndex: number;
+  readonly parameterSources?: readonly RustOperationCarrierRequirement["source"][];
   readonly accumulatorArgumentIndex?: number;
   readonly borrowedParameters?: {
     readonly target: RustProviderOperationForm;

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { appendFileSync } from "node:fs";
 import { join } from "node:path";
-import { boolCarrier, compileRust } from "../../helpers/rust-session.mjs";
+import { analyzeRust, boolCarrier, compileRust } from "../../helpers/rust-session.mjs";
 import { runCargo, validateGeneratedProject, writeGeneratedProject } from "../../helpers/cargo-projects.mjs";
 import { assertRejectedAsyncSource } from "../../helpers/native-promise-lifetimes.mjs";
 import { analyzeRustCheckedContext } from "../../helpers/rust-session-analysis-context.mjs";
@@ -66,7 +66,7 @@ for (const [name, expected] of [
         uses: analyzeRustPromiseResultUses(context.ast, [call]), definitions: context.typeDefinitions,
         nativeStorage: context.callableValues.nativeStorage, native: context.callableValues.native,
         promiseBodies: context.promiseBodies.plan, nativeCaptures: undefined, errorTypes: undefined,
-        sourceTypes: { structuralObjectForType() { assert.fail("an unresolved read cannot inspect structural captures"); } },
+        sourceTypes: { structuralObjectForCarrier() { assert.fail("an unresolved read cannot inspect structural captures"); } },
         sourceLifetimes: context.sourceLifetimes, requirements: { kind: "resolved", index: { contractFor: () => undefined } },
         nativeStorageValidated: true, families: context.typeFamilies, evidence: {}, jsEnabled: true,
       });
@@ -277,6 +277,27 @@ async function run(): Promise<boolean> {
   return await keep(copied, Promise.resolve(undefined)) === 7;
 }`],
 ];
+
+for (const [name, source] of cases.filter(([name]) => ["spread-structural-method", "nested-structural-method",
+  "changed-layout-structural-method"].includes(name))) {
+  test(`sealed native retention keeps captured source storage for ${name}`, () => {
+    const { program } = analyzeRust({ surfaces: ["js"],
+      target: { id: "rust", options: { outputType: "bin", crateName: "promise_result_retention" } },
+      files: { "index.ts": `export {};\n${source}
+async function main(): Promise<void> { if (!await run()) throw new Error("native Promise retention"); }
+await main();` },
+    });
+    assert.equal(program.promiseResults instanceof Map, true, "the completed result-use owner publishes its decisions");
+    const { ast } = program.source;
+    const calls = [...program.promiseResults.keys()].filter(node => {
+      const callee = ast.is.IsCallExpression(node) ? ast.as.AsCallExpression(node)?.Expression : undefined;
+      return callee !== undefined && ast.is.IsIdentifier(callee) && ast.text(callee) === "keep";
+    });
+    assert.equal(calls.length, 1, "the exact native keep invocation has one source retention decision");
+    assert.equal(program.promiseResults.get(calls[0])?.disposition.kind, "stored",
+      "the actual stored native result retains its original use classification");
+  });
+}
 
 for (const [name, source] of cases) {
   test(`Rust native Promise retention preserves ${name}`, { timeout: 300_000 }, () => {

@@ -12,6 +12,7 @@ import { rustFrameCallableTargetType } from "../../../dist/target-model/types/ca
 import { rustClassConstructorTargetType } from "../../../dist/target-model/types/carriers/class-constructors.js";
 import { rustInfallibleTargetId, rustOptionTargetId, rustCallableTargetId } from "../../../dist/target-model/types/carriers/source-types.js";
 import { substituteRustTargetTypeParameters } from "../../../dist/target-model/types/carriers/substitution.js";
+import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 import { analyzeRustErrorEffects } from "../../helpers/rust-error-analysis.mjs";
 import { recursiveCallbackProtocolCases } from "../../../../tsonic/test/fixtures/recursive-callback-protocols.mjs";
 
@@ -150,6 +151,27 @@ test("structural methods require their actual selected storage rather than their
     "supported", "the admitted physical method storage is owned");
   assert.equal(selected(carrier, { evidence: evidence({ structuralShapes: shapes(rustCallableTargetType([], number, scopedLifetime, infallible)) }) }).kind,
     "unsatisfied", "the admitted physical method storage is borrowed");
+});
+
+test("fixed structural retention classifies the exact bound context rather than free invocation lifetimes", () => {
+  const error = { kind: "target-named", id: "rust.program.TsonicError", errorOwner: { kind: "logical" } };
+  const signature = rustCallableTargetType([borrowed(scopedLifetime)], number, scopedLifetime, error);
+  const shape = method => rustStructuralObjectTargetType("/source.ts", [{ sourceName: "read", type: method,
+    presence: "required", readonly: true, method: true }]);
+  const logical = shape(signature);
+  const native = shape(rustCallableTargetType([borrowed(scopedLifetime)], number, scopedLifetime,
+    { ...error, errorOwner: { kind: "physical", domain: "runtime" } }));
+  const shapes = context => {
+    const field = { sourceName: "read", methodPlan: { kind: "fixed", declaration: {}, carrier: signature, context } };
+    return { instances: [{ carrier: logical, fields: [field] }],
+      field: (owner, index) => rustTargetTypeRefEquals(owner, logical) && index === 0 ? field : undefined };
+  };
+  assert.equal(selected(native, { evidence: evidence({ structuralShapes: shapes({ kind: "tuple", elements: [number] }) }) }).kind,
+    "supported", "a native method's free invocation signature does not borrow its owned bound receiver context");
+  assert.equal(selected(native, { evidence: evidence({ structuralShapes: shapes({ kind: "tuple", elements: [borrowed(scopedLifetime)] }) }) }).kind,
+    "unsatisfied", "an actual captured reference still retains its original native lifetime");
+  assert.equal(selected(native, { evidence: evidence({ structuralShapes: { field: () => undefined } }) }).kind,
+    "unresolved", "missing actual context evidence is never replaced by a signature or an owned guess");
 });
 
 test("actual source instance fields are read once and cannot be replaced by empty generic arguments", () => {

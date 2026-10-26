@@ -1,7 +1,7 @@
 import type { AstReader, Node } from "@tsonic/tsts";
 import { failTargetAnalysisInvariant, type TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import { analyzeSourceGenericAdoption, sourceGenericAdoptionDiagnosticCode, sourceGenericAdoptionDiagnosticMessage,
-  createSourceOwnershipQuery, createSourceStorageBudget, defaultSourceStorageLimits,
+  createSourceControlFlowDomain, createSourceOwnershipQuery, createSourceStorageBudget, defaultSourceStorageLimits,
   type SourceOwnershipPremises, type SourceOwnershipUnresolved, type SourceRetentionSelection,
   type SourceStorageBindings, type SourceStorageProjection, type SourceStorageQueries, type SourceStorageSubject } from "@tsonic/target-api/analysis";
 import { sourceEnclosingCallable, sourceExpressionResultDisposition, sourceCallableValueParameters, type TargetSourceProgram } from "@tsonic/target-api/source";
@@ -29,7 +29,7 @@ import type { RustPromiseBodies } from "../../target-model/records/callables-and
 import { rustTargetTypeParameterIdentities } from "../../target-model/types/carriers/generic-references.js";
 import { completeRustNativeCaptureCarrier } from "./native-captures.js";
 import type { RustNativeCapturePlan } from "../../target-model/records/native-captures.js";
-import type { RustErrorTypeContext } from "../errors/error-types.js";
+import { normalizeRustErrorType, type RustErrorTypeContext } from "../errors/error-types.js";
 import type { RustStructuralShapeField } from "../../target-model/records/structural-shapes.js";
 import { rustOptionElementCarrier } from "../../target-model/types/carriers/optional.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
@@ -37,10 +37,10 @@ import type { RustSourceTypeRegistry } from "../project-types/source-type-model.
 import { rustStructuralObjectCarrierValue } from "../../target-model/types/carriers/source-types.js";
 import { substituteRustTargetGenerics } from "../../target-model/types/carriers/substitution.js";
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
-import { isRustAbsenceCarrier, rustFixedArrayCarrierValue } from "../../target-model/types/carriers/native.js";
+import { rustFixedArrayCarrierValue } from "../../target-model/types/carriers/native.js";
 import { rustJsArrayLikeElementTargetType } from "../../target-model/types/carriers/js.js";
-import { rustUnionAlternatives } from "../../target-model/types/union-relations.js";
 import { rustCallableProtocol } from "../../target-model/types/carriers/callables.js";
+import { rustFutureTargetId } from "../../target-model/types/carriers/primitives.js";
 
 export function analyzeRustPromiseResultUses(ast: AstReader, nodes: readonly Node[]): RustPromiseResultUses {
   return new Map(nodes.filter(node => ast.is.IsCallExpression(node) || ast.is.IsNewExpression(node))
@@ -77,7 +77,7 @@ export function analyzeRustPromiseResults(input: {
   readonly promiseBodies: RustPromiseBodies;
   readonly nativeCaptures: RustNativeCapturePlan;
   readonly errorTypes: RustErrorTypeContext;
-  readonly sourceTypes: Pick<RustSourceTypeRegistry, "structuralObjectForType">;
+  readonly sourceTypes: Pick<RustSourceTypeRegistry, "structuralObjectForCarrier">;
   readonly native: Pick<RustNativeCallableInputPlan, "callFor">;
   readonly sourceLifetimes: RustLifetimeIndex;
   readonly requirements: AnalyzeRustDeclarationGenericRequirementsResult;
@@ -92,6 +92,17 @@ export function analyzeRustPromiseResults(input: {
   const budget = createSourceStorageBudget(defaultSourceStorageLimits);
   const unresolved = (at: Node, reason: string): SourceOwnershipUnresolved => Object.freeze({ kind: "unresolved", at, reason });
   const carrierFor = (subject: SourceStorageSubject, bindings: SourceStorageBindings): TargetTypeRef | SourceOwnershipUnresolved => {
+    if (subject.kind === "value" && subject.projection.length === 0 && input.ast.is.IsMethodDeclaration(subject.node) &&
+      input.evidence.structuralShapes?.definitions.some(definition => definition.fields.some(field =>
+        field.methodPlan?.kind === "fixed" && field.methodPlan.declaration === subject.node ||
+        field.methodPlan?.constructions.some(construction => construction.expression === subject.node)))) {
+      const owner = sourceEnclosingCallable(input.ast.parent(subject.node), input.ast);
+      const generic = input.nativeStorage.genericBindingsFor(owner ?? subject.node, bindings);
+      if (generic.kind === "unresolved") return unresolved(subject.node, generic.reason);
+      const captures = completeRustNativeCaptureCarrier(subject.node, input.nativeCaptures.forDeclaration(subject.node),
+        generic.bindings, input.errorTypes);
+      return captures.kind === "unresolved" ? unresolved(subject.node, captures.reason) : captures.carrier;
+    }
     const logical = input.nativeStorage.logicalCarrierFor(subject, bindings);
     if (logical === undefined) return unresolved(subject.node, "Async retention requires its completed bound native storage carrier.");
     const selected = input.nativeStorage.boundSubjectFor(subject, logical, bindings);
@@ -218,13 +229,6 @@ export function analyzeRustPromiseResults(input: {
         if (!budget.step()) return unresolved(subject.node, budget.failure()!);
         const actual = carrierFor(producer.subject, producer.bindings);
         if (actual.kind === "unresolved") return actual;
-        const present = rustOptionElementCarrier(carrier);
-        const alternatives = rustUnionAlternatives(carrier, input.definitions);
-        const expected = present !== undefined && (rustTargetTypeRefEquals(actual, present) || isRustAbsenceCarrier(actual)) ||
-          alternatives?.some(variant => rustTargetTypeRefEquals(variant.carrier, actual)) === true ||
-          rustTargetTypeRefEquals(carrier, actual);
-        if (!expected) return unresolved(subject.node,
-          "Native aggregate retention lost its exact selected source-to-physical construction correspondence.");
         const needsActual = containsMethods(actual, producer.subject.node);
         if (needsActual !== true) {
           if (needsActual !== false) return needsActual;
@@ -247,9 +251,10 @@ export function analyzeRustPromiseResults(input: {
         const structural = rustStructuralObjectCarrierValue(actual);
         if (structural === undefined) return unresolved(subject.node,
           "A retained native captured aggregate requires its existing checked component-storage projection.");
-        const semantics = input.source.semantics.forFile(producer.sourceFile);
-        const checked = semantics.types.nonNullableType(producer.type);
-        const template = checked === undefined ? undefined : input.sourceTypes.structuralObjectForType(checked);
+        const operation = producer.subject.projection.length === 0 ? input.records.targetOperation.get(producer.subject.node) : undefined;
+        const sourceCarrier = operation?.kind === "record-literal" ? operation.resultCarrier
+          : input.nativeStorage.logicalCarrierFor(producer.subject, producer.bindings);
+        const template = sourceCarrier === undefined ? undefined : input.sourceTypes.structuralObjectForCarrier(sourceCarrier);
         if (template === undefined) return unresolved(subject.node,
           "Native structural retention requires its one registered checked source template.");
         const owner = sourceEnclosingCallable(input.ast.parent(producer.subject.node), input.ast);
@@ -283,21 +288,28 @@ export function analyzeRustPromiseResults(input: {
             return unresolved(subject.node, "Native structural retention requires every exact source declaration, storage index and field carrier.");
           indexes.add(index);
           for (const declaration of sourceField.declarations) {
-            const component: SourceStorageProjection = { kind: sourceField.method === true ? "method-value" : "member", declaration };
-            if (sourceField.method === true && physical.methodPlan?.kind !== "native-dispatch") {
-              const selected = input.storage.subject(producer.subject.node, producer.subject.kind,
-                [...producer.subject.projection, component]);
-              if (selected.kind === "unresolved") return unresolved(subject.node, selected.reason);
-              const nested = methodCapturesFor(selected.subject, producer.bindings, physical, index, captureStorageFor);
-              if (nested.kind === "unresolved") return nested;
-              captures.push(nested);
-            } else if (physical.storage === "stored" && sourceField.method !== true) {
-              const failure = project(producer.subject, producer.bindings, component, actualField.type);
-              if (failure !== undefined) return failure;
-            } else if (sourceField.method !== true) {
-              const nested = containsMethods(actualField.type, producer.subject.node);
-              if (nested !== false) return nested === true ? unresolved(subject.node,
-                "A retained computed structural field requires its completed physical captured-storage correspondence.") : nested;
+            const semantics = input.source.semantics.forFile(producer.sourceFile);
+            const correspondence = semantics.types.structuralMember(producer.type, template.sourceType, declaration, "read");
+            if (correspondence?.kind !== "present" || correspondence.source.read === "unavailable" ||
+              correspondence.source.declarations.length === 0) return unresolved(subject.node,
+                "A retained structural field requires its exact checked source-to-template member correspondence.");
+            for (const original of correspondence.source.declarations) {
+              const component: SourceStorageProjection = { kind: sourceField.method === true ? "method-value" : "member", declaration: original };
+              if (sourceField.method === true && physical.methodPlan?.kind !== "native-dispatch") {
+                const selected = input.storage.subject(producer.subject.node, producer.subject.kind,
+                  [...producer.subject.projection, component]);
+                if (selected.kind === "unresolved") return unresolved(subject.node, selected.reason);
+                const nested = methodCapturesFor(selected.subject, producer.bindings, physical, index, captureStorageFor);
+                if (nested.kind === "unresolved") return nested;
+                captures.push(nested);
+              } else if (physical.storage === "stored" && sourceField.method !== true) {
+                const failure = project(producer.subject, producer.bindings, component, actualField.type);
+                if (failure !== undefined) return failure;
+              } else if (sourceField.method !== true) {
+                const nested = containsMethods(actualField.type, producer.subject.node);
+                if (nested !== false) return nested === true ? unresolved(subject.node,
+                  "A retained computed structural field requires its completed physical captured-storage correspondence.") : nested;
+              }
             }
           }
         }
@@ -318,6 +330,7 @@ export function analyzeRustPromiseResults(input: {
     if (kind === "origin" && owner !== undefined && input.promiseBodies.declarations.has(owner) &&
       !input.promiseBodies.objects.has(owner)) return { kind: "supported" };
     const nativeEvidence = { ...input.evidence,
+      errorType: (carrier: TargetTypeRef, declaration: Node) => normalizeRustErrorType(carrier, input.errorTypes, declaration),
       lifetimeContract: rustEnclosingStorageContract(owner ?? at, input.ast, input.sourceLifetimes) };
     if (rustTargetTypeParameterIdentities(carrier).length === 0) return classifyCarrierRequirements(carrier, ["static"],
       new Set<string>(), new Map<string, Set<RustGenericRequirement>>(), () => false, input.definitions, nativeEvidence);
@@ -333,6 +346,7 @@ export function analyzeRustPromiseResults(input: {
     if (checked.kind === "unresolved") return unresolved(value.node, checked.reason);
     const evidence = { value, contractDeclaration: value.node, checkedType: checked.type };
     if (request.kind === "read-value") {
+      const operation = input.records.targetOperation.get(request.reference);
       const read = input.readFor(request.reference);
       if (read?.kind === "unresolved") return unresolved(value.node, read.reason);
       if (read === undefined || read.value.kind === "borrow") return undefined;
@@ -342,6 +356,11 @@ export function analyzeRustPromiseResults(input: {
       const carrier = projection?.selectedCarrier ?? read.carrier;
       const converted = rustEffectiveValueCarrier(input.records, request.reference);
       if (converted === undefined) return undefined;
+      if (operation?.kind === "source-field" && operation.storage === "structural-object" &&
+        operation.valueSemantics.kind === "method" && input.evidence.structuralShapes
+          ?.field(operation.receiverCarrier, operation.storageIndex)?.methodPlan?.kind === "fixed") return undefined;
+      if (carrier.kind === "target-named" && carrier.id === rustFutureTargetId &&
+        rustTargetTypeRefEquals(carrier, converted)) return undefined;
       const owner = sourceEnclosingCallable(request.reference, input.ast);
       const originalRequirement = classify(carrier, owner, request.reference, "read-value");
       const convertedRequirement = classify(converted, owner, request.reference, "read-value");
@@ -518,7 +537,22 @@ export function analyzeRustPromiseResults(input: {
       return Object.freeze({ kind: future ? "may-suspend" : "never", value, contractDeclaration, checkedType: checked.type });
     },
   };
-  const ownership = createSourceOwnershipQuery({ source: input.source, storage: input.storage, budget, premises });
+  const erasedCallees = new Set<Node>();
+  for (const node of input.nodes) {
+    const operation = input.records.targetOperation.get(node);
+    if (operation?.kind !== "reference-operation" && (operation?.kind !== "provider-operation" ||
+      operation.abi.sourceReceiver.kind === "receiver") ||
+      !input.ast.is.IsCallExpression(node) && !input.ast.is.IsNewExpression(node)) continue;
+    const callee = input.source.semantics.forNode(node).operations.call(node)?.sourceCallee.expression;
+    if (callee !== undefined && input.ast.is.IsIdentifier(callee)) erasedCallees.add(callee);
+  }
+  const domain = erasedCallees.size === 0 ? { kind: "resolved" as const, domain: { kind: "source" as const } }
+    : createSourceControlFlowDomain(input.source, input.storage.nodes.filter(node => !erasedCallees.has(node)));
+  if (domain.kind === "unresolved") return { results, diagnostics: [...diagnostics, {
+    code: "RUST_ASYNC_RESULT_USE_NOT_PROVEN", category: "error", source: "tsonic-rust",
+    sourceNode: domain.source, message: domain.reason,
+  }] };
+  const ownership = createSourceOwnershipQuery({ source: input.source, storage: input.storage, budget, premises, domain: domain.domain });
   for (const node of input.nodes) {
     if (!input.ast.is.IsCallExpression(node) && !input.ast.is.IsNewExpression(node)) continue;
     const selection = rustAwaitSelection(rustEffectiveValueCarrier(input.records, node), input.definitions);
@@ -538,7 +572,7 @@ export function analyzeRustPromiseResults(input: {
     // needs no ownership decision; any other discarded native future goes through the must-observe rule.
     const spawn = disposition.kind === "discarded" && native && input.jsEnabled && selection.kind === "leaf"
       ? selectRustDiscardedFutureSpawn(input, node) : undefined;
-    if (input.ast.is.IsCallExpression(node) && (!native || disposition.kind === "discarded" && spawn === undefined)) {
+    if (input.ast.is.IsCallExpression(node) && spawn === undefined) {
       const selected = ownership.forCall(node);
       if (selected.kind === "unresolved") {
         if (input.nativeStorageValidated)

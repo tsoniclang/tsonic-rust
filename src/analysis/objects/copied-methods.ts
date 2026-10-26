@@ -47,19 +47,12 @@ export function selectRustCopiedMethods(
       independent.set(identity, { kind: "rejected", reason: subject.reason });
       return;
     }
-    const typed = storage.typeFor(subject.subject);
-    if (typed.kind === "unresolved") {
-      independent.set(identity, { kind: "rejected", reason: typed.reason });
-      return;
-    }
-    const sourceType = storage.source.semantics.forFile(typed.sourceFile).types.nonNullableType(typed.type);
-    const shape = sourceType === undefined ? undefined : walk.sourceTypes.structuralObjectForType(sourceType, carrier);
+    const shape = walk.sourceTypes.structuralObjectForCarrier(carrier);
     const field = shape?.fields[index];
-    if (sourceType === undefined || shape === undefined || field?.method !== true || field.storageIndex !== index ||
+    if (shape === undefined || field?.method !== true || field.storageIndex !== index ||
       field.declarations.length === 0) {
-      independent.set(identity, { kind: "rejected", reason: sourceType === undefined
-        ? "The copied method receiver has no exact checked present source type."
-        : shape === undefined ? "The copied method receiver has no registered source shape for its exact selected carrier."
+      independent.set(identity, { kind: "rejected", reason: shape === undefined
+        ? "The copied method receiver has no registered source shape for its exact selected carrier."
           : `The copied method receiver has no exact checked method declaration at storage index ${index}.` });
       return;
     }

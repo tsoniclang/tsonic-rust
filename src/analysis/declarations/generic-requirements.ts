@@ -19,7 +19,7 @@ import type { RustOwnershipFlow } from "../../target-model/records/ownership-flo
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
 import { resolveTargetContractFixedPoint } from "@tsonic/target-api/analysis";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
-import { sourceNodeIdentity } from "@tsonic/target-api/source";
+import { sourceExpressionResultDisposition, sourceNodeIdentity } from "@tsonic/target-api/source";
 import type { TargetSourceProgram } from "@tsonic/target-api/source";
 import type { RustNamePlan } from "../../target-model/names/model.js";
 import type { RustAnalysisRecords } from "../../target-model/records/analysis.js";
@@ -121,6 +121,15 @@ export function analyzeRustDeclarationGenericRequirements(
   const idByDeclaration = new WeakMap<Node, string>();
   const bodyIdByDeclaration = new WeakMap<Node, string>();
   const objectFacets = new Set<string>();
+  const promiseStorageDemands = (declaration: Node): readonly Node[] => {
+    const demands = new Set(promiseBodies.objects.get(declaration) ?? [declaration]);
+    for (const node of nativeNodes) {
+      const operation = records.targetOperation.get(node);
+      if (operation?.kind === "source-call" && operation.asyncBody?.declaration === declaration &&
+        sourceExpressionResultDisposition(ast, node).kind === "stored") demands.add(node);
+    }
+    return [...demands];
+  };
   for (const declaration of declarations) {
     const id = sourceNodeIdentity(ast, declaration);
     if (id === undefined || declarationById.has(id)) {
@@ -215,7 +224,7 @@ export function analyzeRustDeclarationGenericRequirements(
       });
       return result.kind === "rejected"
         ? { kind: "rejected", reason: result.reason, cause: Object.freeze(result.promiseStorage === true
-            ? (promiseBodies.objects.get(declaration) ?? [declaration]).map(demand =>
+            ? promiseStorageDemands(declaration).map(demand =>
               diagnostic("RUST_ASYNC_PROMISE_STORAGE_LIFETIME_NOT_PROVEN", rustSuspendingPromiseBorrowReason, demand))
             : [diagnostic("RUST_CALLABLE_CONTRACT_CLOSURE_REJECTED", result.reason, declaration)]) }
         : {
