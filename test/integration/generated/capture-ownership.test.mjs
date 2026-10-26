@@ -80,6 +80,21 @@ test("a single non-Copy capture uses inline native interior storage without a se
   validateGeneratedProject("single-owned-string-capture", result.artifacts, { run: true });
 });
 
+test("captured stores retain right-hand snapshots through reentrant replacement", { timeout: 300_000 }, () => {
+  const { result } = compile(`
+    function append(seed: string): (suffix: string) => string {
+      function replace(): string { seed = "changed"; return "!"; }
+      return suffix => { seed = seed + replace() + suffix; return seed; };
+    }
+    export function main(): void {
+      const next = append("a");
+      if (next("x") !== "a!x" || next("y") !== "a!x!y") throw new Error("captured snapshot order");
+    }
+    main();
+  `);
+  validateGeneratedProject("captured-reentrant-store", result.artifacts, { run: true });
+});
+
 test("non-Copy independent, nested and deferred owners retain one live binding", { timeout: 300_000 }, () => {
   const { result, output } = compile(`
     function pair(seed: string): [(suffix: string) => string, () => string] {

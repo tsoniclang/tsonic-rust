@@ -387,18 +387,20 @@ export function planRustPromotedStorageWrite(
     if (location === undefined || context.syntheticNames === undefined) return { handled: true };
     const locationName = allocateRustSyntheticName(context.syntheticNames, "field_location");
     const currentName = allocateRustSyntheticName(context.syntheticNames, "field_value");
+    const valueName = allocateRustSyntheticName(context.syntheticNames, "field_next");
     const pointer: RustExpr = { kind: "path", path: locationName };
     const current = operator === "=" ? undefined : fallibleLocationAccess(expression,
       { kind: "method-call", receiver: pointer, method: "try_load", args: [] }, context);
     if (operator !== "=" && current === undefined) return { handled: true };
     const binary = assignmentBinaryOperator(operator);
     if (operator !== "=" && binary === undefined) return { handled: true };
-    const next: RustExpr = operator === "=" ? value : { kind: "binary", operator: binary!,
-      left: { kind: "path", path: currentName }, right: value };
+    const operand: RustExpr = { kind: "path", path: valueName };
+    const next: RustExpr = operator === "=" ? operand : { kind: "binary", operator: binary!,
+      left: { kind: "path", path: currentName }, right: operand };
     const write = fallibleLocationAccess(expression,
       { kind: "method-call", receiver: pointer, method: "try_store", args: [next] }, context);
     return { handled: true, ...(write === undefined ? {} : { statement: { kind: "expr", expr: rustValueBlock([{ name: locationName, value: location },
-        ...(current === undefined ? [] : [{ name: currentName, value: current }])], write) } }) };
+        ...(current === undefined ? [] : [{ name: currentName, value: current }]), { name: valueName, value }], write) } }) };
   }
   const location = planRustLocationStorage(
     expression,
@@ -411,22 +413,13 @@ export function planRustPromotedStorageWrite(
     return { handled: true };
   }
   const methods = rustPromotedStorageMethods(root.expression, context);
-  if (operator === "=") {
-    return {
-      handled: true,
-      statement: {
-        kind: "expr",
-        expr: methods.write(location, value),
-      },
-    };
-  }
   const binaryOperator = assignmentBinaryOperator(operator);
-  if (binaryOperator === undefined) {
+  if (operator !== "=" && binaryOperator === undefined) {
     return { handled: true };
   }
   if (context.syntheticNames === undefined) {
     return failRustPlannerInvariant(
-      "Promoted-location compound assignment requires a finalized hygienic-name scope.", expression);
+      "Promoted-location assignment requires a finalized hygienic-name scope.", expression);
   }
   const locationName = allocateRustSyntheticName(context.syntheticNames, "location");
   const currentName = allocateRustSyntheticName(context.syntheticNames, "current");
@@ -441,12 +434,12 @@ export function planRustPromotedStorageWrite(
             name: locationName,
             value: { kind: "reference", expr: location },
           },
-          {
+          ...(binaryOperator === undefined ? [] : [{
             name: currentName,
             value: methods.read(locationPath),
-          },
+          }]),
           { name: valueName, value },
-        ], methods.write(locationPath, {
+        ], methods.write(locationPath, binaryOperator === undefined ? { kind: "path", path: valueName } : {
             kind: "binary",
             operator: binaryOperator,
             left: { kind: "path", path: currentName },

@@ -30,6 +30,7 @@ import { planRustNativeIntegerIdentity } from "./native-integer-identities.js";
 import { rustErrorFieldComparisonView, rustErrorFieldOptionalView } from "./error-field-borrows.js";
 import { planRustOptionalStorageOperation } from "./optional-storage.js";
 import { planRustProjectTypeTest, planRustProjectTypeTestSelection } from "../objects/project-downcasts.js";
+import { requireRustReadOwnership } from "./typed-locations.js";
 
 export interface RustPlannedProjectTypeTest {
   readonly fact: Extract<RustTargetOperationFact, { readonly kind: "project-type-test" }>;
@@ -137,8 +138,8 @@ export function planBinaryExpression(node: Node, context: RustPlanContext, resul
     const nodes = selected.concatParts ?? failRustPlannerInvariant("An admitted concatenation requires its ordered source operands.", node);
     const parts: RustStringConcatPart[] = [];
     for (const operand of nodes) {
-      // The selected concatenation borrows every part as a str, so each operand is read as a shared place.
-      const value = planExpression(operand, context, "value", "shared-place");
+      const read = requireRustReadOwnership(operand, context).source;
+      const value = planExpression(operand, context, "value", read.kind === "borrow" || read.kind === "copy" ? "shared-place" : "value");
       if (value === undefined) return undefined;
       parts.push(planRustStringConcatOperand(operand, value, context));
     }
