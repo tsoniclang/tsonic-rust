@@ -51,7 +51,7 @@ export function resolveRustCallableStorageCarrier(
     if (original.kind !== "resolved" || original.subject !== subject || subject.projection.length !== 0 ||
       context.ast.body(subject.node) === undefined || context.records.sourceCallableReturn.get(subject.node) === undefined) return undefined;
   }
-  const parameterNode = subject.projection.length === 0 && (subject.kind === "value" || subject.kind === "input") &&
+  const parameterNode = (subject?.kind === "value" || subject?.kind === "input") &&
     context.ast.is.IsParameterDeclaration(subject.node) ? subject.node : undefined;
   const parameter = parameterNode === undefined ? undefined : context.ast.as.AsParameterDeclaration(parameterNode);
   const uses = parameterNode === undefined || parameter === undefined ? undefined :
@@ -63,12 +63,14 @@ export function resolveRustCallableStorageCarrier(
   const protocol = rustCallableProtocol(carrier);
   if (parameter !== undefined && carrier !== undefined) {
     const semantics = context.semanticsFor(parameterNode!);
-    const declared = semantics.declarations.declaredValueType(parameterNode!);
+    const projected = subject!.projection.length === 0 ? undefined : context.sourceStorage.typeFor(subject!);
+    const declared = subject!.projection.length === 0 ? semantics.declarations.declaredValueType(parameterNode!)
+      : projected?.kind === "resolved" ? projected.type : undefined;
     const declaredCarrier = declared === undefined ? undefined : resolveRustTargetType(declared,
       rustSourceStorageSubjectContext({ ...context, currentSemantics: semantics,
         callableRepresentation: "signature" }, undefined), options, new Set());
     if (rustTargetTypeRefEquals(rustOptionElementCarrier(declaredCarrier) ?? declaredCarrier, carrier)) {
-      return nativeDeclaration && protocol !== undefined && parameter.DotDotDotToken === undefined &&
+      return subject!.projection.length === 0 && nativeDeclaration && protocol !== undefined && parameter.DotDotDotToken === undefined &&
         parameter.Initializer === undefined && parameter.QuestionToken === undefined &&
         uses !== undefined && uses.uses.length > 0 &&
         uses.uses.every(use => use.kind === "direct-call" && !use.captured && !use.throughMember)
