@@ -67,7 +67,8 @@ export function prepareRustReadOwnership(input: {
         evidence: ["target.capability=rust.analysis.ownership"],
       }] };
     }
-    const ownedProviderResult = operation?.kind === "provider-operation" && flow.movingReads.has(node);
+    const borrowedElement = records.borrowedElement.get(node) !== undefined && uses.get(node)?.mode === "shared";
+    const ownedProviderResult = operation?.kind === "provider-operation" && flow.movingReads.has(node) && !borrowedElement;
     const referenceLoad = operation?.kind === "reference-operation" && operation.operation === "load";
     storageReads.set(node, inherited ?? (ast.is.IsIdentifier(node) || ast.is.IsElementAccessExpression(node) && !ownedProviderResult ||
       ast.kindName(node) === "KindThisExpression" || ast.kindName(node) === "KindThisKeyword" ||
@@ -198,7 +199,7 @@ export function prepareRustReadOwnership(input: {
         const projectBorrows = records.projectDowncast.get(node) !== undefined;
         const constructsContainer = records.optionProjection.get(node)?.kind === "some";
         const sourceRead = selectRustValueReadOwnership({ copy: sourceCopy, clone: sourceClone,
-          transfer: flow.movingReads.has(node) || !storageRead, borrowed: conversionBorrows || projectBorrows || storageRead && projection !== undefined && value?.kind !== "move"
+          transfer: flow.movingReads.has(node) || !storageRead, borrowed: conversionBorrows && borrowed !== undefined || projectBorrows || storageRead && projection !== undefined && value?.kind !== "move"
             ? "shared" : constructsContainer ? undefined : borrowed });
         const binding = records.sourceBinding.get(node);
         const module = binding === undefined ? undefined : records.moduleBinding.get(binding.sourceDeclaration);
