@@ -16,6 +16,13 @@ export function selectRustNativeFrameOwnerPassing(suspended: boolean): "rc" | "s
   return suspended ? "rc" : "shared-reference-to-rc";
 }
 
+export function selectRustNativeStructuralReceiverPassing(factoryReceiver: "value" | "shared"): {
+  readonly body: "shared";
+  readonly object: "value" | "shared";
+} {
+  return Object.freeze({ body: "shared", object: factoryReceiver });
+}
+
 export function selectRustGenericCallableStorage(input: {
   readonly identityObserved: boolean;
   readonly creation: RustGenericCallableImplementation["creation"];

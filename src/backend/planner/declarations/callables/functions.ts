@@ -35,13 +35,12 @@ import { planRustLexicalFunctionEnvironment } from "./lexical-functions.js";
 import { planRustErrorRegion } from "../../program/error-regions.js";
 import { planRustPromiseBodyObjectAdapter, rustPromiseBodyGenericArguments } from "./promise-body-adapters.js";
 import { planRustNativeTaskOwner } from "../../program/native-tasks.js";
-import type { TargetTypeRef } from "../../../../target-model/types/model.js";
+import type { RustNativeCallableEntryFacets } from "../../../../target-model/records/declaration-emission.js";
 
 interface RustNativeMethodReceiver {
   readonly name: string;
-  readonly carrier: TargetTypeRef;
   readonly boundLifetimes: ReadonlySet<string>;
-  readonly factoryReceiver: "value" | "shared";
+  readonly entry: RustNativeCallableEntryFacets;
 }
 
 export interface RustFunctionItemPlan {
@@ -53,6 +52,7 @@ function planRustFunctionParameters(
   node: Node,
   inputContext: RustPlanContext,
   nativeReceiver: RustNativeMethodReceiver | undefined,
+  entry: RustNativeCallableEntryFacets,
   facet: "body" | "object",
   use: Parameters<typeof planRustCallableParameters>[3],
 ) {
@@ -64,22 +64,25 @@ function planRustFunctionParameters(
   if (declaration === undefined) failRustPlannerInvariant("An admitted callable requires its sealed checked value parameters.", node);
   const parameterPlan = planRustCallableParameters(declaration.contract, environment.context, syntheticNames, use);
   if (parameterPlan === undefined) failRustPlannerInvariant("An admitted callable requires its complete native function plan.", node);
-  const receiverMode = nativeReceiver === undefined || facet === "body" ? "shared" : nativeReceiver.factoryReceiver;
-  const leading = planRustCallableLeadingParameters(node, environment.context,
-    nativeReceiver === undefined ? undefined : { ...nativeReceiver, mode: receiverMode });
+  const selected = entry[facet];
+  const receiver = selected.slots.find(slot => slot.kind === "structural-receiver");
+  if (nativeReceiver !== undefined && receiver === undefined)
+    failRustPlannerInvariant("An admitted fixed native method requires its selected physical receiver facet.", node);
+  const leading = planRustCallableLeadingParameters(node, environment.context, selected,
+    nativeReceiver === undefined || receiver === undefined ? undefined : { name: nativeReceiver.name, carrier: receiver.carrier, mode: receiver.passing });
   if (leading === undefined) failRustPlannerInvariant("An admitted callable requires its complete native function plan.", node);
   const leadingParams = leading.parameters.map(parameter => {
     const type = rustTypeFromCarrierInContext(parameter.carrier, environment.context);
     return type === undefined ? undefined : { name: parameter.name, type };
   });
   if (leadingParams.some(parameter => parameter === undefined)) failRustPlannerInvariant("An admitted callable requires its complete native function plan.", node);
-  const receiverType = nativeReceiver === undefined ? undefined : rustTypeFromCarrierInContext(nativeReceiver.carrier, environment.context);
+  const receiverType = receiver === undefined ? undefined : rustTypeFromCarrierInContext(receiver.carrier, environment.context);
   if (nativeReceiver !== undefined && receiverType === undefined)
     failRustPlannerInvariant("An admitted native method requires its completed physical receiver type.", node);
   const tasks = planRustNativeTaskOwner(node, leading.context);
   return {
     params: [...(nativeReceiver === undefined || receiverType === undefined ? [] : [{ name: nativeReceiver.name,
-      type: receiverMode === "value" ? receiverType : { kind: "reference" as const, mutable: false, referent: receiverType } }]), ...leadingParams as NonNullable<typeof leadingParams[number]>[],
+      type: receiver?.passing === "value" ? receiverType : { kind: "reference" as const, mutable: false, referent: receiverType } }]), ...leadingParams as NonNullable<typeof leadingParams[number]>[],
       ...parameterPlan.params, ...environment.parameters, ...tasks.parameters],
     parameterPlan,
     syntheticNames,
@@ -150,6 +153,9 @@ function planRustFunctionItem(
   const node = source.callableDeclaration;
   const emission = outerContext.input.program.records.callableDeclaration.get(node);
   if (emission === undefined) failRustPlannerInvariant("An admitted callable requires its sealed declaration emission.", node);
+  const nativeEntry = source.nativeReceiver === undefined
+    ? outerContext.input.program.records.callableLeading.get(node)?.nativeEntry.module : source.nativeReceiver.entry;
+  if (nativeEntry === undefined) failRustPlannerInvariant("An admitted native function requires its exact early entry facets.", node);
   const { promiseBody: _enclosingPromiseBody, promiseBodyName: _enclosingPromiseBodyName, ...functionContext } = outerContext;
   const { ast } = outerContext.input.program.source;
   const isAsync = ast.hasModifierKind(node, "async");
@@ -200,7 +206,7 @@ function planRustFunctionItem(
   if (genericPlan.preservesExplicitLifetimes) {
     declarationAttributes.push(rustLintAttributes.needlessLifetimes);
   }
-  const parameters = planRustFunctionParameters(node, context, source.nativeReceiver,
+  const parameters = planRustFunctionParameters(node, context, source.nativeReceiver, nativeEntry,
     returnsJsPromise && nativeBody === undefined ? "object" : "body", "source-body");
   if (parameters === undefined) failRustPlannerInvariant("An admitted callable requires its complete native function plan.", node);
   const { params, parameterPlan, syntheticNames } = parameters;
@@ -352,7 +358,7 @@ function planRustFunctionItem(
     return Object.freeze({ item, helper: undefined });
   const adapterGenerics = planRustCallableGenerics(node, functionContext, ownerLifetimes, specialization, lexical?.genericParameters);
   if (adapterGenerics === undefined) failRustPlannerInvariant("An admitted callable requires its complete native function plan.", node);
-  const adapterParameters = planRustFunctionParameters(node, adapterGenerics.context, source.nativeReceiver, "object", "signature");
+  const adapterParameters = planRustFunctionParameters(node, adapterGenerics.context, source.nativeReceiver, nativeEntry, "object", "signature");
   if (adapterParameters === undefined) failRustPlannerInvariant("An admitted callable requires its complete native function plan.", node);
   const adapterContext = adapterParameters.context;
   if (asyncFact?.kind !== "js-promise") failRustPlannerInvariant("An admitted Promise object adapter requires its selected async contract.", node);
@@ -360,7 +366,7 @@ function planRustFunctionItem(
   const adapterBody = planRustPromiseBodyObjectAdapter(node, { kind: "call", path: source.nativeReceiver === undefined ? nativeBodyName! : `Self::${nativeBodyName!}`,
     genericArguments: rustPromiseBodyGenericArguments(generics),
     args: adapterParameters.params.map(parameter => parameter.name === source.nativeReceiver?.name &&
-      source.nativeReceiver.factoryReceiver === "value" ? { kind: "reference", expr: { kind: "path", path: parameter.name } }
+      nativeEntry.object.slots.some(slot => slot.kind === "structural-receiver" && slot.passing === "value") ? { kind: "reference", expr: { kind: "path", path: parameter.name } }
       : { kind: "path", path: parameter.name }),
   }, callableErrorBoundary, adapterContext);
   if (adapterReturn === undefined || adapterBody === undefined) failRustPlannerInvariant("An admitted callable requires its complete native function plan.", node);

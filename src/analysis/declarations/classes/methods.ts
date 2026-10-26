@@ -48,11 +48,8 @@ export function analyzeRustMethodEmission(input: {
     }
     const isStatic = ast.hasModifierKind(member, "static");
     const staticSlot = program.projectTypes.memberSlotName(member, "static");
-    const classEnvironment = program.classValues.forDeclaration(owner.declaration)?.environment;
-    const environment = !isStatic || classEnvironment?.consumers.includes(member) !== true ? undefined : Object.freeze({
-      declaration: owner.declaration, carrier: classEnvironment.carrier, name: classEnvironment.parameterName,
-      genericParameterIndexes: classEnvironment.genericParameterIndexes,
-    });
+    const environment = program.records.callableLeading.get(member)?.nativeEntry.direct?.body.slots
+      .find(slot => slot.kind === "class-environment");
     const visibility = ast.hasModifierKind(member, "private") || ast.hasModifierKind(member, "protected") ? "private" as const : "public" as const;
     const nativeBody = program.promiseBodies.declarations.get(member);
     const sourceFile = ast.getSourceFile(member);

@@ -193,7 +193,9 @@ export function planRustCallableExpressionBody(
       (!suspended || callableProtocol === undefined || ownedStateName === undefined)) {
     failRustPlannerInvariant("A suspended callable's retained owner conflicts with its finalized callable contract.", node);
   }
-  const leadingPlan = planRustCallableLeadingParameters(node, context, undefined);
+  const nativeEntry = context.input.program.records.callableLeading.get(node)?.nativeEntry.module;
+  if (nativeEntry === undefined) failRustPlannerInvariant("A callable expression requires its exact early native entry.", node);
+  const leadingPlan = planRustCallableLeadingParameters(node, context, nativeEntry.body, undefined);
   if (leadingPlan === undefined) {
     failRustPlannerInvariant("Callable expression leading parameters require a finalized hygienic-name scope.", node);
   }

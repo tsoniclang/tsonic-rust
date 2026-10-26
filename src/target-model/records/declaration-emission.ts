@@ -6,6 +6,39 @@ import type { RustGenericCallableEnvironment, RustGenericCallableImplementation 
 import type { RustTargetGenericArgument } from "../types/model.js";
 import type { RustFrameCallableImplementation } from "./frame-callables.js";
 import type { RustFrameNativeType } from "./frame-emission.js";
+import type { RustStructuralShapeDefinition } from "./structural-shapes.js";
+import type { RustLexicalCaptureEmission } from "./lexical-functions.js";
+import type { RustNativeTaskUse } from "./native-tasks.js";
+import type { RustNamedClassEnvironment } from "./class-values.js";
+import type { RustProjectTypeDefinition } from "../types/project-types.js";
+
+export type RustNativeCallableEntrySlot =
+  | { readonly kind: "source"; readonly declaration: Node; readonly carrier: TargetTypeRef }
+  | { readonly kind: "leading"; readonly parameter: RustCallableLeadingEmission["parameters"][number]; readonly carrier: TargetTypeRef }
+  | { readonly kind: "lexical"; readonly capture: RustLexicalCaptureEmission; readonly carrier: TargetTypeRef }
+  | { readonly kind: "task"; readonly use: Extract<RustNativeTaskUse, { readonly kind: "owner" }>; readonly carrier: TargetTypeRef }
+  | { readonly kind: "structural-receiver"; readonly owner: RustStructuralShapeDefinition; readonly sourceName: string;
+      readonly carrier: TargetTypeRef; readonly passing: "value" | "shared" }
+  | { readonly kind: "method-receiver"; readonly owner: RustProjectTypeDefinition; readonly carrier: TargetTypeRef;
+      readonly passing: "ref" | "mut-ref" }
+  | { readonly kind: "class-environment"; readonly declaration: Node; readonly carrier: TargetTypeRef; readonly name: string;
+      readonly genericParameterIndexes: readonly number[]; readonly environment: RustNamedClassEnvironment };
+
+export interface RustNativeCallableEntry {
+  readonly slots: readonly RustNativeCallableEntrySlot[];
+  readonly captureArguments: readonly RustTargetGenericArgument[];
+}
+
+export interface RustNativeCallableEntryFacets {
+  readonly body: RustNativeCallableEntry;
+  readonly object: RustNativeCallableEntry;
+}
+
+export interface RustNativeCallableEntries {
+  readonly direct: RustNativeCallableEntryFacets | undefined;
+  readonly module: RustNativeCallableEntryFacets | undefined;
+  readonly structuralFixed: ReadonlyMap<RustStructuralShapeDefinition, ReadonlyMap<string, RustNativeCallableEntryFacets>>;
+}
 
 export interface RustNativeGenericEntry {
   readonly implementation: RustGenericCallableImplementation;
@@ -40,6 +73,7 @@ export interface RustCallableReturnEmission {
 }
 
 export interface RustCallableLeadingEmission {
+  readonly nativeEntry: RustNativeCallableEntries;
   readonly genericHeader: RustNativeCallableGenericHeader | undefined;
   readonly genericEntries: ReadonlyMap<RustGenericCallableImplementation, RustNativeGenericEntry>;
   readonly frameEntries: ReadonlyMap<RustFrameCallableImplementation, RustNativeFrameEntry>;

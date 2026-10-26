@@ -26,6 +26,12 @@ test("every authored formal including unused and default inputs consumes its exa
   assert.equal(entry?.sourceParameters.size, parameters.length, "the early physical inventory includes every incoming formal");
   assert.equal(Object.isFrozen(entry.sourceParameters) && entry.sourceParameters.set === undefined && entry.sourceParameters.clear === undefined,
     true, "the published formal inventory has no mutation route after the seal");
+  const slots = entry.nativeEntry.direct.body.slots.filter(slot => slot.kind === "source");
+  assert.equal(slots.length === parameters.length && slots.every((slot, index) => slot.declaration === parameters[index] &&
+    slot.carrier === entry.sourceParameters.get(parameters[index])), true,
+  "the direct body keeps every authored incoming ABI slot in exact order including unused inputs");
+  assert.equal(entry.nativeEntry.module === entry.nativeEntry.direct, true,
+    "an ordinary free function has the same module and direct native entry rather than a fabricated helper prefix");
   for (const parameter of parameters) {
     const selected = entry.sourceParameters.get(parameter);
     const emitted = program.records.callableParameter.get(parameter);

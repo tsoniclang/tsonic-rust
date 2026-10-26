@@ -23,6 +23,9 @@ import type { RustFrameCallablePlanRegistry } from "./frame-values.js";
 import type { RustClassValuePlan } from "../../target-model/records/class-values.js";
 import type { RustFrameCallableImplementation } from "../../target-model/records/frame-callables.js";
 import type { RustNativeFrameEntry } from "../../target-model/records/declaration-emission.js";
+import { createRustNativeEntryLayouts } from "./entry-layout.js";
+import type { RustProjectTypePolicy } from "../project-types/index.js";
+import type { RustStructuralShapePlan } from "../objects/shapes/structural-shape-plan.js";
 
 export function analyzeRustCallableEntryParameters(input: {
   readonly source: TargetSourceProgram;
@@ -30,11 +33,13 @@ export function analyzeRustCallableEntryParameters(input: {
   readonly records: RustProgramRecords;
   readonly lifetimes: RustLifetimeIndex;
   readonly nativeStorage: RustNativeStorageConstruction;
-  readonly native: Pick<RustNativeCallableInputPlan, "inputsFor" | "isNativeRetainedParameter">;
+  readonly native: Pick<RustNativeCallableInputPlan, "inputsFor" | "capturesFor" | "isNativeRetainedParameter">;
   readonly nativeProducers: RustNativeCallableProducerPlan;
   readonly generic: RustGenericCallablePlan;
   readonly frames: Pick<RustFrameCallablePlanRegistry, "nativeTypeFor" | "definitions">;
   readonly classValues: RustClassValuePlan;
+  readonly projectTypes: RustProjectTypePolicy;
+  readonly structuralShapes: RustStructuralShapePlan;
   readonly producer: RustDeclarationEmissionProducer;
   readonly required: RustRequiredRecord[];
 }): readonly TargetDiagnostic[] {
@@ -105,6 +110,7 @@ export function analyzeRustCallableEntryParameters(input: {
     else headers.set(declaration, selected.value);
   }
   if (issues.length !== 0) return Object.freeze(issues);
+  const entryFor = createRustNativeEntryLayouts(input);
   for (const node of declarations) {
     const operation = input.records.targetOperation.get(node);
     const leading = operation?.kind === "closure" ? operation.leadingParameters ?? [] : [];
@@ -125,10 +131,13 @@ export function analyzeRustCallableEntryParameters(input: {
       if (parameter.kind === "this") visit(node);
       return Object.freeze({ ...parameter, reads: Object.freeze(reads) });
     });
-    input.producer.leading(node, { parameters: Object.freeze(parameters), genericHeader: headers.get(node),
+    const selectedParameters = sourceParameters.get(node) ?? new Map<Node, TargetTypeRef>();
+    const genericHeader = headers.get(node);
+    input.producer.leading(node, { parameters: Object.freeze(parameters), genericHeader,
+      nativeEntry: entryFor(node, parameters, selectedParameters, genericHeader),
       genericEntries: genericEntries.get(node) ?? new Map<RustGenericCallableImplementation, RustNativeGenericEntry>(),
       frameEntries: frameEntries.get(node) ?? new Map<RustFrameCallableImplementation, RustNativeFrameEntry>(),
-      sourceParameters: sourceParameters.get(node) ?? new Map<Node, TargetTypeRef>() });
+      sourceParameters: selectedParameters });
     requireRustRecord(input.required, "callableLeading", node, "native callable entry parameters", "analyzeRustCallableEntryParameters");
   }
   return Object.freeze(issues);
