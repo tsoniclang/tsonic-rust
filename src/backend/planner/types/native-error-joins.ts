@@ -60,6 +60,8 @@ export function planRustNativeErrorJoin(input: {
   readonly sources: readonly RustNativeErrorJoinSource[];
   readonly clone?: boolean;
 }): RustNativeErrorJoinPlan | undefined {
+  if (input.resultShape !== "value" && input.resultShape !== "result")
+    failRustPlannerInvariant("An admitted native error join requires its explicit Result or value ABI.");
   const selectedSources = input.sources;
   if (input.resultShape === "value" && selectedSources.length !== 0)
     failRustPlannerInvariant("An admitted native value ABI cannot carry a fallible error join.");

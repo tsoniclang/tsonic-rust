@@ -54,6 +54,9 @@ test("an explicit native Result ABI retains Infallible without inventing error v
   assert.equal(joined.inject(first, path("error")), undefined, "foreign inhabited errors remain refused");
   assert.throws(() => plan([first], { resultShape: "value" }), /value ABI/u,
     "nonempty source errors cannot silently become an infallible value ABI");
+  assert.throws(() => planRustNativeErrorJoin({ identity: "old:implicit", name: "OldImplicit",
+    visibility: "private", sources: [] }), /explicit Result or value ABI/u,
+    "the removed implicit-shape API is rejected rather than guessed");
 });
 
 test("one exact source moves its error unchanged and propagates without conversion", () => {
