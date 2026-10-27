@@ -16,6 +16,11 @@ import { rustNativeCallableErrorType } from "../../../dist/policy/types/callable
 import { rustStaticLifetime } from "../../../dist/target-model/lifetimes/index.js";
 import { analyzeRust } from "../../helpers/rust-session.mjs";
 import { Node_Expression } from "@tsonic/target-api/source";
+import { createRustSourceErrorEffectSelection } from "../../../dist/analysis/errors/source-error-effects.js";
+import { rustCallableProtocol } from "../../../dist/target-model/types/carriers/callables.js";
+import { rustCallablePhysicalCarrier, rustUninhabitedError } from "../../../dist/policy/conversions/callable-physical.js";
+import { rustCallablePhysicalSignature } from "../../../dist/target-model/conversions/callable-physical.js";
+import { rustTargetGenericReferences } from "../../../dist/target-model/types/carriers/generic-references.js";
 
 
 function fixture(text = `
@@ -37,7 +42,7 @@ function fixture(text = `
   const input = { ast: context.ast, records: context.records, definitions: context.typeDefinitions,
     producers, components: classified.plan };
   const error = name => producers.errorFor(producer(name).declaration, name === "forwarded" ? 0 : "body");
-  return { input, producer, error, native: context.callableValues.native };
+  return { context, input, producer, error, native: context.callableValues.native };
 }
 
 test("concrete native Callable invocation errors normalize their bound producer without inventing generic purity", () => {
@@ -80,6 +85,45 @@ test("concrete native Callable invocation errors normalize their bound producer 
     "a native implementation binder is never guessed to be infallible");
 });
 
+test("callable adapter emission uses the canonical exact physical error for every destination", () => {
+  const { program } = analyzeRust({ surfaces: ["js"], files: { "index.ts": `
+    export function pure(value: number): (ignored: number) => number {
+      const original = (): number => value;
+      return original;
+    }
+    export function failed(value: number): (ignored: number) => number {
+      const original = (): number => { if (value < 0) throw new Error("failure"); return value; };
+      return original;
+    }
+  ` } });
+  const input = { ast: program.source.ast, records: program.records, definitions: program.typeDefinitions,
+    producers: program.callableValues.nativeProducers, components: program.sourcePackageComponents };
+  let selectedCount = 0;
+  let pureCount = 0;
+  let failedCount = 0;
+  const visit = node => {
+    const conversion = program.records.contextualValueConversion.get(node)?.conversion;
+    if (conversion?.kind === "callable-adapter") {
+      const selected = program.records.callableContract.get(node, conversion);
+      assert.equal(selected !== undefined, true, "the adapter has one pre-seal physical conversion");
+      const error = normalizeRustErrorType(selected.source.signature.error, input, node);
+      assert.equal(error !== undefined, true, "the actual source error has exact native evidence");
+      assert.equal(rustTargetTypeRefEquals(selected.source.signature.error, error), true,
+        "emission retains the canonical error rather than a logical or producer placeholder");
+      assert.equal(rustTargetTypeRefEquals(selected.physical.source.error, error), true,
+        "the adapter and invoked source agree on their physical error identity");
+      if (rustUninhabitedError(error)) pureCount++;
+      else failedCount++;
+      selectedCount++;
+    }
+    program.source.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+  };
+  program.sourceFiles.forEach(visit);
+  assert.equal(selectedCount >= 2, true, "both original arity adaptations retain their owner contracts");
+  assert.equal(pureCount > 0, true, "the pure source retains its uninhabited error");
+  assert.equal(failedCount > 0, true, "the throwing source retains its inhabited error");
+});
+
 test("returned native callback calls publish the bound observer and resolver error before sealing", () => {
   const { program } = analyzeRust({ surfaces: ["js"], files: { "index.ts": `
     function make<Part>(done: (value: Part) => void, value: Part): () => void {
@@ -117,6 +161,114 @@ test("returned native callback calls publish the bound observer and resolver err
   program.sourceFiles.forEach(visit);
   assert.equal(found.size, 2, "both independent actual creation channels are checked before publication");
 });
+
+for (const surfaces of [[], ["js"]]) {
+  test(`higher-order error bindings use physical implementations without changing logical slots (${surfaces[0] ?? "native"})`, () => {
+    const context = analyzeRustErrorEffects(`
+      function invoke(callback: () => number): number { return callback(); }
+      function apply(operation: (callback: () => number) => number, callback: () => number): number {
+        return operation(callback);
+      }
+      export function run(): number { return apply(invoke, () => 7); }
+    `, { surfaces });
+    const nodes = [];
+    const visit = node => {
+      nodes.push(node);
+      context.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+    };
+    context.sourceFiles.forEach(visit);
+    const declaration = name => nodes.find(node => context.ast.is.IsFunctionDeclaration(node) &&
+      context.ast.text(context.ast.name(node)) === name);
+    const invoke = declaration("invoke");
+    const apply = declaration("apply");
+    assert.equal(invoke !== undefined && apply !== undefined, true, "both original declarations are selected");
+    const inputs = context.callableValues.native.inputsFor(apply);
+    const operation = inputs.find(input => context.ast.text(context.ast.name(input.subject.node)) === "operation");
+    const invokedInput = context.callableValues.native.inputsFor(invoke)[0];
+    assert.equal(operation !== undefined && invokedInput !== undefined, true, "both original implementation binders exist");
+    const logical = rustCallableProtocol(operation.carrier)?.parameters[0];
+    const physical = logical === undefined ? undefined : rustCallablePhysicalCarrier(logical);
+    assert.equal(logical?.kind === "target-named" && logical.genericArguments.length === 4, true,
+      "the receiving slot retains its logical four-argument callable contract");
+    assert.equal(physical !== undefined && rustCallablePhysicalSignature(physical) !== undefined, true,
+      "the canonical physical implementation has its exact Result invocation signature");
+    const call = nodes.find(node => context.ast.is.IsCallExpression(node) &&
+      context.ast.text(Node_Expression(context.ast, node)) === "apply");
+    assert.equal(call !== undefined, true, "the source apply invocation is selected");
+    const effects = context.records.errorEffects.get(apply);
+    assert.equal(effects !== undefined, true, "the actual callee publishes its source error effects");
+    const selection = createRustSourceErrorEffectSelection({ context });
+    assert.equal(selection.register(effects.nativeErrors), true, "the original callee error channels are registered");
+    const bindings = selection.bindingsFor(call, apply, effects.nativeErrors.map(error => error.errorType));
+    assert.equal(bindings !== undefined, true, "the actual source invocation binds its native inputs");
+    assert.equal(bindings.types.has(invokedInput.implementation.identity), true,
+      "the supplied producer's own callback implementation is selected");
+    assert.equal(rustTargetTypeRefEquals(bindings.types.get(invokedInput.implementation.identity), physical), true,
+      "the implementation binder receives the physical carrier rather than the logical slot contract");
+    assert.equal(rustTargetTypeRefEquals(bindings.types.get(invokedInput.implementation.identity), logical), false,
+      "the original logical ABI is never substituted as a physical implementation");
+  });
+}
+
+for (const surfaces of [[], ["js"]]) {
+  test(`generic capture error completion stays closed through source forwarding (${surfaces[0] ?? "native"})`, () => {
+    const current = fixture(`
+      type Identity = <Value>(value: Value) => Value;
+      function first(left: () => number): Identity {
+        return <Value>(value: Value): Value => { left(); return value; };
+      }
+      function second(right: () => string): Identity {
+        return <Value>(value: Value): Value => { right(); return value; };
+      }
+      function run(): void {
+        const left = first(() => 1);
+        const right = second((): string => { throw new Error("original"); });
+        left<number>(7);
+        right<string>("exact");
+      }
+      function forward(): void { run(); }
+      function entry(): void { forward(); }
+      entry();
+    `, { surfaces });
+    const { ast, records } = current.context;
+    for (const name of ["run", "forward", "entry"]) {
+      const declaration = current.producer(name)?.declaration;
+      assert.equal(declaration !== undefined, true, name + ": the actual source declaration exists");
+      const effects = records.errorEffects.get(declaration);
+      assert.equal(effects !== undefined, true, name + ": completed source errors are published");
+      let inhabited = effects.localErrors;
+      for (const error of effects.nativeErrors) {
+        const normalized = normalizeRustErrorType(error.errorType, current.input, declaration);
+        assert.equal(normalized !== undefined, true, name + ": completed producer errors normalize exactly");
+        assert.equal(rustTargetGenericReferences(normalized, "metadata").typeIdentities.length, 0,
+          name + ": factory implementation parameters never escape their bound creation");
+        inhabited ||= !rustUninhabitedError(normalized);
+      }
+      assert.equal(inhabited, true, name + ": the original throwing callback is never invented infallible");
+    }
+    const input = current.native.inputsFor(current.producer("first").declaration)[0];
+    const unbound = rustNativeCallableErrorType(input, input.implementation, "invocation", []);
+    const entryCall = ast.statements(current.context.sourceFiles[0])
+      .find(statement => ast.is.IsExpressionStatement(statement));
+    const invocation = Node_Expression(ast, entryCall);
+    assert.equal(invocation !== undefined && ast.is.IsCallExpression(invocation), true,
+      "the original entry invocation is selected");
+    assert.equal(unbound !== undefined, true, "the actual factory owns its unbound native error channel");
+    const selection = createRustSourceErrorEffectSelection({ context: current.context });
+    const errors = [{ identity: "direct-unbound-native-input", errorType: unbound }];
+    assert.equal(selection.register(errors), true, "the exact non-deferred native channel is registered");
+    const deferred = { ...errors[0], identity: "completion-owned-native-input" };
+    assert.equal(selection.pending(deferred, () => errors[0], "completed"), true,
+      "the existing completion owner retains its exact channel identity");
+    assert.equal(selection.bindingCarriersFor([deferred]).length, 0,
+      "completion-owned errors bind only after their existing completion");
+    assert.equal(selection.bindingCarriersFor(errors).length, 1,
+      "the identical carrier under a non-deferred identity still requires binding");
+    assert.equal(selection.bindingsFor(invocation, current.producer("entry").declaration,
+      selection.bindingCarriersFor(errors)) === undefined, true,
+      "only completion-owned channels defer binding; an unrelated unbound input remains refused");
+  });
+}
 
 test("native declaration error demand removes only template-proven impossible channels and retains Result ABI", () => {
   const current = fixture(nativeCallbackParametersSource, { surfaces: [] });

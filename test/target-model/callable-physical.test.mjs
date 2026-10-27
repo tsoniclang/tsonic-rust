@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { rustCallableConversionPhysical, rustCallableConversionErrorArities } from "../../dist/policy/conversions/callable-physical.js";
+import { rustCallableConversionPhysical, rustCallableConversionErrorArities, rustCallablePhysicalCarrier } from "../../dist/policy/conversions/callable-physical.js";
 import { rustCallablePhysicalSignature } from "../../dist/target-model/conversions/callable-physical.js";
 import { selectRustCallableConversion } from "../../dist/policy/conversions/callable.js";
 import { selectRustExactIntegerConversion } from "../../dist/policy/conversions/exact-integer.js";
@@ -25,6 +25,30 @@ const physicalCarrier = ({ parameters, result, error }) => rustRuntimeCallableTa
   rustNamedTargetType("rust.core.Result", "Result", [
     { kind: "type", type: result }, { kind: "type", type: error },
   ]));
+
+test("logical callable implementation bindings retain one exact physical Result and error identity", () => {
+  for (const lifetime of [{ kind: "static" }, { kind: "parameter", identity: "fixture:environment", name: "environment" }]) {
+    for (const error of [infallible, failure, rustRuntimeErrorTargetType()]) {
+      const logical = rustCallableTargetType([integer], wide, lifetime, error);
+      const physical = rustCallablePhysicalCarrier(logical);
+      assert.equal(physical !== undefined, true, "the logical callable has its canonical native implementation");
+      const signature = rustCallablePhysicalSignature(physical);
+      assert.equal(signature !== undefined, true, "the implementation is a physical callable, not the logical protocol");
+      assert.equal(rustTargetTypeRefEquals(signature.parameters[0], integer), true, "the input carrier is unchanged");
+      assert.equal(rustTargetTypeRefEquals(signature.result, wide), true, "the source result is not another Result wrapper");
+      assert.equal(rustTargetTypeRefEquals(signature.error, error), true, "the exact native error identity is unchanged");
+      const actualLifetime = rustNamedTypeCarrierValue(physical).genericArguments[0].lifetime;
+      assert.equal(actualLifetime.kind, lifetime.kind, "the actual environment kind remains unchanged");
+      if (lifetime.kind === "parameter") {
+        assert.equal(actualLifetime.identity, lifetime.identity, "the actual environment identity remains unchanged");
+        assert.equal(actualLifetime.name, lifetime.name, "the actual environment name remains unchanged");
+      }
+      assert.equal(rustCallablePhysicalCarrier(physical) === physical, true, "an existing physical implementation is not wrapped again");
+      assert.equal(rustCallablePhysicalSignature(logical) === undefined, true, "the logical protocol cannot masquerade as an implementation");
+    }
+  }
+  assert.equal(rustCallablePhysicalCarrier(integer) === undefined, true, "an unrelated native value is not a callable");
+});
 
 test("native retained Callable Clone and identity equality have no parameter, result or error trait bound", () => {
   const lifetime = { kind: "parameter", identity: "checked:retained-region", name: "region" };

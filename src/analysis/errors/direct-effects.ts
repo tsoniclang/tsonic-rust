@@ -74,16 +74,15 @@ export function createRustDirectErrorEffects(
       }
       if (carrierWork !== 0) {
         const selectedSignature = walk.context.records.selectedCall.get(invocation);
-        const selectedOperation = walk.context.records.targetOperation.get(invocation);
         budget.metadata(selectedSignature?.member.genericParameters);
         let replacementWork = 1;
-        for (const argument of selectedOperation?.kind === "source-call" ? selectedOperation.targetGenericArguments ?? [] : []) {
+        for (const argument of selectedSignature?.targetGenericArguments ?? []) {
           replacementWork = Math.max(replacementWork, budget.metadata(argument));
         }
         budget.expansion(carrierWork, replacementWork);
       }
       const bindings = source.nativeErrors.length === 0 ? undefined : selectSourceErrors.bindingsFor(
-        invocation, declaration, source.nativeErrors.map(error => error.errorType));
+        invocation, declaration, selectSourceErrors.bindingCarriersFor(source.nativeErrors));
       const edge = selectSourceErrors.edgeFor(declaration, kind, source, bindings);
       if (edge === undefined) {
         appendRustDiagnostic(walk, "RUST_NATIVE_ERROR_REBINDING_MISSING",

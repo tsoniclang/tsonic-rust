@@ -2,6 +2,8 @@ import type { Node } from "@tsonic/tsts";
 import { rustProducerErrorReference } from "../../../target-model/types/carriers/producer-errors.js";
 import { rustFrameCallableValue } from "../../../target-model/types/carriers/frame-callables.js";
 import { selectRustFrameInvocationErrors } from "../../errors/regions.js";
+import { normalizeRustErrorType } from "../../errors/error-types.js";
+import { rustUninhabitedError } from "../../../policy/conversions/callable-physical.js";
 import { Node_Expression, sourceEnclosingCallable } from "@tsonic/target-api/source";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
@@ -151,7 +153,16 @@ export function analyzeRustSourceCalls(program: Omit<RustAnalysisProgram, "reach
     if (frameCarrier !== undefined && rustFrameCallableValue(frameCarrier) !== undefined && frameError === undefined) {
       refuse(node, "rust.backend.frame-call-error-correspondence", "The selected frame invocation has no exact completed native error correspondence."); continue;
     }
-    const eliminateInfallible = method?.kind !== "fixed" && error?.kind === "target-named" && error.id === rustInfallibleTargetId;
+    const genericInfallibleResult = generic !== undefined && generic.effects.invocation === "fallible" &&
+      generic.invocation.length > 0 && generic.invocation.every(source => {
+        const selected = normalizeRustErrorType(source.errorType, {
+          ast: program.source.ast, records: program.records, definitions: program.typeDefinitions,
+          producers: program.callableValues.nativeProducers, components: program.sourcePackageComponents,
+        }, node);
+        return selected !== undefined && rustUninhabitedError(selected);
+      });
+    const eliminateInfallible = method?.kind !== "fixed" &&
+      (error?.kind === "target-named" && error.id === rustInfallibleTargetId || genericInfallibleResult);
     const edges = program.records.sourceErrorEffects.get(node)?.edges.filter(edge => edge.kind === "invoke" && edge.declaration === declaration);
     const directError = effects!.invocation === "fallible" && native === undefined && generic === undefined && declaration !== undefined &&
       fact.target.form !== "callable" && (fact.target.form !== "structural-method" || method?.kind === "fixed") && fact.target.form !== "constructor-value";

@@ -5,6 +5,7 @@ import { selectRustProducerError } from "../../../dist/analysis/callables/calls/
 import { rustProducerErrorReference } from "../../../dist/target-model/types/carriers/producer-errors.js";
 import { rustInfallibleTargetId } from "../../../dist/target-model/types/carriers/source-types.js";
 import { Node_Expression } from "@tsonic/target-api/source";
+import { compileRust } from "../../helpers/rust-session.mjs";
 
 for (const asynchronous of [false, true]) {
   test(`${asynchronous ? "async" : "sync"} generator body errors never become creation errors`, () => {
@@ -77,8 +78,9 @@ export ${asynchronous ? "async " : ""}function consume(): ${asynchronous ? "Prom
 }
 
 test("an infallible generator resume still publishes its physical Result elimination correspondence", () => {
-  const context = analyzeRustErrorEffects(`function* values(): Generator<number, void, unknown> { yield 1; }
-export function consume(): void { values().next(); }`, { surfaces: [] });
+  const source = `function* values(): Generator<number, void, unknown> { yield 1; }
+export function consume(): void { values().next(); }`;
+  const context = analyzeRustErrorEffects(source, { surfaces: [] });
   const generator = context.sourceStorage.nodes.find(node => context.ast.is.IsFunctionDeclaration(node) &&
     context.ast.text(context.ast.name(node)) === "values");
   const edges = context.sourceStorage.nodes.flatMap(node => context.records.sourceErrorEffects.get(node)?.edges ?? [])
@@ -86,4 +88,13 @@ export function consume(): void { values().next(); }`, { surfaces: [] });
   assert.equal(edges.length, 1, "the required physical Result path is present even without an inhabited error");
   assert.equal(edges[0].effects.localErrors, false, "the native body remains actually infallible");
   assert.equal(edges[0].effects.nativeErrors.length, 0, "no default runtime error channel is added");
+  for (const surfaces of [[], ["js"]]) {
+    const { result } = compileRust({ surfaces, files: { "index.ts": source } });
+    assert.equal(result.diagnostics.length, 0, "the exact pure generator result is admitted without a fallible caller");
+    const output = result.artifacts.filter(artifact => artifact.path.endsWith(".rs"))
+      .map(artifact => artifact.text).join("\n");
+    assert.match(output, /\.resume\(/u, "the physical native generator resume is retained");
+    assert.match(output, /Err\([^)]*\)\s*=>\s*match/u,
+      "the actual Result ABI is eliminated by exhaustive matching, not erased");
+  }
 });

@@ -31,6 +31,7 @@ import type { RustTargetGenericBindings } from "../../target-model/types/carrier
 import type { RustNativeStoragePlan } from "../callables/storage/native-storage.js";
 import type { RustNativeCallableInputPlan } from "../callables/native/native-inputs.js";
 import type { RustNativeCallableProducerPlan } from "../../target-model/records/native/native-producers.js";
+import { rustCallablePhysicalCarrier } from "../../policy/conversions/callable-physical.js";
 
 type RustSourceErrorContext = {
   readonly ast: AstReader;
@@ -40,7 +41,7 @@ type RustSourceErrorContext = {
   readonly callableValues: {
     readonly native: RustNativeCallableInputPlan;
     readonly nativeProducers: Pick<RustNativeCallableProducerPlan, "forDeclaration" | "errorFor">;
-    readonly nativeStorage: Pick<RustNativeStoragePlan, "invocationWitnessFor" | "invocationOriginsFor">;
+    readonly nativeStorage: Pick<RustNativeStoragePlan, "invocationWitnessFor">;
   };
 };
 
@@ -55,6 +56,7 @@ export interface RustSourceErrorEffectSelection {
   bindingsFor(node: Node, declaration: Node, carriers: readonly TargetTypeRef[],
     activation?: { readonly storageBindings: SourceStorageBindings;
       readonly genericBindings: RustTargetGenericBindings }): RustSourceErrorBindings | undefined;
+  bindingCarriersFor(errors: readonly RustNativeErrorEffect[]): readonly TargetTypeRef[];
   edgeFor(declaration: Node, kind: RustSourceErrorEffectEdge["kind"], effects: RustErrorEffectsFact,
     bindings: RustSourceErrorBindings | undefined): RustSourceErrorEffectEdge | undefined;
   pending(error: RustNativeErrorEffect, complete: () => RustNativeErrorEffect | undefined,
@@ -96,22 +98,32 @@ export function createRustSourceErrorEffectSelection(walk: { readonly context: R
     throw new Error("JS object rejection requires its one canonical identity and carrier.");
   // A closure cannot be generic: a callable parameter of a closure is not a native input and supplies its
   // type-erased runtime callable carrier.
-  const erasedClosureParameter = (subject: SourceStorageSubject): TargetTypeRef | undefined => {
+  const erasedClosureParameter = (subject: SourceStorageSubject): {
+    readonly logical: TargetTypeRef;
+    readonly physical: TargetTypeRef | undefined;
+  } | undefined => {
     const owner = subject.kind === "input" && subject.projection.length === 0 ? walk.context.ast.parent(subject.node) : undefined;
     if (owner === undefined || !walk.context.ast.is.IsArrowFunction(owner) && !walk.context.ast.is.IsFunctionExpression(owner)) return undefined;
     const carrier = walk.context.records.sourceParameterAbi.get(subject.node)?.valueCarrier;
     const selected = rustOptionElementCarrier(carrier) ?? carrier;
-    return selected?.kind === "target-named" && selected.id === rustCallableTargetId ? selected : undefined;
+    if (selected?.kind !== "target-named" || selected.id !== rustCallableTargetId) return undefined;
+    const physical = rustCallablePhysicalCarrier(selected);
+    return { logical: selected, physical };
   };
   const bindingsFor: RustSourceErrorEffectSelection["bindingsFor"] = (node, declaration, carriers, activation) => {
     const signature = walk.context.records.selectedCall.get(node);
-    const operation = walk.context.records.targetOperation.get(node);
-    const storageBindings = activation?.storageBindings;
-    const generics = activation === undefined ? rustTargetGenericBindingsForArguments(signature?.member.genericParameters ?? [],
-      operation?.kind === "source-call" ? operation.targetGenericArguments ?? [] : []) : activation.genericBindings;
-    if (generics === undefined) return undefined;
     const caller = sourceEnclosingCallable(node, walk.context.ast);
+    const parentBindings = caller === undefined ? walk.context.sourceStorage.emptyBindings : native.bindingsFor(caller);
+    const sourceActivation = activation === undefined && parentBindings !== undefined
+      ? walk.context.sourceStorage.bindingsForInvocation(declaration, node, parentBindings) : undefined;
+    const storageBindings = activation?.storageBindings ??
+      (sourceActivation?.kind === "resolved" ? sourceActivation.bindings : undefined);
+    if (storageBindings === undefined) return undefined;
+    const generics = activation === undefined ? rustTargetGenericBindingsForArguments(signature?.member.genericParameters ?? [],
+      signature?.targetGenericArguments ?? []) : activation.genericBindings;
+    if (generics === undefined) return undefined;
     const available = new Set(caller === undefined ? [] : [...native.inputsFor(caller), ...native.capturesFor(caller)]);
+    const captures = new Set(native.capturesFor(declaration));
     const types = new Map(generics.types);
     const lifetimes = new Map<string, RustLifetimeRef>(activation === undefined ? [...generics.lifetimes,
       ...rustRetainedCallSubstitutions(walk.context.records, node)] : generics.lifetimes);
@@ -173,94 +185,107 @@ export function createRustSourceErrorEffectSelection(walk: { readonly context: R
     const absentInputs = new Set<string>();
     const erasedInputs = new Map<string, TargetTypeRef>();
     const bindings = new Set<string>();
-    const references = rustTargetGenericReferences({ kind: "tuple", elements: carriers });
-    const needed = new Set(references.typeIdentities);
-    if (storageBindings !== undefined) for (const input of [...native.inputsFor(declaration), ...native.capturesFor(declaration)]) {
-      const signature = rustTargetGenericReferences(substituteRustTargetGenerics(input.carrier, types, lifetimes, consts));
-      if (signature.typeIdentities.some(identity => references.typeIdentities.includes(identity)) ||
-        signature.lifetimeIdentities.some(identity => references.lifetimeIdentities.includes(identity)) ||
-        signature.constIdentities.some(identity => references.constIdentities.includes(identity))) needed.add(input.implementation.identity);
-    }
-    for (const identity of needed) {
-      const input = inputs.get(identity);
-      if (input === undefined || bindings.has(identity)) continue;
-      bindings.add(identity);
-      if (storageBindings === undefined && input.owner !== declaration) {
-        if (!available.has(input)) return undefined;
-        continue;
+    const bindCarriers = (selectedCarriers: readonly TargetTypeRef[]): boolean => {
+      const references = rustTargetGenericReferences({ kind: "tuple", elements: selectedCarriers });
+      const needed = new Set(references.typeIdentities);
+      for (const input of [...native.inputsFor(declaration), ...native.capturesFor(declaration)]) {
+        const signature = rustTargetGenericReferences(substituteRustTargetGenerics(input.carrier, types, lifetimes, consts));
+        if (signature.typeIdentities.some(identity => references.typeIdentities.includes(identity)) ||
+          signature.lifetimeIdentities.some(identity => references.lifetimeIdentities.includes(identity)) ||
+          signature.constIdentities.some(identity => references.constIdentities.includes(identity))) needed.add(input.implementation.identity);
       }
-      const absenceWitness = walk.context.callableValues.nativeStorage.invocationWitnessFor(input, node);
-      if (absenceWitness !== undefined) {
-        absentInputs.add(identity);
-        types.set(identity, absenceWitness);
-        continue;
-      }
-      const selected = storageBindings === undefined
-        ? walk.context.callableValues.nativeStorage.invocationOriginsFor(input, node, caller)
-        : walk.context.sourceStorage.boundOriginsFor(input.subject, storageBindings);
-      if (selected.kind !== "resolved") return undefined;
-      let actual: TargetTypeRef | undefined;
-      let erasedActual = false;
-      let producer: RustNativeCallableProducer | undefined;
-      for (const subject of selected.subjects) {
-        const parameter = native.inputs.find(candidate => candidate.subject === subject);
-        const erased = parameter === undefined ? erasedClosureParameter(subject) : undefined;
-        if (erased !== undefined) {
-          if (producer !== undefined || actual !== undefined && !rustTargetTypeRefEquals(actual, erased)) return undefined;
-          actual = erased;
-          erasedActual = true;
-          if (storageBindings !== undefined && !bindSignature(input.carrier, erased)) return undefined;
-        } else if (parameter !== undefined) {
-          if (producer !== undefined || actual !== undefined && !rustTargetTypeRefEquals(actual, parameter.implementation)) return undefined;
-          actual = parameter.implementation;
-          if (storageBindings !== undefined && !bindSignature(input.carrier, parameter.carrier)) return undefined;
-        } else {
-          if (rustOptionElementCarrier(input.carrier) !== undefined && subject.projection.length === 0 &&
-            isRustAbsenceCarrier(walk.context.records.runtimeCarrier.get(subject.node)?.carrier)) continue;
-          const candidate = subject.projection.length === 0
-            ? walk.context.callableValues.nativeProducers.forDeclaration(subject.node) : undefined;
-          if (candidate === undefined || actual !== undefined || producer !== undefined && candidate !== producer) return undefined;
-          producer = candidate;
-          if (storageBindings !== undefined) {
+      for (const identity of needed) {
+        const input = inputs.get(identity);
+        if (input === undefined || bindings.has(identity)) continue;
+        if (input.owner !== declaration && !captures.has(input)) {
+          if (!available.has(input)) return false;
+          bindings.add(identity);
+          continue;
+        }
+        const absenceWitness = walk.context.callableValues.nativeStorage.invocationWitnessFor(input, node);
+        if (absenceWitness !== undefined) {
+          absentInputs.add(identity);
+          types.set(identity, absenceWitness);
+          bindings.add(identity);
+          continue;
+        }
+        const selected = walk.context.sourceStorage.boundOriginsFor(input.subject, storageBindings);
+        if (selected.kind !== "resolved") return false;
+        if (input.subject.projection.length > 0) {
+          physicalInputs.set(identity, substituteRustTargetGenerics(input.carrier, types, lifetimes, consts));
+          bindings.add(identity);
+          continue;
+        }
+        let actual: TargetTypeRef | undefined;
+        let erasedActual: TargetTypeRef | undefined;
+        let producer: RustNativeCallableProducer | undefined;
+        for (const subject of selected.subjects) {
+          const parameter = native.inputs.find(candidate => candidate.subject === subject);
+          const erased = parameter === undefined ? erasedClosureParameter(subject) : undefined;
+          if (erased !== undefined) {
+            if (erased.physical === undefined) return false;
+            if (producer !== undefined || actual !== undefined && !rustTargetTypeRefEquals(actual, erased.physical)) return false;
+            actual = erased.physical;
+            erasedActual = erased.logical;
+            if (!bindSignature(input.carrier, erased.logical)) return false;
+          } else if (parameter !== undefined) {
+            if (producer !== undefined || actual !== undefined && !rustTargetTypeRefEquals(actual, parameter.implementation)) return false;
+            actual = parameter.implementation;
+            if (!bindSignature(input.carrier, parameter.carrier)) return false;
+          } else {
+            if (rustOptionElementCarrier(input.carrier) !== undefined && subject.projection.length === 0 &&
+              isRustAbsenceCarrier(walk.context.records.runtimeCarrier.get(subject.node)?.carrier)) continue;
+            const candidate = subject.projection.length === 0
+              ? walk.context.callableValues.nativeProducers.forDeclaration(subject.node) : undefined;
+            if (candidate === undefined || actual !== undefined || producer !== undefined && candidate !== producer) return false;
+            producer = candidate;
             const operation = walk.context.records.targetOperation.get(subject.node);
             const carrier = operation?.kind === "closure" ? operation.resultCarrier
               : walk.context.records.runtimeCarrier.get(subject.node)?.carrier;
-            if (carrier === undefined || !bindSignature(input.carrier, carrier)) return undefined;
+            if (carrier === undefined || !bindSignature(input.carrier, carrier)) return false;
           }
         }
+        if (actual !== undefined) {
+          types.set(identity, actual);
+          if (erasedActual !== undefined) erasedInputs.set(identity, erasedActual);
+        }
+        else if (producer !== undefined) {
+          const carrier = substituteRustTargetGenerics(input.carrier, types, lifetimes, consts);
+          producers.set(identity, producer);
+          physicalInputs.set(identity, carrier);
+        }
+        else return false;
+        bindings.add(identity);
       }
-      if (actual !== undefined) {
-        types.set(identity, actual);
-        if (erasedActual) erasedInputs.set(identity, actual);
+      // A producer that fills a callable slot is materialized with the slot's parameter carriers, so each of the
+      // producer's own native callable inputs is the slot's formal parameter at the same position. Without this the
+      // producer's error keeps its inputs' implementation parameters, which no caller outside the producer can bind.
+      for (const [identity, producer] of producers) {
+        const slot = inputs.get(identity)!.carrier;
+        const slotCarrier = rustOptionElementCarrier(slot) ?? slot;
+        const formal = rustGenericCallableProtocol(slotCarrier) ?? rustCallableProtocol(slotCarrier) ??
+          rustNativeCallableProtocol(slotCarrier);
+        if (formal === undefined) continue;
+        const parameters = sourceCallableValueParameters(walk.context.ast, producer.declaration,
+          walk.context.sourceStorage.source.semantics.forNode(producer.declaration));
+        if (parameters === undefined) return false;
+        for (const own of native.inputsFor(producer.declaration)) {
+          if (types.has(own.implementation.identity)) continue;
+          const position = parameters.indexOf(own.subject.node);
+          const parameter = position < 0 ? undefined : formal.parameters[position];
+          if (parameter === undefined) continue;
+          const carrier = substituteRustTargetGenerics(parameter, types, lifetimes, consts);
+          const selected = rustOptionElementCarrier(carrier) ?? carrier;
+          if (selected.kind === "target-named" && selected.id === rustCallableTargetId) {
+            const physical = rustCallablePhysicalCarrier(selected);
+            if (physical === undefined) return false;
+            types.set(own.implementation.identity, physical);
+          } else types.set(own.implementation.identity, selected);
+        }
       }
-      else if (producer !== undefined) {
-        const carrier = substituteRustTargetGenerics(input.carrier, types, lifetimes, consts);
-        producers.set(identity, producer);
-        physicalInputs.set(identity, carrier);
-      }
-      else return undefined;
-    }
-    // A producer that fills a callable slot is materialized with the slot's parameter carriers, so each of the
-    // producer's own native callable inputs is the slot's formal parameter at the same position. Without this the
-    // producer's error keeps its inputs' implementation parameters, which no caller outside the producer can bind.
-    for (const [identity, producer] of producers) {
-      const slot = inputs.get(identity)!.carrier;
-      const slotCarrier = rustOptionElementCarrier(slot) ?? slot;
-      const formal = rustGenericCallableProtocol(slotCarrier) ?? rustCallableProtocol(slotCarrier) ??
-        rustNativeCallableProtocol(slotCarrier);
-      if (formal === undefined) continue;
-      const parameters = sourceCallableValueParameters(walk.context.ast, producer.declaration,
-        walk.context.sourceStorage.source.semantics.forNode(producer.declaration));
-      if (parameters === undefined) return undefined;
-      for (const own of native.inputsFor(producer.declaration)) {
-        if (types.has(own.implementation.identity)) continue;
-        const position = parameters.indexOf(own.subject.node);
-        const parameter = position < 0 ? undefined : formal.parameters[position];
-        if (parameter === undefined) continue;
-        const carrier = substituteRustTargetGenerics(parameter, types, lifetimes, consts);
-        types.set(own.implementation.identity, rustOptionElementCarrier(carrier) ?? carrier);
-      }
-    }
+      return true;
+    };
+    if (!bindCarriers(carriers)) return undefined;
     const substitute = (carrier: TargetTypeRef, selectedTypes: ReadonlyMap<string, TargetTypeRef>): TargetTypeRef | undefined => {
       let valid = true;
       const selected = substituteRustTargetGenerics(carrier, selectedTypes, lifetimes, consts, (type, original) => {
@@ -282,15 +307,16 @@ export function createRustSourceErrorEffectSelection(walk: { readonly context: R
       });
       return valid && isRustTargetTypeRef(selected) ? selected : undefined;
     };
-    if (storageBindings !== undefined && !bindingIdentities.has(storageBindings)) bindingIdentities.set(storageBindings, nextBindingIdentity++);
+    if (activation !== undefined && !bindingIdentities.has(storageBindings)) bindingIdentities.set(storageBindings, nextBindingIdentity++);
     const identity = closedMetadataKey({ invocation: sourceNodeIdentity(walk.context.ast, node),
       declaration: sourceNodeIdentity(walk.context.ast, declaration),
-      storage: storageBindings === undefined ? null : bindingIdentities.get(storageBindings),
+      storage: activation === undefined ? null : bindingIdentities.get(storageBindings),
       types: [...types], lifetimes: [...lifetimes], consts: [...consts],
       producers: [...producers].map(([identity, producer]) => [identity, producer.identity]), absent: [...absentInputs] });
     return Object.freeze({ types, lifetimes, consts, identity,
       substitute: (carrier: TargetTypeRef) => substitute(carrier, types),
       complete(carrier: TargetTypeRef, physical: Pick<RustNativeStoragePlan, "invocationInputFor" | "boundSubjectFor">) {
+        if (!bindCarriers([carrier])) return undefined;
         const logical = substitute(carrier, types);
         if (logical === undefined) return undefined;
         const needed = new Set(rustTargetGenericReferences(logical).typeIdentities);
@@ -300,7 +326,7 @@ export function createRustSourceErrorEffectSelection(walk: { readonly context: R
           const previous = completedInputs.get(identity);
           if (previous !== undefined) { selectedTypes.set(identity, previous); continue; }
           const input = inputs.get(identity)!;
-          const selected = storageBindings === undefined ? physical.invocationInputFor(input, node, caller)
+          const selected = activation === undefined ? physical.invocationInputFor(input, node, caller)
             : physical.boundSubjectFor(input.subject, logical, storageBindings);
           const payload = selected.kind === "unresolved" ? undefined : rustPhysicalPayloadFor(logical, selected.carrier,
             rustOptionElementCarrier(logical) ?? logical, walk.context.typeDefinitions);
@@ -344,6 +370,7 @@ export function createRustSourceErrorEffectSelection(walk: { readonly context: R
           return Object.freeze({ identity: selectedIdentity, errorType: snapshotClosedMetadata(selectedType) });
         });
       } else if (!rustTargetTypeRefEquals(target.errorType, errorType)) return undefined;
+      if (substitutedOnCompletion.has(source.identity)) substitutedOnCompletion.add(target.identity);
       nativeErrors.push(Object.freeze({ source, target }));
     }
     const selectedEffects = mergeRustErrorEffects([{ localErrors: effects.localErrors,
@@ -372,6 +399,9 @@ export function createRustSourceErrorEffectSelection(walk: { readonly context: R
     } finally { active.delete(error.identity); }
   };
   return Object.freeze({ register, bindingsFor, edgeFor, complete,
+    bindingCarriersFor(errors: readonly RustNativeErrorEffect[]) {
+      return errors.flatMap(error => substitutedOnCompletion.has(error.identity) ? [] : [error.errorType]);
+    },
     pending(error: RustNativeErrorEffect, select: () => RustNativeErrorEffect | undefined, substitution: "bound" | "completed" = "bound") {
       if (!register([error])) return false;
       pending.set(error.identity, select);
