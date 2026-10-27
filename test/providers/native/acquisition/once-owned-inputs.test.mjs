@@ -50,7 +50,7 @@ export function looped<Value>(status: Result<int32, int32>, count: nativeUint, s
 }
 ` },
   });
-  assert.deepEqual(result.diagnostics, []);
+  assert.equal(result.diagnostics.length, 0, "accepted source has no diagnostics");
   const output = artifactText(result, "src/index.rs");
   const start = output.indexOf("pub fn owned");
   const repeated = output.indexOf("pub fn snapshots");

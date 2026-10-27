@@ -217,7 +217,7 @@ export function main(): void {
     files: { "index.ts": source + "\nmain();\n" },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assert.equal(result.diagnostics.length, 0, "accepted source has no diagnostics");
   assert.equal(result.artifacts.some(({ path }) => path === "Cargo.toml"), false);
   assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /widget_alias::Widget::new\(7\)/u);
   assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /widget_alias::GenericFactory::new::<i32>\(1\)/u);
@@ -296,7 +296,7 @@ main();
 `,
     },
   });
-  assert.deepEqual(result.diagnostics, []);
+  assert.equal(result.diagnostics.length, 0, "accepted source has no diagnostics");
   const source = result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "";
   assert.match(source, /let equalFalse[^\n]*!probe\.is_some\(\)/u);
   assert.match(source, /let notTrue[^\n]*!probe\.is_some\(\)/u);
@@ -366,7 +366,7 @@ main();
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assert.equal(result.diagnostics.length, 0, "accepted source has no diagnostics");
   const source = result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "";
   assert.match(source, /widget_alias::require_local_future::<_>\(completeLater\(\)\)/u);
   assert.match(source, /widget_alias::require_send_static_future::<_>\(completeLater\(\)\)/u);
@@ -475,7 +475,7 @@ main();
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assert.equal(result.diagnostics.length, 0, "accepted source has no diagnostics");
   const source = result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "";
   assert.match(source, /widget_alias::choose_borrowed_mixed::<i32, 3>\(short, long\)/u);
   assert.match(source, /fn incrementBorrowed<'L>\(value: &'L mut i32\)/u);
@@ -710,7 +710,7 @@ main();
 `,
     },
   });
-  assert.deepEqual(result.diagnostics, []);
+  assert.equal(result.diagnostics.length, 0, "accepted source has no diagnostics");
   assert.equal(result.artifacts.some(({ path }) => path === "Cargo.toml"), false);
   const generated = result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "";
   assert.match(generated, /widget_alias::named_reexports::create_record\(value\)\n\}/u);

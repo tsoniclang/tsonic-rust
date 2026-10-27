@@ -35,7 +35,7 @@ function compile(providerRoot, options = {}, source = nativeProviderProofSource,
 function verifyProviderSource(sourceText, records = false) {
   const { root, providerRoot } = prepare();
   const result = compile(providerRoot, {}, sourceText, records);
-  assert.deepEqual(result.diagnostics, []);
+  assert.equal(result.diagnostics.length, 0, "accepted source has no diagnostics");
   const source = artifactText(result, "src/index.rs");
   assert.match(source, records ? /NativeLayout::<native_memory_proof::Envelope>::new/u : /native_memory_proof::acquire/u);
   assert.match(source, /reinterpret_raw_location::<u32, rt::TsonicError>/u);

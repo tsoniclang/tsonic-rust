@@ -34,7 +34,7 @@ export function copy(
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assert.equal(result.diagnostics.length, 0, "accepted source has no diagnostics");
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /pub fn copy\(source: \*mut i32, destination: \*mut i32, elementOffset: isize\) -> \*mut i32/u);
   assert.match(source, /unsafe \{\s*\*destination = \*source;\s*source\.offset\(elementOffset\)\s*\}/u);
@@ -63,7 +63,7 @@ safety(declaredUnsafe).requiresunsafe();
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assert.equal(result.diagnostics.length, 0, "accepted source has no diagnostics");
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /pub fn read\(pointer: \*mut i32\) -> i32 \{\s*unsafe \{ \*pointer \}\s*\}/u);
   assert.match(source, /pub unsafe fn declaredUnsafe\(value: i32\) -> i32/u);
@@ -85,7 +85,7 @@ export function pass(pointer: NativePointer<int32>): NativePointer<int32> {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assert.equal(result.diagnostics.length, 0, "accepted source has no diagnostics");
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /pub fn pass\(pointer: \*mut i32\) -> \*mut i32/u);
   assert.doesNotMatch(source, /unsafe/u);
@@ -120,7 +120,7 @@ export function passMut(pointer: mutPtr<u8>): mutPtr<u8> {
 `,
     },
   });
-  assert.deepEqual(accepted.result.diagnostics, []);
+  assert.equal(accepted.result.diagnostics.length, 0, "accepted source has no diagnostics");
   const source = artifactText(accepted.result, "src/index.rs");
   assert.match(source, /pub fn preserveConst\(pointer: \*const u8\) -> \*const u8/u);
   assert.match(source, /pub fn preserveMut\(pointer: \*mut u8\) -> \*mut u8/u);
@@ -216,7 +216,7 @@ export function local(value: int32): int32 {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assert.equal(result.diagnostics.length, 0, "accepted source has no diagnostics");
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /pub fn exact\(value: i32\) -> i32 \{\s*unsafe \{ value \}\s*\}/u);
   assert.match(source, /pub fn local\(value: i32\) -> i32 \{\s*unsafecontext\(value\)\s*\}/u);
@@ -240,7 +240,7 @@ export function increment(value: int32): int32 {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assert.equal(result.diagnostics.length, 0, "accepted source has no diagnostics");
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /allow\(unused_unsafe, reason = "explicit source unsafe region"\)/u);
   assert.match(source, /unsafe \{ value \+ 1 \}/u);
@@ -264,7 +264,7 @@ export function read(pointer: NativePointer<int32>): int32 {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assert.equal(result.diagnostics.length, 0, "accepted source has no diagnostics");
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /allow\(unused_unsafe, reason = "explicit source unsafe region"\)/u);
   assert.match(source, /unsafe \{ unsafe \{ \*pointer \} \}/u);
@@ -289,7 +289,7 @@ export function read(pointer: NativePointer<int32>): int32 {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assert.equal(result.diagnostics.length, 0, "accepted source has no diagnostics");
   const read = nativeFunction(result, "read");
   assert.equal(nativeNodes(read, node => node.kind === "word" && node.path === "unused_unsafe").length, 0);
   assert.equal(nativeNodes(read, node => node.kind === "dereference").length, 1);
@@ -342,7 +342,7 @@ export function read(pointer: NativePointer<int32>): int32 {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assert.equal(result.diagnostics.length, 0, "accepted source has no diagnostics");
   const read = nativeFunction(result, "read");
   assert.equal(nativeNodes(read, node => node.kind === "dereference").length, 1);
   validateGeneratedProject("explicit-safety-nested-function-region", result.artifacts);
@@ -365,7 +365,7 @@ export function read(value: int32): int32 {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assert.equal(result.diagnostics.length, 0, "accepted source has no diagnostics");
   const proofArtifacts = result.artifacts.map(artifact => artifact.path !== "src/index.rs" ? artifact : {
     ...artifact,
     text: artifact.text + `
@@ -465,7 +465,7 @@ export function accepted(value: int32): int32 {
 `,
     },
   }).result;
-  assert.deepEqual(accepted.diagnostics, []);
+  assert.equal(accepted.diagnostics.length, 0, "accepted source has no diagnostics");
   const source = artifactText(accepted, "src/index.rs");
   assert.match(source, /pub unsafe fn selected\(value: i32\) -> i32/u);
   assert.match(source, /pub fn accepted\(value: i32\) -> i32 \{\s*unsafe \{ selected\(value\) \}\s*\}/u);
@@ -496,7 +496,7 @@ export function inspect(value: int32): int32 {
 `,
     },
   });
-  assert.deepEqual(result.diagnostics, []);
+  assert.equal(result.diagnostics.length, 0, "accepted source has no diagnostics");
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /pub unsafe fn new\(value: i32\) -> Box/u);
   assert.match(source, /unsafe fn dispatch_box_read\(self: alloc::rc::Rc<Self>\) -> i32/u);
@@ -533,7 +533,7 @@ export function inspect(): int32 {
 `,
     },
   });
-  assert.deepEqual(result.diagnostics, []);
+  assert.equal(result.diagnostics.length, 0, "accepted source has no diagnostics");
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /pub unsafe fn new\(\) -> Base/u);
   assert.match(source, /unsafe fn dispatch_base_read/u);
@@ -690,7 +690,7 @@ export function write(value: Value, next: int32): void {
 `,
     },
   }).result;
-  assert.deepEqual(accepted.diagnostics, []);
+  assert.equal(accepted.diagnostics.length, 0, "accepted source has no diagnostics");
   const text = artifactText(accepted, "src/index.rs");
   assert.match(
     text,

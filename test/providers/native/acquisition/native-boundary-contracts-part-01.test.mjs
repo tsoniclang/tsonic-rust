@@ -31,7 +31,7 @@ export function main(): Outcome<void> {
 }
 ` },
   });
-  assert.deepEqual(result.diagnostics, []);
+  assert.equal(result.diagnostics.length, 0, "accepted source has no diagnostics");
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /Box<dyn (?:std|core)::error::Error>/u);
   assert.match(source, /read_to_string[^;]+\?/u);
