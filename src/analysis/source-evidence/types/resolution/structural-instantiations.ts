@@ -129,7 +129,7 @@ export function retainRustStructuralInstantiation(
       (!ownsBody && (selected.source.property.optional !== selected.destination.property.optional ||
       selected.source.property.readonly !== selected.destination.property.readonly)) ||
       selected.source.read !== selected.destination.read ||
-      selected.source.read === "unavailable" ||
+      (selected.source.read === "unavailable" && context.callableRepresentation !== "signature") ||
       selected.destination.declarations.length !== field.declarations.length ||
       selected.destination.declarations.some(declaration => !field.declarations.includes(declaration))) return undefined;
     const authoredEvidence = field.declarations.flatMap(declaration => {

@@ -79,6 +79,22 @@ test("structural retention projects the actual source member and preserves physi
   assert.equal(retainRustStructuralInstantiation(sourceType, carrier, carrier,
     { ...context, currentSemantics: logicalSemantics }, options), false,
   "the same absent source provenance cannot authorize physical member storage");
+  const setterSemantics = destinationRead => ({ types: { ...context.currentSemantics.types, structuralMembers() {
+    const selected = context.currentSemantics.types.structuralMembers();
+    return { ...selected, members: selected.members.map(member => ({ ...member,
+      source: { ...member.source, read: "unavailable" },
+      destination: { ...member.destination, read: destinationRead } })) };
+  } } });
+  const setterContext = { ...context, currentSemantics: setterSemantics("unavailable"),
+    ast: { ...context.ast, is: { ...context.ast.is, IsSetAccessorDeclaration: () => true } } };
+  assert.equal(retainRustStructuralInstantiation(sourceType, carrier, carrier,
+    { ...setterContext, callableRepresentation: "signature", sourceStorageResolution: undefined }, options), true,
+  "an exact setter-only correspondence retains logical metadata without inventing a readable physical field");
+  assert.equal(retainRustStructuralInstantiation(sourceType, carrier, carrier, setterContext, options), false,
+    "the same setter-only metadata cannot authorize physical read storage");
+  assert.equal(retainRustStructuralInstantiation(sourceType, carrier, carrier,
+    { ...setterContext, currentSemantics: setterSemantics("property"), callableRepresentation: "signature" }, options), false,
+  "signature purpose cannot disguise a setter-only source as a readable property destination");
   const arraySource = {};
   const arrayContext = { ...context, currentSemantics: { types: { ...context.currentSemantics.types,
     isArrayLike: type => type === arraySource, isTypeReference: type => type === arraySource,
