@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { assertRustInheritedRecordConflict, assertRustInheritedRecordCorrespondence } from "../../../helpers/records.mjs";
 import { createRustProgramRecordBuilder, createRustProgramRecords } from "../../../../dist/analysis/program/records/create.js";
+import { createRustStructuralShapePlanRegistry } from "../../../../dist/analysis/objects/shapes/structural-shape-registry.js";
 import { recordRustValueCarrierReconciliation } from "../../../../dist/analysis/program/records/types/value-carrier-admission.js";
 import { rustEffectiveValueCarrier } from "../../../../dist/analysis/conversions/value-carrier-queries.js";
 
@@ -100,10 +101,18 @@ function admitFamily(model, family, subject, fact) {
 test("sealed records publish only frozen typed family readers without a native key or writer API", () => {
   const model = createModel();
   const modelRequiredRecords = [];
+  const shapes = createRustStructuralShapePlanRegistry();
+  shapes.initialize([], [], () => "fixture", [], [], new Map());
+  shapes.finalizeMethodStorage(new Map(), () => undefined);
+  shapes.initializeUnions([]);
+  const structuralShapes = shapes.seal();
+  model.projectEmissionPlans.structuralShapes(structuralShapes.definitionForCarrier);
   model.assertOpen();
   const records = model.seal(modelRequiredRecords);
   assert.equal(Object.hasOwn(records, "assertOpen"), false, "the analysis lifecycle guard is not a backend capability");
   assert.throws(model.assertOpen, /after analysis is sealed/u);
+  assert.throws(() => model.projectEmissionPlans.structuralShapes(structuralShapes.definitionForCarrier),
+    /after analysis is sealed/u, "canonical lookup publication closes with the rest of the record producers");
   const subject = {};
   const carrier = { kind: "source-primitive", name: "uint32" };
   const location = rustSourceLocationTargetType(carrier);
