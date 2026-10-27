@@ -1,11 +1,11 @@
 import { structuralStorageKey, instantiateStructuralDefinition } from "../../../policy/types/objects/structural-storage.js";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import { preferredShapeName, allocateSnakeName, allocatePascalName } from "../../names/structural-storage.js";
-import type { RustStructuralShapeField, RustStructuralShapeDefinition, RustStructuralMethodStorageSelection, RustStructuralMethodExposure, RustStructuralMethodPlan } from "../../../target-model/records/structural-shapes.js";
+import type { RustStructuralShapeField, RustStructuralShapeDefinition, RustStructuralMethodStorageSelection, RustStructuralMethodExposure, RustStructuralMethodPlan } from "../../../target-model/records/objects/structural-shapes.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
 import { rustPropertyStorageNames } from "../../../target-model/names/property-storage.js";
-import type { RustStructuralInstantiation } from "../../../target-model/records/source-types.js";
+import type { RustStructuralInstantiation } from "../../../target-model/records/types/source-types.js";
 import { createRustGeneratedUnionPlan, type RustGeneratedUnionPlan } from "./generated-union-plan.js";
 import type { RustNativeObjectField } from "../../../target-model/operations/native-memory.js";
 import { rustNativeMemoryLayoutsEqual } from "../../../target-model/operations/native-memory.js";
@@ -21,7 +21,7 @@ import { rustLifetimeKey, type RustLifetimeRef } from "../../../target-model/lif
 import { rustStructuralGenericCarrier } from "../../../policy/types/objects/structural-generics.js";
 import { inferRustTargetGenericBindings } from "../../../target-model/types/carriers/generic-inference.js";
 import { substituteRustTargetGenerics } from "../../../target-model/types/carriers/substitution.js";
-import type { RustSourceObjectShape, RustStructuralFieldImplementation } from "../../../target-model/records/source-types.js";
+import type { RustSourceObjectShape, RustStructuralFieldImplementation } from "../../../target-model/records/types/source-types.js";
 import { selectRustStructuralMethodContextCarrier } from "../../../policy/types/objects/structural-emission.js";
 import { selectRustStructuralPhysicalDestinations } from "./physical-destinations.js";
 import { rustProgramErrorOwner } from "../../../target-model/types/carriers/program-errors.js";

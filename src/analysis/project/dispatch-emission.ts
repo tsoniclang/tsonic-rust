@@ -1,10 +1,10 @@
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import { rustProgramNodeIsOutsideNativeCode } from "../control-flow/compile-time-statements.js";
 import type { RustAnalysisProgram } from "../program/model.js";
-import type { RustSourcePackageErrorPlan } from "../../target-model/records/source-package-errors.js";
-import type { RustDispatchRootEmission } from "../../target-model/records/dispatch-contexts.js";
-import type { RustDispatchContextEmissionProducer } from "../program/records/dispatch-contexts.js";
-import type { RustPhysicalErrorOwner } from "../../target-model/records/error-regions.js";
+import type { RustSourcePackageErrorPlan } from "../../target-model/records/errors/source-package-errors.js";
+import type { RustDispatchRootEmission } from "../../target-model/records/operations/dispatch-contexts.js";
+import type { RustDispatchContextEmissionProducer } from "../program/records/operations/dispatch-contexts.js";
+import type { RustPhysicalErrorOwner } from "../../target-model/records/errors/error-regions.js";
 import { isRustProgramErrorCarrier, rustProgramErrorTargetType } from "../../target-model/types/index.js";
 import { mapRustTargetTypes } from "../../target-model/types/carriers/substitution.js";
 import { selectRustStandaloneTypeIdentity } from "../../policy/types/resolution/standalone-emission.js";
@@ -12,7 +12,7 @@ import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import { closeRustRetainedCallableCarrier } from "../../policy/ownership/retained-storage.js";
 import { rustStaticLifetime } from "../../target-model/lifetimes/index.js";
 import type { Node } from "@tsonic/tsts";
-import type { RustFinalizedDispatchContextInput, RustFinalizedOperationAbi } from "../../target-model/records/finalized-operation.js";
+import type { RustFinalizedDispatchContextInput, RustFinalizedOperationAbi } from "../../target-model/records/operations/finalized-operation.js";
 import { isRustFinalizedDispatchContextInput } from "../../target-model/operations/finalized-inputs.js";
 
 export function analyzeRustDispatchRootEmission(program: Omit<RustAnalysisProgram, "reachability">,

@@ -1,6 +1,6 @@
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
-import type { RustProjectStructuralView } from "../../target-model/records/project-structural-views.js";
+import type { RustProjectStructuralView } from "../../target-model/records/objects/project-structural-views.js";
 import { analyzeRustFrozenReceiverCaptures } from "./frozen-receiver-captures.js";
 
 import { rustStructuralObjectCarrierValue } from "../../target-model/types/carriers/source-types.js";
@@ -9,10 +9,10 @@ import type { RustObjectRepresentationPlan } from "../project-types/object-repre
 import type { RustStructuralShapeLayoutPlan } from "./shapes/structural-shape-plan.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 
-import type { RustFrozenWriteReceiver } from "../../target-model/records/field-writes.js";
+import type { RustFrozenWriteReceiver } from "../../target-model/records/storage/field-writes.js";
 
-import type { RustFrozenDataWritePlan } from "../../target-model/records/frozen-data.js";
-import { createRustFrozenDataWriteRecords } from "../program/records/frozen-data.js";
+import type { RustFrozenDataWritePlan } from "../../target-model/records/storage/frozen-data.js";
+import { createRustFrozenDataWriteRecords } from "../program/records/storage/frozen-data.js";
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
 import { rustSourceTypeCarrierValue } from "../../target-model/types/carriers/source-types.js";
 export interface RustFrozenDataWriteRegistry extends RustFrozenDataWritePlan {

@@ -1,5 +1,5 @@
-import type { RustNativeGenericProducerBridge } from "../../../../target-model/records/native-protocol-emission.js";
-import type { RustNativeCallableProtocol } from "../../../../target-model/records/native-protocols.js";
+import type { RustNativeGenericProducerBridge } from "../../../../target-model/records/native/native-protocol-emission.js";
+import type { RustNativeCallableProtocol } from "../../../../target-model/records/native/native-protocols.js";
 import { rustGenericCallableStorageArguments } from "../../../../target-model/types/carriers/generic-callable-storage.js";
 import type { RustExpr, RustItem, RustStmt, RustType } from "../../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../../program/plan-context.js";

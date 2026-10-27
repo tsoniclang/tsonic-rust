@@ -3,7 +3,7 @@ import test from "node:test";
 import { createRustSourceTypeFamilyRegistry } from "../../../../dist/analysis/project-types/type-families.js";
 import { rustSourceOptionalTargetType } from "../../../../dist/target-model/types/projections.js";
 import { analyzeRustOptionalStorageCallEmission, analyzeRustOptionalStorageTypeEmission } from "../../../../dist/analysis/project-types/optional-storage-emission.js";
-import { createRustProjectEmissionProducer } from "../../../../dist/analysis/program/records/project-emission.js";
+import { createRustProjectEmissionProducer } from "../../../../dist/analysis/program/records/program/project-emission.js";
 import { rustOptionalStorageCallArguments, rustOptionalStorageTypeArguments } from "../../../../dist/backend/planner/types/type-projections.js";
 import { closedMetadataKey } from "../../../../dist/target-model/metadata/closed-data.js";
 import { createRustRecordFixture } from "../../../helpers/records.mjs";

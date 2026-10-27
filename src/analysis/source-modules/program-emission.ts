@@ -2,7 +2,7 @@ import type { SourceFile } from "@tsonic/tsts";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { RustAnalysisProgram } from "../program/model.js";
-import type { RustSourcePackageEmissionProducer } from "../program/records/source-packages.js";
+import type { RustSourcePackageEmissionProducer } from "../program/records/program/source-packages.js";
 import { allocateRustComponentSupportModuleName } from "../../policy/identities/support-modules.js";
 import { selectRustStandaloneTypeIdentity } from "../../policy/types/resolution/standalone-emission.js";
 

@@ -4,8 +4,8 @@ import type { TargetSourceProgram } from "@tsonic/target-api/source";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustEffectiveValueCarrier } from "../conversions/value-carrier-queries.js";
-import type { RustNumericRepresentations } from "../../target-model/records/numeric.js";
-import { createRustNumericRepresentationRecords } from "../program/records/numeric.js";
+import type { RustNumericRepresentations } from "../../target-model/records/operations/numeric.js";
+import { createRustNumericRepresentationRecords } from "../program/records/operations/numeric.js";
 
 export function analyzeRustNumericRepresentations(input: {
   readonly source: TargetSourceProgram;

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { finalizeRustProviderOperationAbi } from "../../../dist/policy/operations/members/abi/finalize.js";
 import { validateRustFinalizedOperationAbi } from "../../../dist/policy/operations/members/abi/validation.js";
-import { finalizeProviderOperationFact } from "../../../dist/analysis/program/records/provider-operations.js";
+import { finalizeProviderOperationFact } from "../../../dist/analysis/program/records/native/provider-operations.js";
 import { emptyRustTypeDefinitions } from "../../../dist/target-model/types/source-union-definitions.js";
 
 const native = { kind: "target-named", id: "acme.NativeError" };

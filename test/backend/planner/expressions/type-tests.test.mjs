@@ -8,7 +8,7 @@ import { planRustFlowReadProjection } from "../../../../dist/backend/planner/exp
 import { createRustSyntheticNameState } from "../../../../dist/backend/planner/names/synthetic.js";
 import { rustSourcePrimitiveTargetType } from "../../../../dist/target-model/types/index.js";
 import { analyzeRustClosedTypeTests } from "../../../../dist/analysis/operations/type-test-emission.js";
-import { createRustClosedTypeTestProducer } from "../../../../dist/analysis/program/records/type-tests.js";
+import { createRustClosedTypeTestProducer } from "../../../../dist/analysis/program/records/types/type-tests.js";
 import { localProtectedIntrinsicSource } from "../../../../../tsonic/test/fixtures/local-protected-error-regions.mjs";
 import { nativeErrorCatchSource } from "../../../../../tsonic/test/fixtures/native-error-catch.mjs";
 import { bigintTruncationSource } from "../../../../../tsonic/test/fixtures/bigint-truncation.mjs";

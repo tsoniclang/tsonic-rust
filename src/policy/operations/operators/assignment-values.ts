@@ -1,4 +1,4 @@
-import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
+import type { RustTargetOperationFact } from "../../../target-model/records/operations/operations.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
 export function rustSelectedAssignmentValueCarrier(

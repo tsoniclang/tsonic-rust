@@ -3,9 +3,9 @@ import { rustProgramNodeIsOutsideNativeCode } from "../control-flow/compile-time
 import { Node_Expression } from "@tsonic/target-api/source";
 import { failTargetAnalysisInvariant, type TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustAnalysisProgram } from "../program/model.js";
-import type { RustPropertyReadProducer } from "../program/records/property-reads.js";
+import type { RustPropertyReadProducer } from "../program/records/objects/property-reads.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
-import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
+import type { RustTargetOperationFact } from "../../target-model/records/operations/operations.js";
 import { rustCallableProtocol, rustSourceTypeCarrierValue } from "../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { isValidRustIdentifier } from "../../target-model/names/identifiers.js";

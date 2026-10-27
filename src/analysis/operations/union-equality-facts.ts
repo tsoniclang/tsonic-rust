@@ -1,6 +1,6 @@
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
-import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
+import type { RustTargetOperationFact } from "../../target-model/records/operations/operations.js";
 import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustSourcePrimitiveTargetType } from "../../target-model/types/index.js";
 import { closedMetadataEquals } from "../../target-model/metadata/closed-data.js";

@@ -30,7 +30,7 @@ import { resolveRustIndexedField } from "./indexed-fields.js";
 import { resolveRustConstructType } from "./constructors.js";
 import { resolveRustIndexedRecordType } from "./records.js";
 import { rustSourcePropertyTargetType } from "../../../../target-model/types/projections.js";
-import type { RustSourceObjectField } from "../../../../target-model/records/source-types.js";
+import type { RustSourceObjectField } from "../../../../target-model/records/types/source-types.js";
 
 export function resolveRustFixedArrayTargetType(
   fixedArray: TsonicFixedArrayFact,

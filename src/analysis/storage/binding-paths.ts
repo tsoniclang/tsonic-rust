@@ -1,7 +1,7 @@
 import type { Node } from "@tsonic/tsts";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { RustAnalysisProgram } from "../program/model.js";
-import type { RustSourceBindingEmissionProducer } from "../program/records/binding-paths.js";
+import type { RustSourceBindingEmissionProducer } from "../program/records/storage/binding-paths.js";
 import { isValidRustIdentifier } from "../../target-model/names/identifiers.js";
 
 export function analyzeRustSourceBindingEmission(program: Omit<RustAnalysisProgram, "reachability">,

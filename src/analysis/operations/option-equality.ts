@@ -2,7 +2,7 @@ import type { Node } from "@tsonic/tsts";
 import { BinaryExpression_Left, BinaryExpression_Right } from "@tsonic/target-api/source";
 import { failTargetAnalysisInvariant, type TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustAnalysisProgram } from "../program/model.js";
-import type { RustOptionEqualityProducer } from "../program/records/option-equality.js";
+import type { RustOptionEqualityProducer } from "../program/records/operations/option-equality.js";
 import { rustStrictEqualityOperandCarrier } from "../conversions/value-carrier-queries.js";
 import { rustOptionEqualityContract } from "../../policy/operations/operators/option-equality.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";

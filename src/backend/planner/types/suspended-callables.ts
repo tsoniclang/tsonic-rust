@@ -1,4 +1,4 @@
-import type { RustSuspendedCallableImplementation } from "../../../target-model/records/suspended-callables.js";
+import type { RustSuspendedCallableImplementation } from "../../../target-model/records/callables/suspended-callables.js";
 import type { RustType } from "../../target-ast/syntax/nodes.js";
 import type { RustTypeRenderingContext } from "./render.js";
 import { rustTypeFromCarrierInContext } from "./render.js";

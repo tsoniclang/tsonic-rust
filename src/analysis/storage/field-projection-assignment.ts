@@ -5,8 +5,8 @@ import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { RustProjectFieldDispatchQueries } from "../project-types/field-dispatch.js";
 import type { RustObjectRepresentationPlan } from "../project-types/object-representation.js";
 import type { RustProjectTypePolicy } from "../project-types/index.js";
-import type { RustFieldProjectionAssignmentProducer } from "../program/records/field-projection-assignment.js";
-import { requireRustRecord, type RustRequiredRecord } from "../program/records/required-records.js";
+import type { RustFieldProjectionAssignmentProducer } from "../program/records/storage/field-projection-assignment.js";
+import { requireRustRecord, type RustRequiredRecord } from "../program/records/objects/required-records.js";
 
 export function analyzeRustFieldProjectionAssignments(input: {
   readonly ast: AstReader; readonly nodes: readonly Node[]; readonly records: RustProgramRecords;

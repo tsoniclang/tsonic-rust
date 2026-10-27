@@ -1,4 +1,4 @@
-import { requireRustRecord } from "../program/records/required-records.js";
+import { requireRustRecord } from "../program/records/objects/required-records.js";
 
 import { appendRustDiagnostic } from "../program/walk.js";
 

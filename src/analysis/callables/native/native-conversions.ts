@@ -1,16 +1,16 @@
 import type { Node } from "@tsonic/tsts";
 import type { RustProgramRecords } from "../../../target-model/records/program.js";
 
-import type { RustNativeCallablePhysicalSource } from "../../../target-model/records/callable-conversions.js";
+import type { RustNativeCallablePhysicalSource } from "../../../target-model/records/callables/callable-conversions.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 
 import { rustValueCarrierBeforeContextualConversion } from "../../conversions/value-carrier-queries.js";
 
-import type { RustNativeCallableProducerPlan } from "../../../target-model/records/native-producers.js";
+import type { RustNativeCallableProducerPlan } from "../../../target-model/records/native/native-producers.js";
 import type { RustNativeStoragePlan } from "../storage/native-storage.js";
-import type { RustFrameCallablePlan } from "../../../target-model/records/frame-callables.js";
+import type { RustFrameCallablePlan } from "../../../target-model/records/callables/frame-callables.js";
 import { rustInfallibleTargetId } from "../../../target-model/types/carriers/source-types.js";
 
 export function rustNativeCallableOperand(

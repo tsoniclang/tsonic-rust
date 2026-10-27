@@ -1,4 +1,4 @@
-import type { RustSourceParameterAbiFact } from "../../target-model/records/callables-and-resources.js";
+import type { RustSourceParameterAbiFact } from "../../target-model/records/callables/callables-and-resources.js";
 
 import { inferRustTargetGenericBindings, rustTargetGenericReferences, substituteRustTargetGenerics, isRustVecCarrier, isRustStringCarrier, rustFixedArrayCarrierValue, rustSourceOptionalTargetType, rustSliceElementCarrier, rustSliceRefTargetType, rustStructuralObjectCarrierValue, rustSourceTypeCarrierValue } from "../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";

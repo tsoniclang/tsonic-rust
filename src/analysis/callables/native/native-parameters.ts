@@ -3,7 +3,7 @@ import { sourceCallableValueParameters } from "@tsonic/target-api/source";
 import type { SourceStorageBindings, SourceStorageQueries, SourceStorageSubject } from "@tsonic/target-api/analysis";
 import type { RustProgramRecords } from "../../../target-model/records/program.js";
 import type { RustNativeStorageConstruction, RustNativeStorageQueries } from "../storage/native-storage.js";
-import type { RustNativeStorageSelection } from "../../../target-model/records/native-storage.js";
+import type { RustNativeStorageSelection } from "../../../target-model/records/native/native-storage.js";
 import type { RustOperationAttempt } from "../../program/operation-attempts.js";
 import type { RustValueDomainCarrierHost } from "../../objects/value-domain-carriers.js";
 import { rustSourceStorageProjectedCarrier } from "../../objects/value-domain-carriers.js";
@@ -116,4 +116,4 @@ export function finalizeRustNativeParameterStorage(input: {
     parameterFor: sealRustNativeParameterStorage(parameters).get });
 }
 
-import { sealRustNativeParameterStorage } from "../../program/records/native-parameters.js";
+import { sealRustNativeParameterStorage } from "../../program/records/native/native-parameters.js";

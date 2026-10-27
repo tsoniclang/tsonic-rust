@@ -5,7 +5,7 @@ import { closedMetadataKey } from "../../../target-model/metadata/closed-data.js
 import { type RustGenericCallableConversion } from "../../../target-model/conversions/generic-callable.js";
 import { rustGenericCallableConversionMatches } from "../../../policy/conversions/generic-callable.js";
 
-import type { RustSourceCallableSpecializationIssue } from "../../../target-model/records/callable-issues.js";
+import type { RustSourceCallableSpecializationIssue } from "../../../target-model/records/callables/callable-issues.js";
 
 export interface RustGenericCallableFlowIndex {
   readonly issues: readonly RustSourceCallableSpecializationIssue[];

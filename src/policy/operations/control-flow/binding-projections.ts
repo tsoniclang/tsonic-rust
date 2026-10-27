@@ -1,5 +1,5 @@
 import type { RustBindingProjectionPolicyInput } from "../../model/binding-projections.js";
-import type { RustBindingProjectionEmission, RustBindingProjectionOwnership } from "../../../target-model/records/binding-emission.js";
+import type { RustBindingProjectionEmission, RustBindingProjectionOwnership } from "../../../target-model/records/storage/binding-emission.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { isRustJsArrayCarrier, isRustVecCarrier, rustFixedArrayCarrierValue, rustJsArrayLikeElementTargetType, rustStructuralObjectCarrierValue, rustTargetConstInteger } from "../../../target-model/types/index.js";

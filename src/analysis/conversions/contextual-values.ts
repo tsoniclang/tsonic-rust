@@ -1,4 +1,4 @@
-import { requireRustRecord } from "../program/records/required-records.js";
+import { requireRustRecord } from "../program/records/objects/required-records.js";
 
 import { isRustUnitCarrier, isRustOptionCarrier, rustOptionElementCarrier, rustStructuralObjectCarrierValue } from "../../target-model/types/index.js";
 
@@ -6,8 +6,8 @@ import { selectRustIntegerTruncationConversion } from "../../policy/conversions/
 import { selectRustKnownNumericValueConversion } from "../../policy/conversions/selection.js";
 
 import { rustCallableTargetForSourceLifetime, selectRustValueCarrierReconciliation } from "../../policy/conversions/value-carrier-reconciliation.js";
-import { recordRustConversionSelection } from "../program/records/value-carrier-admission.js";
-import { recordRustOptionProjection, recordRustValueCarrierReconciliation } from "../program/records/value-carrier-admission.js";
+import { recordRustConversionSelection } from "../program/records/types/value-carrier-admission.js";
+import { recordRustOptionProjection, recordRustValueCarrierReconciliation } from "../program/records/types/value-carrier-admission.js";
 
 import { appendRustDiagnostic, rustOperationContext } from "../program/walk.js";
 

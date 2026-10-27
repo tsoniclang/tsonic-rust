@@ -1,13 +1,13 @@
-import { sealRustCallableEmissionContexts } from "../../program/records/physical-emission-contexts.js";
+import { sealRustCallableEmissionContexts } from "../../program/records/native/physical-emission-contexts.js";
 import type { AstReader, Node } from "@tsonic/tsts";
 import { targetUseSiteIdentity, targetUseSiteRef, type SourceStorageQueries, type TargetUseSiteRef } from "@tsonic/target-api/analysis";
 import { failTargetAnalysisInvariant, rejectedTargetStage, resolvedTargetStage, type TargetDiagnostic, type TargetStageResult } from "@tsonic/target-api/artifacts";
 import { sourceNodeIdentity } from "@tsonic/target-api/source";
 import type { RustLifetimeIndex } from "../../../target-model/lifetimes/index.js";
 import type { RustProgramRecords } from "../../../target-model/records/program.js";
-import type { RustFinalizedOperationAbi, RustFinalizedValueConversion } from "../../../target-model/records/finalized-operation.js";
-import type { RustErrorRegionRecords, RustInitializationErrorRecords } from "../../../target-model/records/error-regions.js";
-import type { RustCallableEmissionContexts, RustEmissionErrorContext, RustEmissionReturnDestination, RustEmissionProviderOperation, RustPhysicalEmissionContext, RustPhysicalEmissionOperand, RustPhysicalEmissionOperandOrigin, RustPhysicalEmissionSourceOccurrence, RustPhysicalEmissionSourceOrigins, RustPhysicalEmissionSourceSlot } from "../../../target-model/records/physical-emission-contexts.js";
+import type { RustFinalizedOperationAbi, RustFinalizedValueConversion } from "../../../target-model/records/operations/finalized-operation.js";
+import type { RustErrorRegionRecords, RustInitializationErrorRecords } from "../../../target-model/records/errors/error-regions.js";
+import type { RustCallableEmissionContexts, RustEmissionErrorContext, RustEmissionReturnDestination, RustEmissionProviderOperation, RustPhysicalEmissionContext, RustPhysicalEmissionOperand, RustPhysicalEmissionOperandOrigin, RustPhysicalEmissionSourceOccurrence, RustPhysicalEmissionSourceOrigins, RustPhysicalEmissionSourceSlot } from "../../../target-model/records/native/physical-emission-contexts.js";
 import type { RustTargetGenericBindings } from "../../../target-model/types/carriers/generic-inference.js";
 import type { RustTargetGenericArgument, TargetTypeRef } from "../../../target-model/types/model.js";
 import { substituteRustTargetGenerics } from "../../../target-model/types/carriers/substitution.js";
@@ -19,14 +19,14 @@ import type { RustProjectConstructionPlan } from "../../project-types/constructi
 import { providerSourceInputKey } from "../../operations/provider-source-inputs.js";
 import { rustGenericCallablePhysicalBindings, snapshotRustCallableBindings } from "../../../policy/types/callables/generic-bindings.js";
 import type { RustGenericCallablePlan } from "../generics/generic-values.js";
-import type { RustFrameCallablePlan } from "../../../target-model/records/frame-callables.js";
-import type { RustSuspendedCallablePlan } from "../../../target-model/records/suspended-callables.js";
+import type { RustFrameCallablePlan } from "../../../target-model/records/callables/frame-callables.js";
+import type { RustSuspendedCallablePlan } from "../../../target-model/records/callables/suspended-callables.js";
 import type { RustNativeCallableInputPlan } from "../native/native-inputs.js";
 import type { RustPhysicalCallableEmissionRequest } from "../ownership/physical-lifecycle.js";
-import type { RustPhysicalCallableStorage } from "../../../target-model/records/native-storage.js";
-import type { RustNativeCallableProducerPlan } from "../../../target-model/records/native-producers.js";
+import type { RustPhysicalCallableStorage } from "../../../target-model/records/native/native-storage.js";
+import type { RustNativeCallableProducerPlan } from "../../../target-model/records/native/native-producers.js";
 import type { RustGenericCallableCompletionPlan } from "../generics/generic-completions.js";
-import type { RustGenericCallableErrorIndex } from "../../../target-model/records/generic-callable-errors.js";
+import type { RustGenericCallableErrorIndex } from "../../../target-model/records/callables/generic-callable-errors.js";
 import type { RustNativeStoragePlan } from "../storage/native-storage.js";
 import { createRustEmissionSourceOriginPreparation, type RustEmissionSourceOwner, type RustEmissionSourceRequest } from "./emission-source-origins.js";
 

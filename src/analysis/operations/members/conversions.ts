@@ -1,17 +1,17 @@
 import type { RustOperationAnalysisContext } from "../../program/operation-context.js";
 import { acceptRustMemberOperation, normalizeSelectedOperationInputCarrier, providerIdentityText, rejectSelectedOperation } from "./result.js";
 import { providerOperationFact } from "../../../policy/operations/members/provider-templates.js";
-import { acceptRustOperation } from "../../program/records/selected-operation-values.js";
+import { acceptRustOperation } from "../../program/records/operations/selected-operation-values.js";
 import { sourceLiteralIsRepresentableAsPrimitive } from "../../source-evidence/types/resolution/selected-literals.js";
 import { acceptRustPolicy } from "../../../policy/model/contracts.js";
 import { asNode } from "../../../policy/identities/selected-source.js";
 import { providerFormRequiresSourceReceiver } from "../../../policy/operations/members/call-inputs.js";
 import { instantiateProviderOperationTemplate } from "../../../policy/types/callables/provider-templates.js";
-import { finalizeProviderOperationFact } from "../../program/records/provider-operations.js";
+import { finalizeProviderOperationFact } from "../../program/records/native/provider-operations.js";
 import { isRustAbsenceCarrier, rustOptionElementCarrier } from "../../../target-model/types/index.js";
 import { selectRustValueCarrierReconciliation } from "../../../policy/conversions/value-carrier-reconciliation.js";
 import { rustEffectiveValueCarrier } from "../../conversions/value-carrier-queries.js";
-import { recordRustValueCarrierReconciliation } from "../../program/records/value-carrier-admission.js";
+import { recordRustValueCarrierReconciliation } from "../../program/records/types/value-carrier-admission.js";
 import { resolveRustTargetTypeRef } from "../../source-evidence/types/resolution/source.js";
 import { rustCallableProtocol, rustTargetTypeContainsTypeParameter } from "../../../target-model/types/index.js";
 import { sourceExpressionResultDisposition } from "@tsonic/target-api/source";
@@ -25,7 +25,7 @@ import type { RustCheckedConversionSelectionInput, RustCheckedConversionSelectio
 import type { ExtensionFactSubject, ProviderDeclarationIdentity } from "@tsonic/tsts";
 import type { RustOperationsProviderOptions } from "./model.js";
 import type { RustProviderFactOperationKind, RustProviderOperationTemplate } from "../../../target-model/operations/model.js";
-import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
+import type { RustTargetOperationFact } from "../../../target-model/records/operations/operations.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { selectRustProviderSourceReceiver } from "./source-qualifiers.js";
 

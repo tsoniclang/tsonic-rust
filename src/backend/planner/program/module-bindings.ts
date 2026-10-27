@@ -1,5 +1,5 @@
 import type { Node } from "@tsonic/tsts";
-import type { RustModuleBindingFact } from "../../../target-model/records/operation-selections.js";
+import type { RustModuleBindingFact } from "../../../target-model/records/operations/operation-selections.js";
 import type { RustExpr, RustItem, RustStmt } from "../../target-ast/syntax/nodes.js";
 import { rustLintAttributes } from "../../target-ast/normalization/lint-policy.js";
 import { planNativeModuleFunction } from "../declarations/callables/functions.js";

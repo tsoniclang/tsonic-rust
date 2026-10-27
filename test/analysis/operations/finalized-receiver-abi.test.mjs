@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { finalizeRustProviderOperationAbi } from "../../../dist/policy/operations/members/abi/finalize.js";
 import { validateRustFinalizedOperationAbi } from "../../../dist/policy/operations/members/abi/validation.js";
-import { finalizeProviderOperationFact } from "../../../dist/analysis/program/records/provider-operations.js";
+import { finalizeProviderOperationFact } from "../../../dist/analysis/program/records/native/provider-operations.js";
 import { emptyRustTypeDefinitions } from "../../../dist/target-model/types/source-union-definitions.js";
 import { rustNamedTargetType, rustStringTargetType } from "../../../dist/target-model/types/carriers/native.js";
 import { rustStringToBorrowedStrValueConversion } from "../../../dist/public/provider.js";

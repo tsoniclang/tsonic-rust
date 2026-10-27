@@ -595,7 +595,7 @@ test("optional chains consume exact TSTS evidence through one finalized Option f
   assert.match(semantics, /records\.optionalChains\.guard\(request\.expression, selection\.fact\.guard, selection\.fact\.operationKind, selection\.fact\)/u);
   assert.doesNotMatch(semantics, /records\.optionalChain\.set\(/u);
   assert.doesNotMatch(semantics, /rustOptionalChainFactKey/u);
-  const producer = readFileSync(join(sourceRoot, "analysis/program/records/optional-chain.ts"), "utf8");
+  const producer = readFileSync(join(sourceRoot, "analysis/program/records/operations/optional-chain.ts"), "utf8");
   assert.match(producer, /id: "tsonic\.rust\.optionalChain"/u);
   assert.match(producer, /family\.writer\.set\(expression, Object\.freeze\(\{ expression, guard, operationKind,/u);
 
@@ -779,8 +779,8 @@ test("backend provider lowering consumes only total finalized operation ABI", ()
 });
 
 test("operation target shape and source-call effects have one finalized owner", () => {
-  const keys = readFileSync(join(sourceRoot, "target-model/records/operations.ts"), "utf8");
-  const abi = readFileSync(join(sourceRoot, "target-model/records/finalized-operation.ts"), "utf8");
+  const keys = readFileSync(join(sourceRoot, "target-model/records/operations/operations.ts"), "utf8");
+  const abi = readFileSync(join(sourceRoot, "target-model/records/operations/finalized-operation.ts"), "utf8");
   const expressions = collectFiles(join(sourceRoot, "backend/planner/expressions"), ".ts")
     .map((path) => readFileSync(path, "utf8"))
     .join("\n");
@@ -1121,7 +1121,7 @@ test("Rust dead-code obligations consume sealed reachability and normalize befor
   }
   const reachabilityModel = readFileSync(join(sourceRoot, "analysis/reachability/model.ts"), "utf8");
   const generatedModel = readFileSync(join(sourceRoot, "analysis/reachability/generated-item-usage-model.ts"), "utf8");
-  const recordModel = readFileSync(join(sourceRoot, "target-model/records/reachability.ts"), "utf8");
+  const recordModel = readFileSync(join(sourceRoot, "target-model/records/program/reachability.ts"), "utf8");
   assert.doesNotMatch(reachabilityModel, /readonly\s+\w+\s*:\s*\([^)]*\)\s*=>|\n\s+\w+\([^)]*\)\s*:/u);
   assert.doesNotMatch(recordModel, /readonly\s+\w+\s*:\s*\([^)]*\)\s*=>|\n\s+\w+\([^)]*\)\s*:/u);
   assert.doesNotMatch(

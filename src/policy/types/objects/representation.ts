@@ -1,5 +1,5 @@
 import type { RustProjectTypeDefinition } from "../../../target-model/types/project-types.js";
-import type { RustObjectRepresentationKind, RustObjectNativeLifetimeContract } from "../../../target-model/records/object-representation.js";
+import type { RustObjectRepresentationKind, RustObjectNativeLifetimeContract } from "../../../target-model/records/objects/object-representation.js";
 import { rustStaticLifetime } from "../../../target-model/lifetimes/index.js";
 import { rustLifetimeOutlives } from "../../constraints/lifetime-outlives.js";
 

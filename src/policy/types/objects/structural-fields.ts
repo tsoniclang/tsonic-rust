@@ -1,7 +1,7 @@
 import type { Node, Symbol } from "@tsonic/tsts";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
-import type { RustSourceTypeQueries, RustStructuralFieldRegistration } from "../../../target-model/records/source-types.js";
+import type { RustSourceTypeQueries, RustStructuralFieldRegistration } from "../../../target-model/records/types/source-types.js";
 
 export function selectRustStructuralFieldProjection(
   registry: RustSourceTypeQueries,

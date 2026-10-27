@@ -6,7 +6,7 @@ import { createTargetSourceProgram } from "@tsonic/target-api/source";
 import { analyzeRust } from "../../helpers/rust-session.mjs";
 import { analyzeRustNativeParticipation } from "../../../dist/analysis/callables/calls/participation.js";
 import { createRustProgramRecordBuilder } from "../../../dist/analysis/program/records/create.js";
-import { requireRustRecord } from "../../../dist/analysis/program/records/required-records.js";
+import { requireRustRecord } from "../../../dist/analysis/program/records/objects/required-records.js";
 
 function checkedFunctions(text) {
   const { program, source } = analyzeRust({ surfaces: [], files: { "index.ts": text } });

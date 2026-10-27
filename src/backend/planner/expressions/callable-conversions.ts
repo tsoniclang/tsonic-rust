@@ -2,7 +2,7 @@ import type { Node } from "@tsonic/tsts";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustCallableConversion } from "../../../target-model/conversions/callable.js";
 import type { RustCallablePhysicalValueConversion } from "../../../target-model/conversions/callable-physical.js";
-import type { RustCallableConversionEmission, RustCallableOperandEmission } from "../../../target-model/records/callable-conversions.js";
+import type { RustCallableConversionEmission, RustCallableOperandEmission } from "../../../target-model/records/callables/callable-conversions.js";
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";

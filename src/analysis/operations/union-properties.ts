@@ -3,7 +3,7 @@ import type { RustOperationAnalysisContext } from "../program/operation-context.
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustCheckedPropertySelectionInput, RustCheckedOperationSelectionResult, RustPolicySelection } from "../../policy/model/contracts.js";
 import type { RustOperationsProviderOptions } from "./members/model.js";
-import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
+import type { RustTargetOperationFact } from "../../target-model/records/operations/operations.js";
 import { selectRustGuardedValueMembers } from "./native-flow-refinement.js";
 import { resolveSelectedSourceProfilePropertyMembers } from "../../policy/identities/selected-source.js";
 import { selectJsSurfaceOperation } from "../../policy/operations/source-profiles/js/selection.js";

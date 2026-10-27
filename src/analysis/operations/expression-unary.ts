@@ -3,8 +3,8 @@ import { rustProgramNodeIsOutsideNativeCode } from "../control-flow/compile-time
 import { Node_Operand } from "@tsonic/target-api/source";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustAnalysisProgram } from "../program/model.js";
-import type { RustUnaryEmissionProducer } from "../program/records/expression-unary.js";
-import type { RustUnaryUpdateEmission } from "../../target-model/records/expression-unary.js";
+import type { RustUnaryEmissionProducer } from "../program/records/operations/expression-unary.js";
+import type { RustUnaryUpdateEmission } from "../../target-model/records/operations/expression-unary.js";
 import { isRustBigIntCarrier, isRustBoolCarrier } from "../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustTargetOperationText } from "../../target-model/operations/text.js";

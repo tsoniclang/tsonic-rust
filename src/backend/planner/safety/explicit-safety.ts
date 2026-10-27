@@ -1,5 +1,5 @@
 import type { Node } from "@tsonic/tsts";
-import type { RustSafetyApplication, RustSafetyOperation } from "../../../target-model/records/safety.js";
+import type { RustSafetyApplication, RustSafetyOperation } from "../../../target-model/records/storage/safety.js";
 import type { RustPlanningContext } from "../context.js";
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import type { RustAttribute } from "../../target-ast/syntax/attributes.js";

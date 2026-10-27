@@ -3,7 +3,7 @@ import { rustProgramNodeIsOutsideNativeCode } from "../control-flow/compile-time
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import { Node_Expression, Node_Operand } from "@tsonic/target-api/source";
 import type { RustAnalysisProgram } from "../program/model.js";
-import type { RustSourceAssertionProducer } from "../program/records/source-assertions.js";
+import type { RustSourceAssertionProducer } from "../program/records/operations/source-assertions.js";
 import { rustValueConversionContract } from "../../policy/conversions/contracts.js";
 
 export function analyzeRustSourceAssertions(program: Omit<RustAnalysisProgram, "reachability">,

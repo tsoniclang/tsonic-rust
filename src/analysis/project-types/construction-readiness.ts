@@ -13,7 +13,7 @@ import { rustConstructionFallthrough as fallthrough, rustConstructionFlowStates,
 import type { RustConstructionIssue } from "./construction-plan.js";
 import type { RustProjectTypeDefinition } from "./index.js";
 
-import type { RustConstructionExpression, RustConstructionPoint } from "../../target-model/records/construction.js";
+import type { RustConstructionExpression, RustConstructionPoint } from "../../target-model/records/objects/construction.js";
 
 export interface RustConstructionPointQueries {
   readonly points: readonly RustConstructionPoint[];

@@ -3,12 +3,12 @@ import { rustProgramNodeIsOutsideNativeCode } from "../control-flow/compile-time
 import { type TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import { TemplateExpression_Head, TemplateExpression_TemplateSpans, TemplateSpan_Expression, TemplateSpan_Literal } from "@tsonic/target-api/source";
 import { type RustAnalysisProgram } from "../program/model.js";
-import { type RustTemplateStringProducer } from "../program/records/template-strings.js";
-import { type RustTemplateStringEmission } from "../../target-model/records/template-strings.js";
+import { type RustTemplateStringProducer } from "../program/records/operations/template-strings.js";
+import { type RustTemplateStringEmission } from "../../target-model/records/operations/template-strings.js";
 import { isRustStringCarrier, rustStringTargetType } from "../../target-model/types/index.js";
 import { isRustSourceStringConvertibleCarrier } from "../../policy/operations/js-values/carrier-protocols.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
-import { requireRustRecord } from "../program/records/required-records.js";
+import { requireRustRecord } from "../program/records/objects/required-records.js";
 import { appendRustDiagnostic, type RustFactWalk } from "../program/walk.js";
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 import { setCarrierFact } from "./project-calls.js";

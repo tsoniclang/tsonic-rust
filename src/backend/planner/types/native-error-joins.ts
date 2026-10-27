@@ -5,7 +5,7 @@ import { emptyRustGenerics } from "../../target-ast/syntax/nodes.js";
 import { rustDeriveAttributes } from "../../target-ast/syntax/attributes.js";
 import { isValidRustIdentifier } from "../../../target-model/names/identifiers.js";
 import type { RustNativeErrorSource } from "../../../target-model/types/native-error-joins.js";
-import type { RustErrorJoinDeclaration } from "../../../target-model/records/error-regions.js";
+import type { RustErrorJoinDeclaration } from "../../../target-model/records/errors/error-regions.js";
 import { rustTargetRuntimeErrorType } from "./error-boundary.js";
 
 export type RustNativeErrorJoinSource = RustNativeErrorSource<RustType>;

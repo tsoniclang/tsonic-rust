@@ -17,7 +17,7 @@ import {
   readRustSourceUnsafeContext,
 } from "../../source/extension/explicit-safety.js";
 
-import type { RustSafetyApplication } from "../../target-model/records/safety.js";
+import type { RustSafetyApplication } from "../../target-model/records/storage/safety.js";
 
 export type RustSafetyApplicationFactIndex = TargetSafetyApplicationIndex<
   TsonicUnsafeContextFact,

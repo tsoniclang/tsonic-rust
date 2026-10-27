@@ -1,13 +1,13 @@
 import { failTargetAnalysisInvariant, type TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustAnalysisProgram } from "../program/model.js";
-import type { RustStructuralEmissionProducer } from "../program/records/structural-emission.js";
-import type { RustProjectEmissionProducer } from "../program/records/project-emission.js";
+import type { RustStructuralEmissionProducer } from "../program/records/objects/structural-emission.js";
+import type { RustProjectEmissionProducer } from "../program/records/program/project-emission.js";
 import { rustStructuralObjectCarrierValue } from "../../target-model/types/index.js";
 import { rustCarrierSupportsTrait } from "../../policy/constraints/native-traits.js";
 import { selectRustStructuralEmission } from "../../policy/types/objects/structural-emission.js";
 import type { Node } from "@tsonic/tsts";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
-import type { RustStructuralShapeDefinition } from "../../target-model/records/structural-shapes.js";
+import type { RustStructuralShapeDefinition } from "../../target-model/records/objects/structural-shapes.js";
 import { rustProgramNodeIsOutsideNativeCode } from "../control-flow/compile-time-statements.js";
 
 export function analyzeRustStructuralEmission(

@@ -1,11 +1,11 @@
-import { createRustPromiseBodyProducer } from "../../program/records/promise-bodies.js";
+import { createRustPromiseBodyProducer } from "../../program/records/callables/promise-bodies.js";
 import type { Node } from "@tsonic/tsts";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import { createSourceStorageBudget, defaultSourceStorageLimits } from "@tsonic/target-api/analysis";
 import { Node_Expression, sourceDeclarationIsModuleScoped, sourceImmediatelyAwaitedLocal } from "@tsonic/target-api/source";
 import type { RustAnalysisContext } from "../../program/context.js";
-import type { RustPromiseBodies } from "../../../target-model/records/callables-and-resources.js";
-import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
+import type { RustPromiseBodies } from "../../../target-model/records/callables/callables-and-resources.js";
+import type { RustTargetOperationFact } from "../../../target-model/records/operations/operations.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustFutureTargetType } from "../../../target-model/types/carriers/primitives.js";
 import { rustJsPromiseOutputTargetType } from "../../../target-model/types/carriers/promises.js";

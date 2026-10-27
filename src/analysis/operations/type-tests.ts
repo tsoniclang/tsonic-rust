@@ -1,4 +1,4 @@
-import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
+import type { RustTargetOperationFact } from "../../target-model/records/operations/operations.js";
 import type { RustProjectTypePolicy } from "../../target-model/types/project-types.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import { isRustTargetTypeRef } from "../../target-model/types/equality.js";

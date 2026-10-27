@@ -1,4 +1,4 @@
-import type { RustClosedErrorTransportDemand } from "../../target-model/records/closed-error-demand.js";
+import type { RustClosedErrorTransportDemand } from "../../target-model/records/errors/closed-error-demand.js";
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
 import { Node_Expression, TryStatement_CatchClause,
   TryStatement_TryBlock } from "@tsonic/target-api/source";
@@ -17,8 +17,8 @@ import { rustTargetTypeChildren } from "../../target-model/types/carriers/childr
 import { rustEffectiveValueCarrier, rustValueCarrierBeforeContextualConversion } from "../conversions/value-carrier-queries.js";
 import { rustFlowReadProjectionMatches } from "../control-flow/flow-read-projections.js";
 import { rustJsValueTargetType } from "../../target-model/types/carriers/js.js";
-import { rustJsRejectionErrorIdentity } from "../../target-model/records/error-effects.js";
-import type { RustErrorEffectsFact } from "../../target-model/records/error-effects.js";
+import { rustJsRejectionErrorIdentity } from "../../target-model/records/errors/error-effects.js";
+import type { RustErrorEffectsFact } from "../../target-model/records/errors/error-effects.js";
 
 export function rustClosedErrorTransportDemand(
   sourceFile: SourceFile, ast: AstReader, records: RustProgramRecords,

@@ -20,7 +20,7 @@ import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustOptionElementCarrier } from "../../../target-model/types/carriers/optional.js";
 
 import { rustCarrierSupportsClone } from "../../constraints/native-traits.js";
-import type { RustTsValueAdmission } from "../../../target-model/records/js-value-admission.js";
+import type { RustTsValueAdmission } from "../../../target-model/records/types/js-value-admission.js";
 export function isRustJsStrictEqualityCarrier(carrier: TargetTypeRef | undefined): boolean {
   return carrier?.kind === "target-named" && rustJsStrictEqualityTargetIds.has(carrier.id);
 }

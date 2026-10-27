@@ -3,7 +3,7 @@ import type { RustPlanContext } from "../../program/plan-context.js";
 import { allocateRustSyntheticName } from "../../names/synthetic.js";
 import { failRustPlannerInvariant } from "../../diagnostics.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
-import type { RustNativeCallableEntry } from "../../../../target-model/records/declaration-emission.js";
+import type { RustNativeCallableEntry } from "../../../../target-model/records/program/declaration-emission.js";
 
 export function planRustCallableLeadingParameters(
   declaration: Node,

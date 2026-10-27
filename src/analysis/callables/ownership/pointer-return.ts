@@ -8,7 +8,7 @@ import { resolveRustExactNullishValueCarrier } from "../../source-evidence/types
 import { readRustRawLocation } from "../../../source/extension/native-memory.js";
 import { resolveRustMemoryLayoutPointee } from "../../operations/pointers/native-memory.js";
 
-import type { RustPointerReturnContract } from "../../../target-model/records/pointer-return.js";
+import type { RustPointerReturnContract } from "../../../target-model/records/calls/pointer-return.js";
 export function selectRustPointerReturnCarrier(
   declaration: Node,
   context: RustTargetTypeResolutionContext,

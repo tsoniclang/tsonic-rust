@@ -3,7 +3,7 @@ import { authoredTypeParameterNames, generatedTypeParameterNames } from "@tsonic
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import { snapshotTargetReadonlyMap } from "@tsonic/target-api/analysis";
 import type { RustAnalysisProgram } from "../program/model.js";
-import type { RustClassEmissionProducer } from "../program/records/class-emission.js";
+import type { RustClassEmissionProducer } from "../program/records/objects/class-emission.js";
 import type { RustLifetimeRef } from "../../target-model/lifetimes/model.js";
 import { rustLifetimeKey } from "../../target-model/lifetimes/index.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
@@ -12,7 +12,7 @@ import { rustSourceTypeCarrierValue } from "../../target-model/types/carriers/so
 import { rustTargetGenericReferences } from "../../target-model/types/carriers/generic-references.js";
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
 import type { RustProjectTypeDefinition } from "../../target-model/types/project-types.js";
-import type { RustClassImplementationContext } from "../../target-model/records/class-implementations.js";
+import type { RustClassImplementationContext } from "../../target-model/records/objects/class-implementations.js";
 
 export interface RustClassImplementationContextConstruction {
   forInstance(definition: RustProjectTypeDefinition, carrier: TargetTypeRef): RustClassImplementationContext;

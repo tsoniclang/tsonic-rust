@@ -1,7 +1,7 @@
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { RustProjectTypeDefinition } from "../../target-model/types/project-types.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
-import type { RustProjectGenericEmission } from "../../target-model/records/project-emission.js";
+import type { RustProjectGenericEmission } from "../../target-model/records/program/project-emission.js";
 import { rustLifetimeKey } from "../../target-model/lifetimes/index.js";
 import { rustTargetGenericReferences } from "../../target-model/types/index.js";
 import type { RustDeclarationGenericRequirementIndex } from "../declarations/generic-requirements.js";

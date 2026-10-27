@@ -3,7 +3,7 @@ import type { Node } from "@tsonic/tsts";
 import type { RustOperationAttempt } from "./operation-attempts.js";
 
 import type { RustProgramRecordWriter } from "./records/model.js";
-import type { RustRequiredRecord } from "./records/required-records.js";
+import type { RustRequiredRecord } from "./records/objects/required-records.js";
 import type { RustSourceStorageResolution } from "../source-evidence/types/resolution/model.js";
 
 export interface RustOperationAnalysisContext extends RustOperationPolicyContext {

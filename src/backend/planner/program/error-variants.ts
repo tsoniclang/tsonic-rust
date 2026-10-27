@@ -1,6 +1,6 @@
 import type { RustProgramRecords } from "../../../target-model/records/program.js";
-import type { RustSourcePackageErrorBoundary, RustSourcePackageErrorDomainPlan } from "../../../target-model/records/source-package-errors.js";
-import type { RustPlannedErrorVariant, RustBoundaryErrorVariants } from "../../../target-model/records/error-transport.js";
+import type { RustSourcePackageErrorBoundary, RustSourcePackageErrorDomainPlan } from "../../../target-model/records/errors/source-package-errors.js";
+import type { RustPlannedErrorVariant, RustBoundaryErrorVariants } from "../../../target-model/records/errors/error-transport.js";
 
 export function planRustBoundaryErrorVariants(
   program: { readonly records: Pick<RustProgramRecords, "boundaryErrorVariants"> },

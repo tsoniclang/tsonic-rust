@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
-import type { RustOptionalStorageRequirement } from "../../../target-model/records/generic-requirements.js";
+import type { RustOptionalStorageRequirement } from "../../../target-model/records/types/generic-requirements.js";
 import type { RustGenericParameter, RustCallGenericArgument } from "../../target-ast/syntax/nodes.js";
 import { rustTypeFromCarrierInContext, type RustTypeRenderingContext } from "./render.js";
 import { rustGenericRequirementBounds } from "./generic-bounds.js";

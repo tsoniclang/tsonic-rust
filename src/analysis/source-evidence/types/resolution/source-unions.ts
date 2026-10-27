@@ -1,7 +1,7 @@
 import { selectRustImmediateUnionCarrier } from "../../../../policy/types/resolution/source-unions.js";
 import type { Node, Type } from "@tsonic/tsts";
 import { sourceBoundTypeRelationship, type SourceFileSemantics } from "@tsonic/target-api/source";
-import type { RustSourceUnion } from "../../../../target-model/records/source-types.js";
+import type { RustSourceUnion } from "../../../../target-model/records/types/source-types.js";
 import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "./model.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import { rustSourceUnionCarrierValue } from "../../../../target-model/types/carriers/source-types.js";

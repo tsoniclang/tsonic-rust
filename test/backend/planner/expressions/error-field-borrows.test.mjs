@@ -3,8 +3,8 @@ import test from "node:test";
 import { analyzeRust, compileRust, rustSourceText } from "../../../helpers/rust-session.mjs";
 import { rustNativeFixtureNodes } from "../../../helpers/records.mjs";
 import { analyzeRustErrorFieldBorrows } from "../../../../dist/analysis/operations/error-field-borrows.js";
-import { createRustErrorFieldProducer } from "../../../../dist/analysis/program/records/error-field-borrows.js";
-import { assertRustRequiredRecords } from "../../../../dist/analysis/program/records/required-records.js";
+import { createRustErrorFieldProducer } from "../../../../dist/analysis/program/records/errors/error-field-borrows.js";
+import { assertRustRequiredRecords } from "../../../../dist/analysis/program/records/objects/required-records.js";
 
 // Error property reads in comparisons borrow the Error's field where nothing later can change it, and take an
 // owned value first where a later operand writes the same Error. Analysis seals the decision

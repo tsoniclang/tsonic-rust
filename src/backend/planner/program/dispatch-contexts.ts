@@ -3,7 +3,7 @@ import { failRustPlannerInvariant } from "../diagnostics.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import type { RustTypeRenderingContext } from "../types/render.js";
 import { rustRuntimeAliasUseItems } from "./plan-context.js";
-import type { RustSourcePackageErrorDomainPlan } from "../../../target-model/records/source-package-errors.js";
+import type { RustSourcePackageErrorDomainPlan } from "../../../target-model/records/errors/source-package-errors.js";
 
 export function planRustDispatchContextRoots(
   context: RustTypeRenderingContext & {

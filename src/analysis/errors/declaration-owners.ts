@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import type { RustAnalysisProgram } from "../program/model.js";
-import type { RustErrorEmissionProducer } from "../program/records/error-emission.js";
+import type { RustErrorEmissionProducer } from "../program/records/errors/error-emission.js";
 import { selectRustPhysicalProgramErrorOwner } from "./error-types.js";
 
 export function analyzeRustDeclarationErrorOwners(

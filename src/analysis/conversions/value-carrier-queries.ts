@@ -8,7 +8,7 @@ import { rustCompilerOwnedContextualConversionMatches } from "../../policy/conve
 import type { RustContextualValueConversion } from "../../target-model/conversions/contextual.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 
-import type { RustProjectUpcastFact } from "../../target-model/records/value-projections.js";
+import type { RustProjectUpcastFact } from "../../target-model/records/objects/value-projections.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 
 export function rustValueCarrierBeforeContextualConversion(

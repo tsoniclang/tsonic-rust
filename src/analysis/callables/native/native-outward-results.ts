@@ -10,7 +10,7 @@ import { rustNamedTargetType } from "../../../target-model/types/carriers/native
 import { rustTypeGenericArguments } from "../../../target-model/types/generic-arguments.js";
 
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
-import type { RustNativeCallableProducerPlan } from "../../../target-model/records/native-producers.js";
+import type { RustNativeCallableProducerPlan } from "../../../target-model/records/native/native-producers.js";
 import { getRustGeneratorProtocol } from "../../../target-model/types/carriers/callables.js";
 import { rustGeneratorStorageTargetType } from "../../../policy/types/callables/generators.js";
 import { rustPlaceholderLifetime } from "../../../target-model/lifetimes/index.js";

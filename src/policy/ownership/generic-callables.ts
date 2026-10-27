@@ -1,5 +1,5 @@
 import type { TargetTypeRef } from "../../target-model/types/model.js";
-import type { RustGenericCallableImplementation } from "../../target-model/records/generic-callables.js";
+import type { RustGenericCallableImplementation } from "../../target-model/records/callables/generic-callables.js";
 import { rustNativeFutureCallableResult } from "../../target-model/types/carriers/generic-callables.js";
 import { isRustCopyCarrier } from "../constraints/native-traits.js";
 

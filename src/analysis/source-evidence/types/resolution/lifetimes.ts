@@ -7,7 +7,7 @@ import { resolveProviderTypeIdentity } from "../../../../policy/identities/provi
 import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "./model.js";
 
 import { rustLifetimeTypeContractFor } from "../../../../policy/ownership/lifetime-source-contracts.js";
-import type { RustSourceLifetimeTypeContract } from "../../../../target-model/records/source-lifetime-types.js";
+import type { RustSourceLifetimeTypeContract } from "../../../../target-model/records/storage/source-lifetime-types.js";
 export function rustSourceLifetimeTypeContract(
   node: Node,
   context: Pick<RustSourcePolicyContext, "source" | "ast" | "records" | "semanticsFor">,

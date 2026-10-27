@@ -7,7 +7,7 @@ import { planRustValueFieldLocation } from "../../../../dist/backend/planner/obj
 import { createRustSyntheticNameState } from "../../../../dist/backend/planner/names/synthetic.js";
 import { rustSourcePrimitiveTargetType } from "../../../../dist/target-model/types/index.js";
 import { analyzeRustStoredFields } from "../../../../dist/analysis/storage/stored-fields.js";
-import { createRustStoredFieldProducer } from "../../../../dist/analysis/program/records/stored-fields.js";
+import { createRustStoredFieldProducer } from "../../../../dist/analysis/program/records/storage/stored-fields.js";
 
 test("prepared native field locations retain exact storage and reject copied or mismatched roots", () => {
   const { program } = analyzeRust({ files: { "index.ts": `

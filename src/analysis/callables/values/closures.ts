@@ -1,5 +1,5 @@
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
-import { requireRustRecord } from "../../program/records/required-records.js";
+import { requireRustRecord } from "../../program/records/objects/required-records.js";
 import { rustTypeParameterFromSourceContract } from "../../../target-model/types/carriers/generic-references.js";
 
 import { appendRustDiagnostic } from "../../program/walk.js";
@@ -179,7 +179,7 @@ export function resolveFunctionExpressionCarrier(
       parameters.length !== resolvedSourceCallable.parameters.length) {
       return undefined;
     }
-    const parameterAbis: import("../../../target-model/records/callables-and-resources.js").RustSourceParameterAbiFact[] = [];
+    const parameterAbis: import("../../../target-model/records/callables/callables-and-resources.js").RustSourceParameterAbiFact[] = [];
     const byRefCopyParams: boolean[] = [];
     for (const [index, parameter] of parameters.entries()) {
       if (parameter === undefined) {
@@ -375,7 +375,7 @@ export function collectRustLexicalCaptures(
   roots: readonly Node[],
   permitSingleOwner = false,
   nativeCallTrait?: "Fn" | "FnMut" | "FnOnce",
-): import("../../../target-model/records/operation-selections.js").RustClosureCaptureFact | undefined {
+): import("../../../target-model/records/operations/operation-selections.js").RustClosureCaptureFact | undefined {
   const { ast } = walk.context;
   const captures = new Map<Node, {
     readonly declaration: Node;
@@ -385,13 +385,13 @@ export function collectRustLexicalCaptures(
     readonly mutable?: true;
   }>();
   let recursiveDeclaration: Node | undefined;
-  let recursiveField: import("../../../target-model/records/operation-selections.js").RustClosureCaptureFact["recursiveField"];
+  let recursiveField: import("../../../target-model/records/operations/operation-selections.js").RustClosureCaptureFact["recursiveField"];
   const valueDeclaration = rustCallableExpressionValueDeclaration(expression, ast);
   const selected = sourceLexicalEnvironment(expression, roots, ast, walk.context.source.navigation, "source",
     (use, declaration) => walk.context.records.compileTimeSource.get(use.reference) !== true &&
       walk.context.runtimeValueUses.isRuntimeReference(declaration, use.reference));
   if (selected.kind === "unresolved") return undefined;
-  const receiverFields: import("../../../target-model/records/operation-selections.js").RustClosureCaptureFact["receiverFields"][number][] = [];
+  const receiverFields: import("../../../target-model/records/operations/operation-selections.js").RustClosureCaptureFact["receiverFields"][number][] = [];
   const fieldCaptures = walk.context.objectRepresentations.receiverCaptures.capturesFor(expression);
   const fixedField = walk.context.objectRepresentations.receiverCaptures.fixedSelfFor(expression);
   if (fixedField !== undefined) {
@@ -407,7 +407,7 @@ export function collectRustLexicalCaptures(
     if (storage === undefined || carrier === undefined) return undefined;
     receiverFields.push({ ...capture, storage: storage.storage, carrier });
   }
-  const receivers: import("../../../target-model/records/operation-selections.js").RustClosureCaptureFact["receivers"][number][] = [];
+  const receivers: import("../../../target-model/records/operations/operation-selections.js").RustClosureCaptureFact["receivers"][number][] = [];
   for (const receiver of walk.context.objectRepresentations.receiverCaptures.receiversFor(expression)) {
     const carrier = walk.context.records.runtimeCarrier.get(receiver.reference)?.carrier;
     const definition = carrier === undefined ? undefined : walk.context.projectTypes.definitionForCarrier(carrier);

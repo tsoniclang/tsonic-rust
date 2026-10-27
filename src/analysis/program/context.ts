@@ -1,4 +1,4 @@
-import { createRustIntegerRangeIndex } from "./records/integer-ranges.js";
+import { createRustIntegerRangeIndex } from "./records/operations/integer-ranges.js";
 import { createTsonicMemoryBindingIndex, createTsonicMemoryMetadataIndex, type TsonicMemoryMetadataIndex, createTsonicPointerBackingDemands, type TsonicPointerBackingDemands, createTsonicPointerReturnQueries } from "@tsonic/source-core/facts";
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
 import type { TargetCompileInput, TargetSelection } from "@tsonic/target-api";
@@ -14,9 +14,9 @@ import type { RustNamePlan } from "../../target-model/names/model.js";
 import type { RustSourceTypeFamilyRegistry } from "../../target-model/types/type-families.js";
 import { createRustSourceTypeFamilyRegistry } from "../project-types/type-families.js";
 import { createRustTypeDefinitionRegistry, type RustTypeDefinitionRegistry } from "../project-types/type-definitions.js";
-import { createRustClassValueRegistry, type RustClassValueRegistry } from "./records/class-value-registry.js";
+import { createRustClassValueRegistry, type RustClassValueRegistry } from "./records/objects/class-value-registry.js";
 import { createRustProgramRecordBuilder } from "./records/create.js";
-import type { RustRequiredRecord } from "./records/required-records.js";
+import type { RustRequiredRecord } from "./records/objects/required-records.js";
 import type { RustProgramRecordBuilder } from "./records/model.js";
 import { createRustProjectTypePolicyRegistry } from "../project-types/index.js";
 import type { RustProjectTypePolicyRegistry } from "../project-types/index.js";
@@ -38,7 +38,7 @@ import { createRustObjectRepresentationPlanRegistry, type RustObjectRepresentati
 import { createRustRuntimeValueUsePlan, type RustRuntimeValueUsePlan } from "./runtime-value-uses.js";
 import { analyzeRustLifetimes } from "../declarations/lifetimes.js";
 import { emptyRustLifetimeIndex, type RustLifetimeIndex } from "../../target-model/lifetimes/index.js";
-import { createRustGeneratedDeclarationUseRegistry, type RustGeneratedDeclarationUseRegistry } from "./records/generated-declaration-uses.js";
+import { createRustGeneratedDeclarationUseRegistry, type RustGeneratedDeclarationUseRegistry } from "./records/program/generated-declaration-uses.js";
 import { createRustErrorStorageDemandQuery } from "../objects/error-storage-demands.js";
 import { analyzeSourceReceiverOccurrences, createSourceStorageQuery, type SourceErrorStorageDemandQueries, type SourceStorageQueries, type SourceNativeTaskGraph } from "@tsonic/target-api/analysis";
 import { createRustRetainedErrorDemandSelection } from "../objects/retained-error-demands.js";
@@ -50,7 +50,7 @@ import { createRustExplicitUnsafeContexts } from "../safety/explicit-regions.js"
 import { createRustRetainedEnvironmentQueries } from "../callables/ownership/retained-environment-shapes.js";
 import { analyzeRustNumericLiteralAdmission } from "../numeric/literal-admission.js";
 import { analyzeRustPromiseResultUses } from "../callables/async/promise-results.js";
-import type { RustPromiseResultUses } from "../../target-model/records/promise-results.js";
+import type { RustPromiseResultUses } from "../../target-model/records/callables/promise-results.js";
 import { createRustPromiseBodySelection, type RustPromiseBodySelection } from "../callables/async/promise-bodies.js";
 import { analyzeRustNativeParticipation } from "../callables/calls/participation.js";
 import { selectRustSourcePackageComponentIdentities, type SelectRustSourcePackageComponentIdentitiesResult } from "../source-modules/component-semantics.js";

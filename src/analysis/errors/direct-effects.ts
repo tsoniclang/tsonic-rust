@@ -3,12 +3,12 @@ import { KindCallExpression, KindNewExpression, KindVariableDeclaration, Node_Ex
   sourceEnclosingCallable } from "@tsonic/target-api/source";
 import { appendRustDiagnostic, rustOperationContext, type RustFactWalk } from "../program/walk.js";
 import type { RustEffectsWorkBudget } from "./effects-work-budget.js";
-import { rustJsRejectionErrorIdentity, type RustErrorEffectsFact } from "../../target-model/records/error-effects.js";
+import { rustJsRejectionErrorIdentity, type RustErrorEffectsFact } from "../../target-model/records/errors/error-effects.js";
 import { rustCallableInvocationErrorEffects, rustLocalErrorEffects } from "./error-effects.js";
-import type { RustSourceErrorEffectEdge } from "../../target-model/records/source-error-effects.js";
+import type { RustSourceErrorEffectEdge } from "../../target-model/records/errors/source-error-effects.js";
 import type { RustSourceErrorEffectSelection } from "./source-error-effects.js";
-import type { RustAwaitSourceErrorBranch } from "../../target-model/records/await-source-error-effects.js";
-import type { RustGenericCallableInvocationFact } from "../../target-model/records/generic-callable-effects.js";
+import type { RustAwaitSourceErrorBranch } from "../../target-model/records/callables/await-source-error-effects.js";
+import type { RustGenericCallableInvocationFact } from "../../target-model/records/callables/generic-callable-effects.js";
 import { selectRustResourceManagement } from "../control-flow/resource-management.js";
 import { rustGeneratorSourceInvocationKind } from "../../policy/operations/source-profiles/generator-source-profile.js";
 import { getRustGeneratorProtocol } from "../../target-model/types/carriers/callables.js";

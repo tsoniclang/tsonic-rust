@@ -21,7 +21,7 @@ import { rustOptionElementCarrier } from "../../../target-model/types/carriers/o
 import { substituteRustTargetGenerics } from "../../../target-model/types/carriers/substitution.js";
 import type { RustLifetimeIndex } from "../../../target-model/lifetimes/index.js";
 import type { RustGenericCallablePlan } from "../generics/generic-values.js";
-import type { RustPhysicalCallableSourceActivations } from "../../../target-model/records/physical-emission-contexts.js";
+import type { RustPhysicalCallableSourceActivations } from "../../../target-model/records/native/physical-emission-contexts.js";
 import { snapshotRustCallableBindings } from "../../../policy/types/callables/generic-bindings.js";
 
 type RustNativeStorageTargetBindingsSelection =

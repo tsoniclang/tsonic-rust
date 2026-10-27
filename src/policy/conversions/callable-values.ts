@@ -1,4 +1,4 @@
-import type { RustCallableParameterAdapter, RustCallableValueAdapter } from "../../target-model/records/callable-adapters.js";
+import type { RustCallableParameterAdapter, RustCallableValueAdapter } from "../../target-model/records/callables/callable-adapters.js";
 
 export function rustCallableAdapterValues(callable: {
   readonly resultAdapter: RustCallableValueAdapter;

@@ -4,8 +4,8 @@ import { Node_Initializer, sourceEnclosingCallable } from "@tsonic/target-api/so
 import { failTargetAnalysisInvariant, type TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustAnalysisProgram } from "../program/model.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
-import type { RustBindingEmissionProducer } from "../program/records/binding-emission.js";
-import type { RustBindingValueProjectionFact, RustSelectedBindingProjection } from "../../target-model/records/value-projections.js";
+import type { RustBindingEmissionProducer } from "../program/records/storage/binding-emission.js";
+import type { RustBindingValueProjectionFact, RustSelectedBindingProjection } from "../../target-model/records/objects/value-projections.js";
 import { rustFixedArrayCarrierValue, rustStructuralObjectCarrierValue } from "../../target-model/types/index.js";
 import { isRustCopyCarrier, rustCarrierSupportsClone } from "../../policy/constraints/native-traits.js";
 import { isValidRustIdentifier } from "../../target-model/names/identifiers.js";

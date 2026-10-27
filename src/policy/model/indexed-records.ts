@@ -1,6 +1,6 @@
 import type { TargetTypeRef } from "../../target-model/types/model.js";
-import type { RustIndexedRecordStorage } from "../../target-model/records/indexed-records.js";
-import type { RustObjectRepresentation } from "../../target-model/records/object-representation.js";
+import type { RustIndexedRecordStorage } from "../../target-model/records/objects/indexed-records.js";
+import type { RustObjectRepresentation } from "../../target-model/records/objects/object-representation.js";
 import type { RustProjectTypeDefinition } from "../../target-model/types/project-types.js";
 
 export interface RustIndexedRecordPolicyInput {

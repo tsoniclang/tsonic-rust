@@ -1,5 +1,5 @@
 import type { TargetTypeRef } from "../../target-model/types/model.js";
-import type { RustSourceCallEffectsFact } from "../../target-model/records/object-methods.js";
+import type { RustSourceCallEffectsFact } from "../../target-model/records/objects/object-methods.js";
 
 export interface RustProjectCallablePolicyInput {
   readonly typeParameters: readonly (string | undefined)[];

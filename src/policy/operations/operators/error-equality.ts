@@ -1,5 +1,5 @@
 import type { RustTypeDefinitions } from "../../../target-model/types/source-union-definitions.js";
-import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
+import type { RustTargetOperationFact } from "../../../target-model/records/operations/operations.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { isRustProgramErrorCarrier, rustSourcePrimitiveTargetType } from "../../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";

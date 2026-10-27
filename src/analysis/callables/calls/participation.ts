@@ -3,9 +3,9 @@ import type { SourceStorageQueries } from "@tsonic/target-api/analysis";
 import { sourceLexicalFunctionIsUnused, sourceNodesOutsideErasedSubtrees,
   sourceCallableDefinitionIsDiscarded,
   type SourceProgramNavigation, type SourceSubtreeParticipation } from "@tsonic/target-api/source";
-import type { RustNativeParticipation } from "../../../target-model/records/native-demand.js";
-import type { RustNativeParticipationProducer } from "../../program/records/native-participation.js";
-import { requireRustRecord, type RustRequiredRecord } from "../../program/records/required-records.js";
+import type { RustNativeParticipation } from "../../../target-model/records/native/native-demand.js";
+import type { RustNativeParticipationProducer } from "../../program/records/native/native-participation.js";
+import { requireRustRecord, type RustRequiredRecord } from "../../program/records/objects/required-records.js";
 
 export function analyzeRustNativeParticipation(input: {
   readonly ast: AstReader;

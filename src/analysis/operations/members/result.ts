@@ -1,9 +1,9 @@
-import { acceptRustOperation } from "../../program/records/selected-operation-values.js";
+import { acceptRustOperation } from "../../program/records/operations/selected-operation-values.js";
 import { sourceCallableValueParameters } from "@tsonic/target-api/source";
-import { requireRustRecord } from "../../program/records/required-records.js";
+import { requireRustRecord } from "../../program/records/objects/required-records.js";
 import type { RustOperationAnalysisContext } from "../../program/operation-context.js";
 import { isRustAbsenceCarrier, isRustProgramErrorCarrier, isRustNumericCarrier, rustOptionElementCarrier, rustOptionNestingDepth, rustOptionValueCarrier, isRustJsArrayCarrier, isRustVecCarrier } from "../../../target-model/types/index.js";
-import { rustTargetOperationResultCarrier } from "../../../target-model/records/operations.js";
+import { rustTargetOperationResultCarrier } from "../../../target-model/records/operations/operations.js";
 
 import { rejectRustPolicy } from "../../../policy/model/contracts.js";
 import { asNode, resolveSelectedSourceProfilePropertyMembers } from "../../../policy/identities/selected-source.js";
@@ -23,7 +23,7 @@ import { selectRustValueCarrierReconciliation } from "../../../policy/conversion
 import { contextualConditionalArgumentMatches } from "../../expected-types/conditional-arguments.js";
 import type { RustCheckedOperationSelectionResult, RustCheckedPropertySelectionInput, RustPolicySelection, RustTargetOperationSelection } from "../../../policy/model/contracts.js";
 
-import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
+import type { RustTargetOperationFact } from "../../../target-model/records/operations/operations.js";
 import type { ExtensionFactSubject, Node, ProviderDeclarationIdentity } from "@tsonic/tsts";
 import type { RustOperationsProviderOptions } from "./model.js";
 

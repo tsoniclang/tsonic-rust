@@ -1,5 +1,5 @@
 import type { Node } from "@tsonic/tsts";
-import type { RustUnionProjectionEmission, RustUnionMappingEmission } from "../../../target-model/records/union-mappings.js";
+import type { RustUnionProjectionEmission, RustUnionMappingEmission } from "../../../target-model/records/types/union-mappings.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../names/synthetic.js";
 import { rustCarrierHasCopyContract, rustCarrierHasCloneContract } from "../types/generic-requirements.js";

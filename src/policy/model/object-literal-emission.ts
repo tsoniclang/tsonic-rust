@@ -1,4 +1,4 @@
-import type { RustRecordLiteralFact } from "../../target-model/records/object-literal-emission.js";
+import type { RustRecordLiteralFact } from "../../target-model/records/objects/object-literal-emission.js";
 
 export interface RustObjectLiteralEmissionPolicyInput {
   readonly fact: RustRecordLiteralFact;

@@ -12,10 +12,10 @@ import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { selectSourceObjectLiteralAccessors } from "@tsonic/target-api/source";
 
 import { rustCallableTargetForSourceLifetime, selectRustValueCarrierReconciliation } from "../../policy/conversions/value-carrier-reconciliation.js";
-import { recordRustValueCarrierReconciliation } from "../program/records/value-carrier-admission.js";
+import { recordRustValueCarrierReconciliation } from "../program/records/types/value-carrier-admission.js";
 import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
-import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
+import type { RustTargetOperationFact } from "../../target-model/records/operations/operations.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { projectRecordMemberImplementation, selectedProjectMethodContracts } from "./record-member-contracts.js";
 

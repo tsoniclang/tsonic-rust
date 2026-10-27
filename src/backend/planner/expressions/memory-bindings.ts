@@ -5,7 +5,7 @@ import type { RustPlanContext } from "../program/plan-context.js";
 
 import { createRustStructuralObjectFromCarrier } from "../objects/project-storage.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
-import type { RustMemoryBindingPlan } from "../../../target-model/records/memory-bindings.js";
+import type { RustMemoryBindingPlan } from "../../../target-model/records/storage/memory-bindings.js";
 import { failRustPlannerInvariant } from "../diagnostics.js";
 
 export function planRustMemoryBinding(

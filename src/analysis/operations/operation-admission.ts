@@ -1,13 +1,13 @@
 import type { Node } from "@tsonic/tsts";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { RustPolicySelection } from "../../policy/model/contracts.js";
-import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
-import { rustSelectedTargetOperationEquals } from "../../target-model/records/operation-equality.js";
-import type { RustSelectedTargetOperation } from "../../target-model/records/member-selections.js";
+import type { RustTargetOperationFact } from "../../target-model/records/operations/operations.js";
+import { rustSelectedTargetOperationEquals } from "../../target-model/records/operations/operation-equality.js";
+import type { RustSelectedTargetOperation } from "../../target-model/records/operations/member-selections.js";
 import type { RustOperationAnalysisContext } from "../program/operation-context.js";
-import { rustTargetOperationFactEquals } from "../../target-model/records/operation-equality.js";
+import { rustTargetOperationFactEquals } from "../../target-model/records/operations/operation-equality.js";
 import { rustPostCheckOperationKind } from "../../target-model/operations/model.js";
-import { requireRustRecord } from "../program/records/required-records.js";
+import { requireRustRecord } from "../program/records/objects/required-records.js";
 
 export function admitRustOperationSelection<T extends {
   readonly operation?: RustSelectedTargetOperation;

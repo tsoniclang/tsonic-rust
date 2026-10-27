@@ -2,12 +2,12 @@ import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { readRustStoredObjectField, readRustStructuralObjectMethodStorage } from "../objects/project-storage.js";
 import { planRustBoundProjectMethodCallable } from "./properties.js";
 import { planRustOptionBranch } from "./option-branch.js";
-import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
+import type { RustTargetOperationFact } from "../../../target-model/records/operations/operations.js";
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import type { RustObjectLiteralMethodImplementationPlan } from "../objects/object-literals/model.js";
 import { rustValueBlock, type RustValueBlockEntry } from "../../target-ast/syntax/value-block.js";
-import type { RustRecordSpreadEvidence } from "../../../target-model/records/record-contributions.js";
+import type { RustRecordSpreadEvidence } from "../../../target-model/records/objects/record-contributions.js";
 import { failRustPlannerInvariant } from "../diagnostics.js";
 
 type RecordFact = Extract<RustTargetOperationFact, { readonly kind: "record-literal" }>;

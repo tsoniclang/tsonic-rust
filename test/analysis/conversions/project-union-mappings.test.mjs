@@ -3,7 +3,7 @@ import test from "node:test";
 import { analyzeRust } from "../../helpers/rust-session.mjs";
 import { rustProgramSourceFiles } from "../../helpers/plan-context.mjs";
 import { analyzeRustProjectUnionMappings } from "../../../dist/analysis/conversions/project-union-mappings.js";
-import { createRustProjectUnionMappingProducer } from "../../../dist/analysis/program/records/project-union-mappings.js";
+import { createRustProjectUnionMappingProducer } from "../../../dist/analysis/program/records/types/project-union-mappings.js";
 import { rustProjectUnionUpcastRelation } from "../../../dist/policy/model/project-union-relations.js";
 import { rustCompilerOwnedContextualConversionMatches } from "../../../dist/policy/conversions/contextual.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";

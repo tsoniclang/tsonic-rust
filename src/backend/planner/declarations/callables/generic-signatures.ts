@@ -1,4 +1,4 @@
-import type { RustGenericCallablePhysicalDefinition } from "../../../../target-model/records/generic-callables.js";
+import type { RustGenericCallablePhysicalDefinition } from "../../../../target-model/records/callables/generic-callables.js";
 import type { RustTargetGenericArgument } from "../../../../target-model/types/model.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import type { RustGenericParameter, RustGenerics, RustWherePredicate } from "../../../target-ast/syntax/nodes.js";

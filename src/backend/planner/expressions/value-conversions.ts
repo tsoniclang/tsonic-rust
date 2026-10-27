@@ -17,7 +17,7 @@ import type { Node } from "@tsonic/tsts";
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import type { RustValueConversion } from "../../../target-model/operations/model.js";
-import type { RustFinalizedValueConversion } from "../../../target-model/records/finalized-operation.js";
+import type { RustFinalizedValueConversion } from "../../../target-model/records/operations/finalized-operation.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { lowerRustExactIntegerConversion } from "./exact-integer.js";
 import { planRustUnionMapping, planRustUnionProjection } from "./union-mappings.js";

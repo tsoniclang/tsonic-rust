@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { rustPropertyProjectionFactEquals } from "../../../dist/target-model/records/operation-equality.js";
+import { rustPropertyProjectionFactEquals } from "../../../dist/target-model/records/operations/operation-equality.js";
 import { createRustPropertyProjectionSelector,
   selectRustPropertyProjectionCase } from "../../../dist/analysis/conversions/property-projections.js";
 import { createRustProgramRecordBuilder } from "../../../dist/analysis/program/records/create.js";

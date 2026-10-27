@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import type { RustCallableParameterAbi, RustCallableParameterAdapter, RustCallableParameterRead,
-  RustCallableRestIteration, RustCallableRestSegment } from "../../../../target-model/records/callable-adapters.js";
+  RustCallableRestIteration, RustCallableRestSegment } from "../../../../target-model/records/callables/callable-adapters.js";
 import { rustVecTargetType } from "../../../../target-model/types/index.js";
 import type { RustExpr, RustFunctionParam, RustStmt, RustType } from "../../../target-ast/syntax/nodes.js";
 import { planRustAbsentValue } from "../../expressions/optional-storage.js";

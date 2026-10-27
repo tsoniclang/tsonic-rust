@@ -11,7 +11,7 @@ import { rustProjectProjectionPredicates } from "../../types/project-projection-
 import { rustOptionalStorageParameters } from "../../types/type-projections.js";
 import { planRustNativeCallableGenerics } from "./native-generics.js";
 import { planRustRetainedGenerics } from "./retained-generics.js";
-import type { RustCallableEntryHeaderSelection, RustCallableEntryHeaderVariant } from "../../../../target-model/records/callable-entry-headers.js";
+import type { RustCallableEntryHeaderSelection, RustCallableEntryHeaderVariant } from "../../../../target-model/records/callables/callable-entry-headers.js";
 
 export interface RustCallableGenericPlan {
   readonly context: RustPlanContext;

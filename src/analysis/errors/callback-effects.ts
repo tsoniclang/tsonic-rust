@@ -1,8 +1,8 @@
 import type { Node } from "@tsonic/tsts";
 import { KindParenthesizedExpression, Node_Expression, Node_Initializer, asSourceNode } from "@tsonic/target-api/source";
 import type { RustFactWalk } from "../program/walk.js";
-import type { RustPreparedDeferredCheckedCall } from "../../target-model/records/deferred-callbacks.js";
-import type { RustErrorEffectsFact } from "../../target-model/records/error-effects.js";
+import type { RustPreparedDeferredCheckedCall } from "../../target-model/records/callables/deferred-callbacks.js";
+import type { RustErrorEffectsFact } from "../../target-model/records/errors/error-effects.js";
 import type { RustEffectsWorkBudget } from "./effects-work-budget.js";
 import { mergeRustErrorEffects, rustCallableInvocationErrorEffects, rustLocalErrorEffects,
   rustProducerInvocationErrorEffects, rustPureErrorEffects } from "./error-effects.js";

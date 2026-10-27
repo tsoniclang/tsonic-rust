@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
-import type { RustTargetOperationFact } from "../../../../target-model/records/operations.js";
-import type { RustSourceCallFact, RustSourceCallInputEmission, RustSourceParameterEmission } from "../../../../target-model/records/source-call-arguments.js";
+import type { RustTargetOperationFact } from "../../../../target-model/records/operations/operations.js";
+import type { RustSourceCallFact, RustSourceCallInputEmission, RustSourceParameterEmission } from "../../../../target-model/records/calls/source-call-arguments.js";
 import type { RustExpr, RustPattern, RustStmt } from "../../../target-ast/syntax/nodes.js";
 import { rustValueBlock } from "../../../target-ast/syntax/value-block.js";
 import { failRustPlannerInvariant } from "../../diagnostics.js";

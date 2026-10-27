@@ -1,4 +1,4 @@
-import type { RustValueReadOwnership } from "../../target-model/records/ownership.js";
+import type { RustValueReadOwnership } from "../../target-model/records/storage/ownership.js";
 
 export function selectRustValueReadOwnership(input: {
   readonly copy: boolean;

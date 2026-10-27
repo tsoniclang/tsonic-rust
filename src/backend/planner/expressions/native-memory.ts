@@ -2,7 +2,7 @@ import type { Node } from "@tsonic/tsts";
 import type { RustExpr, RustStmt } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import type { RustNativeMemoryLayout } from "../../../target-model/operations/native-memory.js";
-import type { RustRawLocationPlan } from "../../../target-model/records/native-memory.js";
+import type { RustRawLocationPlan } from "../../../target-model/records/native/native-memory.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustProgramErrorTargetType } from "../../../target-model/types/index.js";
 import { rustNativeMemoryPaths } from "../../../target-model/names/native-memory.js";

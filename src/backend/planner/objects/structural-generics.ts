@@ -1,4 +1,4 @@
-import type { RustStructuralShapeDefinition } from "../../../target-model/records/structural-shapes.js";
+import type { RustStructuralShapeDefinition } from "../../../target-model/records/objects/structural-shapes.js";
 import type { RustGenerics } from "../../target-ast/syntax/nodes.js";
 import type { RustTypeRenderingContext } from "../types/render.js";
 import type { RustPlanContext } from "../program/plan-context.js";

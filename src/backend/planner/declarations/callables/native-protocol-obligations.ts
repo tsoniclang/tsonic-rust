@@ -1,4 +1,4 @@
-import type { RustNativeCallableProtocol } from "../../../../target-model/records/native-protocols.js";
+import type { RustNativeCallableProtocol } from "../../../../target-model/records/native/native-protocols.js";
 import type { RustWherePredicate } from "../../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import { rustTypeFromCarrierInContext } from "../../types/render.js";

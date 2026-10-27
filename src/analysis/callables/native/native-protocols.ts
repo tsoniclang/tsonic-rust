@@ -7,7 +7,7 @@ import type { RustTypeDefinitions } from "../../../target-model/types/source-uni
 import { closedMetadataKey, snapshotClosedMetadata } from "../../../target-model/metadata/closed-data.js";
 import { allocateRustGeneratedName } from "../../../target-model/names/generated.js";
 
-import type { RustNativeCallableProtocol, RustNativeCallableProtocolBinding } from "../../../target-model/records/native-protocols.js";
+import type { RustNativeCallableProtocol, RustNativeCallableProtocolBinding } from "../../../target-model/records/native/native-protocols.js";
 
 export interface RustNativeCallableProtocolRegistry {
   bind(ownerFileName: string, carrier: TargetTypeRef): RustNativeCallableProtocolBinding | undefined;
@@ -82,7 +82,7 @@ export function createRustNativeCallableProtocolRegistry(input: {
 }
 
 import { selectRustNativeCallableProtocolSignature, selectRustNativeCallableProtocolResult } from "../../../policy/types/callables/native-protocols.js";
-import { rustNativeCallableProtocolIdPrefix } from "../../../target-model/records/native-protocols.js";
+import { rustNativeCallableProtocolIdPrefix } from "../../../target-model/records/native/native-protocols.js";
 import type { RustStructuralShapePlanRegistry } from "../../objects/shapes/structural-shape-registry.js";
 import { rustStructuralObjectCarrierValue } from "../../../target-model/types/carriers/source-types.js";
 import { rustTargetTypeChildren } from "../../../target-model/types/carriers/children.js";

@@ -1,4 +1,4 @@
-import { requireRustRecord } from "../../../program/records/required-records.js";
+import { requireRustRecord } from "../../../program/records/objects/required-records.js";
 import { ConditionalExpression_Condition, ConditionalExpression_WhenFalse, ConditionalExpression_WhenTrue, KindBinaryExpression, KindCallExpression, KindConditionalExpression, KindElementAccessExpression, KindFalseKeyword, KindFunctionExpression, KindIdentifier, KindArrayLiteralExpression, KindBigIntLiteral, KindNewExpression, KindNoSubstitutionTemplateLiteral, KindNonNullExpression, KindNumericLiteral, KindParenthesizedExpression, KindPostfixUnaryExpression, KindPrefixUnaryExpression, KindPropertyAccessExpression, KindStringLiteral, KindSatisfiesExpression, KindSpreadElement, KindTemplateExpression, KindTrueKeyword, KindTypeOfExpression, KindVoidExpression, Node_Expression, sourceIntegerLiteralValue, sourceExpressionResultDisposition } from "@tsonic/target-api/source";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import { rustNumericLiteralIsFinite } from "../../../numeric/literal-admission.js";
@@ -6,7 +6,7 @@ import { rustRuntimeUnionProjection } from "../../../../target-model/types/carri
 import { getRustTypeofRuntimeKind } from "../../../../policy/operations/syntax/runtime-kind.js";
 import { rustUnparenthesizedExpression } from "../../../../target-model/syntax/expressions.js";
 import { getRustGeneratorProtocol, isRustBigIntCarrier, isRustBoolCarrier, isRustIntegerCarrier, isRustNumericCarrier, isRustOptionCarrier, rustOptionElementCarrier, rustBigIntTargetType, rustAbsenceTargetType, rustSourcePrimitiveTargetType, rustStringTargetType } from "../../../../target-model/types/index.js";
-import { rustTargetOperationResultCarrier, type RustTargetOperationFact } from "../../../../target-model/records/operations.js";
+import { rustTargetOperationResultCarrier, type RustTargetOperationFact } from "../../../../target-model/records/operations/operations.js";
 import { appendRustDiagnostic, boolCarrier, hasSelectedRuntimeCallableUse, rustResolutionContext, selectExpressionOperation, type RustFactWalk, rustOperationContext } from "../../../program/walk.js";
 import { parseSourceBigIntLiteral, sourceCharCodeUnit } from "../../../../source/extension/literals.js";
 import { resolvePostCheckBinaryCarrier, resolvePostCheckUnaryCarrier } from "../../../operations/operators.js";

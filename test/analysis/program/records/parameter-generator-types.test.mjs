@@ -11,7 +11,7 @@ const prelude = `
 import { createRustProgramRecordBuilder } from "${join(root, "dist/analysis/program/records/create.js")}";
 import type { Node } from "@tsonic/tsts";
 import type { RustGeneratorProtocol } from "${join(root, "dist/target-model/types/index.js")}";
-import type { RustGeneratorFact, RustSourceParameterAbiFact, RustSuspendedCallableStorage, RustSuspendedOwnedReceiver } from "${join(root, "dist/target-model/records/callables-and-resources.js")}";
+import type { RustGeneratorFact, RustSourceParameterAbiFact, RustSuspendedCallableStorage, RustSuspendedOwnedReceiver } from "${join(root, "dist/target-model/records/callables/callables-and-resources.js")}";
 const builder = createRustProgramRecordBuilder();
 declare const subject: Node;
 declare const parameter: Node;

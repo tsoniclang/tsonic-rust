@@ -1,7 +1,7 @@
 import type { AstReader, Node } from "@tsonic/tsts";
 import { sourceBindingCapturedBeforeInitialization, sourceBindingIterationScope } from "@tsonic/target-api/source";
 import type { SourceProgramNavigation } from "@tsonic/target-api/source";
-import type { RustBindingStorageFact } from "../../target-model/records/operation-selections.js";
+import type { RustBindingStorageFact } from "../../target-model/records/operations/operation-selections.js";
 
 export function selectRustBindingLocationStorage(
   declaration: Node,

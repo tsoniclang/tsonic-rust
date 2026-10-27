@@ -1,4 +1,4 @@
-import type { RustClosureCaptureFact } from "../../../target-model/records/operation-selections.js";
+import type { RustClosureCaptureFact } from "../../../target-model/records/operations/operation-selections.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustExpr, RustType } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";

@@ -4,7 +4,7 @@ import { Node_Expression, sourceEnclosingCallable } from "@tsonic/target-api/sou
 import { analyzeRustErrorEffects } from "../../../helpers/rust-error-analysis.mjs";
 import { analyzeRust } from "../../../helpers/rust-session.mjs";
 import { assertRustRecordRequirement } from "../../../helpers/required-records.mjs";
-import { assertRustRequiredRecords } from "../../../../dist/analysis/program/records/required-records.js";
+import { assertRustRequiredRecords } from "../../../../dist/analysis/program/records/objects/required-records.js";
 
 function fixture(text, surfaces) {
   const context = analyzeRustErrorEffects(text, { surfaces });

@@ -44,7 +44,7 @@ import { rustBindingProjectionCloneCarriers } from "../../policy/types/storage/b
 import { rustAwaitValueRequirements } from "../../policy/ownership/await-values.js";
 import { rustAwaitSelectionLeaves } from "../../target-model/types/await.js";
 
-import type { RustGenericRequirement } from "../../target-model/records/generic-requirements.js";
+import type { RustGenericRequirement } from "../../target-model/records/types/generic-requirements.js";
 
 import { rustProjectViewBindings } from "../../policy/types/objects/project-view-bindings.js";
 import { rustStructuralViewRequirementUses } from "./structural-view-requirements.js";

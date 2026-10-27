@@ -1,5 +1,5 @@
 import type { TargetTypeRef } from "../../target-model/types/model.js";
-import type { RustDeclarationGenericRequirementContract, RustGenericRequirement } from "../../target-model/records/generic-requirements.js";
+import type { RustDeclarationGenericRequirementContract, RustGenericRequirement } from "../../target-model/records/types/generic-requirements.js";
 import type { RustProjectTypePolicy } from "../project-types/index.js";
 import type { RustSourceTypeFamilyRegistry } from "../../target-model/types/type-families.js";
 import type { Node } from "@tsonic/tsts";
@@ -13,7 +13,7 @@ import { rustSourceUnionDefinitionIdentity, type RustTypeDefinitions } from "../
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
 import { normalizeRustErrorType, type RustErrorTypeContext } from "../errors/error-types.js";
 
-import type { RustShapeGenericRequirementContract } from "../../target-model/records/generic-requirements.js";
+import type { RustShapeGenericRequirementContract } from "../../target-model/records/types/generic-requirements.js";
 
 export function analyzeRustShapeGenericRequirements(
   carrier: TargetTypeRef,

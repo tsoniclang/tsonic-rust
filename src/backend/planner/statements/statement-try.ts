@@ -19,7 +19,7 @@ import type { RustCompletionBoundary, RustPlanContext } from "../program/plan-co
 import type { RustExpr, RustStmt } from "../../target-ast/syntax/nodes.js";
 import { planRustProgramErrorConstruction } from "../expressions/program-errors.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
-import type { RustCatchErrorConversion } from "../../../target-model/records/exception-flow.js";
+import type { RustCatchErrorConversion } from "../../../target-model/records/operations/exception-flow.js";
 
 export function planThrowStatement(node: Node, context: RustPlanContext): readonly RustStmt[] {
   const completion = context.input.program.records.throwCompletion.get(node);

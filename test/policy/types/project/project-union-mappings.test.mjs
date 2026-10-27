@@ -26,16 +26,16 @@ import { rustProgramSourceFiles, rustSourceFilePlanContext, rustProgramWithTypeE
 import { createRustPlanningContext } from "../../../../dist/backend/planner/context.js";
 import { createRustSyntheticNameState } from "../../../../dist/backend/planner/names/synthetic.js";
 import { analyzeRustProjectEmission } from "../../../../dist/analysis/project-types/emission.js";
-import { createRustProjectEmissionProducer } from "../../../../dist/analysis/program/records/project-emission.js";
+import { createRustProjectEmissionProducer } from "../../../../dist/analysis/program/records/program/project-emission.js";
 import { analyzeRustTypeEmission } from "../../../../dist/analysis/source-evidence/types/emission.js";
-import { createRustTypeEmissionProducer } from "../../../../dist/analysis/program/records/type-emission.js";
+import { createRustTypeEmissionProducer } from "../../../../dist/analysis/program/records/types/type-emission.js";
 import { analyzeRustValueReads } from "../../../../dist/analysis/conversions/value-reads.js";
-import { createRustValueReadProducer } from "../../../../dist/analysis/program/records/value-read.js";
-import { createRustValueProjectionProducer } from "../../../../dist/analysis/program/records/value-projection.js";
-import { createRustConversionEmissionProducer } from "../../../../dist/analysis/program/records/conversion-emission.js";
-import { createRustOwnershipEmissionProducer } from "../../../../dist/analysis/program/records/ownership-emission.js";
+import { createRustValueReadProducer } from "../../../../dist/analysis/program/records/storage/value-read.js";
+import { createRustValueProjectionProducer } from "../../../../dist/analysis/program/records/objects/value-projection.js";
+import { createRustConversionEmissionProducer } from "../../../../dist/analysis/program/records/operations/conversion-emission.js";
+import { createRustOwnershipEmissionProducer } from "../../../../dist/analysis/program/records/storage/ownership-emission.js";
 import { analyzeRustProjectUnionMappings } from "../../../../dist/analysis/conversions/project-union-mappings.js";
-import { createRustProjectUnionMappingProducer } from "../../../../dist/analysis/program/records/project-union-mappings.js";
+import { createRustProjectUnionMappingProducer } from "../../../../dist/analysis/program/records/types/project-union-mappings.js";
 
 function fixture({ siblings = false, nested = false, retainDerived = false, relationKind = "related", includeRoot = false } = {}) {
   const fileName = "/src/index.ts";

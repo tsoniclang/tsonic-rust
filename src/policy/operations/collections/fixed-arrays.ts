@@ -1,5 +1,5 @@
 import type { RustProviderOperationTemplate } from "../../../target-model/operations/model.js";
-import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
+import type { RustTargetOperationFact } from "../../../target-model/records/operations/operations.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustSourcePrimitiveTargetType } from "../../../target-model/types/index.js";
 import type { RustNativeIndexSelection } from "./native-indices.js";

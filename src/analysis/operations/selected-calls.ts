@@ -3,7 +3,7 @@ import type { RustOperationAnalysisContext } from "../program/operation-context.
 import type { RustOperationsProviderOptions } from "./members/model.js";
 import { resolveRustCheckedCall } from "./members/calls/selection.js";
 import { resolveRustPreparedCheckedCall } from "./members/calls/deferred.js";
-import { type RustPreparedDeferredCheckedCall } from "../../target-model/records/deferred-callbacks.js";
+import { type RustPreparedDeferredCheckedCall } from "../../target-model/records/callables/deferred-callbacks.js";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import { rustCheckedCallRequestsEqual } from "./call-request-correspondence.js";
 import { admitRustOperationSelection } from "./operation-admission.js";
@@ -11,7 +11,7 @@ import { rustSelectedTargetSignatureEquals } from "../../target-model/types/sele
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { closedMetadataEquals } from "../../target-model/metadata/closed-data.js";
 import type { RustOperationAttempt } from "../program/operation-attempts.js";
-import { requireRustRecord } from "../program/records/required-records.js";
+import { requireRustRecord } from "../program/records/objects/required-records.js";
 import type { RustPreparedCallbackEffects } from "../../policy/operations/members/deferred-callbacks.js";
 import { mergeRustErrorEffects, rustErrorEffectsEqual } from "../errors/error-effects.js";
 

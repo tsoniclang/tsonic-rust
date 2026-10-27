@@ -11,9 +11,9 @@ const prelude = `
 import { createRustProgramRecordBuilder } from "${join(root, "dist/analysis/program/records/create.js")}";
 import type { Node } from "@tsonic/tsts";
 import type { TargetTypeRef } from "${join(root, "dist/target-model/types/model.js")}";
-import type { RustProjectUpcastFact } from "${join(root, "dist/target-model/records/value-projections.js")}";
+import type { RustProjectUpcastFact } from "${join(root, "dist/target-model/records/objects/value-projections.js")}";
 import type { RustProjectProjectionSelection } from "${join(root, "dist/target-model/types/project-projections.js")}";
-import type { RustFlowReadProjectionInput } from "${join(root, "dist/analysis/program/records/flow-read-projection.js")}";
+import type { RustFlowReadProjectionInput } from "${join(root, "dist/analysis/program/records/operations/flow-read-projection.js")}";
 import type { RustContextualValueConversion } from "${join(root, "dist/target-model/conversions/contextual.js")}";
 import type { RustProjectTypePolicy } from "${join(root, "dist/target-model/types/project-types.js")}";
 import type { RustTypeDefinitions } from "${join(root, "dist/target-model/types/source-union-definitions.js")}";

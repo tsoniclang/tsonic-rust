@@ -8,7 +8,7 @@ import { planArrayLiteral } from "../../../../dist/backend/planner/expressions/a
 import { createRustSyntheticNameState } from "../../../../dist/backend/planner/names/synthetic.js";
 import { rustSourcePrimitiveTargetType } from "../../../../dist/target-model/types/index.js";
 import { analyzeRustArrayLiterals } from "../../../../dist/analysis/operations/array-literals.js";
-import { createRustArrayLiteralProducer } from "../../../../dist/analysis/program/records/array-literals.js";
+import { createRustArrayLiteralProducer } from "../../../../dist/analysis/program/records/operations/array-literals.js";
 
 for (const surfaces of [[], ["js"]]) {
   test(`array demand uses its selected formal instead of the constructor result on ${surfaces[0] ?? "native"}`, () => {

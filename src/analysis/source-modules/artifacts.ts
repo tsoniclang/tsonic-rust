@@ -3,7 +3,7 @@ import { analyzeSourceArtifactFiles } from "@tsonic/target-api/analysis";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { RustAnalysisProgram } from "../program/model.js";
-import type { RustSourceArtifactProducer } from "../program/records/artifacts.js";
+import type { RustSourceArtifactProducer } from "../program/records/program/artifacts.js";
 import { rustSourceItemIdentity } from "../../target-model/names/source-output-identities.js";
 
 export function analyzeRustSourceArtifacts(program: Omit<RustAnalysisProgram, "reachability">,

@@ -1,5 +1,5 @@
 import type { RustClosedNativeProjectionPolicyInput } from "../../model/closed-native-values.js";
-import type { RustClosedNativeProjectionEmission } from "../../../target-model/records/object-projections.js";
+import type { RustClosedNativeProjectionEmission } from "../../../target-model/records/objects/object-projections.js";
 
 export function selectRustClosedNativeProjection(input: RustClosedNativeProjectionPolicyInput): RustClosedNativeProjectionEmission {
   return Object.freeze({ carrier: input.target, representation: input.representation,

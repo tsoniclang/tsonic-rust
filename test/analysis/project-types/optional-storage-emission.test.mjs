@@ -4,8 +4,8 @@ import { prepareRustProjectGenericMembership } from "../../../dist/analysis/proj
 import { sourceEnclosingCallable } from "@tsonic/target-api/source";
 import * as optionalStorageEmission from "../../../dist/analysis/project-types/optional-storage-emission.js";
 import { createRustSourceTypeFamilyRegistry } from "../../../dist/analysis/project-types/type-families.js";
-import { createRustProjectEmissionProducer } from "../../../dist/analysis/program/records/project-emission.js";
-import { createRustTypeEmissionProducer } from "../../../dist/analysis/program/records/type-emission.js";
+import { createRustProjectEmissionProducer } from "../../../dist/analysis/program/records/program/project-emission.js";
+import { createRustTypeEmissionProducer } from "../../../dist/analysis/program/records/types/type-emission.js";
 import { analyzeRustProjectEmission } from "../../../dist/analysis/project-types/emission.js";
 import { analyzeRustTypeEmission } from "../../../dist/analysis/source-evidence/types/emission.js";
 import { rustSourceTypeCarrier, rustSourceTypeCarrierValue } from "../../../dist/target-model/types/carriers/source-types.js";

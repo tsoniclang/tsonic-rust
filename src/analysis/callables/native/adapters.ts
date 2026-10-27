@@ -3,7 +3,7 @@ import type { AstReader, Node } from "@tsonic/tsts";
 import { sourceCallableValueParameters, type TargetSourceProgram } from "@tsonic/target-api/source";
 import type { RustProgramRecords } from "../../../target-model/records/program.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
-import type { RustCallableParameterAbi } from "../../../target-model/records/callable-adapters.js";
+import type { RustCallableParameterAbi } from "../../../target-model/records/callables/callable-adapters.js";
 
 import { rustCallableInvocationResult } from "../../../policy/types/callables/return-contexts.js";
 import type { RustProjectTypeDefinition } from "../../project-types/index.js";

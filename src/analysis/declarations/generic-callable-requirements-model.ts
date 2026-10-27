@@ -11,7 +11,7 @@ import type { RustProjectTypePolicy } from "../project-types/index.js";
 
 import type { RustObjectRepresentationPlan } from "../project-types/object-representation.js";
 
-import type { RustOwnershipFlow } from "../../target-model/records/ownership-flow.js";
+import type { RustOwnershipFlow } from "../../target-model/records/storage/ownership-flow.js";
 
 import type { RustNamePlan } from "../../target-model/names/model.js";
 import type { RustAnalysisRecords } from "../../target-model/records/analysis.js";
@@ -19,13 +19,13 @@ import type { RustAnalysisRecords } from "../../target-model/records/analysis.js
 import type { RustLifetimeIndex } from "../../target-model/lifetimes/index.js";
 
 import type { RustGenericCallablePlan } from "../callables/generics/generic-values.js";
-import type { RustClassValuePlan } from "../../target-model/records/class-values.js";
+import type { RustClassValuePlan } from "../../target-model/records/objects/class-values.js";
 
 import type { RustNativeCallableInputPlan } from "../callables/native/native-inputs.js";
 
-import type { RustFrameCallablePlan } from "../../target-model/records/frame-callables.js";
+import type { RustFrameCallablePlan } from "../../target-model/records/callables/frame-callables.js";
 import type { RustStructuralShapePlan } from "../objects/shapes/structural-shape-plan.js";
-import type { RustProjectStructuralView } from "../../target-model/records/project-structural-views.js";
+import type { RustProjectStructuralView } from "../../target-model/records/objects/project-structural-views.js";
 
 import type { RustAnalyzedErrorRegions } from "../errors/regions.js";
 

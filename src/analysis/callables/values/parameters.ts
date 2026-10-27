@@ -1,13 +1,13 @@
 import type { Node } from "@tsonic/tsts";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { RustAnalysisProgram } from "../../program/model.js";
-import type { RustCallableParameterProducer } from "../../program/records/parameter-emission.js";
+import type { RustCallableParameterProducer } from "../../program/records/calls/parameter-emission.js";
 import { isValidRustIdentifier } from "../../../target-model/names/identifiers.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
-import { requireRustRecord, type RustRequiredRecord } from "../../program/records/required-records.js";
+import { requireRustRecord, type RustRequiredRecord } from "../../program/records/objects/required-records.js";
 import { selectRustOptionalDefaultStorage } from "../../../policy/conversions/optional-storage.js";
-import type { RustSourceParameterAbiFact } from "../../../target-model/records/callables-and-resources.js";
-import type { RustCallableParameterInitialization } from "../../../target-model/records/parameter-emission.js";
+import type { RustSourceParameterAbiFact } from "../../../target-model/records/callables/callables-and-resources.js";
+import type { RustCallableParameterInitialization } from "../../../target-model/records/calls/parameter-emission.js";
 import { isRustCopyCarrier } from "../../../policy/constraints/native-traits.js";
 import type { RustCallableEntryConstruction } from "../emission/entry-parameters.js";
 

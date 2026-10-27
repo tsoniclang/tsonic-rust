@@ -1,6 +1,6 @@
-import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
+import type { RustTargetOperationFact } from "../../../target-model/records/operations/operations.js";
 import type { RustTargetGenericArgument, TargetTypeRef } from "../../../target-model/types/model.js";
-import type { RustNativeCallableProtocolBinding } from "../../../target-model/records/native-protocols.js";
+import type { RustNativeCallableProtocolBinding } from "../../../target-model/records/native/native-protocols.js";
 import { rustCallScopedElisionLifetime, rustLifetimeKey } from "../../../target-model/lifetimes/index.js";
 import { inferRustTargetGenericBindings } from "../../../target-model/types/carriers/generic-inference.js";
 import { substituteRustTargetGenerics } from "../../../target-model/types/carriers/substitution.js";

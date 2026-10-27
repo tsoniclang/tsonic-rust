@@ -9,7 +9,7 @@ import { analyzeRustErrorEffects } from "../../helpers/rust-error-analysis.mjs";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 import { rustAwaitSelectionLeaves } from "../../../dist/target-model/types/await.js";
 import { mergeRustErrorEffects, rustErrorEffectsEqual } from "../../../dist/analysis/errors/error-effects.js";
-import { rustJsRejectionErrorIdentity } from "../../../dist/target-model/records/error-effects.js";
+import { rustJsRejectionErrorIdentity } from "../../../dist/target-model/records/errors/error-effects.js";
 import { rustProducerErrorReference } from "../../../dist/target-model/types/carriers/producer-errors.js";
 import { rustSourcePrimitiveTargetType } from "../../../dist/target-model/types/carriers/native.js";
 import { isRustNativeFutureCarrier, rustFutureTargetType, rustJsPromiseTargetType, rustJsValueTargetType } from "../../../dist/target-model/types/index.js";

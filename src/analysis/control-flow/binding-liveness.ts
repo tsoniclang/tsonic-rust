@@ -2,13 +2,13 @@ import type { AstReader, Node } from "@tsonic/tsts";
 import { analyzeSourceWrites, createSourceControlFlow, solveSourceFlow, type SourceControlFlowGraph, type SourceFlowWork } from "@tsonic/target-api/analysis";
 import { ForStatement_Condition, ForStatement_Incrementor, Node_Expression, Node_Initializer, sourceEnclosingCallable, sourceParameterIsProperty, type TargetSourceProgram } from "@tsonic/target-api/source";
 import { failTargetAnalysisInvariant, type TargetDiagnostic } from "@tsonic/target-api/artifacts";
-import type { RustOwnershipFlow } from "../../target-model/records/ownership-flow.js";
-import type { RustBindingLivenessProducer } from "../program/records/binding-liveness.js";
+import type { RustOwnershipFlow } from "../../target-model/records/storage/ownership-flow.js";
+import type { RustBindingLivenessProducer } from "../program/records/storage/binding-liveness.js";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { RustNamePlan } from "../../target-model/names/model.js";
 import { rustStaticComparisonSkipsOperand } from "../operations/static-comparison-operands.js";
-import type { RustAdmittedConstruction, RustConstructionLayer } from "../../target-model/records/construction.js";
-import type { RustCallableEmissionContexts } from "../../target-model/records/physical-emission-contexts.js";
+import type { RustAdmittedConstruction, RustConstructionLayer } from "../../target-model/records/objects/construction.js";
+import type { RustCallableEmissionContexts } from "../../target-model/records/native/physical-emission-contexts.js";
 import { isRustNeverCarrier } from "../../target-model/types/index.js";
 
 export function analyzeRustBindingLiveness(

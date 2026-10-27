@@ -3,15 +3,15 @@ import { rustProgramNodeIsOutsideNativeCode } from "../control-flow/compile-time
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import { BinaryExpression_Left, BinaryExpression_Right, Node_Expression, ElementAccessExpression_ArgumentExpression } from "@tsonic/target-api/source";
 import type { RustAnalysisProgram } from "../program/model.js";
-import type { RustAssignmentEvaluationProducer } from "../program/records/assignment-evaluation.js";
-import type { RustAssignmentEvaluation } from "../../target-model/records/assignment-evaluation.js";
+import type { RustAssignmentEvaluationProducer } from "../program/records/storage/assignment-evaluation.js";
+import type { RustAssignmentEvaluation } from "../../target-model/records/storage/assignment-evaluation.js";
 import { isRustCopyCarrier } from "../../policy/constraints/native-traits.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustTargetOperationText } from "../../target-model/operations/text.js";
 import { isRustAssignmentOperator } from "../../target-model/syntax/tokens.js";
 import { rustTargetOperationIsDirectLocation } from "../../policy/operations/members/native-contracts.js";
 import { rustFinalizedSourceInputs } from "../../target-model/operations/finalized-inputs.js";
-import type { RustFinalizedOperationAbi } from "../../target-model/records/finalized-operation.js";
+import type { RustFinalizedOperationAbi } from "../../target-model/records/operations/finalized-operation.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 
 function hasSharedIdentityReceiver(abi: RustFinalizedOperationAbi, carrier: TargetTypeRef): boolean {

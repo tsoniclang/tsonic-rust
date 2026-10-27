@@ -8,7 +8,7 @@ import { rustProgramPlanContext, rustProgramWithTypeEmissions, rustSourceFilePla
 import { planRustCallableParameters, planRustCallableParameterPrelude } from "../../../../dist/backend/planner/declarations/callables/parameters.js";
 import { analyzeRustCallableParameterEmission } from "../../../../dist/analysis/callables/values/parameters.js";
 import { recordRustParameterAbiSelection } from "../../../../dist/analysis/callables/values/parameter-facts.js";
-import { createRustCallableParameterProducer } from "../../../../dist/analysis/program/records/parameter-emission.js";
+import { createRustCallableParameterProducer } from "../../../../dist/analysis/program/records/calls/parameter-emission.js";
 import { createRustSyntheticNameState } from "../../../../dist/backend/planner/names/synthetic.js";
 import { rustOptionTargetType } from "../../../../dist/target-model/types/carriers/optional.js";
 import { selectRustOptionalDefaultStorage } from "../../../../dist/policy/conversions/optional-storage.js";

@@ -3,13 +3,13 @@ import { sourceCallableValueParameters, type TargetSourceProgram } from "@tsonic
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import { snapshotTargetReadonlyMap } from "@tsonic/target-api/analysis";
 import type { RustCallableLeadingEmission, RustNativeCallableEntries, RustNativeCallableEntry,
-  RustNativeCallableEntryFacets, RustNativeCallableEntrySlot } from "../../../target-model/records/declaration-emission.js";
-import type { RustNativeCallableGenericHeader } from "../../../target-model/records/native-generics.js";
+  RustNativeCallableEntryFacets, RustNativeCallableEntrySlot } from "../../../target-model/records/program/declaration-emission.js";
+import type { RustNativeCallableGenericHeader } from "../../../target-model/records/native/native-generics.js";
 import type { RustProgramRecords } from "../../../target-model/records/program.js";
-import type { RustClassValuePlan } from "../../../target-model/records/class-values.js";
+import type { RustClassValuePlan } from "../../../target-model/records/objects/class-values.js";
 import type { RustProjectTypePolicy } from "../../project-types/index.js";
 import type { RustStructuralShapePlan } from "../../objects/shapes/structural-shape-plan.js";
-import type { RustStructuralShapeDefinition, RustStructuralShapeField } from "../../../target-model/records/structural-shapes.js";
+import type { RustStructuralShapeDefinition, RustStructuralShapeField } from "../../../target-model/records/objects/structural-shapes.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { selectRustNativeStructuralReceiverPassing } from "../../../policy/ownership/generic-callables.js";
 

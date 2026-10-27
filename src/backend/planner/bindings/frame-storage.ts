@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import { rustPackageFallibleBoundary } from "../program/fallible-boundaries.js";
-import type { RustFrameCallableBinding, RustFrameCallableDefinition } from "../../../target-model/records/frame-callables.js";
+import type { RustFrameCallableBinding, RustFrameCallableDefinition } from "../../../target-model/records/callables/frame-callables.js";
 import type { RustExpr, RustStmt, RustType } from "../../target-ast/syntax/nodes.js";
 import { rustValueBlock } from "../../target-ast/syntax/value-block.js";
 import type { RustValueFieldLocation } from "../objects/value-fields.js";

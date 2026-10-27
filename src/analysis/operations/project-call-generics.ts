@@ -22,7 +22,7 @@ import { sourceCallableValueParameters } from "@tsonic/target-api/source";
 import type { RustFactWalk } from "../program/walk.js";
 import type { RustTargetGenericBindings } from "../../target-model/types/index.js";
 import type { RustTargetGenericArgument, RustTargetMember, TargetTypeRef } from "../../target-model/types/model.js";
-import type { RustSelectedTargetSignature } from "../../target-model/records/member-selections.js";
+import type { RustSelectedTargetSignature } from "../../target-model/records/operations/member-selections.js";
 
 export interface FinalizedProjectSourceGenericArguments {
   readonly targetGenericArguments: readonly RustTargetGenericArgument[];

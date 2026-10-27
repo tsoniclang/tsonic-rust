@@ -7,11 +7,11 @@ import { analyzeRust } from "../../../helpers/rust-session.mjs";
 import { planBinaryExpression } from "../../../../dist/backend/planner/expressions/binary.js";
 import { createRustSyntheticNameState } from "../../../../dist/backend/planner/names/synthetic.js";
 import { analyzeRustBinaryEmission } from "../../../../dist/analysis/operations/binary-emission.js";
-import { createRustBinaryEmissionProducer } from "../../../../dist/analysis/program/records/expression-binary.js";
+import { createRustBinaryEmissionProducer } from "../../../../dist/analysis/program/records/operations/expression-binary.js";
 import { analyzeRustOptionalChainEmission } from "../../../../dist/analysis/operations/optional-chains.js";
-import { createRustOptionalChainEmissionProducer } from "../../../../dist/analysis/program/records/optional-chain-emission.js";
+import { createRustOptionalChainEmissionProducer } from "../../../../dist/analysis/program/records/operations/optional-chain-emission.js";
 import { analyzeRustNullishCoalescing } from "../../../../dist/analysis/operations/nullish-coalescing.js";
-import { createRustNullishCoalescingProducer } from "../../../../dist/analysis/program/records/nullish-coalescing.js";
+import { createRustNullishCoalescingProducer } from "../../../../dist/analysis/program/records/operations/nullish-coalescing.js";
 
 test("option-check admission rejects missing, duplicate, unordered and impossible nullish depths", () => {
   const { program } = analyzeRust({ surfaces: ["js"], files: { "index.ts": `

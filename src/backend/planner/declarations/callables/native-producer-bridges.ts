@@ -1,4 +1,4 @@
-import type { RustNativeCallableProtocol } from "../../../../target-model/records/native-protocols.js";
+import type { RustNativeCallableProtocol } from "../../../../target-model/records/native/native-protocols.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import type {
   RustBlock, RustFunctionParam, RustGenericArgument, RustItem, RustImplFunction, RustType,

@@ -2,7 +2,7 @@ import { selectExternalProjectFieldAccess, selectProjectSourceMethodProperty, se
 import type { RustOperationAnalysisContext } from "../program/operation-context.js";
 import { isProjectSourceDeclaration, resolveSelectedJsSourceMember, resolveSelectedProviderDeclaration, resolveSelectedSourceProfilePropertyMembers } from "../../policy/identities/selected-source.js";
 import { acceptRustMemberOperation, isDeclarationFileSubject, rejectSelectedOperation, selectedDeclarationIsCallable, selectedMemberReceiverCarrier, sourceOperationId } from "./members/result.js";
-import { acceptDeclarationOperation, acceptRustOperation } from "../program/records/selected-operation-values.js";
+import { acceptDeclarationOperation, acceptRustOperation } from "../program/records/operations/selected-operation-values.js";
 import { finalizeProviderOperationFromSubjects, mapProviderCheckedOperation } from "./members/conversions.js";
 
 import { selectStructuralSourceProperty } from "./members/structural-properties.js";

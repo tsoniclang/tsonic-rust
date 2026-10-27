@@ -7,19 +7,19 @@ import type { RustProgramRecords } from "../../../target-model/records/program.j
 import { allocateRustGeneratedName } from "../../../target-model/names/generated.js";
 import { rustCallableProtocol, rustLocationTargetType, rustTargetGenericReferences } from "../../../target-model/types/index.js";
 
-import type { RustSourceCallableSpecializationIssue } from "../../../target-model/records/callable-issues.js";
+import type { RustSourceCallableSpecializationIssue } from "../../../target-model/records/callables/callable-issues.js";
 import type { RustLifetimeIndex } from "../../../target-model/lifetimes/index.js";
 import { rustLifetimeKey, rustStaticLifetime, type RustLifetimeRef } from "../../../target-model/lifetimes/index.js";
 import { substituteElidedLifetime } from "../../../target-model/types/carriers/lifetime-elision.js";
 import { bindRustElidedCallableInput } from "../../../policy/types/callables/lifetime-elision.js";
 import { resolveRustEnclosingGenericParameters } from "../generics/generic-environment.js";
 import { rustCallableImplicitLifetimeParameters } from "../ownership/source-input-lifetimes.js";
-import type { RustNativeCapturePlan } from "../../../target-model/records/native-captures.js";
+import type { RustNativeCapturePlan } from "../../../target-model/records/native/native-captures.js";
 
-import type { RustSuspendedCallableImplementation } from "../../../target-model/records/suspended-callables.js";
+import type { RustSuspendedCallableImplementation } from "../../../target-model/records/callables/suspended-callables.js";
 
-import type { RustSuspendedCallablePlan } from "../../../target-model/records/suspended-callables.js";
-import { sealRustSuspendedCallablePlan } from "../../program/records/suspended-callables.js";
+import type { RustSuspendedCallablePlan } from "../../../target-model/records/callables/suspended-callables.js";
+import { sealRustSuspendedCallablePlan } from "../../program/records/callables/suspended-callables.js";
 
 export function createRustSuspendedCallablePlan(
   ast: AstReader,

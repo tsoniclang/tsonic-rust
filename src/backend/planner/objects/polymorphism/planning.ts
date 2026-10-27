@@ -254,7 +254,7 @@ export function planPolymorphicClassDeclaration(
 function planProjectExternalErrorImplementations(
   definition: RustProjectTypeDefinition,
   wrapperType: RustType,
-  representation: import("../../../../target-model/records/object-representation.js").RustObjectRepresentation,
+  representation: import("../../../../target-model/records/objects/object-representation.js").RustObjectRepresentation,
   context: RustPlanContext,
 ): readonly RustItem[] | undefined {
   const external = context.input.program.records.projectError.get(definition);

@@ -1,9 +1,9 @@
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { RustAnalysisProgram } from "../program/model.js";
-import type { RustProgramErrorModuleEmission } from "../../target-model/records/error-transport.js";
-import type { RustSourcePackageErrorPlan } from "../../target-model/records/source-package-errors.js";
-import type { RustErrorTransportEmissionProducer } from "../program/records/error-transport.js";
+import type { RustProgramErrorModuleEmission } from "../../target-model/records/errors/error-transport.js";
+import type { RustSourcePackageErrorPlan } from "../../target-model/records/errors/source-package-errors.js";
+import type { RustErrorTransportEmissionProducer } from "../program/records/errors/error-transport.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustJsErrorTargetType, rustProgramErrorTargetType, rustTsValueTargetType, rustJsValueTargetType,
   rustNamedTargetType, rustJsErrorTargetId } from "../../target-model/types/index.js";

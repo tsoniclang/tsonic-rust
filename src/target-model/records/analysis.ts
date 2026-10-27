@@ -1,9 +1,9 @@
 import type { RustProgramRecords, RustRecordFamily } from "./program.js";
 
-import type { RustRawLocationPlan } from "./native-memory.js";
-import type { RustMemoryBindingPlan } from "./memory-bindings.js";
-import type { RustRawAddressPlan } from "./raw-addresses.js";
-import type { RustTypedLocationPlan } from "./operations.js";
+import type { RustRawLocationPlan } from "./native/native-memory.js";
+import type { RustMemoryBindingPlan } from "./storage/memory-bindings.js";
+import type { RustRawAddressPlan } from "./storage/raw-addresses.js";
+import type { RustTypedLocationPlan } from "./operations/operations.js";
 
 export interface RustMemoryLayoutObservationFact {
   readonly value: bigint;

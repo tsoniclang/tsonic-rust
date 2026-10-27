@@ -1,8 +1,8 @@
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
-import type { RustBinaryHookPlan } from "../../target-model/records/binary-execution.js";
+import type { RustBinaryHookPlan } from "../../target-model/records/operations/binary-execution.js";
 import type { RustDispatchContextDemandPlan } from "./dispatch-demand.js";
 import type { AnalyzeRustDispatchContextResult, RustDispatchContextAccess, RustDispatchContextCatalog } from "./dispatch-contexts.js";
-import type { RustSourcePackageComponentClassifications } from "../../target-model/records/source-package-semantics.js";
+import type { RustSourcePackageComponentClassifications } from "../../target-model/records/program/source-package-semantics.js";
 import { snapshotClosedMetadata } from "../../target-model/metadata/closed-data.js";
 import type { RustDispatchContextGroupInput } from "../../target-model/operations/dispatch-contexts.js";
 

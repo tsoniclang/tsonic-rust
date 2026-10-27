@@ -3,7 +3,7 @@ import { planRustAbsentValue, planRustPresentValue } from "../../expressions/opt
 import { planRustOptionBranch } from "../../expressions/option-branch.js";
 import { planRustGenericCallableFlow } from "../../expressions/generic-callable-flow.js";
 import { planRustCallableConversion } from "../../expressions/callable-conversions.js";
-import type { RustCallableValueAdapter } from "../../../../target-model/records/callable-adapters.js";
+import type { RustCallableValueAdapter } from "../../../../target-model/records/callables/callable-adapters.js";
 import type { RustExpr } from "../../../target-ast/syntax/nodes.js";
 import {
   lowerRustValueConversion,

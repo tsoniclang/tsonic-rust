@@ -8,7 +8,7 @@ import { rustEffectiveValueCarrier } from "../../conversions/value-carrier-queri
 import type { RustFactWalk } from "../../program/walk.js";
 import type { RustAwaitSelection } from "../../../target-model/types/await.js";
 import { rustAwaitSelectionLeaves } from "../../../target-model/types/await.js";
-import type { RustAwaitValueLeafFact } from "../../../target-model/records/await-values.js";
+import type { RustAwaitValueLeafFact } from "../../../target-model/records/callables/await-values.js";
 import type { RustSourceErrorEffectSelection } from "../../errors/source-error-effects.js";
 import { finalizeRustDiscardedAwaitSelection } from "../async/await-values.js";
 import { rustFutureValueMatchesCarrier } from "../async/future-values.js";

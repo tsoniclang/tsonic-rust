@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 
-import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
+import type { RustTargetOperationFact } from "../../../target-model/records/operations/operations.js";
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { planRustRuntimeSetExpression } from "./runtime-setters.js";

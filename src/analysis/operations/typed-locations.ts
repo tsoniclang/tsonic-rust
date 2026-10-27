@@ -1,7 +1,7 @@
 import { selectRustTypedLocationCallSignature } from "../../policy/operations/typed-locations/call-signature.js";
-import { requireRustRecord } from "../program/records/required-records.js";
+import { requireRustRecord } from "../program/records/objects/required-records.js";
 import type { RustOperationAnalysisContext } from "../program/operation-context.js";
-import { selectedRustCallSignature } from "../program/records/selected-call.js";
+import { selectedRustCallSignature } from "../program/records/calls/selected-call.js";
 import type { AstReader, Node, ProviderDeclarationIdentity, SourceCallMarkerKind } from "@tsonic/tsts";
 import type { SourceProgramNavigation } from "@tsonic/target-api/source";
 import { selectedValueCarrier } from "./selected-values.js";
@@ -10,11 +10,11 @@ import { acceptRustPolicy, rejectRustPolicy } from "../../policy/model/contracts
 import type { RustCheckedCallSelectionInput, RustCheckedCallSelectionResult, RustPolicySelection } from "../../policy/model/contracts.js";
 
 import type { RustTargetMember, TargetTypeRef } from "../../target-model/types/model.js";
-import type { RustSelectedTargetOperation } from "../../target-model/records/member-selections.js";
+import type { RustSelectedTargetOperation } from "../../target-model/records/operations/member-selections.js";
 import { Node_Expression, Node_Type, sourceDeclarationIsModuleScoped } from "@tsonic/target-api/source";
 
-import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
-import type { RustTypedLocationOperands } from "../../target-model/records/typed-location-operands.js";
+import type { RustTargetOperationFact } from "../../target-model/records/operations/operations.js";
+import type { RustTypedLocationOperands } from "../../target-model/records/storage/typed-location-operands.js";
 import { rustSourceLocationTargetType, rustOptionalLocationPointeeCarrier, rustCallableProtocol, rustClosureProtocol, rustOptionElementCarrier, isRustAbsenceCarrier } from "../../target-model/types/index.js";
 import { rustCarrierSupportsObjectIdentity } from "../../policy/operations/js-values/carrier-protocols.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";

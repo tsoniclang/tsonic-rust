@@ -1,7 +1,7 @@
 import { rustProviderInputBorrowMode } from "../../policy/operations/members/input-borrows.js";
 import type { AstReader, Node } from "@tsonic/tsts";
 import { ElementAccessExpression_ArgumentExpression, Node_Expression } from "@tsonic/target-api/source";
-import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
+import type { RustTargetOperationFact } from "../../target-model/records/operations/operations.js";
 import { isRustStringViewCarrier } from "../../target-model/types/carriers/native.js";
 
 import { rustFinalizedSourceInputs } from "../../target-model/operations/finalized-inputs.js";

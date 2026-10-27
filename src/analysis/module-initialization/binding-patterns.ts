@@ -9,7 +9,7 @@ import {
   Node_Name,
 } from "@tsonic/target-api/source";
 import type { RustAnalysisContext } from "../program/context.js";
-import type { RustModuleBindingFact, RustModuleBindingPatternStep } from "../../target-model/records/operation-selections.js";
+import type { RustModuleBindingFact, RustModuleBindingPatternStep } from "../../target-model/records/operations/operation-selections.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 

@@ -1,4 +1,4 @@
-import { requireRustRecord } from "../../../program/records/required-records.js";
+import { requireRustRecord } from "../../../program/records/objects/required-records.js";
 import { sourceCallableValueParameters } from "@tsonic/target-api/source";
 
 import { KindExportAssignment, KindFunctionDeclaration, KindBindingElement, KindParameter, KindVariableDeclaration, Node_Expression, Node_Initializer, asSourceNode, sourceDeclarationIsModuleScoped, sourceBindingCapturedBeforeInitialization } from "@tsonic/target-api/source";
@@ -83,7 +83,7 @@ export function resolveIdentifierCarrier(
       const targetName = walk.context.names.functionNameForDeclaration(declaration);
       if (name !== undefined && parameterAbis.every((abi) => abi !== undefined) &&
         returnCarrier !== undefined && targetName !== undefined) {
-        const closedParameterAbis = parameterAbis as import("../../../../target-model/records/callables-and-resources.js").RustSourceParameterAbiFact[];
+        const closedParameterAbis = parameterAbis as import("../../../../target-model/records/callables/callables-and-resources.js").RustSourceParameterAbiFact[];
         const callableCarrier = rustSourceFunctionValueCarrier(walk, declaration, closedParameterAbis, returnCarrier);
         if (callableCarrier === undefined) return undefined;
         // The function value's carrier depends only on its declaration; storage origins resolve a reference to the

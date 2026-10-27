@@ -8,7 +8,7 @@ import { selectRustNumberArrayUnionOperation } from "../../../policy/operations/
 import { selectedValueCarrier } from "../selected-values.js";
 import { finalizeProviderOperationFromSubjects } from "./conversions.js";
 import { acceptRustMemberOperation, rejectSelectedOperation } from "./result.js";
-import { elementProvenance } from "../../program/records/selected-operation-values.js";
+import { elementProvenance } from "../../program/records/operations/selected-operation-values.js";
 
 export function selectRustNumberArrayUnionMember(
   request: RustCheckedPropertySelectionInput | RustCheckedElementSelectionInput,

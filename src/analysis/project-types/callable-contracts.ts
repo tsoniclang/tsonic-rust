@@ -2,7 +2,7 @@ import type { Node } from "@tsonic/tsts";
 import { failTargetAnalysisInvariant, type TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import { type TargetSourceProgram } from "@tsonic/target-api/source";
 import type { RustAnalysisProgram } from "../program/model.js";
-import type { RustProjectClassProducer } from "../program/records/project-classes.js";
+import type { RustProjectClassProducer } from "../program/records/objects/project-classes.js";
 import type { RustProjectTypeDefinition } from "../../target-model/types/project-types.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustCallableInvocationResult } from "../../policy/types/callables/return-contexts.js";

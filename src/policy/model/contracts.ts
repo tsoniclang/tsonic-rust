@@ -2,9 +2,9 @@ import type { ExtensionFactSubject, Node, ProviderDeclarationIdentity, ResolvedS
 import type { SourceFileSemantics } from "@tsonic/target-api/source";
 
 import type { RustTargetParameter, TargetTypeRef } from "../../target-model/types/model.js";
-import type { RustSelectedTargetOperation, RustSelectedTargetSignature, RustTargetCallArgumentSlot } from "../../target-model/records/member-selections.js";
+import type { RustSelectedTargetOperation, RustSelectedTargetSignature, RustTargetCallArgumentSlot } from "../../target-model/records/operations/member-selections.js";
 import type { RustCallbackOperationTemplate, RustProviderOperationTemplate } from "../../target-model/operations/model.js";
-import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
+import type { RustTargetOperationFact } from "../../target-model/records/operations/operations.js";
 
 type ResolvedSourceCallInfo = NonNullable<
   ReturnType<SourceFileSemantics["operations"]["call"]>

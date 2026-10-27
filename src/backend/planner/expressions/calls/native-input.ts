@@ -1,13 +1,13 @@
 import type { Node } from "@tsonic/tsts";
-import type { RustNativeCallableCall } from "../../../../target-model/records/native-protocols.js";
-import type { RustNativeCallableInput } from "../../../../target-model/records/native-protocols.js";
+import type { RustNativeCallableCall } from "../../../../target-model/records/native/native-protocols.js";
+import type { RustNativeCallableInput } from "../../../../target-model/records/native/native-protocols.js";
 import type { RustCallGenericArgument, RustExpr } from "../../../target-ast/syntax/nodes.js";
 import { rustTypeFromCarrierInContext } from "../../types/render.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import { rustPropagateNativeError } from "../../program/fallible-boundaries.js";
 import { failRustPlannerInvariant } from "../../diagnostics.js";
 import { createRustSharedReferenceArgument } from "../input-shaping.js";
-import type { RustErasedInputArgument } from "../../../../target-model/records/erased-input-arguments.js";
+import type { RustErasedInputArgument } from "../../../../target-model/records/calls/erased-input-arguments.js";
 import { allocateRustSyntheticName } from "../../names/synthetic.js";
 import { rustValueBlock } from "../../../target-ast/syntax/value-block.js";
 import { rustCallableProtocol } from "../../../../target-model/types/index.js";

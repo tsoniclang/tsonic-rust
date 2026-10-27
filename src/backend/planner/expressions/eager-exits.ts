@@ -1,7 +1,7 @@
 import type { Node } from "@tsonic/tsts";
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
-import type { RustExpressionExit } from "../../../target-model/records/expression-exits.js";
+import type { RustExpressionExit } from "../../../target-model/records/operations/expression-exits.js";
 import { failRustPlannerInvariant } from "../diagnostics.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { rustValueBlock } from "../../target-ast/syntax/value-block.js";

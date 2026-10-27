@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
-import type { RustFinalizedSourceInput } from "../../../target-model/records/finalized-operation.js";
-import type { RustEmissionProviderOperation } from "../../../target-model/records/physical-emission-contexts.js";
+import type { RustFinalizedSourceInput } from "../../../target-model/records/operations/finalized-operation.js";
+import type { RustEmissionProviderOperation } from "../../../target-model/records/native/physical-emission-contexts.js";
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { planRustPromotedStorageLocation, type RustExpressionPlanner } from "../expressions/typed-locations.js";

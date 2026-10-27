@@ -1,7 +1,7 @@
 import { selectRustCompoundAssignmentPromotion } from "../../policy/operations/operators/rules.js";
 import { resolveBinaryOperandCarriers, assignmentTarget } from "./operator-inputs.js";
 import { selectRustAbsenceComparisonOperation, selectRustCoalesceOperation, selectRustNullishAssignmentOperation } from "../../policy/operations/operators/absence.js";
-import { requireRustRecord } from "../program/records/required-records.js";
+import { requireRustRecord } from "../program/records/objects/required-records.js";
 import { selectedOptionNullishRelationship } from "../../policy/operations/operators/nullish-comparisons.js";
 import { BinaryExpression_Left, Node_Operand, KindBinaryExpression, KindEqualsEqualsEqualsToken, KindEqualsToken, KindExpressionStatement, KindExclamationEqualsEqualsToken, KindIdentifier, KindBigIntLiteral, KindQuestionQuestionToken, KindQuestionQuestionEqualsToken } from "@tsonic/target-api/source";
 import { selectRustGenericNumericOperation } from "./numeric/generic.js";
@@ -15,7 +15,7 @@ import { isRustBigIntCarrier, isRustAbsenceCarrier, isRustOptionCarrier, isRustS
 import { rustOptionalStorageValue, rustOptionalStorageNestingDepth } from "../../target-model/types/projections.js";
 
 import { rustPostCheckUnaryMinusOperationId, rustPostCheckUnaryPlusOperationId } from "../../target-model/operations/model.js";
-import { rustTargetOperationResultCarrier } from "../../target-model/records/operations.js";
+import { rustTargetOperationResultCarrier } from "../../target-model/records/operations/operations.js";
 import { appendRustDiagnostic } from "../program/walk.js";
 import { parseSourceBigIntLiteral } from "../../source/extension/literals.js";
 
@@ -33,7 +33,7 @@ import { setCarrierFact } from "./project-calls.js";
 import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustAssignmentOperator } from "../../target-model/syntax/tokens.js";
 import type { RustFactWalk } from "../program/walk.js";
-import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
+import type { RustTargetOperationFact } from "../../target-model/records/operations/operations.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 
 export function resolvePostCheckBinaryCarrier(

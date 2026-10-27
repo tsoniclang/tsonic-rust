@@ -2,7 +2,7 @@ import { rustValueBlock } from "../../target-ast/syntax/value-block.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustExpr, RustStmt } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
-import type { RustAssignmentOperationPlan } from "../../../target-model/records/operator-selection.js";
+import type { RustAssignmentOperationPlan } from "../../../target-model/records/operations/operator-selection.js";
 import { planExpression } from "../expressions/index.js";
 import { planRustDirectStorage, planRustUpdateProjectionArguments } from "../expressions/update-target.js";
 import { failRustPlannerInvariant } from "../diagnostics.js";

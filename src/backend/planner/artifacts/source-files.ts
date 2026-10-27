@@ -1,7 +1,7 @@
 import type { RustPlanningContext } from "../context.js";
 import type { RustSourceFileOutputIdentity } from "../../../target-model/names/source-output-identities.js";
-import type { RustSourcePackageComponentPlan } from "../../../target-model/records/source-packages.js";
-import type { RustSourcePackageErrorPlan } from "../../../target-model/records/source-package-errors.js";
+import type { RustSourcePackageComponentPlan } from "../../../target-model/records/program/source-packages.js";
+import type { RustSourcePackageErrorPlan } from "../../../target-model/records/errors/source-package-errors.js";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import { planRustSourceFile, type PlannedRustSourceFile } from "../program/source-file.js";
 import { failRustPlannerInvariant } from "../diagnostics.js";

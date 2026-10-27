@@ -22,7 +22,7 @@ import { rustValueConversionContract } from "../../policy/conversions/contracts.
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustBorrowedElementReads } from "../storage/borrowed-element-reads.js";
-import type { RustCountedLoopRepresentation } from "../../target-model/records/counted-loops.js";
+import type { RustCountedLoopRepresentation } from "../../target-model/records/operations/counted-loops.js";
 
 interface RustCountedLoopAnalysisContext {
   readonly ast: AstReader;

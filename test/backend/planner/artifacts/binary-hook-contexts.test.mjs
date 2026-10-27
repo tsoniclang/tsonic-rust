@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { planRustBinaryHookCallPlan } from "../../../../dist/backend/planner/program/binary-hook-contexts.js";
 import { analyzeRustBinaryDispatchEmission } from "../../../../dist/analysis/project/binary-dispatch-emission.js";
-import { createRustDispatchContextEmissionProducer } from "../../../../dist/analysis/program/records/dispatch-contexts.js";
+import { createRustDispatchContextEmissionProducer } from "../../../../dist/analysis/program/records/operations/dispatch-contexts.js";
 import { rustNamedTargetType } from "../../../../dist/target-model/types/index.js";
 import { printRustExpr } from "../../../../dist/print/source/index.js";
 import { fakeAstReader, fakeSourceFile } from "../../../helpers/fake-compile-input.mjs";

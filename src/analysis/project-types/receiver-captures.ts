@@ -1,4 +1,4 @@
-import type { RustReceiverFieldCapture, RustReceiverCapture } from "../../target-model/records/receiver-captures.js";
+import type { RustReceiverFieldCapture, RustReceiverCapture } from "../../target-model/records/callables/receiver-captures.js";
 import type { AstReader, Node, SourceFile, Type } from "@tsonic/tsts";
 import { Node_Expression, Node_Initializer, sourceLexicalEnvironment } from "@tsonic/target-api/source";
 import type { SourceProgramNavigation, SourceProgramSemantics } from "@tsonic/target-api/source";

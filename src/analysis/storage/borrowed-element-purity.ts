@@ -1,14 +1,14 @@
 import type { AstReader, Node } from "@tsonic/tsts";
 import { BinaryExpression_Left, BinaryExpression_Right, ElementAccessExpression_ArgumentExpression, Node_Expression } from "@tsonic/target-api/source";
 
-import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
+import type { RustTargetOperationFact } from "../../target-model/records/operations/operations.js";
 import { isRustStringCarrier, rustOptionTargetType } from "../../target-model/types/index.js";
 import { isRustCopyCarrier } from "../../policy/constraints/native-traits.js";
 import { isRustStringViewCarrier } from "../../target-model/types/carriers/native.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { isRustBinaryOperator } from "../../target-model/syntax/tokens.js";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
-import type { RustBorrowedElementRead } from "../../target-model/records/borrowed-element-reads.js";
+import type { RustBorrowedElementRead } from "../../target-model/records/storage/borrowed-element-reads.js";
 import { rustEffectiveValueCarrier, rustValueCarrierBeforeOptionProjection } from "../conversions/value-carrier-queries.js";
 import { hasExactObjectKeys } from "../../target-model/metadata/closed-data.js";
 

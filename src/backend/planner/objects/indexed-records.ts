@@ -1,8 +1,8 @@
 import { rustValueBlock } from "../../target-ast/syntax/value-block.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
-import type { RustIndexedRecordStorage } from "../../../target-model/records/indexed-records.js";
+import type { RustIndexedRecordStorage } from "../../../target-model/records/objects/indexed-records.js";
 import type { Node } from "@tsonic/tsts";
-import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
+import type { RustTargetOperationFact } from "../../../target-model/records/operations/operations.js";
 import type { planExpression as planRustExpression } from "../expressions/entry.js";
 import { planRustSharedReceiver } from "../expressions/typed-locations.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";

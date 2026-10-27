@@ -4,8 +4,8 @@ import type { RustProgramRecords } from "../../target-model/records/program.js";
 
 import { rustMemberAccessReceiver } from "../../target-model/syntax/expressions.js";
 import { rustTargetGenericReferences } from "../../target-model/types/carriers/generic-references.js";
-import type { RustOwnershipRecords } from "../../target-model/records/ownership.js";
-import type { RustBorrowedInitializerProducer } from "../program/records/borrowed-initializers.js";
+import type { RustOwnershipRecords } from "../../target-model/records/storage/ownership.js";
+import type { RustBorrowedInitializerProducer } from "../program/records/storage/borrowed-initializers.js";
 import { rustProviderInputBorrowMode } from "../../policy/operations/members/input-borrows.js";
 
 export function analyzeRustBorrowedInitializers(

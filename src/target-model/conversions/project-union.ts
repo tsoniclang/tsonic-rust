@@ -1,5 +1,5 @@
 import type { TargetTypeRef } from "../types/model.js";
-import type { RustProjectUpcastFact } from "../records/value-projections.js";
+import type { RustProjectUpcastFact } from "../records/objects/value-projections.js";
 
 import { type RustUnionArmMapping } from "../types/union-relations.js";
 

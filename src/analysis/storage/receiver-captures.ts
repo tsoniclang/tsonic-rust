@@ -5,10 +5,10 @@ import { isRustCapturedFieldStorage } from "../../target-model/types/field-stora
 import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 import { selectRustCapturedFieldStorage } from "../../policy/ownership/captured-field-storage.js";
-import type { RustCapturedFieldStorageFact } from "../../target-model/records/receiver-captures.js";
-import type { RustReceiverCaptureEmissionProducer } from "../program/records/receiver-captures.js";
+import type { RustCapturedFieldStorageFact } from "../../target-model/records/callables/receiver-captures.js";
+import type { RustReceiverCaptureEmissionProducer } from "../program/records/callables/receiver-captures.js";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
-import { rustClosureCaptureEquals } from "../../target-model/records/equality.js";
+import { rustClosureCaptureEquals } from "../../target-model/records/operations/equality.js";
 import { isValidRustIdentifier } from "../../target-model/names/identifiers.js";
 import { rustCallableTargetForSourceLifetime } from "../../policy/conversions/value-carrier-reconciliation.js";
 

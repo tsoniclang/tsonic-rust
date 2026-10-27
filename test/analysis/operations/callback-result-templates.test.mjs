@@ -14,7 +14,7 @@ import { rustRuntimeErrorTargetType } from "../../../dist/target-model/types/car
 import { selectJsSurfaceOperation } from "../../../dist/policy/operations/source-profiles/js/selection.js";
 import { finalizeRustRegExpReplacementCallbackContract } from "../../../dist/policy/operations/members/regexp-callbacks.js";
 import { analyzeRust } from "../../helpers/rust-session.mjs";
-import { finalizeProviderOperationFact } from "../../../dist/analysis/program/records/provider-operations.js";
+import { finalizeProviderOperationFact } from "../../../dist/analysis/program/records/native/provider-operations.js";
 import { emptyRustTypeDefinitions } from "../../../dist/target-model/types/source-union-definitions.js";
 
 const inferred = { kind: "opaque", id: "tsonic.rust.infer" };

@@ -15,34 +15,34 @@ import { rustCallableInvocationSignaturesMatch } from "../../../policy/conversio
 import { isRustNeverCarrier, rustJsArrayLikeElementTargetType } from "../../../target-model/types/carriers/js.js";
 import type { RustTypeDefinitions } from "../../../target-model/types/source-union-definitions.js";
 import { createRustNativeCallableProtocolRegistry } from "./native-protocols.js";
-import type { RustNativeCallableProtocol } from "../../../target-model/records/native-protocols.js";
+import type { RustNativeCallableProtocol } from "../../../target-model/records/native/native-protocols.js";
 import { rustNativeCallableErrorType } from "../../../policy/types/callables/native-protocols.js";
 import { rustNativeCallableCompletion } from "../../../policy/types/callables/native-completion.js";
 import { closedMetadataKey } from "../../../target-model/metadata/closed-data.js";
 import { rustNativeCallableInvocationArguments } from "../../../policy/types/callables/native-invocations.js";
 import { rustJsPromiseOutputTargetType } from "../../../target-model/types/carriers/promises.js";
-import { rustJsRejectionErrorIdentity } from "../../../target-model/records/error-effects.js";
+import { rustJsRejectionErrorIdentity } from "../../../target-model/records/errors/error-effects.js";
 
 import { rustTargetTypeChildren } from "../../../target-model/types/carriers/children.js";
 import type { RustDeclarationGenericRequirementIndex } from "../../declarations/generic-requirements.js";
 
 import type { RustNativeStoragePlan } from "../storage/native-storage.js";
-import type { RustNativeCallableProducerPlan } from "../../../target-model/records/native-producers.js";
-import type { RustNativeGenericProducerPlan } from "../../../target-model/records/native-generic-producers.js";
-import type { RustRetainedCallableInputPlan } from "../../../target-model/records/retained-inputs.js";
+import type { RustNativeCallableProducerPlan } from "../../../target-model/records/native/native-producers.js";
+import type { RustNativeGenericProducerPlan } from "../../../target-model/records/native/native-generic-producers.js";
+import type { RustRetainedCallableInputPlan } from "../../../target-model/records/callables/retained-inputs.js";
 import { rustNativeCallableInputPhysicalSignature } from "../../../policy/conversions/native-callables.js";
 import { emissionDiagnostic } from "../emission/emission-contexts.js";
 
-import type { RustNativeCallableInput, RustNativeCallableCall } from "../../../target-model/records/native-protocols.js";
+import type { RustNativeCallableInput, RustNativeCallableCall } from "../../../target-model/records/native/native-protocols.js";
 
-import type { RustNativeCallableGenericContext, RustNativeCallableGenericInput } from "../../../target-model/records/native-generics.js";
-import type { RustNativeGenericProducer } from "../../program/records/native-generics.js";
+import type { RustNativeCallableGenericContext, RustNativeCallableGenericInput } from "../../../target-model/records/native/native-generics.js";
+import type { RustNativeGenericProducer } from "../../program/records/native/native-generics.js";
 import { rustNodeInCatchingTryBody } from "../../errors/catching-try.js";
 import { rustProgramErrorTargetType } from "../../../target-model/types/carriers/js.js";
 import type { RustCallableEntryConstruction } from "../emission/entry-parameters.js";
 import type { RustProjectTypePolicy } from "../../../target-model/types/project-types.js";
 import type { RustStructuralShapePlanRegistry } from "../../objects/shapes/structural-shape-registry.js";
-import type { RustSourceCallableSpecializationIssue } from "../../../target-model/records/callable-issues.js";
+import type { RustSourceCallableSpecializationIssue } from "../../../target-model/records/callables/callable-issues.js";
 import { rustNativeStorageProjectionDepth, rustNativeStorageProjectionSteps } from "../storage/native-storage-generics.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 

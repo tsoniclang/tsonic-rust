@@ -12,7 +12,7 @@ import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equali
 import { fakeAstReader, fakeSourceFile, fakeStatement } from "../../helpers/fake-compile-input.mjs";
 import { rustProgramWithTypeEmissions, rustSourceFilePlanContext } from "../../helpers/plan-context.mjs";
 import { analyzeRustPropertyValueProjection } from "../../../dist/analysis/conversions/property-value-projection.js";
-import { createRustPropertyValueProjectionProducer } from "../../../dist/analysis/program/records/property-value-projection.js";
+import { createRustPropertyValueProjectionProducer } from "../../../dist/analysis/program/records/objects/property-value-projection.js";
 import { analyzeRust } from "../../helpers/rust-session.mjs";
 import { nativePropertyProjectionSource } from "../../../../tsonic/test/fixtures/native-property-projections.mjs";
 import { Node_Expression } from "@tsonic/target-api/source";

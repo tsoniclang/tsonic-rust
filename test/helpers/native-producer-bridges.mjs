@@ -1,13 +1,13 @@
 import assert from "node:assert/strict";
 import { createRustNativeCallableProtocolRegistry } from "../../dist/analysis/callables/native/native-protocols.js";
 import { analyzeRustNativeProtocolEmission } from "../../dist/analysis/callables/emission/native-protocol-emission.js";
-import { createRustNativeProtocolProducer } from "../../dist/analysis/program/records/native-protocol-emission.js";
-import { sealRustNativeCallableDispatch } from "../../dist/analysis/program/records/native-dispatch.js";
+import { createRustNativeProtocolProducer } from "../../dist/analysis/program/records/native/native-protocol-emission.js";
+import { sealRustNativeCallableDispatch } from "../../dist/analysis/program/records/native/native-dispatch.js";
 import { analyzeRustTypeEmission } from "../../dist/analysis/source-evidence/types/emission.js";
-import { createRustTypeEmissionProducer } from "../../dist/analysis/program/records/type-emission.js";
+import { createRustTypeEmissionProducer } from "../../dist/analysis/program/records/types/type-emission.js";
 import { analyzeRustProjectEmission } from "../../dist/analysis/project-types/emission.js";
 import { prepareRustProjectGenericMembership } from "../../dist/analysis/project-types/generic-membership.js";
-import { createRustProjectEmissionProducer } from "../../dist/analysis/program/records/project-emission.js";
+import { createRustProjectEmissionProducer } from "../../dist/analysis/program/records/program/project-emission.js";
 import { planRustNativeCallableProtocol } from "../../dist/backend/planner/declarations/callables/native-protocols.js";
 import { planRustNativeProducerBridge } from "../../dist/backend/planner/declarations/callables/native-producer-bridges.js";
 import { createRustTypeDefinitionRegistry } from "../../dist/analysis/project-types/type-definitions.js";

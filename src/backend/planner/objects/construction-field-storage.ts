@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
-import type { RustAdmittedConstruction } from "../../../target-model/records/construction.js";
+import type { RustAdmittedConstruction } from "../../../target-model/records/objects/construction.js";
 import { failRustPlannerInvariant } from "../diagnostics.js";
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";

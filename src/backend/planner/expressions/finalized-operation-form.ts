@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import type { RustProviderChainStep } from "../../../target-model/operations/model.js";
-import type { RustFinalizedOperationAbi } from "../../../target-model/records/finalized-operation.js";
+import type { RustFinalizedOperationAbi } from "../../../target-model/records/operations/finalized-operation.js";
 import type { RustCallGenericArgument, RustExpr, RustGenericArgument, RustGenericParameter, RustItem, RustType, RustTypeBound } from "../../target-ast/syntax/nodes.js";
 import { failRustPlannerInvariant } from "../diagnostics.js";
 import { rustAutoBorrowedReceiver } from "./auto-borrowed-receivers.js";

@@ -1,8 +1,8 @@
 import type { Node } from "@tsonic/tsts";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { RustAnalysisProgram } from "../program/model.js";
-import type { RustProjectEmissionProducer } from "../program/records/project-emission.js";
-import type { RustDeclarationGenericRequirementContract } from "../../target-model/records/generic-requirements.js";
+import type { RustProjectEmissionProducer } from "../program/records/program/project-emission.js";
+import type { RustDeclarationGenericRequirementContract } from "../../target-model/records/types/generic-requirements.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustSourceTypeCarrierValue, rustTargetGenericTypeArguments, substituteRustTargetGenerics } from "../../target-model/types/index.js";
 import { rustTargetTypeParameterIdentities } from "../../target-model/types/carriers/generic-references.js";

@@ -1,6 +1,6 @@
 import type { AstReader, Node } from "@tsonic/tsts";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
-import type { RustAwaitValueFact, RustAwaitValueLeafFact } from "../../../target-model/records/await-values.js";
+import type { RustAwaitValueFact, RustAwaitValueLeafFact } from "../../../target-model/records/callables/await-values.js";
 import type { RustAwaitSelection } from "../../../target-model/types/await.js";
 
 export function admitRustAwaitBoundary(ast: AstReader, node: Node, fact: RustAwaitValueFact | undefined,

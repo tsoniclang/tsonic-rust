@@ -23,7 +23,7 @@ import type { Node } from "@tsonic/tsts";
 import type { RustEffectiveExpressionOverride, RustPlanContext } from "../../program/plan-context.js";
 import type { RustExpr, RustImplFunction, RustType } from "../../../target-ast/syntax/nodes.js";
 import type { RustProjectTypeDefinition, RustProjectDowncastRoute } from "../../../../target-model/types/project-types.js";
-import type { RustProjectMethodDispatchVariant } from "../../../../target-model/records/method-dispatch.js";
+import type { RustProjectMethodDispatchVariant } from "../../../../target-model/records/operations/method-dispatch.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import type { ProjectCallableShape } from "./model.js";
 
@@ -185,7 +185,7 @@ function planRootCallableImplementation(
     readonly targetName: string;
     readonly safetyPlacement?: "getter" | "setter";
     readonly headerVariant?: RustProjectMethodDispatchVariant;
-    readonly fallibleBoundary?: import("../../../../target-model/records/source-package-errors.js").RustSourcePackageErrorBoundary;
+    readonly fallibleBoundary?: import("../../../../target-model/records/errors/source-package-errors.js").RustSourcePackageErrorBoundary;
   },
 ): RustImplFunction | undefined {
   const owner = context.input.program.records.projectMemberOwner.get(implementation);

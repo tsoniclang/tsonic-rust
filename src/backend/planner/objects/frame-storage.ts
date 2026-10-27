@@ -1,4 +1,4 @@
-import type { RustFrameCallableDefinition } from "../../../target-model/records/frame-callables.js";
+import type { RustFrameCallableDefinition } from "../../../target-model/records/callables/frame-callables.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustExpr, RustStructField, RustVisibility } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";

@@ -3,8 +3,8 @@ import { isRustJsArrayCarrier, rustJsArrayLikeElementTargetType, rustSourcePrimi
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
 import { rustValueConversionIsFallible } from "../../../conversions/contracts.js";
 import { selectRustSourceValueConversion } from "../../../conversions/selection.js";
-import { type RustSourceObjectField } from "../../../../target-model/records/source-types.js";
-import { type RustTargetOperationFact } from "../../../../target-model/records/operations.js";
+import { type RustSourceObjectField } from "../../../../target-model/records/types/source-types.js";
+import { type RustTargetOperationFact } from "../../../../target-model/records/operations/operations.js";
 import { type TargetTypeRef } from "../../../../target-model/types/model.js";
 
 export interface SelectedObjectShapeProjection {

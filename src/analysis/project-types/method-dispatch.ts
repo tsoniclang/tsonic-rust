@@ -9,7 +9,7 @@ import type { RustProjectTypeDefinition, RustProjectTypePolicy } from "./index.j
 import { rustTargetTypeParameterIdentities } from "../../target-model/types/index.js";
 import type { RustLifetimeIndex } from "../../target-model/lifetimes/index.js";
 
-import type { RustProjectMethodDispatchVariant } from "../../target-model/records/method-dispatch.js";
+import type { RustProjectMethodDispatchVariant } from "../../target-model/records/operations/method-dispatch.js";
 
 export type RustProjectMethodDispatchRegistration =
   | { readonly kind: "accepted" }

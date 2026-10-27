@@ -3,9 +3,9 @@ import { rustProgramNodeIsOutsideNativeCode } from "../control-flow/compile-time
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import { Node_Expression } from "@tsonic/target-api/source";
 import type { RustAnalysisProgram } from "../program/model.js";
-import type { RustOptionalChainEmission } from "../../target-model/records/optional-chain-emission.js";
-import type { RustOptionalChainEmissionProducer } from "../program/records/optional-chain-emission.js";
-import { requireRustRecord, type RustRequiredRecord } from "../program/records/required-records.js";
+import type { RustOptionalChainEmission } from "../../target-model/records/operations/optional-chain-emission.js";
+import type { RustOptionalChainEmissionProducer } from "../program/records/operations/optional-chain-emission.js";
+import { requireRustRecord, type RustRequiredRecord } from "../program/records/objects/required-records.js";
 import { isRustUnitCarrier, rustOptionElementCarrier, rustOptionNestingDepth, rustStructuralMethodCallableCarrier } from "../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustSourceOptionalTargetType } from "../../target-model/types/projections.js";

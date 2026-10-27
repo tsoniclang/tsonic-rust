@@ -11,7 +11,7 @@ export const rustRequiresCallableFieldStorage = (carrier: TargetTypeRef): boolea
 
 import { rustLifetimeKey, type RustLifetimeRef } from "../../target-model/lifetimes/index.js";
 import { rustTargetGenericReferences } from "../../target-model/types/carriers/generic-references.js";
-import type { RustClassEnvironment } from "../../target-model/records/class-values.js";
+import type { RustClassEnvironment } from "../../target-model/records/objects/class-values.js";
 import { isRustCopyCarrier } from "../constraints/native-traits.js";
 import { rustNamedTypeCarrierValue } from "../../target-model/types/carriers/native.js";
 import { rustCallableTargetId } from "../../target-model/types/carriers/source-types.js";

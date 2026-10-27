@@ -1,4 +1,4 @@
-import { requireRustRecord } from "../../program/records/required-records.js";
+import { requireRustRecord } from "../../program/records/objects/required-records.js";
 import { rustGenericCallableProtocol, rustGenericCallableValue } from "../../../target-model/types/carriers/generic-callables.js";
 import { finalizeProjectSourceGenericArguments } from "../../operations/project-call-generics.js";
 import { rustTypeFamilyNormalizer } from "../../project-types/type-family-normalization.js";
@@ -24,15 +24,15 @@ import { rustCallableTargetForSourceLifetime } from "../../../policy/conversions
 import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustFactWalk } from "../../program/walk.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
-import type { RustSelectedTargetSignature } from "../../../target-model/records/member-selections.js";
+import type { RustSelectedTargetSignature } from "../../../target-model/records/operations/member-selections.js";
 
-import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
+import type { RustTargetOperationFact } from "../../../target-model/records/operations/operations.js";
 
 import { rustSourceCallArgumentCarriers, rustSourceCallResultWithInputLifetimes } from "../ownership/source-call-lifetimes.js";
 import { retainRustSelectedSourceCallResultStorage } from "../../source-evidence/types/resolution/call-results.js";
-import { callableRestElement } from "../../../target-model/records/callable-adapters.js";
+import { callableRestElement } from "../../../target-model/records/callables/callable-adapters.js";
 import { acceptRustPolicy } from "../../../policy/model/contracts.js";
-import { selectedRustSourceCallOperation } from "../../program/records/selected-call.js";
+import { selectedRustSourceCallOperation } from "../../program/records/calls/selected-call.js";
 
 export function applySelectedRuntimeCallableCall(
   walk: RustFactWalk,

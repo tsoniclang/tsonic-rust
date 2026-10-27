@@ -1,6 +1,6 @@
 import type { RustTargetGenericArgument, TargetTypeRef } from "../../../../target-model/types/model.js";
-import type { RustSelectedTargetSignature } from "../../../../target-model/records/member-selections.js";
-import type { RustFlowReadProjectionFact } from "../../../../target-model/records/value-projections.js";
+import type { RustSelectedTargetSignature } from "../../../../target-model/records/operations/member-selections.js";
+import type { RustFlowReadProjectionFact } from "../../../../target-model/records/objects/value-projections.js";
 import type { RustProjectTypePolicy } from "../../../../target-model/types/project-types.js";
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
 import { rustNativeRepresentationMatches } from "../../../../policy/conversions/native-representation.js";

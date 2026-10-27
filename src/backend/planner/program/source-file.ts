@@ -2,7 +2,7 @@ import { rustHiddenAttribute } from "../../target-ast/syntax/attributes.js";
 import type { RustFallibleBoundary } from "./fallible-boundaries.js";
 import { planRustErrorRegion, planRustErrorJoinDeclarations } from "./error-regions.js";
 import { planRustNativeTaskInitializer } from "./native-tasks.js";
-import type { RustErrorRegionSelection } from "../../../target-model/records/error-regions.js";
+import type { RustErrorRegionSelection } from "../../../target-model/records/errors/error-regions.js";
 
 import type { Node, SourceFile } from "@tsonic/tsts";
 import { planRustNativeCallableProtocolItems } from "../declarations/callables/native-protocols.js";
@@ -65,7 +65,7 @@ import { completeRustAuthoredStructScopes } from "./authored-type-scopes.js";
 import { createRustObjectLiteralImplementationRegistry } from "../objects/object-literals/model.js";
 import { planRustSourceCallableValue } from "../expressions/source-callable-value.js";
 import { rustModuleInitializerFunctionName } from "./source-package-initializers.js";
-import type { RustSourcePackageErrorPlan } from "../../../target-model/records/source-package-errors.js";
+import type { RustSourcePackageErrorPlan } from "../../../target-model/records/errors/source-package-errors.js";
 
 export interface PlannedRustSourceFile {
   readonly sourceFile: SourceFile;

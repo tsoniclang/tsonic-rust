@@ -1,5 +1,5 @@
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
-import type { RustObjectRepresentation } from "../../../target-model/records/object-representation.js";
+import type { RustObjectRepresentation } from "../../../target-model/records/objects/object-representation.js";
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { requireRustCarrierRead } from "../types/carrier-reads.js";

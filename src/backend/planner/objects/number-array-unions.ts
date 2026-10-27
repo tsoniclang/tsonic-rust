@@ -1,5 +1,5 @@
-import type { RustGeneratedUnionDefinition } from "../../../target-model/records/generated-unions.js";
-import { rustNumberArrayLikeMembers } from "../../../target-model/records/generated-unions.js";
+import type { RustGeneratedUnionDefinition } from "../../../target-model/records/types/generated-unions.js";
+import { rustNumberArrayLikeMembers } from "../../../target-model/records/types/generated-unions.js";
 import { emptyRustGenerics, type RustExpr, type RustItem, type RustType } from "../../target-ast/syntax/nodes.js";
 import { rustSelfParameter } from "../declarations/callables/self-parameter.js";
 

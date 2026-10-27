@@ -6,8 +6,8 @@ import { rustNativePropertyNameIssue } from "../objects/computed-field-names.js"
 import type { RustNamePlan } from "../../target-model/names/model.js";
 import { isValidRustIdentifier } from "../../target-model/names/identifiers.js";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
-import type { RustNativeDeclarationForm } from "../../target-model/records/native-declaration-forms.js";
-import type { RustNativeInterfaceField } from "../../target-model/records/native-value-declarations.js";
+import type { RustNativeDeclarationForm } from "../../target-model/records/native/native-declaration-forms.js";
+import type { RustNativeInterfaceField } from "../../target-model/records/native/native-value-declarations.js";
 import type { RustLifetimeIndex } from "../../target-model/lifetimes/model.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import type { RustProjectTypePolicy } from "../../target-model/types/project-types.js";

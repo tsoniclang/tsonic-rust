@@ -1,5 +1,5 @@
 import type { Node } from "@tsonic/tsts";
-import type { RustAwaitValueLeafFact } from "../../../target-model/records/await-values.js";
+import type { RustAwaitValueLeafFact } from "../../../target-model/records/callables/await-values.js";
 import type { RustAwaitSelection } from "../../../target-model/types/await.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustExpr, RustPattern } from "../../target-ast/syntax/nodes.js";

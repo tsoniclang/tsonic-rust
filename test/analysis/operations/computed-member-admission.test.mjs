@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createRustComputedMemberProducer } from "../../../dist/analysis/program/records/computed-member.js";
+import { createRustComputedMemberProducer } from "../../../dist/analysis/program/records/objects/computed-member.js";
 import { createRustProgramRecordBuilder } from "../../../dist/analysis/program/records/create.js";
 import { recordRustComputedCallEvaluation } from "../../../dist/analysis/operations/computed-members.js";
 

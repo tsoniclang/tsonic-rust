@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { assertRustInheritedRecordConflict } from "../../../helpers/records.mjs";
 import test from "node:test";
 import { createRustProgramRecordBuilder } from "../../../../dist/analysis/program/records/create.js";
-import { rustClosureCaptureEquals } from "../../../../dist/target-model/records/equality.js";
+import { rustClosureCaptureEquals } from "../../../../dist/target-model/records/operations/equality.js";
 import { rustSourceOptionalTargetType } from "../../../../dist/target-model/types/index.js";
 
 const integer = { kind: "source-primitive", name: "int32" };

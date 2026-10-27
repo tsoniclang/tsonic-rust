@@ -1,7 +1,7 @@
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { SourceFile } from "@tsonic/tsts";
 import type { RustAnalysisProgram } from "../../program/model.js";
-import type { RustSuspendedCallableProducer } from "../../program/records/suspended-callables.js";
+import type { RustSuspendedCallableProducer } from "../../program/records/callables/suspended-callables.js";
 import { rustCallableProtocol, rustLocationTargetType } from "../../../target-model/types/index.js";
 import { rustStaticLifetime } from "../../../target-model/lifetimes/index.js";
 import { substituteElidedLifetime } from "../../../target-model/types/carriers/lifetime-elision.js";

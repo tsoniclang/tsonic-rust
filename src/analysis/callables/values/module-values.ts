@@ -1,4 +1,4 @@
-import { requireRustRecord } from "../../program/records/required-records.js";
+import { requireRustRecord } from "../../program/records/objects/required-records.js";
 import type { Node } from "@tsonic/tsts";
 import type { SourceDeclarationUse } from "@tsonic/target-api/source";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
@@ -7,9 +7,9 @@ import { rustCallableConversionMatches } from "../../../policy/conversions/calla
 import { rustCallableInputMatches } from "../../../policy/conversions/callable-input.js";
 
 import type { RustFactWalk } from "../../program/walk.js";
-import type { RustSourceCallableValueFact } from "../../../target-model/records/operation-selections.js";
+import type { RustSourceCallableValueFact } from "../../../target-model/records/operations/operation-selections.js";
 import type { RustRecordFamily } from "../../../target-model/records/program.js";
-import { rustSourceCallableValueEquals } from "../../../target-model/records/equality.js";
+import { rustSourceCallableValueEquals } from "../../../target-model/records/operations/equality.js";
 import { selectRustInlineModuleCallableAliases } from "./module-aliases.js";
 
 import { rustGenericCallableValue } from "../../../target-model/types/carriers/generic-callables.js";

@@ -13,7 +13,7 @@ import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality
 import { rustSourceStorageComponentContext } from "./source-storage-projection.js";
 import { sourceArrayElementType } from "@tsonic/target-api/source";
 
-import type { RustProviderObjectLiteralConstructionSelection } from "../../../../target-model/records/provider-construction.js";
+import type { RustProviderObjectLiteralConstructionSelection } from "../../../../target-model/records/native/provider-construction.js";
 import { resolveProviderTypeIdentity } from "../../../../policy/identities/provider-types.js";
 import { providerCarrierFromRelations, instantiateProviderTargetType } from "../../../../policy/types/project/provider-instantiation.js";
 import { resolveSourceProfileCarrierFromArguments, selectRustFixedSourceProfileCarrier, rustSourceProfileErrorCarrierNeeded, rustSourceProfileUsesArrayStorage } from "../../../../policy/operations/source-profiles/type-carriers.js";

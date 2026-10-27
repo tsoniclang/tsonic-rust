@@ -1,5 +1,5 @@
 import type { Node } from "@tsonic/tsts";
-import type { RustGeneratorFact } from "../../../../target-model/records/callables-and-resources.js";
+import type { RustGeneratorFact } from "../../../../target-model/records/callables/callables-and-resources.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import type { RustType } from "../../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../../program/plan-context.js";

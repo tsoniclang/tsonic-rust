@@ -1,4 +1,4 @@
-import type { RustSourceParameterAbiFact } from "../../../target-model/records/callables-and-resources.js";
+import type { RustSourceParameterAbiFact } from "../../../target-model/records/callables/callables-and-resources.js";
 import type { Node } from "@tsonic/tsts";
 import { sourceNodeIdentity } from "@tsonic/target-api/source";
 import type { RustFactWalk } from "../../program/walk.js";

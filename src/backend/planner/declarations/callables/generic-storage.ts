@@ -1,8 +1,8 @@
-import type { RustGenericCallablePhysicalDefinition } from "../../../../target-model/records/generic-callables.js";
+import type { RustGenericCallablePhysicalDefinition } from "../../../../target-model/records/callables/generic-callables.js";
 import { emptyRustGenerics, type RustExpr, type RustGenerics, type RustItem, type RustType } from "../../../target-ast/syntax/nodes.js";
 import { rustSelfParameter } from "./self-parameter.js";
 import { rustCallableIdentityPredicate } from "../../../target-ast/syntax/callable-identities.js";
-import type { RustGenericCallableIdentitySelection } from "../../../../target-model/records/generic-callables.js";
+import type { RustGenericCallableIdentitySelection } from "../../../../target-model/records/callables/generic-callables.js";
 import { failRustPlannerInvariant } from "../../diagnostics.js";
 
 export function genericCallableStorageItems(

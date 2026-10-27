@@ -2,7 +2,7 @@ import type { Node } from "@tsonic/tsts";
 
 import { rustSourceTypeExportIds } from "../../target-model/identities/source.js";
 
-import type { RustSourceLifetimeTypeContract } from "../../target-model/records/source-lifetime-types.js";
+import type { RustSourceLifetimeTypeContract } from "../../target-model/records/storage/source-lifetime-types.js";
 export function rustLifetimeTypeContractFor(
   exportId: string,
   args: readonly Node[],

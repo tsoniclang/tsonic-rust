@@ -20,4 +20,4 @@ export type {
 } from "./classification.js";
 export type {
   RustBinaryHookPlan,
-} from "../../target-model/records/binary-execution.js";
+} from "../../target-model/records/operations/binary-execution.js";

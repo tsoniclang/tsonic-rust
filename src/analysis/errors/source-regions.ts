@@ -2,15 +2,15 @@ import type { Node } from "@tsonic/tsts";
 import { rustProgramNodeIsOutsideNativeCode } from "../control-flow/compile-time-statements.js";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { RustAnalysisProgram } from "../program/model.js";
-import type { RustErrorEmissionProducer } from "../program/records/error-emission.js";
-import type { RustSourceErrorEffectEdge } from "../../target-model/records/source-error-effects.js";
-import { rustJsRejectionErrorIdentity } from "../../target-model/records/error-effects.js";
+import type { RustErrorEmissionProducer } from "../program/records/errors/error-emission.js";
+import type { RustSourceErrorEffectEdge } from "../../target-model/records/errors/source-error-effects.js";
+import { rustJsRejectionErrorIdentity } from "../../target-model/records/errors/error-effects.js";
 import { rustJsValueTargetType } from "../../target-model/types/carriers/js.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
-import type { RustSourceErrorRegionSelection } from "../../target-model/records/error-regions.js";
-import type { RustSourceErrorRegionEmission } from "../../target-model/records/error-emission.js";
+import type { RustSourceErrorRegionSelection } from "../../target-model/records/errors/error-regions.js";
+import type { RustSourceErrorRegionEmission } from "../../target-model/records/errors/error-emission.js";
 
 export function materializeRustSourceErrorRegion(node: Node,
   selected: RustSourceErrorRegionSelection): RustSourceErrorRegionEmission {

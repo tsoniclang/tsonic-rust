@@ -1,11 +1,11 @@
-import { requireRustRecord } from "../../../program/records/required-records.js";
+import { requireRustRecord } from "../../../program/records/objects/required-records.js";
 import { ElementAccessExpression_ArgumentExpression, BinaryExpression_Left, BinaryExpression_Right, BinaryExpression_OperatorToken, Node_Operand, KindBinaryExpression, KindCallExpression, KindConditionalExpression, KindDeleteExpression, KindElementAccessExpression, KindEqualsToken, KindIdentifier, KindNewExpression, KindNonNullExpression, KindParenthesizedExpression, KindPostfixUnaryExpression, KindPrefixUnaryExpression, KindPropertyAccessExpression, KindQuestionQuestionToken, KindSatisfiesExpression, KindSpreadElement, sourceSequenceInputChoice, sourceSequenceInputIsEmpty, KindVoidExpression, KindAwaitExpression, Node_Expression, Node_Type } from "@tsonic/target-api/source";
 import { isRustBigIntCarrier, isRustNumericCarrier, isRustOptionCarrier, rustOptionElementCarrier, rustSourcePrimitiveTargetType, rustStructuralObjectCarrierValue } from "../../../../target-model/types/index.js";
 import { rustUnionAlternatives } from "../../../../target-model/types/union-relations.js";
 import { rustSourceValueWrapperContains } from "../../../../policy/ownership/source-value-wrappers.js";
 
 import { rustPostCheckOperationKind } from "../../../../target-model/operations/model.js";
-import { rustTargetOperationResultCarrier } from "../../../../target-model/records/operations.js";
+import { rustTargetOperationResultCarrier } from "../../../../target-model/records/operations/operations.js";
 import { appendRustDiagnostic, rustResolutionContext, selectExpressionOperation } from "../../../program/walk.js";
 import { resolveRustTargetTypeRef } from "./source.js";
 import { selectedSourceLiteralIsRepresentable } from "../../../../policy/conversions/literals.js";

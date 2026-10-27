@@ -1,5 +1,5 @@
 import type { Node } from "@tsonic/tsts";
-import type { RustSourceParameterAbiFact } from "../../../../target-model/records/callables-and-resources.js";
+import type { RustSourceParameterAbiFact } from "../../../../target-model/records/callables/callables-and-resources.js";
 
 import type { RustExpr, RustStmt } from "../../../target-ast/syntax/nodes.js";
 import { lowerRustValueConversion } from "../../expressions/value-conversions.js";

@@ -1,4 +1,4 @@
-import { rustTargetOperationFactEquals } from "../../dist/target-model/records/operation-equality.js";
+import { rustTargetOperationFactEquals } from "../../dist/target-model/records/operations/operation-equality.js";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { assertRustInheritedRecordConflict, assertRustInheritedRecordCorrespondence } from "../helpers/records.mjs";

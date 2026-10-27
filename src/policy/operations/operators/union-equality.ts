@@ -8,8 +8,8 @@ import { selectRustBinaryOperator } from "./rules.js";
 import { rustAbsenceTargetType, rustSourcePrimitiveTargetType } from "../../../target-model/types/carriers/native.js";
 import { isRustUnitCarrier, isRustBoolCarrier } from "../../../target-model/types/carriers/js.js";
 import { rustSourceOptionalElementCarrier } from "../../../target-model/types/carriers/optional.js";
-import type { RustUnionEqualityOperand, RustUnionEqualityEmission } from "../../../target-model/records/union-equality.js";
-import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
+import type { RustUnionEqualityOperand, RustUnionEqualityEmission } from "../../../target-model/records/operations/union-equality.js";
+import type { RustTargetOperationFact } from "../../../target-model/records/operations/operations.js";
 import { rustValueConversionContract } from "../../conversions/contracts.js";
 
 export function selectRustUnionEquality(

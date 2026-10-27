@@ -2,7 +2,7 @@ import type { Node } from "@tsonic/tsts";
 import { Node_Expression, sourceTransparentExpressionOperand } from "@tsonic/target-api/source";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { RustAnalysisProgram } from "../program/model.js";
-import type { RustStoredFieldProducer } from "../program/records/stored-fields.js";
+import type { RustStoredFieldProducer } from "../program/records/storage/stored-fields.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
@@ -10,7 +10,7 @@ import { rustCallableProtocol, rustLocationTargetType, rustOptionElementCarrier,
 import { rustStructuralPropertyGetterStorageCarrier, rustStructuralPropertySetterStorageCarrier } from "../../policy/types/objects/member-storage.js";
 import { rustGenericCallableProtocol, rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
-import type { RustValueFieldProjectionStep } from "../../target-model/records/stored-fields.js";
+import type { RustValueFieldProjectionStep } from "../../target-model/records/storage/stored-fields.js";
 
 export function analyzeRustStoredFields(program: Omit<RustAnalysisProgram, "reachability">, nodes: readonly Node[], producer: RustStoredFieldProducer): void {
   const pending = [...program.structuralShapes.instances.map(shape => shape.carrier),

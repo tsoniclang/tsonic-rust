@@ -6,7 +6,7 @@ import { rustSourcePrimitiveTargetType } from "../../../target-model/types/index
 import { resolveRustTargetTypeRef } from "../../source-evidence/types/resolution/source.js";
 import { rustEffectiveValueCarrier } from "../../conversions/value-carrier-queries.js";
 import { acceptRustMemberOperation, rejectSelectedOperation } from "./result.js";
-import { acceptRustOperation } from "../../program/records/selected-operation-values.js";
+import { acceptRustOperation } from "../../program/records/operations/selected-operation-values.js";
 import type { RustCheckedOperationSelectionResult, RustCheckedOperatorSelectionInput, RustCheckedPropertySelectionInput, RustPolicySelection } from "../../../policy/model/contracts.js";
 import type { RustOperationsProviderOptions } from "./model.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";

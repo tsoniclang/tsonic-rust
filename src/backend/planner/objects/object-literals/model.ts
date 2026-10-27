@@ -2,10 +2,10 @@ import { createImplementationPlan } from "./registry.js";
 
 import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustFunctionParam, RustItem, RustType } from "../../../target-ast/syntax/nodes.js";
-import type { RustCallableParameterAbi, RustCallableParameterAdapter, RustCallableValueAdapter } from "../../../../target-model/records/callable-adapters.js";
+import type { RustCallableParameterAbi, RustCallableParameterAdapter, RustCallableValueAdapter } from "../../../../target-model/records/callables/callable-adapters.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import type { RustSyntheticNameState } from "../../names/synthetic.js";
-import type { RustProjectMethodDispatchVariant } from "../../../../target-model/records/method-dispatch.js";
+import type { RustProjectMethodDispatchVariant } from "../../../../target-model/records/operations/method-dispatch.js";
 import { failRustPlannerInvariant } from "../../diagnostics.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import { createStructuralLiteralImplementation, type RustStructuralLiteralImplementation } from "./structural.js";

@@ -1,7 +1,7 @@
 import { sourcePackageFacadeModuleSegments } from "../../policy/identities/package-facades.js";
-import type { RustSourcePackageFacadeClassifications } from "../../target-model/records/source-package-semantics.js";
+import type { RustSourcePackageFacadeClassifications } from "../../target-model/records/program/source-package-semantics.js";
 import type { Node } from "@tsonic/tsts";
-import type { RustSourcePackageFacadeExportContract } from "../../target-model/records/source-packages.js";
+import type { RustSourcePackageFacadeExportContract } from "../../target-model/records/program/source-packages.js";
 import { rustSourceItemIdentity } from "../../target-model/names/source-output-identities.js";
 
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";

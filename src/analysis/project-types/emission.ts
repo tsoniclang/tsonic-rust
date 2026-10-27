@@ -1,7 +1,7 @@
 import type { Node } from "@tsonic/tsts";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { RustAnalysisProgram } from "../program/model.js";
-import type { RustProjectEmissionProducer } from "../program/records/project-emission.js";
+import type { RustProjectEmissionProducer } from "../program/records/program/project-emission.js";
 import type { RustLifetimeRef } from "../../target-model/lifetimes/model.js";
 import { rustSourceTypeCarrierValue, rustSourceUnionCarrierValue } from "../../target-model/types/index.js";
 import type { prepareRustProjectGenericMembership } from "./generic-membership.js";

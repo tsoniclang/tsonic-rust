@@ -3,7 +3,7 @@ import { rustCarrierWithTargetPlaceholderLifetimes } from "../../target-model/ty
 import { rustUnionLeaves } from "../../target-model/types/union-relations.js";
 import { selectRustUnionArmMapping, rustUnionProjectionContract } from "./union-relations.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
-import type { RustCallScopedLifetimeReconciliationFact, RustContextualValueConversionFact, RustFlowReadProjectionFact, RustProjectUpcastFact } from "../../target-model/records/value-projections.js";
+import type { RustCallScopedLifetimeReconciliationFact, RustContextualValueConversionFact, RustFlowReadProjectionFact, RustProjectUpcastFact } from "../../target-model/records/objects/value-projections.js";
 import { isRustProgramErrorCarrier, rustJsErrorTargetType, rustOptionElementCarrier, rustCallableProtocol, rustCallableTargetType } from "../../target-model/types/index.js";
 import { rustCarrierSupportsClone, rustCarrierSupportsTrait } from "../constraints/native-traits.js";
 import { rustCallableTargetId, rustOptionTargetId, rustStructuralObjectCarrierValue, rustStructuralObjectTargetType } from "../../target-model/types/carriers/source-types.js";

@@ -7,7 +7,7 @@ import { substituteRustTargetGenerics } from "./carriers/substitution.js";
 import { closedMetadataKey, isDenseDataArray, snapshotClosedMetadata } from "../metadata/closed-data.js";
 import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "./equality.js";
 
-import type { RustNativeEnumDeclaration } from "../records/native-value-declarations.js";
+import type { RustNativeEnumDeclaration } from "../records/native/native-value-declarations.js";
 
 export interface RustSourceUnionDefinition {
   readonly carrier: TargetTypeRef;

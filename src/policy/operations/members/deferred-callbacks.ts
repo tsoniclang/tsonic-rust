@@ -1,8 +1,8 @@
 import type { RustProviderOperationTemplate } from "../../../target-model/operations/model.js";
-import type { RustErrorEffectsFact } from "../../../target-model/records/error-effects.js";
+import type { RustErrorEffectsFact } from "../../../target-model/records/errors/error-effects.js";
 import type { Node } from "@tsonic/tsts";
 
-import type { RustPreparedDeferredCheckedCall } from "../../../target-model/records/deferred-callbacks.js";
+import type { RustPreparedDeferredCheckedCall } from "../../../target-model/records/callables/deferred-callbacks.js";
 export interface RustPreparedCallbackEffects {
   readonly invocationOwner: Node;
   readonly invocationEffects: RustErrorEffectsFact;

@@ -5,7 +5,7 @@ import { analyzeRustBorrowedElementLocals } from "./borrowed-element-locals.js";
 import { rustBorrowedElementRead, rustBorrowedStringAppend, rustBorrowPureOperation } from "./borrowed-element-purity.js";
 import { rustBorrowedStringInputs } from "./provider-borrows.js";
 import { analyzeRustBorrowedIterationBindings } from "./borrowed-iteration-bindings.js";
-import type { RustBorrowedElementRead, RustBorrowedElementLocal, RustBorrowedIterationBinding } from "../../target-model/records/borrowed-element-reads.js";
+import type { RustBorrowedElementRead, RustBorrowedElementLocal, RustBorrowedIterationBinding } from "../../target-model/records/storage/borrowed-element-reads.js";
 
 export interface RustBorrowedElementReads {
   isAppend(node: Node): boolean;

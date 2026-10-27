@@ -16,7 +16,7 @@ import { allocateRustGeneratedName } from "../../../target-model/names/generated
 
 import type { RustCallableOwnershipPlan } from "../ownership/ownership-plan.js";
 
-import type { RustSourceCallableSpecializationIssue } from "../../../target-model/records/callable-issues.js";
+import type { RustSourceCallableSpecializationIssue } from "../../../target-model/records/callables/callable-issues.js";
 import type { RustProjectTypePolicy } from "../../project-types/index.js";
 import { validatedRustCapturedFieldStorageFact } from "../../storage/receiver-captures.js";
 import type { RustObjectRepresentationPlan } from "../../project-types/object-representation.js";
@@ -24,12 +24,12 @@ import type { RustProjectConstructionPlan } from "../../project-types/constructi
 import { prepareRustRetainedFrameCounters } from "../storage/frame-counter-storage.js";
 
 import type { RustFrameCallableImplementation, RustFrameCallableEntryDefinition, RustFrameCallableBinding,
-  RustFrameCallableDefinition, RustFrameEntryErrorSelection } from "../../../target-model/records/frame-callables.js";
+  RustFrameCallableDefinition, RustFrameEntryErrorSelection } from "../../../target-model/records/callables/frame-callables.js";
 import { substituteRustTargetGenerics } from "../../../target-model/types/carriers/substitution.js";
 import { rustCallableProtocol, rustCallableTargetType } from "../../../target-model/types/carriers/callables.js";
 import { rustStaticLifetime } from "../../../target-model/lifetimes/index.js";
-import type { RustFrameNativeType } from "../../../target-model/records/frame-emission.js";
-import type { RustClassValuePlan } from "../../../target-model/records/class-values.js";
+import type { RustFrameNativeType } from "../../../target-model/records/callables/frame-emission.js";
+import type { RustClassValuePlan } from "../../../target-model/records/objects/class-values.js";
 
 export interface RustFrameCallablePlanRegistry extends RustFrameCallablePlan {
   nativeTypeFor(carrier: TargetTypeRef, classValues: Pick<RustClassValuePlan, "forDeclaration">): RustFrameNativeType | undefined;
@@ -437,6 +437,6 @@ export function createRustFrameCallablePlan(input: {
   });
 }
 
-import type { RustFrameCallablePlan } from "../../../target-model/records/frame-callables.js";
-import { createRustFrameCallableRecords } from "../../program/records/frame-callables.js";
+import type { RustFrameCallablePlan } from "../../../target-model/records/callables/frame-callables.js";
+import { createRustFrameCallableRecords } from "../../program/records/callables/frame-callables.js";
 import { selectRustFrameBindingStorage } from "../../../policy/ownership/frame-bindings.js";

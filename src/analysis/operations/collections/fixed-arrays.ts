@@ -1,6 +1,6 @@
 import type { RustOperationAnalysisContext } from "../../program/operation-context.js";
 import { acceptRustMemberOperation, normalizeSelectedOperationInputCarrier, rejectSelectedOperation } from "../members/result.js";
-import { elementProvenance } from "../../program/records/selected-operation-values.js";
+import { elementProvenance } from "../../program/records/operations/selected-operation-values.js";
 
 import { finalizeProviderOperationFromSubjects } from "../members/conversions.js";
 

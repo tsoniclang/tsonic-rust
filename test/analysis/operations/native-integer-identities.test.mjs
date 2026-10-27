@@ -3,7 +3,7 @@ import test from "node:test";
 import { createRustRecordFixture } from "../../helpers/records.mjs";
 import { analyzeRust } from "../../helpers/rust-session.mjs";
 import { analyzeRustNativeComparisons } from "../../../dist/analysis/operations/native-comparisons.js";
-import { createRustNativeComparisonProducer } from "../../../dist/analysis/program/records/native-comparisons.js";
+import { createRustNativeComparisonProducer } from "../../../dist/analysis/program/records/native/native-comparisons.js";
 
 // The all-bits identity decision (`value & -1` on a signed integer keeps `value`) moved from the planner, which read
 // generated literal syntax, to native comparison analysis over checked source literals. These cases carry over the

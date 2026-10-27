@@ -1,5 +1,5 @@
 import type { RustTargetTypeRef } from "../types/model.js";
-import type { RustSelectedTargetOperation } from "./member-selections.js";
+import type { RustSelectedTargetOperation } from "./operations/member-selections.js";
 
 export interface RustRuntimeCarrierSelection {
   readonly carrier: RustTargetTypeRef;

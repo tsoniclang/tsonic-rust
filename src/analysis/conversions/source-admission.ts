@@ -3,7 +3,7 @@ import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import { Node_Expression, Node_Operand, BinaryExpression_Left, BinaryExpression_Right } from "@tsonic/target-api/source";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
-import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
+import type { RustTargetOperationFact } from "../../target-model/records/operations/operations.js";
 import type { RustValueConversion } from "../../target-model/operations/model.js";
 import { rustValueConversionContract } from "../../policy/conversions/contracts.js";
 import { rustEffectiveValueCarrier } from "./value-carrier-queries.js";

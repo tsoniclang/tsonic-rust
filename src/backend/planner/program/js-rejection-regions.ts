@@ -1,8 +1,8 @@
 import { failRustPlannerInvariant } from "../diagnostics.js";
 import type { Node } from "@tsonic/tsts";
-import type { RustErrorRegionSelection, RustJsRejectionConversion } from "../../../target-model/records/error-regions.js";
+import type { RustErrorRegionSelection, RustJsRejectionConversion } from "../../../target-model/records/errors/error-regions.js";
 import { rustJsValueTargetType } from "../../../target-model/types/carriers/js.js";
-import { rustJsRejectionErrorIdentity } from "../../../target-model/records/error-effects.js";
+import { rustJsRejectionErrorIdentity } from "../../../target-model/records/errors/error-effects.js";
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import { planRustProgramErrorClosedValue } from "../expressions/program-error-values.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";

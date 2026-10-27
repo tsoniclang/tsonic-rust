@@ -1,8 +1,8 @@
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import { snapshotTargetReadonlyMap } from "@tsonic/target-api/analysis";
-import type { RustCallableEntryHeaderSelection } from "../../target-model/records/callable-entry-headers.js";
-import type { RustNativeCallableGenericHeader } from "../../target-model/records/native-generics.js";
-import type { RustDeclarationGenericRequirementContract } from "../../target-model/records/generic-requirements.js";
+import type { RustCallableEntryHeaderSelection } from "../../target-model/records/callables/callable-entry-headers.js";
+import type { RustNativeCallableGenericHeader } from "../../target-model/records/native/native-generics.js";
+import type { RustDeclarationGenericRequirementContract } from "../../target-model/records/types/generic-requirements.js";
 import type { RustSourceGenericParameterContract } from "../../target-model/lifetimes/model.js";
 import { rustLifetimeKey } from "../../target-model/lifetimes/index.js";
 import type { RustTargetGenericArgument, TargetTypeRef } from "../../target-model/types/model.js";

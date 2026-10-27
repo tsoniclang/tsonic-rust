@@ -5,7 +5,7 @@ import { appendRustDiagnostic } from "../program/walk.js";
 import { setCarrierFact } from "../operations/project-calls.js";
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 import { isValidRustIdentifier } from "../../target-model/names/identifiers.js";
-import type { RustNativeEnumDeclaration } from "../../target-model/records/native-value-declarations.js";
+import type { RustNativeEnumDeclaration } from "../../target-model/records/native/native-value-declarations.js";
 import { selectRustEnumConstantRepresentation } from "../../policy/types/project/enum-constant-admission.js";
 
 export function recordEnumFacts(walk: RustFactWalk, declaration: Node): void {

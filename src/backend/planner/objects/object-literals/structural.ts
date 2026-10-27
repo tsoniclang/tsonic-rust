@@ -1,7 +1,7 @@
 import { rustValueBlock } from "../../../target-ast/syntax/value-block.js";
 import type { Node } from "@tsonic/tsts";
 import { rustProgramErrorTargetType } from "../../../../target-model/types/index.js";
-import type { RustStructuralLiteralEmission } from "../../../../target-model/records/object-literal-emission.js";
+import type { RustStructuralLiteralEmission } from "../../../../target-model/records/objects/object-literal-emission.js";
 import { failRustPlannerInvariant } from "../../diagnostics.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import {

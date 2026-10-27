@@ -4,7 +4,7 @@ import { KindPropertyAssignment, KindShorthandPropertyAssignment, orderEnumerabl
 
 import type { Node } from "@tsonic/tsts";
 
-import type { RustSourceObjectField, RustSourceObjectShape } from "../../../target-model/records/source-types.js";
+import type { RustSourceObjectField, RustSourceObjectShape } from "../../../target-model/records/types/source-types.js";
 
 type SelectedAuthoredObjectFields =
   | { readonly kind: "resolved"; readonly fields: readonly RustSourceObjectField[] }

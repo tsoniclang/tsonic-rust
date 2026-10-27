@@ -1,6 +1,6 @@
 import type { AstReader } from "@tsonic/tsts";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
-import type { RustTypedLocationOperands } from "../../../target-model/records/typed-location-operands.js";
+import type { RustTypedLocationOperands } from "../../../target-model/records/storage/typed-location-operands.js";
 import { rustSourceLocationTargetType, rustOptionTargetType, rustSourcePrimitiveTargetType, rustUnitTargetType } from "../../../target-model/types/index.js";
 import { rustLocationCallbackCarrier } from "../../types/callables/location-callbacks.js";
 

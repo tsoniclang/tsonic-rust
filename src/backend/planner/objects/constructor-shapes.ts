@@ -1,10 +1,10 @@
-import type { RustStructuralShapeDefinition } from "../../../target-model/records/structural-shapes.js";
+import type { RustStructuralShapeDefinition } from "../../../target-model/records/objects/structural-shapes.js";
 import type { RustExpr, RustGenerics, RustItem, RustTraitFunction, RustType, RustVisibility } from "../../target-ast/syntax/nodes.js";
-import type { RustDeadCodeDisposition } from "../../../target-model/records/native-liveness.js";
+import type { RustDeadCodeDisposition } from "../../../target-model/records/native/native-liveness.js";
 import { emptyRustGenerics } from "../../target-ast/syntax/nodes.js";
 import { rustSelfParameter } from "../declarations/callables/self-parameter.js";
 import { rustProjectObjectIdentityImplementation } from "./project-identity.js";
-import type { RustConstructorShapeEmission } from "../../../target-model/records/structural-emission.js";
+import type { RustConstructorShapeEmission } from "../../../target-model/records/objects/structural-emission.js";
 import { failRustPlannerInvariant } from "../diagnostics.js";
 import { rustLifetimeToAst } from "../types/lifetime-syntax.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";

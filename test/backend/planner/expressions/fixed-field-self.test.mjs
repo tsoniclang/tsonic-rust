@@ -1,4 +1,4 @@
-import { rustClosureCaptureEquals } from "../../../../dist/target-model/records/equality.js";
+import { rustClosureCaptureEquals } from "../../../../dist/target-model/records/operations/equality.js";
 import { createRustRecordFixture } from "../../../helpers/records.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -6,9 +6,9 @@ import test from "node:test";
 import { rustCallableTargetType } from "../../../../dist/target-model/types/index.js";
 import { rustRecursiveReceiverFieldContext } from "../../../../dist/backend/planner/expressions/receiver-captures.js";
 import { analyzeRustReceiverCaptureEmission } from "../../../../dist/analysis/storage/receiver-captures.js";
-import { createRustReceiverCaptureEmissionProducer } from "../../../../dist/analysis/program/records/receiver-captures.js";
+import { createRustReceiverCaptureEmissionProducer } from "../../../../dist/analysis/program/records/callables/receiver-captures.js";
 import { analyzeRustConstructionEmission } from "../../../../dist/analysis/project-types/construction-emission.js";
-import { createRustConstructionProducer } from "../../../../dist/analysis/program/records/construction.js";
+import { createRustConstructionProducer } from "../../../../dist/analysis/program/records/objects/construction.js";
 import { planRustConstructionBody } from "../../../../dist/backend/planner/declarations/classes/construction-body.js";
 import { int32Carrier, stringCarrier } from "../../../helpers/rust-session.mjs";
 import { fakeAstReader, fakeSourceFile, fakeStatement } from "../../../helpers/fake-compile-input.mjs";

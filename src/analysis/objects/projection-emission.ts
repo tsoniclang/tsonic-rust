@@ -1,12 +1,12 @@
 import type { Node } from "@tsonic/tsts";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { RustAnalysisProgram } from "../program/model.js";
-import type { RustObjectProjectionProducer } from "../program/records/object-projections.js";
+import type { RustObjectProjectionProducer } from "../program/records/objects/object-projections.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustProjectDowncastFact } from "../../target-model/types/project-projections.js";
-import type { RustProjectProjectionEmission } from "../../target-model/records/object-projections.js";
+import type { RustProjectProjectionEmission } from "../../target-model/records/objects/object-projections.js";
 import type { RustClosedTypeTestPlan, RustProjectTypeTestPlan } from "../../target-model/operations/type-tests.js";
-import type { RustFlowReadProjectionFact } from "../../target-model/records/value-projections.js";
+import type { RustFlowReadProjectionFact } from "../../target-model/records/objects/value-projections.js";
 import { closedMetadataKey, closedMetadataEquals } from "../../target-model/metadata/closed-data.js";
 import { isRustProgramErrorCarrier, rustOptionElementCarrier } from "../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";

@@ -1,7 +1,7 @@
 import type { AstReader, SourceFile } from "@tsonic/tsts";
 import type { RustNativeCallableInputPlan } from "./native-inputs.js";
-import type { RustNativeCallableDispatchPlan } from "../../../target-model/records/native-dispatch.js";
-import { sealRustNativeCallableDispatch } from "../../program/records/native-dispatch.js";
+import type { RustNativeCallableDispatchPlan } from "../../../target-model/records/native/native-dispatch.js";
+import { sealRustNativeCallableDispatch } from "../../program/records/native/native-dispatch.js";
 import { sourceExpressionResultDisposition, type SourceProgramNavigation } from "@tsonic/target-api/source";
 
 export function createRustNativeCallableDispatchPlan(input: {

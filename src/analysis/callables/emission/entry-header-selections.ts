@@ -2,8 +2,8 @@ import type { Node } from "@tsonic/tsts";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import { snapshotTargetReadonlyMap } from "@tsonic/target-api/analysis";
 import type { RustCallableEntryHeaderFacets, RustCallableEntryHeaderPlacement, RustCallableEntryHeaderSelections, RustCallableEntryHeaderSelection,
-  RustCallableEntryHeaderVariant } from "../../../target-model/records/callable-entry-headers.js";
-import type { RustNativeCallableGenericHeader } from "../../../target-model/records/native-generics.js";
+  RustCallableEntryHeaderVariant } from "../../../target-model/records/callables/callable-entry-headers.js";
+import type { RustNativeCallableGenericHeader } from "../../../target-model/records/native/native-generics.js";
 import type { RustDeclarationGenericRequirementIndex } from "../../declarations/generic-requirements.js";
 import { selectRustCallableEntryHeader } from "../../../policy/ownership/callable-entry-headers.js";
 import { closedMetadataEquals } from "../../../target-model/metadata/closed-data.js";

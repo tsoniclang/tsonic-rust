@@ -1,6 +1,6 @@
 import { rustLintAttributes } from "../../../target-ast/normalization/lint-policy.js";
 import type { Node } from "@tsonic/tsts";
-import type { RustAdmittedConstruction, RustConstructionLayer } from "../../../../target-model/records/construction.js";
+import type { RustAdmittedConstruction, RustConstructionLayer } from "../../../../target-model/records/objects/construction.js";
 import type { RustProjectTypeDefinition } from "../../../../target-model/types/project-types.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import type { RustExpr, RustStmt, RustType } from "../../../target-ast/syntax/nodes.js";

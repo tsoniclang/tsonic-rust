@@ -1,8 +1,8 @@
 import type { SourceFile } from "@tsonic/tsts";
 import { targetUseSiteRef, type TargetUseSiteRef } from "@tsonic/target-api/analysis";
 import { rejectedTargetStage, resolvedTargetStage, type TargetStageResult } from "@tsonic/target-api/artifacts";
-import type { RustInitializationErrorRecords, RustInitializerSelection, RustModuleErrorInitializer } from "../../target-model/records/error-regions.js";
-import type { RustEmissionProviderOperation, RustPhysicalEmissionContext, RustPhysicalEmissionOperand } from "../../target-model/records/physical-emission-contexts.js";
+import type { RustInitializationErrorRecords, RustInitializerSelection, RustModuleErrorInitializer } from "../../target-model/records/errors/error-regions.js";
+import type { RustEmissionProviderOperation, RustPhysicalEmissionContext, RustPhysicalEmissionOperand } from "../../target-model/records/native/physical-emission-contexts.js";
 import type { Node } from "@tsonic/tsts";
 import { prepareRustCallableEmissionContexts, prepareRustEmissionContextRequests, rustEmissionIdentityBindings, type RustCallableEmissionPreparation, type RustCallableEmissionPreparationInput, type RustEmissionContextRequest } from "../callables/emission/emission-contexts.js";
 

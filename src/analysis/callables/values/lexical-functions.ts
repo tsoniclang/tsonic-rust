@@ -10,14 +10,14 @@ import { rustLifetimeKey } from "../../../target-model/lifetimes/index.js";
 import { resolveRustEnclosingGenericParameters } from "../generics/generic-environment.js";
 
 import type { RustRuntimeValueUsePlan } from "../../program/runtime-value-uses.js";
-import type { RustSourceCallableQueries } from "../../../target-model/records/source-callables.js";
+import type { RustSourceCallableQueries } from "../../../target-model/records/callables/source-callables.js";
 import { rustCallableImplicitLifetimeParameters } from "../ownership/source-input-lifetimes.js";
 
 import type { RustNativeStorageConstruction } from "../storage/native-storage.js";
 import type { RustNativeCallableInputPlan } from "../native/native-inputs.js";
 
-import type { RustLexicalFunctionCapture, RustLexicalFunctionEnvironmentSelection, RustLexicalFunctionSelection, RustLexicalFunctionEnvironmentPlan, RustLexicalFunctionQueries } from "../../../target-model/records/lexical-functions.js";
-import { sealRustLexicalFunctionEnvironments, sealRustLexicalFunctionQueries } from "../../program/records/lexical-functions.js";
+import type { RustLexicalFunctionCapture, RustLexicalFunctionEnvironmentSelection, RustLexicalFunctionSelection, RustLexicalFunctionEnvironmentPlan, RustLexicalFunctionQueries } from "../../../target-model/records/callables/lexical-functions.js";
+import { sealRustLexicalFunctionEnvironments, sealRustLexicalFunctionQueries } from "../../program/records/callables/lexical-functions.js";
 
 const maximumLexicalFunctions = 65_536;
 const maximumLexicalCaptureRows = 262_144;

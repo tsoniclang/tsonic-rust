@@ -1,4 +1,4 @@
-import { rustTargetOperationFactEquals } from "../../../dist/target-model/records/operation-equality.js";
+import { rustTargetOperationFactEquals } from "../../../dist/target-model/records/operations/operation-equality.js";
 import { createRustRecordFixture } from "../../helpers/records.mjs";
 import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import { test } from "node:test";
@@ -16,7 +16,7 @@ import { requireProviderArgumentPassingFacts } from "../../../dist/backend/plann
 import { sourceCallSelectedMemberMatches } from "../../../dist/analysis/callables/calls/source-call-evidence.js";
 import { emptyRustTypeDefinitions } from "../../../dist/target-model/types/source-union-definitions.js";
 import { analyzeRustSourceCallArguments } from "../../../dist/analysis/callables/calls/source-call-arguments.js";
-import { createRustSourceCallArgumentProducer } from "../../../dist/analysis/program/records/source-call-arguments.js";
+import { createRustSourceCallArgumentProducer } from "../../../dist/analysis/program/records/calls/source-call-arguments.js";
 import { selectRustProviderSourceOccurrence } from "../../../dist/analysis/operations/provider-source-inputs.js";
 import {
   isRustNamedTypeTraitContract,

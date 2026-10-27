@@ -3,7 +3,7 @@ import { BinaryExpression_Left, BinaryExpression_Right, BreakOrContinueStatement
 
 import { isRustStringCarrier } from "../../target-model/types/index.js";
 import { isRustAssignmentOperator } from "../../target-model/syntax/tokens.js";
-import type { RustBorrowedElementLocal } from "../../target-model/records/borrowed-element-reads.js";
+import type { RustBorrowedElementLocal } from "../../target-model/records/storage/borrowed-element-reads.js";
 import { rustBorrowedElementRead, rustBorrowPureOperation } from "./borrowed-element-purity.js";
 import { rustBorrowedStringInputs } from "./provider-borrows.js";
 import type { RustProgramRecords } from "../../target-model/records/program.js";

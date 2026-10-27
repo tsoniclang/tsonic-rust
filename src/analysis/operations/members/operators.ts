@@ -1,12 +1,12 @@
 import { selectRustCheckedUnaryOperation } from "../../../policy/operations/operators/unary-values.js";
 import { mapSelectedAssignment } from "./assignments.js";
-import { acceptPostCheckOperator } from "../../program/records/selected-operation-values.js";
+import { acceptPostCheckOperator } from "../../program/records/operations/selected-operation-values.js";
 import type { RustOperationAnalysisContext } from "../../program/operation-context.js";
 import { isRustProgramErrorCarrier, isRustAbsenceCarrier, rustOptionElementCarrier } from "../../../target-model/types/index.js";
 
 import { isDeclarationFileSubject, rejectSelectedOperation } from "./result.js";
 
-import { acceptDeclarationOperation, acceptRustOperation } from "../../program/records/selected-operation-values.js";
+import { acceptDeclarationOperation, acceptRustOperation } from "../../program/records/operations/selected-operation-values.js";
 import { normalizeSelectedLiteralCarrier } from "../../source-evidence/types/resolution/selected-literals.js";
 
 import { asNode } from "../../../policy/identities/selected-source.js";
@@ -29,7 +29,7 @@ import type { RustCheckedCallSelectionInput, RustCheckedOperationSelectionResult
 import type { Node } from "@tsonic/tsts";
 import type { RustOperationsProviderOptions } from "./model.js";
 
-import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
+import type { RustTargetOperationFact } from "../../../target-model/records/operations/operations.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
 import { isRustSourceErrorCarrier, isRustRetainedErrorCarrier } from "../../../target-model/types/carriers/source-error.js";

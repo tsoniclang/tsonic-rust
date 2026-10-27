@@ -1,7 +1,7 @@
 import type { TypeSignatureInfo, Type } from "@tsonic/tsts";
 import { closeRustRetainedCallableCarrier } from "../../../../policy/ownership/retained-storage.js";
 import { sourceCallableParameterEvidence } from "@tsonic/target-api/source";
-import type { RustSourceObjectShape } from "../../../../target-model/records/source-types.js";
+import type { RustSourceObjectShape } from "../../../../target-model/records/types/source-types.js";
 import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "./model.js";
 import { resolveRustCallableEvidence } from "./source-evidence.js";
 import { rustCallableProtocol } from "../../../../target-model/types/carriers/callables.js";

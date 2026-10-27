@@ -1,4 +1,4 @@
-import { requireRustRecord } from "../../program/records/required-records.js";
+import { requireRustRecord } from "../../program/records/objects/required-records.js";
 import { rustTypeParameterFromSourceContract } from "../../../target-model/types/carriers/generic-references.js";
 import { rustCallableInvocationResult } from "../../../policy/types/callables/return-contexts.js";
 import { KindFunctionExpression, KindFunctionDeclaration, KindNonNullExpression, KindParenthesizedExpression, KindSatisfiesExpression, KindVariableDeclaration, KindVariableStatement, Node_Expression, Node_Initializer, Node_Type, VariableDeclarationList_Declarations, VariableStatement_DeclarationList, sourceDeclarationIsModuleScoped, sourceCallableValueParameters } from "@tsonic/target-api/source";
@@ -135,7 +135,7 @@ function finalizedNativeCallableValue(
   callableDeclaration: Node,
   valueName: string | undefined,
 ): Extract<
-  import("../../../target-model/records/operation-selections.js").RustModuleBindingFact,
+  import("../../../target-model/records/operations/operation-selections.js").RustModuleBindingFact,
   { readonly storage: "native-callable" }
 >["value"] | undefined {
   const parameters = sourceCallableValueParameters(walk.context.ast, callableDeclaration, walk.context.semanticsFor(callableDeclaration));
@@ -149,7 +149,7 @@ function finalizedNativeCallableValue(
     parameterAbis.some((abi) => abi === undefined)) {
     return undefined;
   }
-  const closed = parameterAbis as import("../../../target-model/records/callables-and-resources.js").RustSourceParameterAbiFact[];
+  const closed = parameterAbis as import("../../../target-model/records/callables/callables-and-resources.js").RustSourceParameterAbiFact[];
   const carrier = rustSourceFunctionValueCarrier(walk, callableDeclaration, closed, resultCarrier);
   if (carrier === undefined) return undefined;
   return {
@@ -258,7 +258,7 @@ function recordCallableValueSignatureFacts(
     selectedReturnCarrier === undefined || parameters.length > parameterCarriers.length) {
     return;
   }
-  const parameterAbis: import("../../../target-model/records/callables-and-resources.js").RustSourceParameterAbiFact[] = [];
+  const parameterAbis: import("../../../target-model/records/callables/callables-and-resources.js").RustSourceParameterAbiFact[] = [];
   for (const [index, parameter] of parameters.entries()) {
     const sourceParameterCarrier = parameterCarriers[index];
     if (parameter === undefined || sourceParameterCarrier === undefined) {

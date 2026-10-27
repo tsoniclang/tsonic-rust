@@ -1,5 +1,5 @@
 import type { TargetTypeRef } from "../../target-model/types/model.js";
-import type { RustStructuralShapeField, RustStructuralMethodPlan } from "../../target-model/records/structural-shapes.js";
+import type { RustStructuralShapeField, RustStructuralMethodPlan } from "../../target-model/records/objects/structural-shapes.js";
 
 export interface RustStructuralStorageLookup {
   field(

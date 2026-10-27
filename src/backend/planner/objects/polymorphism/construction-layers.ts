@@ -1,4 +1,4 @@
-import type { RustAdmittedConstruction } from "../../../../target-model/records/construction.js";
+import type { RustAdmittedConstruction } from "../../../../target-model/records/objects/construction.js";
 import type { RustStmt } from "../../../target-ast/syntax/nodes.js";
 import { planRustCallableParameterPrelude, planRustCallableParameters,
   type RustCallableParameterPlan } from "../../declarations/callables/parameters.js";

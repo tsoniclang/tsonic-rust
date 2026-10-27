@@ -4,19 +4,19 @@ import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustFactWalk } from "../program/walk.js";
 import { rustOperationContext } from "../program/walk.js";
 import { resolveRustProjectField } from "../operations/members/project-fields.js";
-import type { RustProjectFieldSelection } from "../../target-model/records/project-fields.js";
+import type { RustProjectFieldSelection } from "../../target-model/records/objects/project-fields.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { selectRustClassValueCallable } from "./class-value-callables.js";
-import type { RustClassValueCallable } from "../../target-model/records/class-value-callables.js";
+import type { RustClassValueCallable } from "../../target-model/records/callables/class-value-callables.js";
 import { isRustErasedNominalMember } from "../../policy/types/objects/source-shapes.js";
 import { resolveRustProjectAccessor } from "../operations/members/project-accessors.js";
-import type { RustProjectAccessorSelection } from "../../target-model/records/project-accessors.js";
+import type { RustProjectAccessorSelection } from "../../target-model/records/objects/project-accessors.js";
 import { selectRustCallableValueAdapter } from "../../policy/conversions/callable-adapters.js";
 import { resolveRustTargetTypeRef } from "../source-evidence/types/resolution/source.js";
-import type { RustSourceObjectShape } from "../../target-model/records/source-types.js";
+import type { RustSourceObjectShape } from "../../target-model/records/types/source-types.js";
 import { instantiateRustSelectedMemberCarrier } from "../operations/members/member-carriers.js";
 import { rustSourceStorageScope, rustSourceStorageSubjectContext } from "../source-evidence/types/resolution/source-storage-projection.js";
-import type { RustProjectStructuralView } from "../../target-model/records/project-structural-views.js";
+import type { RustProjectStructuralView } from "../../target-model/records/objects/project-structural-views.js";
 
 export type RustProjectStructuralViewSource = {
   readonly declaration: Node;

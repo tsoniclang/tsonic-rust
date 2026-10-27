@@ -15,7 +15,7 @@ import { rustSourceStorageProjectedCarrier } from "../../objects/value-domain-ca
 import { rustCallableProtocol } from "../../../target-model/types/carriers/callables.js";
 import { rustRetainedCallSubstitutions } from "./retained-call-lifetimes.js";
 import type { RustNativeStoragePlan } from "../storage/native-storage.js";
-import type { RustNativeCallableProducerPlan } from "../../../target-model/records/native-producers.js";
+import type { RustNativeCallableProducerPlan } from "../../../target-model/records/native/native-producers.js";
 import type { RustProgramRecords } from "../../../target-model/records/program.js";
 import type { RustSourceCallableSpecializationPlan } from "../generics/specializations.js";
 import type { createRustCallableEntryHeaderPlacements } from "../emission/entry-header-placements.js";

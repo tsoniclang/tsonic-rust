@@ -7,7 +7,7 @@ import { KindFalseKeyword, KindArrayBindingPattern, KindFunctionExpression, Kind
 import { cyclicSourceFiles } from "./module-graph.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustAnalysisContext } from "./context.js";
-import type { RustModuleBindingFact } from "../../target-model/records/operation-selections.js";
+import type { RustModuleBindingFact } from "../../target-model/records/operations/operation-selections.js";
 import { selectRustModuleBindingPattern } from "../module-initialization/binding-patterns.js";
 
 export interface RustModuleBindingAnalysis {

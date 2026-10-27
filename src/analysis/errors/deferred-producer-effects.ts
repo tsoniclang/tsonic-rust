@@ -1,9 +1,9 @@
 import type { Node } from "@tsonic/tsts";
 import { asSourceNode } from "@tsonic/target-api/source";
 
-import type { RustDeferredProducerEffectsFact } from "../../target-model/records/deferred-producer-effects.js";
+import type { RustDeferredProducerEffectsFact } from "../../target-model/records/errors/deferred-producer-effects.js";
 import { mergeRustDeferredProducerChannels } from "../callables/async/deferred-producer-effects.js";
-import type { RustDeferredProducerChannel } from "../../target-model/records/deferred-producer-effects.js";
+import type { RustDeferredProducerChannel } from "../../target-model/records/errors/deferred-producer-effects.js";
 import { appendRustDiagnostic, type RustFactWalk } from "../program/walk.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustNativeCallableCompletion } from "../../policy/types/callables/native-completion.js";
@@ -18,8 +18,8 @@ import { substituteRustTargetGenerics } from "../../target-model/types/carriers/
 import { snapshotClosedMetadata } from "../../target-model/metadata/closed-data.js";
 import { rustStoredFutureValues, type RustStoredFutureValue } from "../callables/storage/future-storage.js";
 import { createRustEffectsWorkBudget } from "./effects-work-budget.js";
-import type { RustNativeCallableInput } from "../../target-model/records/native-protocols.js";
-import { requireRustRecord } from "../program/records/required-records.js";
+import type { RustNativeCallableInput } from "../../target-model/records/native/native-protocols.js";
+import { requireRustRecord } from "../program/records/objects/required-records.js";
 import type { RustSourceErrorEffectSelection } from "./source-error-effects.js";
 
 const infallible: TargetTypeRef = Object.freeze({ kind: "target-named", id: rustInfallibleTargetId });

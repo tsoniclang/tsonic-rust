@@ -1,5 +1,5 @@
 import type { TargetTypeRef } from "../../target-model/types/model.js";
-import type { RustTypePositions } from "../../target-model/records/type-emission.js";
+import type { RustTypePositions } from "../../target-model/records/types/type-emission.js";
 
 export interface RustTypePositionInput {
   readonly carrier: TargetTypeRef;

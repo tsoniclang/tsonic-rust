@@ -4,11 +4,11 @@ import test from "node:test";
 import { analyzeRust, artifactText, compileRust } from "../../helpers/rust-session.mjs";
 
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
-import { rustTargetOperationResultCarrier } from "../../../dist/target-model/records/operations.js";
+import { rustTargetOperationResultCarrier } from "../../../dist/target-model/records/operations/operations.js";
 import { rustEffectiveValueCarrier } from "../../../dist/analysis/conversions/value-carrier-queries.js";
 import { rustSourcePrimitiveTargetType } from "../../../dist/target-model/types/index.js";
 import { analyzeRustBinaryEmission } from "../../../dist/analysis/operations/binary-emission.js";
-import { createRustBinaryEmissionProducer } from "../../../dist/analysis/program/records/expression-binary.js";
+import { createRustBinaryEmissionProducer } from "../../../dist/analysis/program/records/operations/expression-binary.js";
 import { nativeExpressionSequencesSource } from "../../../../tsonic/test/fixtures/native-expression-sequences.mjs";
 
 test("checked value sequences seal independent operand carriers and the exact final completion", () => {

@@ -11,7 +11,7 @@ import { finalizeRustCallableSignature } from "../../../../dist/analysis/callabl
 import { recordPredeclaredNativeFunctionBindingFacts } from "../../../../dist/analysis/callables/calls/signatures.js";
 import { recordRustIndexedCallKeyArguments } from "../../../../dist/analysis/operations/indexed-call-keys.js";
 import { rustUnitTargetType } from "../../../../dist/target-model/types/index.js";
-import { rustSourceCallableValueEquals } from "../../../../dist/target-model/records/equality.js";
+import { rustSourceCallableValueEquals } from "../../../../dist/target-model/records/operations/equality.js";
 
 function isolate(current, readers) {
   const probe = createRustCarrierProbe(current.walk);

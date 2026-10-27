@@ -1,4 +1,4 @@
-import type { RustFrameCallableDefinition, RustFrameCallableEntryDefinition } from "../../../target-model/records/frame-callables.js";
+import type { RustFrameCallableDefinition, RustFrameCallableEntryDefinition } from "../../../target-model/records/callables/frame-callables.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustType } from "../../target-ast/syntax/nodes.js";
 import type { RustTypeRenderingContext } from "./render.js";
@@ -7,7 +7,7 @@ import { rustProjectStateType } from "../objects/polymorphism/names.js";
 import { rustProjectObjectSharedStateType } from "../objects/project-objects.js";
 import { rustClassEnvironmentHandleType } from "../objects/class-environment-types.js";
 import { failRustPlannerInvariant } from "../diagnostics.js";
-import type { RustFrameNativeType } from "../../../target-model/records/frame-emission.js";
+import type { RustFrameNativeType } from "../../../target-model/records/callables/frame-emission.js";
 
 export interface RustFrameCallableTypes {
   readonly definition: RustFrameCallableDefinition;

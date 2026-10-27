@@ -3,8 +3,8 @@ import { rustNodeIsOutsideNativeCode } from "../control-flow/compile-time-statem
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import { BinaryExpression_Left, BinaryExpression_Right, Node_Expression, sourceBooleanShortCircuitBranch, sourceSequenceInputChoice } from "@tsonic/target-api/source";
 import type { RustAnalysisProgram } from "../program/model.js";
-import type { RustBinaryEmissionProducer } from "../program/records/expression-binary.js";
-import type { RustBinaryEmission } from "../../target-model/records/expression-binary.js";
+import type { RustBinaryEmissionProducer } from "../program/records/operations/expression-binary.js";
+import type { RustBinaryEmission } from "../../target-model/records/operations/expression-binary.js";
 import { isRustBoolCarrier, isRustNeverCarrier, isRustUnitCarrier, isRustStringCarrier, rustOptionElementCarrier, rustSourcePrimitiveTargetType } from "../../target-model/types/index.js";
 import { rustOptionalStorageValue } from "../../target-model/types/projections.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";

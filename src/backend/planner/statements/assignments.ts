@@ -22,10 +22,10 @@ import { planRustSourceStaticFieldStorage } from "../declarations/classes/static
 import { planRustIndexedRecordStorage, planRustSourceIndexKey } from "../objects/indexed-records.js";
 import { rustStringConcat } from "../../target-ast/syntax/expressions.js";
 import type { Node } from "@tsonic/tsts";
-import type { RustAssignmentOperationPlan } from "../../../target-model/records/operator-selection.js";
+import type { RustAssignmentOperationPlan } from "../../../target-model/records/operations/operator-selection.js";
 import type { RustExpr, RustStmt } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
-import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
+import type { RustTargetOperationFact } from "../../../target-model/records/operations/operations.js";
 import { planRustSourceAccessorReceiver } from "../objects/accessor-receivers.js";
 import { applyRustValueConversion } from "../expressions/value-conversions.js";
 import { planRustSharedReceiver } from "../expressions/typed-locations.js";

@@ -9,7 +9,7 @@ import { rustLifetimeKey, rustStaticLifetime, type RustLifetimeRef } from "../..
 import { rustTargetGenericReferences } from "../../../target-model/types/carriers/generic-references.js";
 import { rustTargetTypeChildren } from "../../../target-model/types/carriers/children.js";
 import { type RustNativeCallableProtocol, type RustNativeCallableProtocolBinding, type RustNativeCallableOutlivesBound,
-  rustNativeCallableProtocolIdPrefix } from "../../../target-model/records/native-protocols.js";
+  rustNativeCallableProtocolIdPrefix } from "../../../target-model/records/native/native-protocols.js";
 import { rustNamedTypeCarrierValue } from "../../../target-model/types/carriers/native.js";
 import { rustCallableTargetId } from "../../../target-model/types/carriers/source-types.js";
 import { rustJsPromiseTargetId } from "../../../target-model/types/carriers/source-types.js";

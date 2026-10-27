@@ -4,8 +4,8 @@ import { sourceCallableValueParameters, type TargetSourceProgram } from "@tsonic
 import type { RustLifetimeIndex } from "../../../target-model/lifetimes/index.js";
 import { rustLifetimeKey } from "../../../target-model/lifetimes/index.js";
 import type { RustProgramRecords } from "../../../target-model/records/program.js";
-import type { RustNativeCallableGenericHeader } from "../../../target-model/records/native-generics.js";
-import type { RustNativeCallableProducerPlan } from "../../../target-model/records/native-producers.js";
+import type { RustNativeCallableGenericHeader } from "../../../target-model/records/native/native-generics.js";
+import type { RustNativeCallableProducerPlan } from "../../../target-model/records/native/native-producers.js";
 import type { RustNativeCallableInputPlan } from "../native/native-inputs.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { isValidRustIdentifier } from "../../../target-model/names/identifiers.js";

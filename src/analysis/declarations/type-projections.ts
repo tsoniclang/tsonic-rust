@@ -1,10 +1,10 @@
 import type { TargetTypeRef } from "../../target-model/types/model.js";
-import type { RustGenericRequirement } from "../../target-model/records/generic-requirements.js";
+import type { RustGenericRequirement } from "../../target-model/records/types/generic-requirements.js";
 import type { RustOptionalStorageProjection } from "../../target-model/types/projections.js";
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
 import { rustTargetTypeParameterIdentities } from "../../target-model/types/carriers/generic-references.js";
 
-import type { RustOptionalStorageRequirement } from "../../target-model/records/generic-requirements.js";
+import type { RustOptionalStorageRequirement } from "../../target-model/records/types/generic-requirements.js";
 
 export function createRustOptionalStorageCollector(
   own: ReadonlySet<string>,

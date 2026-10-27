@@ -1,8 +1,8 @@
 import type { Node } from "@tsonic/tsts";
 import { sourceEnclosingCallable } from "@tsonic/target-api/source";
 import type { RustFactWalk } from "../program/walk.js";
-import type { RustErrorEffectsFact } from "../../target-model/records/error-effects.js";
-import type { RustSourceErrorEffectEdge } from "../../target-model/records/source-error-effects.js";
+import type { RustErrorEffectsFact } from "../../target-model/records/errors/error-effects.js";
+import type { RustSourceErrorEffectEdge } from "../../target-model/records/errors/source-error-effects.js";
 import { rustSourceErrorEffectEdgeEquals, type RustSourceErrorEffectSelection } from "./source-error-effects.js";
 import type { RustEffectsWorkBudget } from "./effects-work-budget.js";
 

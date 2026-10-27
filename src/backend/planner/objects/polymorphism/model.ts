@@ -1,7 +1,7 @@
 import type { Node } from "@tsonic/tsts";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import type { RustProjectTypeDefinition } from "../../../../target-model/types/project-types.js";
-import type { RustProjectFieldEmission, RustProjectMethodPropertyEmission } from "../../../../target-model/records/project-classes.js";
+import type { RustProjectFieldEmission, RustProjectMethodPropertyEmission } from "../../../../target-model/records/objects/project-classes.js";
 import type { RustLifetimeRef } from "../../../../target-model/lifetimes/model.js";
 import { cloneRustExpression } from "../../../target-ast/syntax/expressions.js";
 import type { RustExpr, RustFunctionParam, RustType } from "../../../target-ast/syntax/nodes.js";

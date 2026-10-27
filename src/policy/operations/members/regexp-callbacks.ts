@@ -4,7 +4,7 @@ import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js
 import type { RustProviderOperationForm, RustValueConversion } from "../../../target-model/operations/model.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
-import type { RustRegExpReplacementCallbackEvidence, RustRegExpReplacementCallbackContract } from "../../../target-model/records/regexp-callbacks.js";
+import type { RustRegExpReplacementCallbackEvidence, RustRegExpReplacementCallbackContract } from "../../../target-model/records/callables/regexp-callbacks.js";
 import { rustCallbackProtocol } from "./callbacks.js";
 export function finalizeRustRegExpReplacementCallbackContract(
   evidence: RustRegExpReplacementCallbackEvidence,

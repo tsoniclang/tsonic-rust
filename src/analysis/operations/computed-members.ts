@@ -3,7 +3,7 @@ import { type TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import { type RustAnalysisProgram } from "../program/model.js";
 import { type ResolvedSourceCallInfo } from "@tsonic/target-api/source";
 import { type RustProgramRecordWriter } from "../program/records/model.js";
-import { requireRustRecord, type RustRequiredRecord } from "../program/records/required-records.js";
+import { requireRustRecord, type RustRequiredRecord } from "../program/records/objects/required-records.js";
 import { rustProgramNodeIsOutsideNativeCode } from "../control-flow/compile-time-statements.js";
 
 export function admitRustComputedMembers(program: Omit<RustAnalysisProgram, "reachability">,

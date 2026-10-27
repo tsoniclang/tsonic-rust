@@ -4,7 +4,7 @@ import { isSourceCallableBodyBoundary, Node_Initializer, sourceDeclarationIsModu
 import type { SourceOwnershipUnresolved } from "@tsonic/target-api/analysis";
 import type { RustAnalysisProgram } from "../../program/model.js";
 import type { RustCallableEntryConstruction } from "./entry-parameters.js";
-import type { RustCallableEntryHeaderPlacement, RustCallableEntryHeaderSelection, RustCallableEntryHeaderVariant } from "../../../target-model/records/callable-entry-headers.js";
+import type { RustCallableEntryHeaderPlacement, RustCallableEntryHeaderSelection, RustCallableEntryHeaderVariant } from "../../../target-model/records/callables/callable-entry-headers.js";
 import type { RustTargetGenericArgument, TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustSourceGenericParameterContract } from "../../../target-model/lifetimes/model.js";
 import { rustLifetimeKey } from "../../../target-model/lifetimes/index.js";
@@ -14,7 +14,7 @@ import type { RustClassImplementationContextConstruction } from "../../objects/c
 import type { prepareRustProjectGenericMembership } from "../../project-types/generic-membership.js";
 import type { RustProgramRecords } from "../../../target-model/records/program.js";
 import type { RustGenericCallablePlan } from "../generics/generic-values.js";
-import type { RustNativeCallableEntry } from "../../../target-model/records/declaration-emission.js";
+import type { RustNativeCallableEntry } from "../../../target-model/records/program/declaration-emission.js";
 
 export function createRustCallableEntryHeaderPlacements(input: {
   readonly program: Pick<RustAnalysisProgram, "promiseBodies" | "projectTypes" | "sourceCallableSpecializations" | "names"> & {

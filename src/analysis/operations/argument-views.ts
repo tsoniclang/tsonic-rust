@@ -1,10 +1,10 @@
 import type { Node } from "@tsonic/tsts";
 import type { RustAnalysisProgram } from "../program/model.js";
-import type { RustArgumentViewProducer } from "../program/records/argument-views.js";
+import type { RustArgumentViewProducer } from "../program/records/calls/argument-views.js";
 import { rustBorrowValueIsUnprojected } from "../storage/borrowed-element-purity.js";
 import { rustProgramNodeIsOutsideNativeCode } from "../control-flow/compile-time-statements.js";
 import { sourceTransparentExpressionOperand } from "@tsonic/target-api/source";
-import type { RustArgumentView } from "../../target-model/records/argument-views.js";
+import type { RustArgumentView } from "../../target-model/records/calls/argument-views.js";
 
 export function analyzeRustArgumentViews(program: Omit<RustAnalysisProgram, "reachability">,
   nodes: readonly Node[], producer: RustArgumentViewProducer): void {

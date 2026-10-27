@@ -1,6 +1,6 @@
 import { createRustDirectErrorEffects } from "./direct-effects.js";
 import { createRustCallbackEffectAnalysis } from "./callback-effects.js";
-import { createRustIntrinsicErrorEffectsPublication } from "../program/records/intrinsic-error-effects.js";
+import { createRustIntrinsicErrorEffectsPublication } from "../program/records/errors/intrinsic-error-effects.js";
 import {
   KindCallExpression,
   KindElementAccessExpression,
@@ -21,7 +21,7 @@ import { rustNativeCallableCompletion } from "../../policy/types/callables/nativ
 import { rustSourceCallCallableStorageCarrier } from "../../policy/operations/members/native-contracts.js";
 import { rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
 
-import type { RustGenericCallableInvocationFact } from "../../target-model/records/generic-callable-effects.js";
+import type { RustGenericCallableInvocationFact } from "../../target-model/records/callables/generic-callable-effects.js";
 import { prepareRustGenericCallableInvocation, type RustSourceGenericCallableInvocation } from "./generic-call-errors.js";
 import { rustTargetOperationIsFallible } from "../../policy/operations/members/native-contracts.js";
 import { rustPolicyTargetDiagnostic } from "../program/policy-diagnostics.js";
@@ -39,17 +39,17 @@ import { collectRustErrorRegionEffects } from "./region-effects.js";
 import { collectRustErrorDeclarations } from "./error-declarations.js";
 import { mergeRustErrorEffects, rustErrorEffectsAreFallible, rustErrorEffectsEqual, rustLocalErrorEffects, rustPureErrorEffects } from "./error-effects.js";
 
-import type { RustErrorEffectsFact } from "../../target-model/records/error-effects.js";
+import type { RustErrorEffectsFact } from "../../target-model/records/errors/error-effects.js";
 import type { RustSourceErrorEffectSelection } from "./source-error-effects.js";
 
-import type { RustSourceErrorEffectEdge } from "../../target-model/records/source-error-effects.js";
+import type { RustSourceErrorEffectEdge } from "../../target-model/records/errors/source-error-effects.js";
 import { createRustEffectsWorkBudget, defaultRustEffectsWorkLimit, type RustEffectsWorkBudget } from "./effects-work-budget.js";
 
-import type { RustAwaitSourceErrorBranch } from "../../target-model/records/await-source-error-effects.js";
+import type { RustAwaitSourceErrorBranch } from "../../target-model/records/callables/await-source-error-effects.js";
 import { selectRustAwaitSourceErrors } from "./await-source-effects.js";
 import { rustGeneratorSourceInvocationKind } from "../../policy/operations/source-profiles/generator-source-profile.js";
 import { getRustGeneratorProtocol } from "../../target-model/types/carriers/callables.js";
-import { requireRustRecord } from "../program/records/required-records.js";
+import { requireRustRecord } from "../program/records/objects/required-records.js";
 import type { SourceNativeTaskGraph } from "@tsonic/target-api/analysis";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 

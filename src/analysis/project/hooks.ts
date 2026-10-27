@@ -1,5 +1,5 @@
 import type { RustProviderBinaryHookRow } from "../../target-model/metadata/provider-metadata.js";
-import type { RustBinaryHookPlan } from "../../target-model/records/binary-execution.js";
+import type { RustBinaryHookPlan } from "../../target-model/records/operations/binary-execution.js";
 import type { RustDispatchContextGroupInput } from "../../target-model/operations/dispatch-contexts.js";
 
 export function analyzeRustBinaryHooks(

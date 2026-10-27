@@ -14,8 +14,8 @@ import type { Node } from "@tsonic/tsts";
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import type { RustExpressionResultUse } from "./entry.js";
 import type { RustPlanContext } from "../program/plan-context.js";
-import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
-import type { RustUnaryUpdateEmission } from "../../../target-model/records/expression-unary.js";
+import type { RustTargetOperationFact } from "../../../target-model/records/operations/operations.js";
+import type { RustUnaryUpdateEmission } from "../../../target-model/records/operations/expression-unary.js";
 import { planRustSourceAccessorReceiver } from "../objects/accessor-receivers.js";
 import { planRustRuntimeIndexUpdate } from "./update-runtime.js";
 

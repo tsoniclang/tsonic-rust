@@ -3,8 +3,8 @@ import { analyzeSourceStatementExits, createSourceSwitchCoverage } from "@tsonic
 import type { TargetSourceProgram } from "@tsonic/target-api/source";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 import { isRustNeverCarrier } from "../../target-model/types/carriers/js.js";
-import type { RustStatementExitProducer } from "../program/records/statement-exits.js";
-import { requireRustRecord, type RustRequiredRecord } from "../program/records/required-records.js";
+import type { RustStatementExitProducer } from "../program/records/operations/statement-exits.js";
+import { requireRustRecord, type RustRequiredRecord } from "../program/records/objects/required-records.js";
 
 export function analyzeRustStatementExits(input: {
   readonly source: TargetSourceProgram;

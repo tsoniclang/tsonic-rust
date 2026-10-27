@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createRustRecordFamily } from "../../../../dist/analysis/program/records/family.js";
-import { createRustRuntimeCarrierProducer } from "../../../../dist/analysis/program/records/runtime-carrier.js";
+import { createRustRuntimeCarrierProducer } from "../../../../dist/analysis/program/records/types/runtime-carrier.js";
 
 const equal = (left, right) => left === right;
 const open = () => {};

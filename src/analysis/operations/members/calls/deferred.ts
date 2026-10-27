@@ -14,18 +14,18 @@ import { rustSourceStorageSubjectContext } from "../../../source-evidence/types/
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
 import { selectedCallArgumentNodes, selectedCallCalleeSymbol } from "../operators.js";
 import { selectRustTypedLocationCall } from "../../typed-locations.js";
-import { selectedRustCallSignature } from "../../../program/records/selected-call.js";
+import { selectedRustCallSignature } from "../../../program/records/calls/selected-call.js";
 import type { RustCheckedCallSelectionInput, RustCheckedCallSelectionResult, RustPolicySelection, RustTargetOperationSelection } from "../../../../policy/model/contracts.js";
 import type { Node, ProviderDeclarationIdentity, SourceCallMarkerKind } from "@tsonic/tsts";
 import type { RustOperationsProviderOptions } from "../model.js";
 
-import type { RustTargetOperationFact } from "../../../../target-model/records/operations.js";
+import type { RustTargetOperationFact } from "../../../../target-model/records/operations/operations.js";
 import type { RustTargetMember, TargetTypeRef } from "../../../../target-model/types/model.js";
 
 import { rustJsStringTargetType, rustStringTargetType, rustOptionElementCarrier } from "../../../../target-model/types/index.js";
 import { selectRustValueCarrierReconciliation } from "../../../../policy/conversions/value-carrier-reconciliation.js";
 
-import type { RustPreparedDeferredCheckedCall } from "../../../../target-model/records/deferred-callbacks.js";
+import type { RustPreparedDeferredCheckedCall } from "../../../../target-model/records/callables/deferred-callbacks.js";
 import { callbackFallibleTemplate, type RustPreparedCallbackEffects } from "../../../../policy/operations/members/deferred-callbacks.js";
 export function prepareRustDeferredCheckedCall(
   request: RustCheckedCallSelectionInput,

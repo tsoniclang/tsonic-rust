@@ -1,4 +1,4 @@
-import { requireRustRecord } from "../program/records/required-records.js";
+import { requireRustRecord } from "../program/records/objects/required-records.js";
 import type { RustOperationAnalysisContext } from "../program/operation-context.js";
 import { isRustJsArrayCarrier, rustStringTargetType } from "../../target-model/types/index.js";
 import { acceptRustPolicy } from "../../policy/model/contracts.js";
@@ -14,7 +14,7 @@ import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 
 import { selectedCallCalleeSymbol, selectedSourceValueCarrier } from "./members/operators.js";
 import { selectedValueCarrier } from "./selected-values.js";
-import { selectedRustCallSignature } from "../program/records/selected-call.js";
+import { selectedRustCallSignature } from "../program/records/calls/selected-call.js";
 import { selectedAuthoredObjectFields } from "./members/object-shape-fields.js";
 import { selectObjectAssignmentFields, selectObjectShapeProjectionFields } from "../../policy/operations/source-profiles/js/object-fields.js";
 import type { SelectedObjectShapeProjection } from "../../policy/operations/source-profiles/js/object-fields.js";
@@ -22,7 +22,7 @@ import type { RustCheckedCallSelectionInput, RustCheckedCallSelectionResult, Rus
 
 import type { RustOperationsProviderOptions } from "./members/model.js";
 import type { RustTargetMember } from "../../target-model/types/model.js";
-import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
+import type { RustTargetOperationFact } from "../../target-model/records/operations/operations.js";
 
 import { selectRustRecordObjectCall } from "./members/records.js";
 

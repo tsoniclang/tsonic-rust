@@ -1,4 +1,4 @@
-import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
+import type { RustTargetOperationFact } from "../../../target-model/records/operations/operations.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustJsRegExpTargetType } from "../../../target-model/types/carriers/js.js";
 

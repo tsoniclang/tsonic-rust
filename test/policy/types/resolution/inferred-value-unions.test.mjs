@@ -1,5 +1,5 @@
 import { createRustOwnershipFixture } from "../../../helpers/ownership.mjs";
-import { rustFlowReadProjectionEquals } from "../../../../dist/target-model/records/equality.js";
+import { rustFlowReadProjectionEquals } from "../../../../dist/target-model/records/operations/equality.js";
 import { createRustRecordFixture } from "../../../helpers/records.mjs";
 import { assertNoTargetDiagnostics } from "../../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
@@ -9,7 +9,7 @@ import { validateGeneratedProject } from "../../../helpers/cargo-projects.mjs";
 import { selectRustFlowReadProjection } from "../../../../dist/policy/conversions/value-carrier-reconciliation.js";
 import { planRustFlowReadProjection } from "../../../../dist/backend/planner/expressions/flow-read-projections.js";
 import { analyzeRustFlowReadEmission } from "../../../../dist/analysis/control-flow/flow-read-emission.js";
-import { createRustFlowReadEmissionProducer } from "../../../../dist/analysis/program/records/flow-read-emission.js";
+import { createRustFlowReadEmissionProducer } from "../../../../dist/analysis/program/records/operations/flow-read-emission.js";
 import { rustProgramPlanContext, rustProgramWithTypeEmissions } from "../../../helpers/plan-context.mjs";
 
 import { createRustTypeDefinitionRegistry } from "../../../../dist/analysis/project-types/type-definitions.js";

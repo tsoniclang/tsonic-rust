@@ -38,7 +38,7 @@ export function recordRustClassEnvironmentDemands(walk: RustFactWalk): void {
   for (const sourceFile of walk.context.sourceFiles) visit(sourceFile);
 }
 
-import type { RustClassEnvironment } from "../../target-model/records/class-values.js";
+import type { RustClassEnvironment } from "../../target-model/records/objects/class-values.js";
 
 export type RustClassEnvironmentSelection =
   | { readonly kind: "none" }

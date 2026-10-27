@@ -4,7 +4,7 @@ import { rustSourceTypeCarrierValue, rustSourceUnionTargetType, rustStructuralOb
 import { closedMetadataKey } from "../../../../target-model/metadata/closed-data.js";
 import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "./model.js";
 import { rustSourceUnionMemberDeclarationIsOwned } from "../../../../policy/identities/source-union-members.js";
-import type { RustSourceUnionVariant } from "../../../../target-model/records/source-types.js";
+import type { RustSourceUnionVariant } from "../../../../target-model/records/types/source-types.js";
 import { rustSourceUnionMemberTypes } from "./source-unions.js";
 
 export function resolveRustInferredUnion(

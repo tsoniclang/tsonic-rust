@@ -2,9 +2,9 @@ import assert from "node:assert/strict";
 import { assertRustInheritedRecordConflict, assertRustInheritedRecordCorrespondence } from "../../../helpers/records.mjs";
 import test from "node:test";
 import { createRustProgramRecordBuilder } from "../../../../dist/analysis/program/records/create.js";
-import { selectedRustCallSignature } from "../../../../dist/analysis/program/records/selected-call.js";
+import { selectedRustCallSignature } from "../../../../dist/analysis/program/records/calls/selected-call.js";
 import { setCarrierFact } from "../../../../dist/analysis/operations/project-calls.js";
-import { acceptRustOperation } from "../../../../dist/analysis/program/records/selected-operation-values.js";
+import { acceptRustOperation } from "../../../../dist/analysis/program/records/operations/selected-operation-values.js";
 import { rustPostCheckUnaryMinusOperationId, rustPostCheckUnaryPlusOperationId } from "../../../../dist/target-model/operations/model.js";
 
 const integer = { kind: "source-primitive", name: "int32" };

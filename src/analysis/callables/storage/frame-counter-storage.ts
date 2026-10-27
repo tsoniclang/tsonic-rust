@@ -1,6 +1,6 @@
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { AstReader, Node } from "@tsonic/tsts";
-import type { RustFrameCallableDefinition } from "../../../target-model/records/frame-callables.js";
+import type { RustFrameCallableDefinition } from "../../../target-model/records/callables/frame-callables.js";
 import type { RustProjectConstructionPlan } from "../../project-types/construction-plan.js";
 
 export function prepareRustRetainedFrameCounters(

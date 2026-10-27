@@ -4,10 +4,10 @@ import { snapshotClosedMetadata } from "../../../target-model/metadata/closed-da
 import { rustGenericCallableValue } from "../../../target-model/types/carriers/generic-callables.js";
 import { substituteRustTargetGenerics } from "../../../target-model/types/carriers/substitution.js";
 
-import type { RustNativeCaptureSelection } from "../../../target-model/records/native-captures.js";
-import type { RustGenericCallableImplementation } from "../../../target-model/records/generic-callables.js";
+import type { RustNativeCaptureSelection } from "../../../target-model/records/native/native-captures.js";
+import type { RustGenericCallableImplementation } from "../../../target-model/records/callables/generic-callables.js";
 
-import type { RustGenericCallableEnvironment } from "../../../target-model/records/generic-callables.js";
+import type { RustGenericCallableEnvironment } from "../../../target-model/records/callables/generic-callables.js";
 
 export function rustGenericCallableEnvironment(
   implementation: RustGenericCallableImplementation,

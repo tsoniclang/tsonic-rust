@@ -6,11 +6,11 @@ import { Node_Expression, sourceEnclosingCallable } from "@tsonic/target-api/sou
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { RustAnalysisProgram } from "../../program/model.js";
-import type { RustSourceCallProducer } from "../../program/records/source-calls.js";
+import type { RustSourceCallProducer } from "../../program/records/calls/source-calls.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
-import type { RustSourceCallEffectsFact } from "../../../target-model/records/object-methods.js";
-import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
-import type { RustNativeCallableCall } from "../../../target-model/records/native-protocols.js";
+import type { RustSourceCallEffectsFact } from "../../../target-model/records/objects/object-methods.js";
+import type { RustTargetOperationFact } from "../../../target-model/records/operations/operations.js";
+import type { RustNativeCallableCall } from "../../../target-model/records/native/native-protocols.js";
 import type { RustTypeDefinitions } from "../../../target-model/types/source-union-definitions.js";
 import { rustCallableProtocol, rustCallableInputProtocol, isRustNeverCarrier, rustOptionElementCarrier, rustTargetGenericTypeArguments } from "../../../target-model/types/index.js";
 import { rustGenericCallableProtocol, rustGenericCallableValue } from "../../../target-model/types/carriers/generic-callables.js";
@@ -24,8 +24,8 @@ import { rustValueCarrierBeforeContextualConversion } from "../../conversions/va
 import { rustNativeCallableOperand } from "../native/native-conversions.js";
 import { rustNodeIsOutsideNativeCode } from "../../control-flow/compile-time-statements.js";
 import { substituteRustTargetGenerics } from "../../../target-model/types/carriers/substitution.js";
-import type { RustProjectMethodDispatchVariant } from "../../../target-model/records/method-dispatch.js";
-import type { RustStructuralMethodPlan } from "../../../target-model/records/structural-shapes.js";
+import type { RustProjectMethodDispatchVariant } from "../../../target-model/records/operations/method-dispatch.js";
+import type { RustStructuralMethodPlan } from "../../../target-model/records/objects/structural-shapes.js";
 
 export function sourceCallEffectsMatch(fact: Extract<RustTargetOperationFact, { readonly kind: "source-call" }>,
   effects: RustSourceCallEffectsFact | undefined, definitions: RustTypeDefinitions, native?: RustNativeCallableCall,

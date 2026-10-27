@@ -1,4 +1,4 @@
-import type { RustSuspendedCallableImplementation } from "../../../../target-model/records/suspended-callables.js";
+import type { RustSuspendedCallableImplementation } from "../../../../target-model/records/callables/suspended-callables.js";
 import type { RustGenericParameter, RustItem, RustType } from "../../../target-ast/syntax/nodes.js";
 import { emptyRustGenerics } from "../../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../../program/plan-context.js";

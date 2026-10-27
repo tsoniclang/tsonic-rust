@@ -4,7 +4,7 @@ import test from "node:test";
 import { createTargetSourceProgram } from "@tsonic/target-api/source";
 import { analyzeRust } from "../../helpers/rust-session.mjs";
 import { analyzeRustObjectLiteralEmission } from "../../../dist/analysis/objects/object-literal-emission.js";
-import { createRustObjectLiteralEmissionProducer } from "../../../dist/analysis/program/records/object-literal-emission.js";
+import { createRustObjectLiteralEmissionProducer } from "../../../dist/analysis/program/records/objects/object-literal-emission.js";
 import { rustSourcePrimitiveTargetType } from "../../../dist/target-model/types/index.js";
 
 // Closed record admission moved from the planner to object literal emission analysis, which publishes the sealed

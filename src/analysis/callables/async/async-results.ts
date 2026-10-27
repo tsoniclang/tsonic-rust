@@ -25,9 +25,9 @@ import { resolveRustSuspendedCallableStorage } from "../storage/suspension-stora
 import { rustRetainedEnvironment } from "../ownership/retained-values.js";
 import type {
   RustAsyncFunctionFact, RustJsPromiseLowering, RustSettledPromiseAwait,
-} from "../../../target-model/records/callables-and-resources.js";
-import type { RustRetainedEnvironment } from "../../../target-model/records/retained-environments.js";
-import { rustNativeAsyncFunctionFact, rustPromiseAsyncFunctionFact } from "../../program/records/async-function.js";
+} from "../../../target-model/records/callables/callables-and-resources.js";
+import type { RustRetainedEnvironment } from "../../../target-model/records/callables/retained-environments.js";
+import { rustNativeAsyncFunctionFact, rustPromiseAsyncFunctionFact } from "../../program/records/callables/async-function.js";
 import { rustDirectPromiseBodyCallee } from "./promise-bodies.js";
 import { rustUnparenthesizedExpression } from "../../../target-model/syntax/expressions.js";
 

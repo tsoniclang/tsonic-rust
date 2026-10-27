@@ -1,4 +1,4 @@
-import { requireRustRecord } from "../program/records/required-records.js";
+import { requireRustRecord } from "../program/records/objects/required-records.js";
 import type { Node, SourceFile } from "@tsonic/tsts";
 import { ObjectLiteralProperty_Value } from "@tsonic/target-api/source";
 import type { TargetTypeRef } from "../../target-model/types/model.js";

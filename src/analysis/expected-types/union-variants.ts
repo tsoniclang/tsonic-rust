@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
-import type { RustSourceUnion, RustSourceUnionVariant } from "../../target-model/records/source-types.js";
+import type { RustSourceUnion, RustSourceUnionVariant } from "../../target-model/records/types/source-types.js";
 import { rustResolutionContext } from "../program/walk.js";
 import { resolveRustTargetTypeRef } from "../source-evidence/types/resolution/source.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";

@@ -8,7 +8,7 @@ import { closedMetadataKey, snapshotClosedMetadata } from "../../target-model/me
 import { KindStringLiteral, Node_Type, sourceTypeSyntaxRoot } from "@tsonic/target-api/source";
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 import { rustStructuralObjectCarrierValue } from "../../target-model/types/index.js";
-import type { RustSourceEnumVariant, RustSourceObjectField, RustSourceObjectShape, RustSourceUnion, RustStructuralFieldRegistration } from "../../target-model/records/source-types.js";
+import type { RustSourceEnumVariant, RustSourceObjectField, RustSourceObjectShape, RustSourceUnion, RustStructuralFieldRegistration } from "../../target-model/records/types/source-types.js";
 
 export function closedStringUnionVariants(
   declaration: Node,

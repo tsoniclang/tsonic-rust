@@ -1,4 +1,4 @@
-import { requireRustRecord } from "../program/records/required-records.js";
+import { requireRustRecord } from "../program/records/objects/required-records.js";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import {
@@ -64,7 +64,7 @@ import { requireDenseSourceNodes } from "../source-evidence/dense-nodes.js";
 import { setCarrierFact } from "../operations/project-calls.js";
 import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
-import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
+import type { RustTargetOperationFact } from "../../target-model/records/operations/operations.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 
 import { recordRustNativeGuardResult, recordRustNativeUnreachable } from "./native-control-flow.js";

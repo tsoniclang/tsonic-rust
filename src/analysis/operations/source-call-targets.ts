@@ -16,8 +16,8 @@ import { sourceTypeCarrierForDeclaration } from "./inputs.js";
 import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
-import type { RustSelectedTargetSignature } from "../../target-model/records/member-selections.js";
-import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
+import type { RustSelectedTargetSignature } from "../../target-model/records/operations/member-selections.js";
+import type { RustTargetOperationFact } from "../../target-model/records/operations/operations.js";
 
 import { rustGenericCallableProtocol } from "../../target-model/types/carriers/generic-callables.js";
 import { substituteRustValueConversion } from "../../target-model/conversions/substitution.js";

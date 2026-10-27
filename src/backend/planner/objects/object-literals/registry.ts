@@ -8,7 +8,7 @@ import type { RustItem, RustStructField, RustType } from "../../../target-ast/sy
 import { emptyRustGenerics } from "../../../target-ast/syntax/nodes.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustObjectLiteralAccessorImplementationPlan, RustObjectLiteralImplementationPlan, RustObjectLiteralMethodDispatchPlan, RustObjectLiteralMethodImplementationPlan, RustObjectLiteralMethodOverridePlan } from "./model.js";
-import type { RustProjectLiteralEmission } from "../../../../target-model/records/object-literal-emission.js";
+import type { RustProjectLiteralEmission } from "../../../../target-model/records/objects/object-literal-emission.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import type { RustSyntheticNameState } from "../../names/synthetic.js";
 import { failRustPlannerInvariant } from "../../diagnostics.js";

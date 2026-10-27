@@ -1,4 +1,4 @@
-import type { RustClassValueCallable } from "../../../target-model/records/class-value-callables.js";
+import type { RustClassValueCallable } from "../../../target-model/records/callables/class-value-callables.js";
 import { failRustPlannerInvariant } from "../diagnostics.js";
 import { rustPackageFallibleBoundary, rustErrorType } from "../program/fallible-boundaries.js";
 

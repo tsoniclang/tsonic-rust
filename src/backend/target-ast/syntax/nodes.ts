@@ -388,7 +388,7 @@ export type RustSelfParam =
 
 export type RustVisibility = "private" | "parent" | "crate" | "public";
 
-import type { RustDeadCodeDisposition } from "../../../target-model/records/native-liveness.js";
+import type { RustDeadCodeDisposition } from "../../../target-model/records/native/native-liveness.js";
 
 export interface RustStructField {
   readonly name: string;

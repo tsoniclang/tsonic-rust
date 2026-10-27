@@ -1,17 +1,17 @@
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import { analyzeRustRecordContributions } from "./record-contributions.js";
-import type { RustRecordContributionEvidence, RustRecordContributionFact } from "../../target-model/records/record-contributions.js";
+import type { RustRecordContributionEvidence, RustRecordContributionFact } from "../../target-model/records/objects/record-contributions.js";
 
 import type { Node } from "@tsonic/tsts";
 import { Node_Expression } from "@tsonic/target-api/source";
 
-import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
+import type { RustTargetOperationFact } from "../../target-model/records/operations/operations.js";
 
-import type { RustCallableValueAdapter } from "../../target-model/records/callable-adapters.js";
+import type { RustCallableValueAdapter } from "../../target-model/records/callables/callable-adapters.js";
 import type { RustContextualValueConversion } from "../../target-model/conversions/contextual.js";
 
 import { isRustFinalizedArrayInput, isRustFinalizedSliceInput, isRustFinalizedSourceInput, isRustFinalizedTaggedArrayInput } from "../../target-model/operations/finalized-inputs.js";
-import type { RustFinalizedTargetInput, RustFinalizedValueConversion } from "../../target-model/records/finalized-operation.js";
+import type { RustFinalizedTargetInput, RustFinalizedValueConversion } from "../../target-model/records/operations/finalized-operation.js";
 
 import type { RustValueConversion } from "../../target-model/operations/model.js";
 import type { RustCallableConversion } from "../../target-model/conversions/callable.js";
@@ -23,12 +23,12 @@ import { analyzeRustProjectThisReferences, rustProjectRootThisCarrier } from "./
 import { isRustPreconstructionThisOperation, isRustArrayFieldContentAssignment, markBinaryProjectIdentityUsed, visitConversionContract } from "./generated-item-usage-helpers.js";
 
 import type { RustGeneratedItemUsageInput, RustGeneratedOperationAbi } from "./generated-item-usage-model.js";
-import type { RustGeneratedItemUsage } from "../../target-model/records/reachability.js";
+import type { RustGeneratedItemUsage } from "../../target-model/records/program/reachability.js";
 
 import { createRustGeneratedItemUsageState } from "./generated-item-usage-state.js";
 import { admitRustConversionEmission } from "../conversions/emission.js";
 import type { RustAwaitSelection } from "../../target-model/types/await.js";
-import type { RustAwaitValueLeafFact } from "../../target-model/records/await-values.js";
+import type { RustAwaitValueLeafFact } from "../../target-model/records/callables/await-values.js";
 
 export function analyzeRustGeneratedItemUsage(input: RustGeneratedItemUsageInput): RustGeneratedItemUsage {
   const nativeNodes = new Set(input.nativeNodes);

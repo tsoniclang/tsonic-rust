@@ -1,5 +1,5 @@
 import type { Node } from "@tsonic/tsts";
-import type { RustErrorRegionSelection } from "../../../target-model/records/error-regions.js";
+import type { RustErrorRegionSelection } from "../../../target-model/records/errors/error-regions.js";
 import type { RustItem, RustType } from "../../target-ast/syntax/nodes.js";
 import { planRustNativeErrorJoin, planRustNativeErrorRuntimeFrom } from "../types/native-error-joins.js";
 import { rustTypeFromCarrierInContext, type RustTypeRenderingContext } from "../types/render.js";

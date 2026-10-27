@@ -3,11 +3,11 @@ import { Node_Expression } from "@tsonic/target-api/source";
 import type { RustProgramRecords } from "../../../target-model/records/program.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
-import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
-import type { RustGenericCallablePhysicalDefinition } from "../../../target-model/records/generic-callables.js";
+import type { RustTargetOperationFact } from "../../../target-model/records/operations/operations.js";
+import type { RustGenericCallablePhysicalDefinition } from "../../../target-model/records/callables/generic-callables.js";
 import type { RustGenericCallablePlan } from "./generic-values.js";
 import type { RustNativeStoragePlan } from "../storage/native-storage.js";
-import type { RustNativeGenericProducerPlan } from "../../../target-model/records/native-generic-producers.js";
+import type { RustNativeGenericProducerPlan } from "../../../target-model/records/native/native-generic-producers.js";
 import { rustEffectiveValueCarrier } from "../../conversions/value-carrier-queries.js";
 import { rustSourceCallCallableStorageCarrier } from "../../../policy/operations/members/native-contracts.js";
 import type { RustStructuralStorageLookup } from "../../../policy/model/operation-record-inputs.js";

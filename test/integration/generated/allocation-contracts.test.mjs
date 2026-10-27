@@ -17,7 +17,7 @@ import { rustSourcePrimitiveTargetType } from "../../../dist/target-model/types/
 import { Node_Expression } from "@tsonic/target-api/source";
 import { createRustRecordFixture } from "../../helpers/records.mjs";
 import { analyzeRustReferenceOperations } from "../../../dist/analysis/operations/reference-operations.js";
-import { createRustReferenceOperationProducer } from "../../../dist/analysis/program/records/reference-operations.js";
+import { createRustReferenceOperationProducer } from "../../../dist/analysis/program/records/operations/reference-operations.js";
 
 
 test("owned exits, static text, direct helpers and scoped array reads execute without extra owners", { timeout: 300_000 }, () => {

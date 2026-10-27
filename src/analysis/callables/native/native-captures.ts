@@ -7,7 +7,7 @@ import type { RustTargetGenericBindings } from "../../../target-model/types/carr
 import { substituteRustTargetGenerics } from "../../../target-model/types/carriers/substitution.js";
 import { normalizeRustErrorType, type RustErrorTypeContext } from "../../errors/error-types.js";
 
-import type { RustNativeCallableInput } from "../../../target-model/records/native-protocols.js";
+import type { RustNativeCallableInput } from "../../../target-model/records/native/native-protocols.js";
 import type { RustNativeStoragePlan } from "../storage/native-storage.js";
 
 export interface RustNativeCaptureConstruction extends RustNativeCapturePlan {
@@ -100,6 +100,6 @@ export function createRustNativeCapturePlan(input: {
   });
 }
 
-import type { RustNativeCaptureSelection, RustNativeCapturePlan } from "../../../target-model/records/native-captures.js";
-import { sealRustNativeCaptures } from "../../program/records/native-captures.js";
+import type { RustNativeCaptureSelection, RustNativeCapturePlan } from "../../../target-model/records/native/native-captures.js";
+import { sealRustNativeCaptures } from "../../program/records/native/native-captures.js";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";

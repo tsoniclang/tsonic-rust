@@ -1,6 +1,6 @@
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
 import type { Node } from "@tsonic/tsts";
-import type { RustTargetOperationFact } from "../../../../target-model/records/operations.js";
+import type { RustTargetOperationFact } from "../../../../target-model/records/operations/operations.js";
 import type { RustCallGenericArgument, RustExpr } from "../../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import { rustTargetGenericTypeArguments, substituteRustTargetGenericArgument } from "../../../../target-model/types/index.js";

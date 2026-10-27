@@ -18,7 +18,7 @@ import { rustTargetGenericReferences } from "../../../target-model/types/carrier
 import { directReturnedValues } from "./native-storage-values.js";
 import type { RustProgramRecords } from "../../../target-model/records/program.js";
 import type { RustTypeDefinitions } from "../../../target-model/types/source-union-definitions.js";
-import type { RustFrameCallablePlan } from "../../../target-model/records/frame-callables.js";
+import type { RustFrameCallablePlan } from "../../../target-model/records/callables/frame-callables.js";
 
 /** The analysis facts the native storage carrier selections read. */
 export interface RustNativeStorageCarrierInput {

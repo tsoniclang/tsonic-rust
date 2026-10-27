@@ -11,7 +11,7 @@ import { runCargo, validateGeneratedProject, writeGeneratedProject } from "../..
 import { nativeOwnershipCostSupport } from "../../helpers/native-ownership-cost.mjs";
 import { planRustExternalProjectInitialization } from "../../../dist/backend/planner/objects/polymorphism/external-construction.js";
 import { analyzeRustConstructionEmission } from "../../../dist/analysis/project-types/construction-emission.js";
-import { createRustConstructionProducer } from "../../../dist/analysis/program/records/construction.js";
+import { createRustConstructionProducer } from "../../../dist/analysis/program/records/objects/construction.js";
 
 import { rustBorrowedStrTargetType, rustSourceOptionalTargetType, rustStringTargetType } from "../../../dist/target-model/types/index.js";
 import { rustOptionalStringToBorrowedStrValueConversion } from "../../../dist/target-model/conversions/model.js";

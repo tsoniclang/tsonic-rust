@@ -3,8 +3,8 @@ import { rustProgramNodeIsOutsideNativeCode } from "../control-flow/compile-time
 import { failTargetAnalysisInvariant, type TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import { ObjectLiteralProperty_Value, type SourcePropertyNameSelection, type TargetSourceProgram } from "@tsonic/target-api/source";
 import type { RustAnalysisProgram } from "../program/model.js";
-import type { RustObjectLiteralEmissionProducer } from "../program/records/object-literal-emission.js";
-import type { RustObjectLiteralEmission, RustObjectLiteralEmissionRequest, RustRecordLiteralFact, RustStructuralLiteralEmission } from "../../target-model/records/object-literal-emission.js";
+import type { RustObjectLiteralEmissionProducer } from "../program/records/objects/object-literal-emission.js";
+import type { RustObjectLiteralEmission, RustObjectLiteralEmissionRequest, RustRecordLiteralFact, RustStructuralLiteralEmission } from "../../target-model/records/objects/object-literal-emission.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustCallableProtocol, rustCallableTargetType, rustStructuralPropertyValueCarrier, rustUnitTargetType, rustEmptyObjectTargetId, rustOptionElementCarrier } from "../../target-model/types/index.js";
 import { isRustCopyCarrier } from "../../policy/constraints/native-traits.js";

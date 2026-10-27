@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createRustRecordFixture } from "../../helpers/records.mjs";
 import { analyzeRustNativeComparisons } from "../../../dist/analysis/operations/native-comparisons.js";
-import { createRustNativeComparisonProducer } from "../../../dist/analysis/program/records/native-comparisons.js";
+import { createRustNativeComparisonProducer } from "../../../dist/analysis/program/records/native/native-comparisons.js";
 
 function select(operator, first, second, name = "int32", layouts = [], conversions = {}) {
   const expression = {}, left = {}, right = {};

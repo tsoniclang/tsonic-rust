@@ -1,5 +1,5 @@
-import type { RustGenericCallableImplementation } from "../../../../target-model/records/generic-callables.js";
-import type { RustGenericCallablePhysicalDefinition } from "../../../../target-model/records/generic-callables.js";
+import type { RustGenericCallableImplementation } from "../../../../target-model/records/callables/generic-callables.js";
+import type { RustGenericCallablePhysicalDefinition } from "../../../../target-model/records/callables/generic-callables.js";
 import type { RustTargetGenericArgument } from "../../../../target-model/types/model.js";
 import { closedMetadataKey } from "../../../../target-model/metadata/closed-data.js";
 

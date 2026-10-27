@@ -1,4 +1,4 @@
-import { requireRustRecord } from "../program/records/required-records.js";
+import { requireRustRecord } from "../program/records/objects/required-records.js";
 import { ObjectLiteralProperty_Value } from "@tsonic/target-api/source";
 import type { Node, SourceFile } from "@tsonic/tsts";
 import { rustOptionElementCarrier } from "../../target-model/types/index.js";
@@ -17,7 +17,7 @@ import { setCarrierFact } from "../operations/project-calls.js";
 import { resolveRustTargetTypeRef } from "../source-evidence/types/resolution/source.js";
 import { resolveExpressionCarrier } from "../source-evidence/types/resolution/expression-carriers.js";
 import type { RustFactWalk } from "../program/walk.js";
-import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
+import type { RustTargetOperationFact } from "../../target-model/records/operations/operations.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 
 export type ProviderRecordLiteralResolution =

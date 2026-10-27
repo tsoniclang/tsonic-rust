@@ -1,11 +1,11 @@
 import type { Node } from "@tsonic/tsts";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { RustProgramRecords } from "../../../target-model/records/program.js";
-import type { RustLexicalFunctionQueries } from "../../../target-model/records/lexical-functions.js";
-import type { RustOwnershipRecords } from "../../../target-model/records/ownership.js";
+import type { RustLexicalFunctionQueries } from "../../../target-model/records/callables/lexical-functions.js";
+import type { RustOwnershipRecords } from "../../../target-model/records/storage/ownership.js";
 import type { RustCallableValueConstruction } from "../values/value-plan.js";
-import type { RustLexicalFunctionProducer } from "../../program/records/lexical-functions.js";
-import type { RustLexicalCaptureEmission } from "../../../target-model/records/lexical-functions.js";
+import type { RustLexicalFunctionProducer } from "../../program/records/callables/lexical-functions.js";
+import type { RustLexicalCaptureEmission } from "../../../target-model/records/callables/lexical-functions.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { isRustCopyCarrier } from "../../../policy/constraints/native-traits.js";
 import { rustRetainedCallableStorage } from "../../../policy/types/callables/return-contexts.js";

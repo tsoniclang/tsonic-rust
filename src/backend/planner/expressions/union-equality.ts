@@ -1,7 +1,7 @@
 import type { Node } from "@tsonic/tsts";
 import type { RustExpr, RustPattern } from "../../target-ast/syntax/nodes.js";
-import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
-import type { RustUnionEqualityOperand } from "../../../target-model/records/union-equality.js";
+import type { RustTargetOperationFact } from "../../../target-model/records/operations/operations.js";
+import type { RustUnionEqualityOperand } from "../../../target-model/records/operations/union-equality.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { failRustPlannerInvariant } from "../diagnostics.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";

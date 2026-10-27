@@ -1,7 +1,7 @@
 import type { AstReader, Node } from "@tsonic/tsts";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
-import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
-import type { RustErrorRegionSelection } from "../../target-model/records/error-regions.js";
+import type { RustTargetOperationFact } from "../../target-model/records/operations/operations.js";
+import type { RustErrorRegionSelection } from "../../target-model/records/errors/error-regions.js";
 import type { RustProjectFieldDispatchQueries } from "../project-types/field-dispatch.js";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 

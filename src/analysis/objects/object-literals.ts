@@ -1,4 +1,4 @@
-import { requireRustRecord } from "../program/records/required-records.js";
+import { requireRustRecord } from "../program/records/objects/required-records.js";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import { KindSpreadAssignment, ObjectLiteralProperty_Value, SpreadAssignment_Expression, sourceNodeIdentity } from "@tsonic/target-api/source";
 import { rustEmptyObjectTargetId, rustEmptyObjectTargetType, rustSourceTypeCarrierValue, rustSourceUnionCarrierValue, rustStructuralObjectCarrierValue } from "../../target-model/types/index.js";
@@ -19,7 +19,7 @@ import { retainRustStructuralInstantiation } from "../source-evidence/types/reso
 import { rustStructuralObjectTargetType } from "../../target-model/types/carriers/source-types.js";
 import { rustOptionElementCarrier } from "../../target-model/types/carriers/optional.js";
 import { rustEffectiveValueCarrier } from "../conversions/value-carrier-queries.js";
-import { recordRustValueCarrierReconciliation } from "../program/records/value-carrier-admission.js";
+import { recordRustValueCarrierReconciliation } from "../program/records/types/value-carrier-admission.js";
 import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
 

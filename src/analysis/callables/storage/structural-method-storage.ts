@@ -3,8 +3,8 @@ import type { AstReader, Node } from "@tsonic/tsts";
 import type { SourceStorageBindings, SourceStorageDomainBoundary, SourceStorageProducer, SourceStorageQueries, SourceStorageSubject } from "@tsonic/target-api/analysis";
 import { Node_Expression, sourceEnclosingCallable, asSourceNode, type TargetSourceProgram } from "@tsonic/target-api/source";
 import type { RustProgramRecords } from "../../../target-model/records/program.js";
-import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
-import type { RustErrorRegionRecords } from "../../../target-model/records/error-regions.js";
+import type { RustTargetOperationFact } from "../../../target-model/records/operations/operations.js";
+import type { RustErrorRegionRecords } from "../../../target-model/records/errors/error-regions.js";
 import { rustLifetimeKey, rustLifetimesEqual, type RustLifetimeIndex, type RustLifetimeRef } from "../../../target-model/lifetimes/index.js";
 import { rustLifetimeOutlives } from "../../../policy/constraints/lifetime-outlives.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
@@ -20,17 +20,17 @@ import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js
 import { rustStructuralGenericCarrier } from "../../../policy/types/objects/structural-generics.js";
 import { rustEnclosingStorageContract } from "./storage-contracts.js";
 import { rustCallableTargetForSourceLifetime } from "../../../policy/conversions/value-carrier-reconciliation.js";
-import type { RustStructuralMethodConstruction, RustStructuralMethodStorageSelection, RustStructuralMethodPayload, RustStructuralMethodExposure } from "../../../target-model/records/structural-shapes.js";
+import type { RustStructuralMethodConstruction, RustStructuralMethodStorageSelection, RustStructuralMethodPayload, RustStructuralMethodExposure } from "../../../target-model/records/objects/structural-shapes.js";
 import type { RustStructuralShapePlanRegistry } from "../../objects/shapes/structural-shape-registry.js";
 import { rustNativeCallablePhysicalSource } from "../../../policy/conversions/native-callables.js";
 import type { RustNativeCallableInputPlan } from "../native/native-inputs.js";
 import type { RustNativeCallableProducerConstruction } from "../native/native-producers.js";
-import type { RustNativeCallableProducerPlan } from "../../../target-model/records/native-producers.js";
+import type { RustNativeCallableProducerPlan } from "../../../target-model/records/native/native-producers.js";
 import type { RustNativeStoragePlan } from "./native-storage.js";
 import { rustRetainedValueLifetime } from "../ownership/retained-values.js";
-import type { RustRetainedEnvironmentQueries } from "../../../target-model/records/retained-environments.js";
-import type { RustErrorEffectsFact } from "../../../target-model/records/error-effects.js";
-import type { RustSourcePackageComponentClassifications } from "../../../target-model/records/source-package-semantics.js";
+import type { RustRetainedEnvironmentQueries } from "../../../target-model/records/callables/retained-environments.js";
+import type { RustErrorEffectsFact } from "../../../target-model/records/errors/error-effects.js";
+import type { RustSourcePackageComponentClassifications } from "../../../target-model/records/program/source-package-semantics.js";
 import { normalizeRustErrorType, type RustErrorTypeContext } from "../../errors/error-types.js";
 import { rustHasOpenOwnedStorage, selectRustStructuralFactoryReceiver } from "../../../policy/ownership/retained-storage.js";
 import type { RustDeclarationGenericRequirementIndex } from "../../declarations/generic-requirements.js";
@@ -38,13 +38,13 @@ import { rustFinalContractSupportsStatic } from "../../declarations/generic-carr
 import type { RustProjectCallableFieldStorage } from "./project-field-storage.js";
 import type { RustSourceTypeFamilyRegistry } from "../../../target-model/types/type-families.js";
 
-import type { RustSourceCallableSpecializationIssue } from "../../../target-model/records/callable-issues.js";
+import type { RustSourceCallableSpecializationIssue } from "../../../target-model/records/callables/callable-issues.js";
 import type { RustSourceTypeRegistry } from "../../project-types/source-type-model.js";
-import type { RustSourceObjectField, RustSourceObjectShape } from "../../../target-model/records/source-types.js";
+import type { RustSourceObjectField, RustSourceObjectShape } from "../../../target-model/records/types/source-types.js";
 import { completeRustNativeCaptureCarrier, type RustNativeCaptureConstruction } from "../native/native-captures.js";
-import type { RustNativeCaptureSelection } from "../../../target-model/records/native-captures.js";
-import type { RustFrameCallablePlan } from "../../../target-model/records/frame-callables.js";
-import type { RustClassValuePlan } from "../../../target-model/records/class-values.js";
+import type { RustNativeCaptureSelection } from "../../../target-model/records/native/native-captures.js";
+import type { RustFrameCallablePlan } from "../../../target-model/records/callables/frame-callables.js";
+import type { RustClassValuePlan } from "../../../target-model/records/objects/class-values.js";
 import type { RustGenericCallablePlan } from "../generics/generic-values.js";
 import type { RustProjectTypePolicy } from "../../project-types/index.js";
 import type { RustObjectRepresentationPlan } from "../../project-types/object-representation.js";
@@ -224,7 +224,7 @@ export function createRustStructuralMethodStorage(input: {
   readonly genericCallables: RustGenericCallablePlan;
   readonly projectTypes: RustProjectTypePolicy;
   readonly objectRepresentations: RustObjectRepresentationPlan;
-  readonly frozenDataWrites: Pick<import("../../../target-model/records/frozen-data.js").RustFrozenDataWritePlan, "capturesFieldIdentity">;
+  readonly frozenDataWrites: Pick<import("../../../target-model/records/storage/frozen-data.js").RustFrozenDataWritePlan, "capturesFieldIdentity">;
 }): {
   prepareConstructors(components: RustSourcePackageComponentClassifications,
     effectsFor: (declaration: Node) => RustErrorEffectsFact | undefined,

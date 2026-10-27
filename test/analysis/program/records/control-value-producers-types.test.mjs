@@ -12,10 +12,10 @@ import { createRustProgramRecordBuilder } from "${join(root, "dist/analysis/prog
 import { recordRustIndexedCallKeyArguments } from "${join(root, "dist/analysis/operations/indexed-call-keys.js")}";
 import type { Node } from "@tsonic/tsts";
 import type { TargetTypeRef } from "${join(root, "dist/target-model/types/model.js")}";
-import type { RustSelectedTargetSignature } from "${join(root, "dist/target-model/records/member-selections.js")}";
+import type { RustSelectedTargetSignature } from "${join(root, "dist/target-model/records/operations/member-selections.js")}";
 import type { RustBinaryOperatorSelection } from "${join(root, "dist/target-model/operations/binary.js")}";
 import type { RustValueConversion } from "${join(root, "dist/target-model/operations/model.js")}";
-import type { RustPropertyProjectionCase } from "${join(root, "dist/target-model/records/property-projections.js")}";
+import type { RustPropertyProjectionCase } from "${join(root, "dist/target-model/records/objects/property-projections.js")}";
 const builder = createRustProgramRecordBuilder();
 declare const subject: Node;
 declare const carrier: TargetTypeRef;

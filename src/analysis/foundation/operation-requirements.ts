@@ -1,5 +1,5 @@
 import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
-import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
+import type { RustTargetOperationFact } from "../../target-model/records/operations/operations.js";
 import type { RustValueConversion } from "../../target-model/operations/model.js";
 import type { RustClosedTypeTestPlan } from "../../target-model/operations/type-tests.js";
 import type {

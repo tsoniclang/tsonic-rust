@@ -1,7 +1,7 @@
 import { isRustTargetTypeRef } from "../../../../target-model/types/equality.js";
 import { isClosedMetadata } from "../../../../target-model/metadata/closed-data.js";
 import { isRustValueConversion } from "../../../../target-model/conversions/shape.js";
-import type { RustFinalizedValueConversion } from "../../../../target-model/records/finalized-operation.js";
+import type { RustFinalizedValueConversion } from "../../../../target-model/records/operations/finalized-operation.js";
 import { hasExactKeys, isRecord } from "./validation-records.js";
 
 export function isFinalizedConversion(value: unknown): value is RustFinalizedValueConversion {

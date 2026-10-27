@@ -13,11 +13,11 @@ import { rustPhysicalPayloadFor } from "../../../policy/conversions/physical-pay
 import type { RustTypeDefinitions } from "../../../target-model/types/source-union-definitions.js";
 
 import type { RustGenericCallablePlan } from "../generics/generic-values.js";
-import type { RustGenericCallablePhysicalDefinition } from "../../../target-model/records/generic-callables.js";
+import type { RustGenericCallablePhysicalDefinition } from "../../../target-model/records/callables/generic-callables.js";
 import type { RustNativeCallableInputPlan } from "./native-inputs.js";
-import type { RustNativeCallableInput } from "../../../target-model/records/native-protocols.js";
+import type { RustNativeCallableInput } from "../../../target-model/records/native/native-protocols.js";
 import type { RustNativeStoragePlan } from "../storage/native-storage.js";
-import type { RustNativeCallableProtocol } from "../../../target-model/records/native-protocols.js";
+import type { RustNativeCallableProtocol } from "../../../target-model/records/native/native-protocols.js";
 
 export function prepareRustNativeGenericProducerRequests(input: {
   readonly ast: AstReader;
@@ -188,8 +188,8 @@ export function createRustNativeGenericProducerPlan(input: {
     forwarding: input.requests.forwarding, errorArities });
 }
 
-import type { RustNativeGenericProducerForwarding, RustNativeGenericProducerPlan, RustNativeGenericProducerRequests } from "../../../target-model/records/native-generic-producers.js";
-import { sealRustNativeGenericProducers } from "../../program/records/native-generic-producers.js";
+import type { RustNativeGenericProducerForwarding, RustNativeGenericProducerPlan, RustNativeGenericProducerRequests } from "../../../target-model/records/native/native-generic-producers.js";
+import { sealRustNativeGenericProducers } from "../../program/records/native/native-generic-producers.js";
 
 function isErasedRuntimeCallable(carrier: TargetTypeRef): boolean {
   const selected = rustOptionElementCarrier(carrier) ?? carrier;

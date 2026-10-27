@@ -1,4 +1,4 @@
-import type { RustGenericRequirement } from "../../../target-model/records/generic-requirements.js";
+import type { RustGenericRequirement } from "../../../target-model/records/types/generic-requirements.js";
 import type { RustLifetimeRef, RustSourceGenericParameterContract } from "../../../target-model/lifetimes/index.js";
 import { rustLifetimesEqual } from "../../../target-model/lifetimes/index.js";
 import type { RustGenericParameter, RustGenerics, RustTypeBound, RustWherePredicate } from "../../target-ast/syntax/nodes.js";

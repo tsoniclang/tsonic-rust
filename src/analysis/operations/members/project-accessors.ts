@@ -1,5 +1,5 @@
 import type { RustOperationAnalysisContext } from "../../program/operation-context.js";
-import type { RustProjectAccessorSelection } from "../../../target-model/records/project-accessors.js";
+import type { RustProjectAccessorSelection } from "../../../target-model/records/objects/project-accessors.js";
 import { Node_Type } from "@tsonic/target-api/source";
 import type { Node, Type } from "@tsonic/tsts";
 

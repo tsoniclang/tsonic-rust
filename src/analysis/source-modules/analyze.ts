@@ -9,7 +9,7 @@ import type {
   RustSourceModuleAnalysisIssue,
   RustSourceModuleConstruction,
   RustSourceModuleConstructionIndex,
-} from "../../target-model/records/source-modules.js";
+} from "../../target-model/records/program/source-modules.js";
 
 export function analyzeRustSourceModuleConstructions(input: {
   readonly source: TargetSourceProgram;

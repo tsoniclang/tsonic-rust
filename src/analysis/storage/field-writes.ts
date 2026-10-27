@@ -3,8 +3,8 @@ import { Node_Expression } from "@tsonic/target-api/source";
 import { rustEffectiveValueCarrier } from "../conversions/value-carrier-queries.js";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { RustAnalysisProgram } from "../program/model.js";
-import type { RustFieldWriteProducer } from "../program/records/field-writes.js";
-import { requireRustRecord, type RustRequiredRecord } from "../program/records/required-records.js";
+import type { RustFieldWriteProducer } from "../program/records/storage/field-writes.js";
+import { requireRustRecord, type RustRequiredRecord } from "../program/records/objects/required-records.js";
 
 export function analyzeRustFieldWrites(input: {
   readonly program: Pick<RustAnalysisProgram, "source" | "records" | "ownership" | "projectFieldDispatch" | "projectTypes" | "objectRepresentations" | "frozenDataWrites">;

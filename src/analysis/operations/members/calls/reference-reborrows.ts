@@ -11,7 +11,7 @@ import type { RustOperationsProviderOptions } from "../model.js";
 import { selectReferenceReborrow } from "../../../../policy/conversions/reference-reborrows.js";
 export function selectReceiverReferenceReborrow(
   request: RustCheckedCallSelectionInput,
-  abi: import("../../../../target-model/records/finalized-operation.js").RustFinalizedOperationAbi,
+  abi: import("../../../../target-model/records/operations/finalized-operation.js").RustFinalizedOperationAbi,
   context: RustOperationAnalysisContext,
   options: RustOperationsProviderOptions,
 ): Extract<
@@ -30,7 +30,7 @@ export function selectReceiverReferenceReborrow(
   }
   const modes = new Set<import("../../../../target-model/operations/model.js").RustArgumentMode>();
   const collect = (
-    input: import("../../../../target-model/records/finalized-operation.js").RustFinalizedTargetInput,
+    input: import("../../../../target-model/records/operations/finalized-operation.js").RustFinalizedTargetInput,
   ): void => {
     if (isRustFinalizedSourceInput(input) && input.source.kind === "receiver") {
       modes.add(input.mode);

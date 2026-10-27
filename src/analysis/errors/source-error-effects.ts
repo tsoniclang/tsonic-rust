@@ -2,11 +2,11 @@ import type { AstReader, Node } from "@tsonic/tsts";
 import { sourceEnclosingCallable, sourceNodeIdentity, sourceCallableValueParameters } from "@tsonic/target-api/source";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
-import type { RustErrorEffectsFact, RustNativeErrorEffect } from "../../target-model/records/error-effects.js";
-import { rustJsRejectionErrorIdentity } from "../../target-model/records/error-effects.js";
+import type { RustErrorEffectsFact, RustNativeErrorEffect } from "../../target-model/records/errors/error-effects.js";
+import { rustJsRejectionErrorIdentity } from "../../target-model/records/errors/error-effects.js";
 import { rustJsValueTargetType } from "../../target-model/types/carriers/js.js";
 import { mergeRustErrorEffects, rustErrorEffectsEqual } from "./error-effects.js";
-import type { RustSourceErrorEffectEdge } from "../../target-model/records/source-error-effects.js";
+import type { RustSourceErrorEffectEdge } from "../../target-model/records/errors/source-error-effects.js";
 
 import { rustCallableTargetId, rustInfallibleTargetId } from "../../target-model/types/carriers/source-types.js";
 import { rustTargetGenericBindingsForArguments } from "../../target-model/types/generic-arguments.js";
@@ -16,7 +16,7 @@ import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../../target-model
 import { closedMetadataKey, snapshotClosedMetadata } from "../../target-model/metadata/closed-data.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustPhysicalPayloadFor } from "../../policy/conversions/physical-payloads.js";
-import type { RustNativeCallableProducer } from "../../target-model/records/native-producers.js";
+import type { RustNativeCallableProducer } from "../../target-model/records/native/native-producers.js";
 import { rustNativeCallableErrorChannel } from "../../policy/types/callables/native-protocols.js";
 import { isRustAbsenceCarrier } from "../../target-model/types/carriers/native.js";
 import { rustOptionElementCarrier } from "../../target-model/types/carriers/optional.js";
@@ -30,7 +30,7 @@ import type { RustTargetConstArgument } from "../../target-model/types/model.js"
 import type { RustTargetGenericBindings } from "../../target-model/types/carriers/generic-inference.js";
 import type { RustNativeStoragePlan } from "../callables/storage/native-storage.js";
 import type { RustNativeCallableInputPlan } from "../callables/native/native-inputs.js";
-import type { RustNativeCallableProducerPlan } from "../../target-model/records/native-producers.js";
+import type { RustNativeCallableProducerPlan } from "../../target-model/records/native/native-producers.js";
 
 type RustSourceErrorContext = {
   readonly ast: AstReader;

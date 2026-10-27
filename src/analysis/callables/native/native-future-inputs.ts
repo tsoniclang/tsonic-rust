@@ -16,10 +16,10 @@ import { rustUnionAlternatives } from "../../../target-model/types/union-relatio
 import { closedMetadataKey } from "../../../target-model/metadata/closed-data.js";
 import { isRustTargetTypeRef } from "../../../target-model/types/equality.js";
 
-import type { RustLexicalFunctionEnvironments } from "../../../target-model/records/lexical-functions.js";
+import type { RustLexicalFunctionEnvironments } from "../../../target-model/records/callables/lexical-functions.js";
 
-import type { RustNativeFutureInput, RustNativeFutureEnvironmentSelection, RustNativeFutureInputPlan } from "../../../target-model/records/native-future-inputs.js";
-import { sealRustNativeFutureInputs } from "../../program/records/native-future-inputs.js";
+import type { RustNativeFutureInput, RustNativeFutureEnvironmentSelection, RustNativeFutureInputPlan } from "../../../target-model/records/native/native-future-inputs.js";
+import { sealRustNativeFutureInputs } from "../../program/records/native/native-future-inputs.js";
 import { rustNativeStorageProjectionDepth, rustNativeStorageProjectionSteps } from "../storage/native-storage-generics.js";
 
 export function selectRustNativeFutureTypeDemand(carrier: TargetTypeRef, definitions: RustTypeDefinitions,

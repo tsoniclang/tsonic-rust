@@ -7,18 +7,18 @@ import { isRustOptionCarrier, isRustAbsenceCarrier } from "../../target-model/ty
 import { type RustProjectTypeDefinition, type RustProjectTypePolicy } from "./index.js";
 import { rustInheritedProjectConstructor } from "./inherited-constructors.js";
 import type { RustObjectRepresentationPlan } from "./object-representation.js";
-import type { RustFrameCallablePlan } from "../../target-model/records/frame-callables.js";
-import type { RustFrameCallableDefinition } from "../../target-model/records/frame-callables.js";
+import type { RustFrameCallablePlan } from "../../target-model/records/callables/frame-callables.js";
+import type { RustFrameCallableDefinition } from "../../target-model/records/callables/frame-callables.js";
 import { validatedRustCapturedFieldStorageFact } from "../storage/receiver-captures.js";
 import { rustFrameCallableValue } from "../../target-model/types/carriers/frame-callables.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { analyzeRustConstructionReadiness, type RustConstructionPointQueries } from "./construction-readiness.js";
 
 import { selectRustExternalInitialization } from "./external-initialization.js";
-import type { RustExternalInitialization } from "../../target-model/records/construction.js";
+import type { RustExternalInitialization } from "../../target-model/records/objects/construction.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 
-import type { RustConstructionField, RustConstructionLayer, RustConstructionProjection, RustConstructionPreparationSelection } from "../../target-model/records/construction.js";
+import type { RustConstructionField, RustConstructionLayer, RustConstructionProjection, RustConstructionPreparationSelection } from "../../target-model/records/objects/construction.js";
 
 export interface RustConstructionIssue {
   readonly node: Node;

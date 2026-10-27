@@ -122,16 +122,16 @@ import { analyzeRustCallableParameterEmission } from "../callables/values/parame
 import { analyzeRustDeclarationLiveness } from "../reachability/declaration-emission.js";
 
 import type { TargetStageResult } from "@tsonic/target-api/artifacts";
-import type { RustReachability } from "../../target-model/records/reachability.js";
-import type { RustNativeDeclarationForms } from "../../target-model/records/native-declaration-forms.js";
+import type { RustReachability } from "../../target-model/records/program/reachability.js";
+import type { RustNativeDeclarationForms } from "../../target-model/records/native/native-declaration-forms.js";
 
 export interface RustNativeEmissionResult {
   readonly reachability: RustReachability;
   readonly nativeDeclarations: RustNativeDeclarationForms;
 }
 import type { RustAnalysisContext } from "./context.js";
-import type { RustGenericCallableErrorIndex } from "../../target-model/records/generic-callable-errors.js";
-import type { RustOwnershipFlow } from "../../target-model/records/ownership-flow.js";
+import type { RustGenericCallableErrorIndex } from "../../target-model/records/callables/generic-callable-errors.js";
+import type { RustOwnershipFlow } from "../../target-model/records/storage/ownership-flow.js";
 import { analyzeRustBindingLiveness } from "../control-flow/binding-liveness.js";
 import { analyzeRustLocalBindings } from "../storage/local-bindings.js";
 import type { RustOperationAttempt } from "./operation-attempts.js";

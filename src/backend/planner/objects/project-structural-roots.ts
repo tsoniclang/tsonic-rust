@@ -1,5 +1,5 @@
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
-import type { RustObjectRepresentation } from "../../../target-model/records/object-representation.js";
+import type { RustObjectRepresentation } from "../../../target-model/records/objects/object-representation.js";
 import type { RustExpr, RustType } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
@@ -12,7 +12,7 @@ import { rustGenericRequirementBounds, rustGenericsWithAssociatedBounds } from "
 import { rustAssociatedPredicates } from "../types/associated-bounds.js";
 import { closedMetadataKey } from "../../../target-model/metadata/closed-data.js";
 import { failRustPlannerInvariant } from "../diagnostics.js";
-import type { RustClassStructuralViewEmission } from "../../../target-model/records/class-implementations.js";
+import type { RustClassStructuralViewEmission } from "../../../target-model/records/objects/class-implementations.js";
 import { rustLifetimeKey } from "../../../target-model/lifetimes/index.js";
 import { rustLifetimeToAst } from "../types/lifetime-syntax.js";
 

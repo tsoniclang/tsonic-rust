@@ -1,4 +1,4 @@
-import type { RustFlowReadProjectionFact } from "../../../target-model/records/value-projections.js";
+import type { RustFlowReadProjectionFact } from "../../../target-model/records/objects/value-projections.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustProjectTypePolicy } from "../../../target-model/types/project-types.js";
 import type { RustTypeDefinitions } from "../../../target-model/types/source-union-definitions.js";

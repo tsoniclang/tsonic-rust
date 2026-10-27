@@ -6,7 +6,7 @@ import { compileRust, rustSourceText } from "../../helpers/rust-session.mjs";
 import { runCargo, writeGeneratedProject } from "../../helpers/cargo-projects.mjs";
 import { sourceCallableValueParameters } from "@tsonic/target-api/source";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
-import { rustTargetOperationFactEquals } from "../../../dist/target-model/records/operation-equality.js";
+import { rustTargetOperationFactEquals } from "../../../dist/target-model/records/operations/operation-equality.js";
 
 const examples = [
   ["implicit and inherited construction with callable fields", `

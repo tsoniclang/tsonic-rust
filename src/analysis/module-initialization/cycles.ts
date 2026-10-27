@@ -5,7 +5,7 @@ import { rejectedTargetStage, resolvedTargetStage } from "@tsonic/target-api/art
 import type { RustAnalysisContext } from "../program/context.js";
 import type { RustFactWalk } from "../program/walk.js";
 import { appendRustDiagnostic } from "../program/walk.js";
-import type { RustModuleCycleSelection } from "../../target-model/records/module-initialization.js";
+import type { RustModuleCycleSelection } from "../../target-model/records/program/module-initialization.js";
 import { stronglyConnectedSourceFiles } from "../program/module-graph.js";
 import { rustModuleInitializationIsStateIndependent } from "./independence.js";
 

@@ -1,11 +1,11 @@
 import type { Node } from "@tsonic/tsts";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { RustAnalysisProgram } from "../program/model.js";
-import type { RustClassEmissionProducer } from "../program/records/class-emission.js";
-import type { RustClassConstructorViewEmission, RustClassImplementationContext, RustClassStructuralViewEmission } from "../../target-model/records/class-implementations.js";
+import type { RustClassEmissionProducer } from "../program/records/objects/class-emission.js";
+import type { RustClassConstructorViewEmission, RustClassImplementationContext, RustClassStructuralViewEmission } from "../../target-model/records/objects/class-implementations.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
-import type { RustProjectGenericEmission } from "../../target-model/records/project-emission.js";
-import type { RustClassValueCallable } from "../../target-model/records/class-value-callables.js";
+import type { RustProjectGenericEmission } from "../../target-model/records/program/project-emission.js";
+import type { RustClassValueCallable } from "../../target-model/records/callables/class-value-callables.js";
 import type { RustLifetimeRef } from "../../target-model/lifetimes/model.js";
 import { rustLifetimeKey } from "../../target-model/lifetimes/index.js";
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";

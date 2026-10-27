@@ -3,8 +3,8 @@ import { rustProgramNodeIsOutsideNativeCode } from "../control-flow/compile-time
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import { BinaryExpression_Left, ElementAccessExpression_ArgumentExpression, Node_Expression, Node_Operand, sourceEnclosingCallable } from "@tsonic/target-api/source";
 import type { RustAnalysisProgram } from "../program/model.js";
-import type { RustLocationStorageProducer } from "../program/records/location-storage.js";
-import type { RustLocationProjection } from "../../target-model/records/location-storage.js";
+import type { RustLocationStorageProducer } from "../program/records/storage/location-storage.js";
+import type { RustLocationProjection } from "../../target-model/records/storage/location-storage.js";
 import { rustIndexedLocationContract } from "../../policy/operations/members/abi/indexed-location.js";
 import { isRustFinalizedSourceInput } from "../../target-model/operations/finalized-inputs.js";
 

@@ -5,7 +5,7 @@ import { jsOperationRows } from "../../../dist/policy/operations/source-profiles
 import { resolveCarrierRef } from "../../../dist/policy/operations/source-profiles/js/carrier-references.js";
 import { selectJsSurfaceOperation } from "../../../dist/policy/operations/source-profiles/js/index.js";
 import { rustJsErrorTargetType, rustStringTargetType } from "../../../dist/target-model/types/index.js";
-import { finalizeProviderOperationFact } from "../../../dist/analysis/program/records/provider-operations.js";
+import { finalizeProviderOperationFact } from "../../../dist/analysis/program/records/native/provider-operations.js";
 import { emptyRustTypeDefinitions } from "../../../dist/target-model/types/source-union-definitions.js";
 
 test("every JSON serializer overload retains the actual runtime error while parse retains its native JS error", () => {

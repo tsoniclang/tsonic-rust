@@ -1,7 +1,7 @@
 import type { Node } from "@tsonic/tsts";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { RustAnalysisProgram } from "../program/model.js";
-import type { RustErrorEmissionProducer } from "../program/records/error-emission.js";
+import type { RustErrorEmissionProducer } from "../program/records/errors/error-emission.js";
 import { selectRustPhysicalProgramErrorOwner } from "./error-types.js";
 import { closedMetadataEquals } from "../../target-model/metadata/closed-data.js";
 import { rustProgramErrorTargetType } from "../../target-model/types/index.js";

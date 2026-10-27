@@ -2,15 +2,15 @@ import type { Node } from "@tsonic/tsts";
 import { Node_Expression, BinaryExpression_Left, BinaryExpression_Right,
   ElementAccessExpression_ArgumentExpression, asSourceNode } from "@tsonic/target-api/source";
 import { rustFinalizedSourceInputs } from "../../target-model/operations/finalized-inputs.js";
-import type { RustFinalizedSourceInput } from "../../target-model/records/finalized-operation.js";
+import type { RustFinalizedSourceInput } from "../../target-model/records/operations/finalized-operation.js";
 import { providerSourceInputKey, providerSourceInputNode } from "../operations/provider-source-inputs.js";
 
-import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
+import type { RustTargetOperationFact } from "../../target-model/records/operations/operations.js";
 import { rustTargetOperationIsDirectLocation } from "../../policy/operations/members/native-contracts.js";
 import { rustNativeStoragePathsDisjoint, rustNativeStorageProjections, rustNativeStorageRoot } from "./native-paths.js";
 import type { RustNativeStoragePathInput, RustNativeStorageProjection } from "./native-paths.js";
 import { rustMemberAccessReceiver } from "../../target-model/syntax/expressions.js";
-import type { RustStatementCompletionRecords } from "../../target-model/records/statement-completion.js";
+import type { RustStatementCompletionRecords } from "../../target-model/records/operations/statement-completion.js";
 
 type ProviderOperation = Extract<RustTargetOperationFact, { readonly kind: "provider-operation" | "runtime-set" }>;
 

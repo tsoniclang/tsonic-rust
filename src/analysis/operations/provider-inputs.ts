@@ -1,8 +1,8 @@
 import type { Node } from "@tsonic/tsts";
 import { failTargetAnalysisInvariant, type TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustAnalysisProgram } from "../program/model.js";
-import type { RustProviderInputProducer } from "../program/records/provider-inputs.js";
-import type { RustFinalizedSourceInput } from "../../target-model/records/finalized-operation.js";
+import type { RustProviderInputProducer } from "../program/records/native/provider-inputs.js";
+import type { RustFinalizedSourceInput } from "../../target-model/records/operations/finalized-operation.js";
 import { rustValueCarrierTransitionTarget } from "../conversions/value-carrier-queries.js";
 import { rustCallableTargetForSourceLifetime } from "../../policy/conversions/value-carrier-reconciliation.js";
 import { rustFinalizedCarrierTransitionMatches } from "../../policy/operations/members/native-contracts.js";

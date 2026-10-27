@@ -2,9 +2,9 @@ import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
-import type { RustSourcePackageComponentClassifications } from "../../target-model/records/source-package-semantics.js";
+import type { RustSourcePackageComponentClassifications } from "../../target-model/records/program/source-package-semantics.js";
 import type { AnalyzeRustDispatchContextResult, RustDispatchContextAccess, RustDispatchContextCatalog, RustDispatchContextComposition } from "./dispatch-contexts.js";
-import type { RustFinalizedDispatchContextInput, RustFinalizedOperationAbi } from "../../target-model/records/finalized-operation.js";
+import type { RustFinalizedDispatchContextInput, RustFinalizedOperationAbi } from "../../target-model/records/operations/finalized-operation.js";
 import type { RustDispatchContextProjection } from "../../target-model/operations/dispatch-contexts.js";
 import { isRustFinalizedDispatchContextInput } from "../../target-model/operations/finalized-inputs.js";
 

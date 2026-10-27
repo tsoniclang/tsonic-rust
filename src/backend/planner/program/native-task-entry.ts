@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
-import type { RustInitializerSelection, RustLifecycleErrorSelection } from "../../../target-model/records/error-regions.js";
-import type { RustNativeTaskUse } from "../../../target-model/records/native-tasks.js";
+import type { RustInitializerSelection, RustLifecycleErrorSelection } from "../../../target-model/records/errors/error-regions.js";
+import type { RustNativeTaskUse } from "../../../target-model/records/native/native-tasks.js";
 import type { RustExpr, RustStmt, RustType } from "../../target-ast/syntax/nodes.js";
 import type { RustTypeRenderingContext } from "../types/render.js";
 import { failRustPlannerInvariant } from "../diagnostics.js";

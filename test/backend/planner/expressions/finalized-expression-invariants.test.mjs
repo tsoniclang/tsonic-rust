@@ -11,7 +11,7 @@ import { planRustPromotedStorageWrite } from "../../../../dist/backend/planner/e
 import { planRustCallArguments } from "../../../../dist/backend/planner/expressions/input-shaping.js";
 import { planExpression } from "../../../../dist/backend/planner/expressions/entry.js";
 import { analyzeRustDirectStorage } from "../../../../dist/analysis/storage/direct-storage.js";
-import { createRustDirectStorageProducer } from "../../../../dist/analysis/program/records/direct-storage.js";
+import { createRustDirectStorageProducer } from "../../../../dist/analysis/program/records/storage/direct-storage.js";
 
 let fixture;
 function checkedProgram() {

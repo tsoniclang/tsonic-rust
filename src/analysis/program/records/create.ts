@@ -1,4 +1,4 @@
-import { assertRustRequiredRecords, type RustRequiredRecord } from "./required-records.js";
+import { assertRustRequiredRecords, type RustRequiredRecord } from "./objects/required-records.js";
 import type { RustProgramRecordBuilder } from "./model.js";
 import type { RustAnalysisRecords } from "../../../target-model/records/analysis.js";
 import type { RustProgramRecords } from "../../../target-model/records/program.js";
@@ -6,8 +6,8 @@ import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../../tar
 import { maximumRustFoundation, type RustFoundation } from "../../../target-model/foundation/model.js";
 
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
-import { createRustSourceRecordProducers } from "./source-producers.js";
-import { createRustEmissionRecordProducers } from "./emission-producers.js";
+import { createRustSourceRecordProducers } from "./program/source-producers.js";
+import { createRustEmissionRecordProducers } from "./program/emission-producers.js";
 
 export function createRustProgramRecordBuilder(
   definitions: RustTypeDefinitions = emptyRustTypeDefinitions, parent?: RustAnalysisRecords,

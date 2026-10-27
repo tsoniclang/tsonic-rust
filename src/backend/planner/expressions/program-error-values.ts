@@ -1,7 +1,7 @@
 import type { Node } from "@tsonic/tsts";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
-import type { RustSourcePackageErrorBoundary } from "../../../target-model/records/source-package-errors.js";
-import type { RustClosedErrorPayloadEmission, RustClosedErrorValueEmission } from "../../../target-model/records/error-transport.js";
+import type { RustSourcePackageErrorBoundary } from "../../../target-model/records/errors/source-package-errors.js";
+import type { RustClosedErrorPayloadEmission, RustClosedErrorValueEmission } from "../../../target-model/records/errors/error-transport.js";
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../names/synthetic.js";

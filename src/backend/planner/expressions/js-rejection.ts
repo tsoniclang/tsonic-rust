@@ -1,6 +1,6 @@
 import { failRustPlannerInvariant } from "../diagnostics.js";
 import type { Node } from "@tsonic/tsts";
-import { rustJsRejectionErrorIdentity } from "../../../target-model/records/error-effects.js";
+import { rustJsRejectionErrorIdentity } from "../../../target-model/records/errors/error-effects.js";
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { rustInjectNativeError, rustPropagateNativeError } from "../program/fallible-boundaries.js";

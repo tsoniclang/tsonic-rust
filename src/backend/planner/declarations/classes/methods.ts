@@ -26,12 +26,12 @@ import { rustProjectGenerics } from "../../objects/polymorphism/names.js";
 import { emptyRustGenerics } from "../../../target-ast/syntax/nodes.js";
 import { planRustGeneratorBody } from "../callables/generator-body.js";
 import { rustClassEnvironmentType } from "../../objects/class-environment-types.js";
-import type { RustMethodEmissionVariant } from "../../../../target-model/records/method-emission.js";
+import type { RustMethodEmissionVariant } from "../../../../target-model/records/program/method-emission.js";
 import { planRustSuspendedReceiver } from "../callables/suspended-receiver.js";
 import { planRustPromiseBodyObjectAdapter, rustPromiseBodyGenericArguments } from "../callables/promise-body-adapters.js";
-import type { RustSourceCallableSpecializationVariant } from "../../../../target-model/records/callable-emission.js";
+import type { RustSourceCallableSpecializationVariant } from "../../../../target-model/records/callables/callable-emission.js";
 import { planRustNativeTaskOwner } from "../../program/native-tasks.js";
-import type { RustCallableEntryHeaderVariant } from "../../../../target-model/records/callable-entry-headers.js";
+import type { RustCallableEntryHeaderVariant } from "../../../../target-model/records/callables/callable-entry-headers.js";
 
 export function planProjectMethod(
   member: Node,
@@ -40,7 +40,7 @@ export function planProjectMethod(
     readonly targetName?: string;
     readonly safetyPlacement?: "getter" | "setter";
     readonly headerVariant?: RustCallableEntryHeaderVariant;
-    readonly fallibleBoundary?: import("../../../../target-model/records/source-package-errors.js").RustSourcePackageErrorBoundary;
+    readonly fallibleBoundary?: import("../../../../target-model/records/errors/source-package-errors.js").RustSourcePackageErrorBoundary;
     readonly promiseBody?: true;
     readonly specialization?: RustSourceCallableSpecializationVariant;
   },

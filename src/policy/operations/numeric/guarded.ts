@@ -1,5 +1,5 @@
 import type { Node } from "@tsonic/tsts";
-import type { RustIntegerRangeIndex } from "../../../target-model/records/integer-ranges.js";
+import type { RustIntegerRangeIndex } from "../../../target-model/records/operations/integer-ranges.js";
 
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustSourcePrimitiveTargetType } from "../../../target-model/types/index.js";

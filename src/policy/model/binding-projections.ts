@@ -1,5 +1,5 @@
 import type { TargetTypeRef } from "../../target-model/types/model.js";
-import type { RustBindingValueProjectionFact } from "../../target-model/records/value-projections.js";
+import type { RustBindingValueProjectionFact } from "../../target-model/records/objects/value-projections.js";
 
 export interface RustBindingProjectionPolicyInput {
   readonly fact: RustBindingValueProjectionFact;

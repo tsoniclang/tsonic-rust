@@ -1,13 +1,13 @@
 import type { Node } from "@tsonic/tsts";
-import type { RustFlowReadProjectionFact } from "../../../target-model/records/value-projections.js";
-import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
+import type { RustFlowReadProjectionFact } from "../../../target-model/records/objects/value-projections.js";
+import type { RustTargetOperationFact } from "../../../target-model/records/operations/operations.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustExpr, RustPattern } from "../../target-ast/syntax/nodes.js";
 import { rustCurrentErrorBoundary } from "../program/plan-context.js";
 import { failRustPlannerInvariant } from "../diagnostics.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
-import type { RustSourcePackageErrorRoute } from "../../../target-model/records/source-package-errors.js";
+import type { RustSourcePackageErrorRoute } from "../../../target-model/records/errors/source-package-errors.js";
 import { checkedProjectProjectionResultType, planCheckedProjectProjectionCall } from "../objects/checked-project-projections.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { rustValueBlock } from "../../target-ast/syntax/value-block.js";

@@ -7,11 +7,11 @@ import type { RustLifetimeIndex } from "../../target-model/lifetimes/index.js";
 import type { TsonicPointerReturnQueries, TsonicMemoryBindingIndex } from "@tsonic/source-core/facts";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import type { SourceStorageQueries } from "@tsonic/target-api/analysis";
-import type { RustSourceCallableQueries } from "../../target-model/records/source-callables.js";
-import type { RustRetainedEnvironmentQueries } from "../../target-model/records/retained-environments.js";
+import type { RustSourceCallableQueries } from "../../target-model/records/callables/source-callables.js";
+import type { RustRetainedEnvironmentQueries } from "../../target-model/records/callables/retained-environments.js";
 
 export interface RustSourcePolicyContext {
-  readonly integerRanges: import("../../target-model/records/integer-ranges.js").RustIntegerRangeIndex;
+  readonly integerRanges: import("../../target-model/records/operations/integer-ranges.js").RustIntegerRangeIndex;
   readonly callableRepresentation: "signature" | "storage" | "construction";
   readonly typeDefinitions: RustTypeDefinitions;
   readonly source: TargetSourceProgram;

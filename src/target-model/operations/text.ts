@@ -1,4 +1,4 @@
-import type { RustTargetOperationFact } from "../records/operations.js";
+import type { RustTargetOperationFact } from "../records/operations/operations.js";
 
 export function rustTargetOperationText(fact: RustTargetOperationFact): string {
   if (fact.kind === "provider-operation") {

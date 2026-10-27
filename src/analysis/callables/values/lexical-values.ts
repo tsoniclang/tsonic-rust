@@ -1,9 +1,9 @@
 import type { Node } from "@tsonic/tsts";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { RustAnalysisProgram } from "../../program/model.js";
-import type { RustLexicalValueProducer } from "../../program/records/lexical-values.js";
-import type { RustLexicalValueDeclaration } from "../../../target-model/records/lexical-values.js";
-import { rustSourceCallableValueEquals } from "../../../target-model/records/equality.js";
+import type { RustLexicalValueProducer } from "../../program/records/storage/lexical-values.js";
+import type { RustLexicalValueDeclaration } from "../../../target-model/records/storage/lexical-values.js";
+import { rustSourceCallableValueEquals } from "../../../target-model/records/operations/equality.js";
 
 export function analyzeRustLexicalValues(input: {
   readonly program: Pick<RustAnalysisProgram, "sourceNavigation" | "lexicalFunctions" | "names" | "records">;

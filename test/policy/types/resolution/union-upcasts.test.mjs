@@ -1,4 +1,4 @@
-import { rustFlowReadProjectionEquals } from "../../../../dist/target-model/records/equality.js";
+import { rustFlowReadProjectionEquals } from "../../../../dist/target-model/records/operations/equality.js";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createRustRecordFixture } from "../../../helpers/records.mjs";
@@ -6,7 +6,7 @@ import { selectRustValueCarrierReconciliation, selectRustFlowReadProjection } fr
 import { rustFlowReadProjectionMatches } from "../../../../dist/analysis/control-flow/flow-read-projections.js";
 
 import { selectRustCallableValueAdapter } from "../../../../dist/policy/conversions/callable-adapters.js";
-import { recordRustValueCarrierReconciliation } from "../../../../dist/analysis/program/records/value-carrier-admission.js";
+import { recordRustValueCarrierReconciliation } from "../../../../dist/analysis/program/records/types/value-carrier-admission.js";
 import { createRustProgramRecordBuilder } from "../../../../dist/analysis/program/records/create.js";
 import { rustEffectiveValueCarrier } from "../../../../dist/analysis/conversions/value-carrier-queries.js";
 

@@ -1,11 +1,11 @@
 import type { Node, SourceFile } from "@tsonic/tsts";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustPlanningContext } from "../context.js";
-import type { RustCallableEntryHeaderPlacement, RustCallableEntryHeaderSelection } from "../../../target-model/records/callable-entry-headers.js";
-import type { RustGeneratorFact } from "../../../target-model/records/callables-and-resources.js";
-import type { RustSourceBindingFact } from "../../../target-model/records/value-projections.js";
-import type { RustConstructionLayer } from "../../../target-model/records/construction.js";
-import type { RustProviderFormEmission } from "../../../target-model/records/provider-forms.js";
+import type { RustCallableEntryHeaderPlacement, RustCallableEntryHeaderSelection } from "../../../target-model/records/callables/callable-entry-headers.js";
+import type { RustGeneratorFact } from "../../../target-model/records/callables/callables-and-resources.js";
+import type { RustSourceBindingFact } from "../../../target-model/records/objects/value-projections.js";
+import type { RustConstructionLayer } from "../../../target-model/records/objects/construction.js";
+import type { RustProviderFormEmission } from "../../../target-model/records/native/provider-forms.js";
 
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustSyntheticNameState } from "../names/synthetic.js";
@@ -13,10 +13,10 @@ import type { RustObjectLiteralImplementationRegistry } from "../objects/object-
 import type { RustFrameOwner } from "./frame-owners.js";
 import type { RustBlockPlanner } from "../statements/model.js";
 import { resolveRustSourcePackageErrorBoundary } from "./source-package-errors.js";
-import type { RustSourcePackageErrorBoundary, RustSourcePackageErrorPlan } from "../../../target-model/records/source-package-errors.js";
+import type { RustSourcePackageErrorBoundary, RustSourcePackageErrorPlan } from "../../../target-model/records/errors/source-package-errors.js";
 import { rustSourceItemIdentity } from "../../../target-model/names/source-output-identities.js";
 import type { RustFallibleBoundary } from "./fallible-boundaries.js";
-import type { RustNativeTaskScope } from "../../../target-model/records/native-tasks.js";
+import type { RustNativeTaskScope } from "../../../target-model/records/native/native-tasks.js";
 import type { RustErrorDomain } from "../../../target-model/operations/error-boundary.js";
 import type { RustExpr, RustItem, RustStmt, RustType } from "../../target-ast/syntax/nodes.js";
 import {
@@ -145,7 +145,7 @@ export interface RustPlanContext {
   };
   readonly valueFieldLocations?: ReadonlyMap<Node, import("../objects/value-fields.js").RustValueFieldLocation>;
   readonly bindingLocations?: ReadonlyMap<Node, import("../objects/value-fields.js").RustValueFieldLocation>;
-  readonly frameOwners?: ReadonlyMap<import("../../../target-model/records/frame-callables.js").RustFrameCallableDefinition, RustFrameOwner>;
+  readonly frameOwners?: ReadonlyMap<import("../../../target-model/records/callables/frame-callables.js").RustFrameCallableDefinition, RustFrameOwner>;
   readonly capturedFieldOwners?: ReadonlyMap<Node, RustExpr>;
   readonly capturedFieldIdentities?: ReadonlyMap<Node, RustExpr>;
   readonly flowReadOverrides?: ReadonlyMap<Node, RustFlowReadOverride>;

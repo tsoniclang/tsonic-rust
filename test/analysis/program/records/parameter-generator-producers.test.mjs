@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { assertRustInheritedRecordConflict, assertRustInheritedRecordCorrespondence } from "../../../helpers/records.mjs";
 import test from "node:test";
 import { createRustProgramRecordBuilder } from "../../../../dist/analysis/program/records/create.js";
-import { createRustSourceParameterAbiProducer } from "../../../../dist/analysis/program/records/source-parameter-abi.js";
+import { createRustSourceParameterAbiProducer } from "../../../../dist/analysis/program/records/calls/source-parameter-abi.js";
 import { getRustGeneratorProtocol, rustGeneratorTargetType, rustAsyncGeneratorTargetType, rustStringTargetType } from "../../../../dist/target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../../dist/target-model/types/equality.js";
 import { selectRustSourceValueConversion } from "../../../../dist/policy/conversions/selection.js";

@@ -3,7 +3,7 @@ import test from "node:test";
 import { compileRust } from "../../helpers/rust-session.mjs";
 import { analyzeRustAnalysisProgram } from "../../../dist/analysis/program/target-program.js";
 import { analyzeRustObjectLiteralEmission } from "../../../dist/analysis/objects/object-literal-emission.js";
-import { createRustObjectLiteralEmissionProducer } from "../../../dist/analysis/program/records/object-literal-emission.js";
+import { createRustObjectLiteralEmissionProducer } from "../../../dist/analysis/program/records/objects/object-literal-emission.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 
 function analyze(body) {

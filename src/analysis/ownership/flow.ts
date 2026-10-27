@@ -1,12 +1,12 @@
-import type { RustOwnershipFlow } from "../../target-model/records/ownership-flow.js";
+import type { RustOwnershipFlow } from "../../target-model/records/storage/ownership-flow.js";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { Node } from "@tsonic/tsts";
 import { analyzeSourceLiveness, createSourceControlFlow, type SourceControlFlowGraph, type SourceFlowLivenessSelection, type SourceFlowLimits, type SourceStorageQueries } from "@tsonic/target-api/analysis";
 import { Node_Expression, isSourceCallableBodyBoundary, sourceEnclosingCallable, sourceExpressionResultDisposition, sourceNodesEqual, sourceParameterIsProperty, sourceTransparentExpressionOperand, type TargetSourceProgram } from "@tsonic/target-api/source";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
-import type { RustClosureCaptureFact } from "../../target-model/records/operation-selections.js";
-import type { RustLexicalFunctionCapture, RustLexicalFunctionQueries } from "../../target-model/records/lexical-functions.js";
-import type { RustReadUse } from "../../target-model/records/ownership.js";
+import type { RustClosureCaptureFact } from "../../target-model/records/operations/operation-selections.js";
+import type { RustLexicalFunctionCapture, RustLexicalFunctionQueries } from "../../target-model/records/callables/lexical-functions.js";
+import type { RustReadUse } from "../../target-model/records/storage/ownership.js";
 
 export interface RustOwnershipFlowInput {
   readonly source: TargetSourceProgram;

@@ -7,7 +7,7 @@ import { selectRustSourceValueConversion } from "../../../conversions/selection.
 import { rustCallableTargetForSourceLifetime } from "../../../conversions/value-carrier-reconciliation.js";
 import { isFinalizedConversion } from "./conversion-shape.js";
 import type { RustArgumentMode, RustProviderOperationForm, RustValueConversion } from "../../../../target-model/operations/model.js";
-import type { RustFinalizedSourceInput, RustFinalizedValueConversion } from "../../../../target-model/records/finalized-operation.js";
+import type { RustFinalizedSourceInput, RustFinalizedValueConversion } from "../../../../target-model/records/operations/finalized-operation.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 
 export function sourceInput(

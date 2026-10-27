@@ -12,7 +12,7 @@ import { rustFutureTargetType } from "../../../../dist/target-model/types/index.
 import { planRustProviderEvaluationScope } from "../../../../dist/backend/planner/project/provider-evaluation-scope.js";
 import { selectRustProviderSourceOccurrence } from "../../../../dist/analysis/operations/provider-source-inputs.js";
 import { analyzeRustProviderEvaluation } from "../../../../dist/analysis/storage/provider-evaluation.js";
-import { createRustProviderEvaluationProducer } from "../../../../dist/analysis/program/records/provider-evaluation.js";
+import { createRustProviderEvaluationProducer } from "../../../../dist/analysis/program/records/native/provider-evaluation.js";
 import { analyzeRustProviderMutableEmission } from "../../../../dist/analysis/storage/provider-mutable-emission.js";
 
 for (const surfaces of [[], ["js"]]) {

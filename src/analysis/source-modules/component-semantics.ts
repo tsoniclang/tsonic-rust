@@ -1,4 +1,4 @@
-import type { RustSourcePackageComponentSemantics, RustSourcePackageComponentClassifications, RustSourcePackageComponentIdentities } from "../../target-model/records/source-package-semantics.js";
+import type { RustSourcePackageComponentSemantics, RustSourcePackageComponentClassifications, RustSourcePackageComponentIdentities } from "../../target-model/records/program/source-package-semantics.js";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
 import type { TargetCompileInput } from "@tsonic/target-api";
@@ -10,8 +10,8 @@ import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustClosedErrorTransportDemand } from "../errors/closed-errors.js";
 
-import type { RustNativeStorageSelection } from "../../target-model/records/native-storage.js";
-import type { RustErrorEffectsFact } from "../../target-model/records/error-effects.js";
+import type { RustNativeStorageSelection } from "../../target-model/records/native/native-storage.js";
+import type { RustErrorEffectsFact } from "../../target-model/records/errors/error-effects.js";
 import { IsTypeSyntaxNode } from "@tsonic/target-api/source";
 
 export type AnalyzeRustSourcePackageComponentsResult =

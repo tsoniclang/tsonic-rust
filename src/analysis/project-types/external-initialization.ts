@@ -11,7 +11,7 @@ import { snapshotClosedMetadata } from "../../target-model/metadata/closed-data.
 import { rustValueCarrierTransitionTarget } from "../conversions/value-carrier-queries.js";
 import { rustFinalizedCarrierTransitionMatches } from "../../policy/operations/members/native-contracts.js";
 
-import type { RustExternalInitialization } from "../../target-model/records/construction.js";
+import type { RustExternalInitialization } from "../../target-model/records/objects/construction.js";
 
 export function selectRustExternalInitialization(
   base: RustExternalProjectBase,

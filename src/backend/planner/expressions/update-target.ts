@@ -13,8 +13,8 @@ import { planRustProjectFieldDispatchRoles } from "../objects/project-field-disp
 import type { Node } from "@tsonic/tsts";
 import type { RustEffectiveExpressionOverride, RustPlanContext } from "../program/plan-context.js";
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
-import type { RustFinalizedSourceInput } from "../../../target-model/records/finalized-operation.js";
-import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
+import type { RustFinalizedSourceInput } from "../../../target-model/records/operations/finalized-operation.js";
+import type { RustTargetOperationFact } from "../../../target-model/records/operations/operations.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { planRustDirectStorageCore } from "./update-direct-storage.js";
 

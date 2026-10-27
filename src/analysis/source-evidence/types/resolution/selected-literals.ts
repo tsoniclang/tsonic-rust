@@ -1,5 +1,5 @@
 import type { RustOperationAnalysisContext } from "../../../program/operation-context.js";
-import { requireRustRecord } from "../../../program/records/required-records.js";
+import { requireRustRecord } from "../../../program/records/objects/required-records.js";
 import type { ExtensionFactSubject, Node } from "@tsonic/tsts";
 
 import type { RustOperationsProviderOptions } from "../../../operations/members/model.js";
@@ -9,11 +9,11 @@ import { isRustNumericLiteralCarrier, selectedSourceLiteralIsRepresentable, sele
 
 import { rustPostCheckUnaryMinusOperationId, rustPostCheckUnaryPlusOperationId } from "../../../../target-model/operations/model.js";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
-import { rustEnumLiteralFact, rustUnaryMinusLiteralFact, rustUnaryPlusLiteralFact } from "../../../program/records/target-operation-literals.js";
-import { rustSelectedOperatorOperation } from "../../../program/records/selected-operation-values.js";
-import type { RustTargetOperationFact } from "../../../../target-model/records/operations.js";
-import { rustTargetOperationFactEquals } from "../../../../target-model/records/operation-equality.js";
-import { rustSelectedTargetOperationEquals } from "../../../../target-model/records/operation-equality.js";
+import { rustEnumLiteralFact, rustUnaryMinusLiteralFact, rustUnaryPlusLiteralFact } from "../../../program/records/operations/target-operation-literals.js";
+import { rustSelectedOperatorOperation } from "../../../program/records/operations/selected-operation-values.js";
+import type { RustTargetOperationFact } from "../../../../target-model/records/operations/operations.js";
+import { rustTargetOperationFactEquals } from "../../../../target-model/records/operations/operation-equality.js";
+import { rustSelectedTargetOperationEquals } from "../../../../target-model/records/operations/operation-equality.js";
 import { rustEffectiveValueCarrier } from "../../../conversions/value-carrier-queries.js";
 
 export function sourceLiteralIsRepresentableAsPrimitive(

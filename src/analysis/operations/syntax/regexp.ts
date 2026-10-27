@@ -1,4 +1,4 @@
-import { requireRustRecord } from "../../program/records/required-records.js";
+import { requireRustRecord } from "../../program/records/objects/required-records.js";
 import { setCarrierFact } from "../project-calls.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustFactWalk } from "../../program/walk.js";

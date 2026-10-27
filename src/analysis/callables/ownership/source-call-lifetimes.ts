@@ -1,5 +1,5 @@
 import type { RustTargetGenericArgument, TargetTypeRef } from "../../../target-model/types/model.js";
-import type { RustSelectedTargetSignature } from "../../../target-model/records/member-selections.js";
+import type { RustSelectedTargetSignature } from "../../../target-model/records/operations/member-selections.js";
 import type { RustLifetimeRef } from "../../../target-model/lifetimes/index.js";
 import { rustLifetimeKey, rustLifetimesEqual, rustPlaceholderLifetime } from "../../../target-model/lifetimes/index.js";
 import { inferRustTargetGenericBindings } from "../../../target-model/types/carriers/generic-inference.js";

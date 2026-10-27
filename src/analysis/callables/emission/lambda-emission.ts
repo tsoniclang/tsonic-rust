@@ -3,8 +3,8 @@ import { asSourceNode, BinaryExpression_Left, BinaryExpression_Right } from "@ts
 import { rustProgramNodeIsOutsideNativeCode } from "../../control-flow/compile-time-statements.js";
 import { failTargetAnalysisInvariant, type TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustAnalysisProgram } from "../../program/model.js";
-import type { RustLambdaEmissionProducer } from "../../program/records/lambda-emission.js";
-import type { RustLambdaParameterEmission } from "../../../target-model/records/lambda-emission.js";
+import type { RustLambdaEmissionProducer } from "../../program/records/callables/lambda-emission.js";
+import type { RustLambdaParameterEmission } from "../../../target-model/records/callables/lambda-emission.js";
 import { rustCallableProtocol, rustClosureProtocol, isRustUnitCarrier } from "../../../target-model/types/index.js";
 import { rustCallableInputProtocol } from "../../../target-model/types/carriers/callables.js";
 import { rustGenericCallableValue } from "../../../target-model/types/carriers/generic-callables.js";

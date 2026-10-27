@@ -1,10 +1,10 @@
 import { selectTargetNativeHandler } from "@tsonic/target-api/analysis";
 import type { SourceMarkerFact } from "@tsonic/tsts";
-import type { RustMemoryBindingPlan } from "../../../target-model/records/memory-bindings.js";
-import type { RustNativeHandler } from "../../../target-model/records/native-handlers.js";
-import type { RustNativePointerOperationSelection } from "../../../target-model/records/native-pointers.js";
-import type { RustSafetyOperation } from "../../../target-model/records/safety.js";
-import type { RustTargetOperationFact, RustTypedLocationPlan } from "../../../target-model/records/operations.js";
+import type { RustMemoryBindingPlan } from "../../../target-model/records/storage/memory-bindings.js";
+import type { RustNativeHandler } from "../../../target-model/records/native/native-handlers.js";
+import type { RustNativePointerOperationSelection } from "../../../target-model/records/native/native-pointers.js";
+import type { RustSafetyOperation } from "../../../target-model/records/storage/safety.js";
+import type { RustTargetOperationFact, RustTypedLocationPlan } from "../../../target-model/records/operations/operations.js";
 
 export function selectRustNativeHandler(
   memoryBinding: RustMemoryBindingPlan | undefined,

@@ -17,7 +17,7 @@ import { rustLifetimesEqual } from "../../../target-model/lifetimes/index.js";
 import { closedMetadataKey } from "../../../target-model/metadata/closed-data.js";
 
 import { rustInfallibleTargetId } from "../../../target-model/types/carriers/source-types.js";
-import type { RustDeferredProducerChannel } from "../../../target-model/records/deferred-producer-effects.js";
+import type { RustDeferredProducerChannel } from "../../../target-model/records/errors/deferred-producer-effects.js";
 import type { RustNativeCallableInputPlan } from "./native-inputs.js";
 import { createRustNativeOutwardResults } from "./native-outward-results.js";
 import { mapRustTargetTypes } from "../../../target-model/types/carriers/substitution.js";
@@ -256,6 +256,6 @@ export function createRustNativeCallableProducerPlan(input: {
   });
 }
 
-import type { RustNativeCallableProducer, RustNativeCallableProducerPlan } from "../../../target-model/records/native-producers.js";
-import { sealRustNativeCallableProducers } from "../../program/records/native-producers.js";
+import type { RustNativeCallableProducer, RustNativeCallableProducerPlan } from "../../../target-model/records/native/native-producers.js";
+import { sealRustNativeCallableProducers } from "../../program/records/native/native-producers.js";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";

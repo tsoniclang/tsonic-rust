@@ -5,7 +5,7 @@ import { analyzeRust } from "../../../helpers/rust-session.mjs";
 
 import { planBinaryExpression } from "../../../../dist/backend/planner/expressions/binary.js";
 import { analyzeRustOptionEquality } from "../../../../dist/analysis/operations/option-equality.js";
-import { createRustOptionEqualityProducer } from "../../../../dist/analysis/program/records/option-equality.js";
+import { createRustOptionEqualityProducer } from "../../../../dist/analysis/program/records/operations/option-equality.js";
 import { createRustSyntheticNameState } from "../../../../dist/backend/planner/names/synthetic.js";
 import { rustOptionTargetType, rustStringTargetType, rustSourcePrimitiveTargetType } from "../../../../dist/target-model/types/index.js";
 import { optionalArrayComparisonSource } from "../../../../../tsonic/test/fixtures/optional-array-comparisons.mjs";

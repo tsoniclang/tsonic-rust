@@ -2,7 +2,7 @@ import type { Node } from "@tsonic/tsts";
 import type { RustExplicitUnsafeContexts } from "../../safety/explicit-regions.js";
 import { Node_Expression, Node_Initializer, sourceDeclarationIsModuleScoped, sourceLexicalCaptures, sourceMayReadBeforeInitialization, type TargetSourceProgram } from "@tsonic/target-api/source";
 
-import type { RustSourceLexicalCallableQueries } from "../../../target-model/records/source-callables.js";
+import type { RustSourceLexicalCallableQueries } from "../../../target-model/records/callables/source-callables.js";
 
 export function createRustSourceLexicalCallableQueries(source: TargetSourceProgram, nodes: readonly Node[],
   explicitUnsafe: RustExplicitUnsafeContexts): RustSourceLexicalCallableQueries {

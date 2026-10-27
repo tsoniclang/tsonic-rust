@@ -1,9 +1,9 @@
-import type { RustBorrowEffects } from "../../target-model/records/ownership-effects.js";
+import type { RustBorrowEffects } from "../../target-model/records/storage/ownership-effects.js";
 import type { AstReader, Node, ReadonlySourceFactResolver } from "@tsonic/tsts";
 import { BinaryExpression_Left, BinaryExpression_Right, Node_Expression, Node_Operand, sourceBindingHasMutableExposure, sourceEnclosingCallable, sourceTransparentExpressionOperand } from "@tsonic/target-api/source";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 
-import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
+import type { RustTargetOperationFact } from "../../target-model/records/operations/operations.js";
 import { rustStructuralObjectCarrierValue } from "../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import type { RustAnalysisProgram } from "../program/model.js";
@@ -19,7 +19,7 @@ import { rustCallArgumentMode } from "../callables/values/parameter-passing.js";
 
 type StoredField = Extract<RustTargetOperationFact, { readonly kind: "source-field" }>;
 
-import type { RustBorrowedFieldWrite, RustReadUse } from "../../target-model/records/ownership.js";
+import type { RustBorrowedFieldWrite, RustReadUse } from "../../target-model/records/storage/ownership.js";
 
 export interface RustBorrowEffectsInput {
   readonly ast: AstReader;

@@ -3,7 +3,7 @@ import test from "node:test";
 import { planRustRecordSpread } from "../../../../dist/backend/planner/expressions/record-spreads.js";
 import { rustOptionTargetType, rustStructuralObjectTargetType } from "../../../../dist/target-model/types/index.js";
 import { analyzeRustRecordContributions, admitRustRecordContributions, rustRecordFinalFieldContributions, rustRecordSpreadRetainsField, rustRecordSpreadReadIsObservable } from "../../../../dist/analysis/reachability/record-contributions.js";
-import { createRustRecordContributionProducer } from "../../../../dist/analysis/program/records/record-contributions.js";
+import { createRustRecordContributionProducer } from "../../../../dist/analysis/program/records/objects/record-contributions.js";
 import { fakeAstReader, fakeStatement } from "../../../helpers/fake-compile-input.mjs";
 
 const source = rustStructuralObjectTargetType("/src/index.ts", []);

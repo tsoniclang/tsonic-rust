@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
-import type { RustFinalizedDispatchContextInput } from "../../../target-model/records/finalized-operation.js";
+import type { RustFinalizedDispatchContextInput } from "../../../target-model/records/operations/finalized-operation.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../names/synthetic.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { failRustPlannerInvariant } from "../diagnostics.js";

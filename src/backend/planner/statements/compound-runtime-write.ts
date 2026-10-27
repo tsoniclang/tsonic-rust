@@ -1,7 +1,7 @@
 import type { Node } from "@tsonic/tsts";
 
 import type { RustPlanContext } from "../program/plan-context.js";
-import type { RustAssignmentOperationPlan } from "../../../target-model/records/operator-selection.js";
+import type { RustAssignmentOperationPlan } from "../../../target-model/records/operations/operator-selection.js";
 import type { RustStmt } from "../../target-ast/syntax/nodes.js";
 import { planExpression } from "../expressions/entry.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";

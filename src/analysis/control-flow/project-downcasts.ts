@@ -6,9 +6,9 @@ import type { RustProjectDowncastFact } from "../../target-model/types/project-p
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustProjectTypePolicy } from "../../target-model/types/project-types.js";
 import { rustOptionElementCarrier } from "../../target-model/types/index.js";
-import { rustProjectDowncastEquals } from "../../target-model/records/equality.js";
+import { rustProjectDowncastEquals } from "../../target-model/records/operations/equality.js";
 import { selectRustProjectProjection } from "../../policy/types/project/project-projections.js";
-import { requireRustRecord, type RustRequiredRecord } from "../program/records/required-records.js";
+import { requireRustRecord, type RustRequiredRecord } from "../program/records/objects/required-records.js";
 
 export type RustProjectDowncastQuery = (
   requiredRecords: RustRequiredRecord[],

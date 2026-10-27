@@ -2,7 +2,7 @@ import type { Node } from "@tsonic/tsts";
 import { ForStatement_Incrementor, ForStatement_Initializer, IterationStatement_Statement,
   KindVariableDeclarationList } from "@tsonic/target-api/source";
 import type { RustBlock, RustStmt } from "../../target-ast/syntax/nodes.js";
-import type { RustCountedLoopRepresentation } from "../../../target-model/records/counted-loops.js";
+import type { RustCountedLoopRepresentation } from "../../../target-model/records/operations/counted-loops.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { planResourceDeclarations } from "./resource-management.js";

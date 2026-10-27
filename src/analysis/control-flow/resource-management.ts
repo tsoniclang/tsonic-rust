@@ -1,6 +1,6 @@
 import { KindVariableDeclaration } from "@tsonic/target-api/source";
 import { appendRustDiagnostic, rustOperationContext, type RustFactWalk } from "../program/walk.js";
-import { requireRustRecord } from "../program/records/required-records.js";
+import { requireRustRecord } from "../program/records/objects/required-records.js";
 import type { RustOperationPolicyContext } from "../../policy/model/operation-context.js";
 
 import type {
@@ -12,7 +12,7 @@ import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { closedMetadataEquals } from "../../target-model/metadata/closed-data.js";
 import { Node_Type } from "@tsonic/target-api/source";
-import type { RustResourceDisposalTarget, RustResourceManagementFact } from "../../target-model/records/callables-and-resources.js";
+import type { RustResourceDisposalTarget, RustResourceManagementFact } from "../../target-model/records/callables/callables-and-resources.js";
 import {
   isRustUnitCarrier,
   rustFutureOutputCarrier,

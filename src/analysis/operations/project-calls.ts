@@ -22,7 +22,7 @@ import { bindRustSelectedCallTypeArguments } from "../source-evidence/types/reso
 import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
-import type { RustSelectedTargetSignature } from "../../target-model/records/member-selections.js";
+import type { RustSelectedTargetSignature } from "../../target-model/records/operations/member-selections.js";
 
 import { retainRustSelectedCallableResultTemplate, retainRustSelectedSourceCallResultStorage, selectRustSourceCallResult } from "../source-evidence/types/resolution/call-results.js";
 import { rustSourceCallArgumentCarriers, rustSourceCallResultWithInputLifetimes } from "../callables/ownership/source-call-lifetimes.js";
@@ -32,13 +32,13 @@ import { rustTargetGenericReferences } from "../../target-model/types/carriers/g
 import { rustLifetimeKey, rustPlaceholderLifetime } from "../../target-model/lifetimes/index.js";
 
 import { recordRustComputedCallEvaluation } from "./computed-members.js";
-import { requireRustRecord } from "../program/records/required-records.js";
+import { requireRustRecord } from "../program/records/objects/required-records.js";
 import { rustPromiseBodyInvocationCarrier } from "../callables/async/promise-bodies.js";
 import { rustSpreadElementCarrier } from "../../target-model/operations/rest-assembly.js";
 import { rustFixedArrayCarrierValue } from "../../target-model/types/carriers/native.js";
 import { rustTargetConstInteger } from "../../target-model/types/generic-arguments.js";
 import { acceptRustPolicy } from "../../policy/model/contracts.js";
-import { selectedRustSourceCallOperation } from "../program/records/selected-call.js";
+import { selectedRustSourceCallOperation } from "../program/records/calls/selected-call.js";
 
 export function applySelectedProjectSourceCall(
   walk: RustFactWalk,

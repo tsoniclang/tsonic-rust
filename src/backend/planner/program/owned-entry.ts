@@ -1,4 +1,4 @@
-import type { RustBinaryExecution } from "../../../target-model/records/binary-execution.js";
+import type { RustBinaryExecution } from "../../../target-model/records/operations/binary-execution.js";
 import type { RustBlock, RustExpr, RustStmt, RustType } from "../../target-ast/syntax/nodes.js";
 import type { RustBinaryHookCallPlan } from "./binary-hook-contexts.js";
 import type { RustBinaryErrorPlan } from "./binary-errors.js";

@@ -3,8 +3,8 @@ import { Node_Expression, BinaryExpression_Left, BinaryExpression_Right, Conditi
   ConditionalExpression_WhenTrue, ConditionalExpression_WhenFalse, TryStatement_TryBlock, TryStatement_CatchClause,
   CatchClause_Block, TryStatement_FinallyBlock } from "@tsonic/target-api/source";
 import type { RustAnalysisProgram } from "../program/model.js";
-import type { RustCompletionBindingProducer } from "../program/records/completion-bindings.js";
-import type { RustCompletionBinding } from "../../target-model/records/completion-bindings.js";
+import type { RustCompletionBindingProducer } from "../program/records/storage/completion-bindings.js";
+import type { RustCompletionBinding } from "../../target-model/records/storage/completion-bindings.js";
 
 type Access = "read" | "write" | "none" | "exit";
 

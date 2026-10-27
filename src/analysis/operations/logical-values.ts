@@ -1,4 +1,4 @@
-import { requireRustRecord } from "../program/records/required-records.js";
+import { requireRustRecord } from "../program/records/objects/required-records.js";
 import type { Node } from "@tsonic/tsts";
 import { BinaryExpression_Left, BinaryExpression_Right, sourceBooleanShortCircuitBranch } from "@tsonic/target-api/source";
 import { finalizeValueConversion } from "../../policy/operations/members/abi/conversions.js";

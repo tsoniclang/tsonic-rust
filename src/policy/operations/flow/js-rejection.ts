@@ -1,4 +1,4 @@
-import type { RustJsRejectionConversion, RustJsRejectionRegion, RustPhysicalErrorOwner } from "../../../target-model/records/error-regions.js";
+import type { RustJsRejectionConversion, RustJsRejectionRegion, RustPhysicalErrorOwner } from "../../../target-model/records/errors/error-regions.js";
 import { rustJsValueTargetType, rustProgramErrorTargetType, isRustNeverCarrier } from "../../../target-model/types/carriers/js.js";
 import { rustProgramErrorOwner } from "../../../target-model/types/carriers/program-errors.js";
 import { rustInfallibleTargetId } from "../../../target-model/types/carriers/source-types.js";

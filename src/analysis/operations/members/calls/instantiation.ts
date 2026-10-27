@@ -1,11 +1,11 @@
 import { selectedCallSourceCarriers } from "./source-carriers.js";
 import { providerFormRequiresSourceReceiver } from "../../../../policy/operations/members/call-inputs.js";
 import { selectRustOptionalCallResult } from "./optional-results.js";
-import { requireRustRecord } from "../../../program/records/required-records.js";
+import { requireRustRecord } from "../../../program/records/objects/required-records.js";
 import type { RustOperationAnalysisContext } from "../../../program/operation-context.js";
 import { rustLifetimeGenericArgument, rustStrTargetType, rustStringTargetId, rustTargetGenericBindingsForArguments, substituteRustTargetGenerics, rustTypeGenericArgument } from "../../../../target-model/types/index.js";
 import { acceptRustPolicy } from "../../../../policy/model/contracts.js";
-import { selectedRustCallSignature } from "../../../program/records/selected-call.js";
+import { selectedRustCallSignature } from "../../../program/records/calls/selected-call.js";
 import { asNode } from "../../../../policy/identities/selected-source.js";
 
 import { materializeRustOmittedCallArguments } from "../../../../policy/types/callables/omitted-arguments.js";
@@ -13,7 +13,7 @@ import { materializeRustOmittedCallArguments } from "../../../../policy/types/ca
 import { KindCallExpression, KindNewExpression, sourceNodeIdentity, sourceConstructorParametersMatch } from "@tsonic/target-api/source";
 import { rejectSelectedOperation } from "../result.js";
 
-import { recordRustValueCarrierReconciliation } from "../../../program/records/value-carrier-admission.js";
+import { recordRustValueCarrierReconciliation } from "../../../program/records/types/value-carrier-admission.js";
 import { resolveRustTargetTypeRef } from "../../../source-evidence/types/resolution/source.js";
 
 import { rustArgumentPassingMode } from "../../../../policy/ownership/argument-passing.js";
@@ -25,7 +25,7 @@ import { selectedCallArgumentNodes, selectedCallCalleeSymbol, selectedSourceValu
 
 import { resolveRustProviderGenericArgument } from "../../../source-evidence/types/resolution/provider-arguments.js";
 import { instantiateProviderOperationTemplate } from "../../../../policy/types/callables/provider-templates.js";
-import { finalizeProviderOperationFact } from "../../../program/records/provider-operations.js";
+import { finalizeProviderOperationFact } from "../../../program/records/native/provider-operations.js";
 import { selectReceiverReferenceReborrow } from "./reference-reborrows.js";
 
 import { selectRustProviderSourceReceiver } from "../source-qualifiers.js";

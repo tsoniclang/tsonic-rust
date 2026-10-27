@@ -1,6 +1,6 @@
 import { analyzeRust } from "./rust-session.mjs";
 import { analyzeRustTypeEmission } from "../../dist/analysis/source-evidence/types/emission.js";
-import { createRustTypeEmissionProducer } from "../../dist/analysis/program/records/type-emission.js";
+import { createRustTypeEmissionProducer } from "../../dist/analysis/program/records/types/type-emission.js";
 import { createRustPlanningContext } from "../../dist/backend/planner/context.js";
 import { planRustSourcePackageComponents } from "../../dist/backend/planner/program/source-package-components.js";
 import { planRustSourcePackageErrors } from "../../dist/backend/planner/program/source-package-errors.js";
@@ -8,9 +8,9 @@ import { createRustSyntheticNameState } from "../../dist/backend/planner/names/s
 import { planBlockLike } from "../../dist/backend/planner/statements/index.js";
 import { analyzeRustProjectEmission } from "../../dist/analysis/project-types/emission.js";
 import { prepareRustProjectGenericMembership } from "../../dist/analysis/project-types/generic-membership.js";
-import { createRustProjectEmissionProducer } from "../../dist/analysis/program/records/project-emission.js";
+import { createRustProjectEmissionProducer } from "../../dist/analysis/program/records/program/project-emission.js";
 import { analyzeRustCarrierReads } from "../../dist/analysis/ownership/carrier-reads.js";
-import { createRustCarrierReadProducer } from "../../dist/analysis/program/records/carrier-reads.js";
+import { createRustCarrierReadProducer } from "../../dist/analysis/program/records/storage/carrier-reads.js";
 import { rustCallableInputAbsenceWitness } from "../../dist/target-model/types/carriers/callable-input-witness.js";
 
 // The sealed program's authored source files, in artifact order.

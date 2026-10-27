@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { selectRustProjectViewImplementations } from "../../../dist/analysis/objects/view-implementations.js";
-import { createRustClassValueRegistry } from "../../../dist/analysis/program/records/class-value-registry.js";
+import { createRustClassValueRegistry } from "../../../dist/analysis/program/records/objects/class-value-registry.js";
 import { collectRustImplicitInterfaceContracts } from "../../../dist/analysis/project-types/implicit-interfaces.js";
 import { rustSourceTypeCarrier, rustStructuralObjectTargetType } from "../../../dist/target-model/types/carriers/source-types.js";
 

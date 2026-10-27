@@ -6,9 +6,9 @@ import type { RustItem, RustType } from "../../target-ast/syntax/nodes.js";
 import { emptyRustGenerics } from "../../target-ast/syntax/nodes.js";
 import { rustItemBindingNames } from "../../target-ast/syntax/item-bindings.js";
 import { allocateRustGeneratedName } from "../../../target-model/names/generated.js";
-import type { RustSourcePackageComponentPlan } from "../../../target-model/records/source-packages.js";
+import type { RustSourcePackageComponentPlan } from "../../../target-model/records/program/source-packages.js";
 import type { RustSourcePackageCrateContentPlan } from "./source-package-crates.js";
-import type { RustSourcePackageInitializerPlan } from "../../../target-model/records/source-packages.js";
+import type { RustSourcePackageInitializerPlan } from "../../../target-model/records/program/source-packages.js";
 import type { RustTypeRenderingContext } from "../types/render.js";
 import {
   planRustCrateInitializer,
@@ -16,8 +16,8 @@ import {
   planRustModuleInitializers,
 } from "./module-initialization.js";
 import { resolveRustSourcePackageErrorBoundary } from "./source-package-errors.js";
-import type { RustSourcePackageErrorPlan } from "../../../target-model/records/source-package-errors.js";
-import type { RustInitializerErrorSelection } from "../../../target-model/records/error-regions.js";
+import type { RustSourcePackageErrorPlan } from "../../../target-model/records/errors/source-package-errors.js";
+import type { RustInitializerErrorSelection } from "../../../target-model/records/errors/error-regions.js";
 import type { RustFallibleBoundary } from "./fallible-boundaries.js";
 
 export interface RustWorkerEntryPlan {

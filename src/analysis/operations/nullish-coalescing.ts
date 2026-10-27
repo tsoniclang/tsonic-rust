@@ -3,7 +3,7 @@ import { rustProgramNodeIsOutsideNativeCode } from "../control-flow/compile-time
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import { BinaryExpression_Left, BinaryExpression_Right, Node_Expression } from "@tsonic/target-api/source";
 import type { RustAnalysisProgram } from "../program/model.js";
-import type { RustNullishCoalescingProducer } from "../program/records/nullish-coalescing.js";
+import type { RustNullishCoalescingProducer } from "../program/records/operations/nullish-coalescing.js";
 import { isRustNeverCarrier, rustOptionElementCarrier } from "../../target-model/types/index.js";
 import { rustOptionNestingDepth } from "../../target-model/types/carriers/optional.js";
 import { rustOptionalStorageNestingDepth } from "../../target-model/types/projections.js";

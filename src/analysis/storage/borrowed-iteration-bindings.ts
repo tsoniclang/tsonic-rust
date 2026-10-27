@@ -5,7 +5,7 @@ import { rustEffectiveValueCarrier } from "../conversions/value-carrier-queries.
 import { isRustStringCarrier } from "../../target-model/types/index.js";
 import { isRustAssignmentOperator } from "../../target-model/syntax/tokens.js";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
-import type { RustBorrowedIterationBinding } from "../../target-model/records/borrowed-element-reads.js";
+import type { RustBorrowedIterationBinding } from "../../target-model/records/storage/borrowed-element-reads.js";
 import { rustBorrowedStringAppend, rustBorrowPureOperation } from "./borrowed-element-purity.js";
 import { rustBorrowedStringInputs } from "./provider-borrows.js";
 

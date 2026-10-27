@@ -1,4 +1,4 @@
-import { requireRustRecord } from "../../program/records/required-records.js";
+import { requireRustRecord } from "../../program/records/objects/required-records.js";
 import type { Node } from "@tsonic/tsts";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustCarrierSupportsNumberPredicate, rustCarrierSupportsSourceNumeric } from "../../../target-model/types/carriers/source-numeric.js";

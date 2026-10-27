@@ -12,10 +12,10 @@ import type { RustCheckedOperationSelectionResult, RustCheckedPropertySelectionI
 import type { Node } from "@tsonic/tsts";
 import type { RustOperationsProviderOptions } from "./model.js";
 
-import type { RustStructuralFieldRegistration, RustSourceUnion } from "../../../target-model/records/source-types.js";
+import type { RustStructuralFieldRegistration, RustSourceUnion } from "../../../target-model/records/types/source-types.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { resolveRustProjectField } from "./project-fields.js";
-import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
+import type { RustTargetOperationFact } from "../../../target-model/records/operations/operations.js";
 
 type UnionField = NonNullable<Extract<RustTargetOperationFact,
   { readonly kind: "source-union-field" }>["variants"][number]["field"]>;

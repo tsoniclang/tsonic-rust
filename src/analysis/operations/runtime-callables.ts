@@ -1,6 +1,6 @@
-import { requireRustRecord } from "../program/records/required-records.js";
+import { requireRustRecord } from "../program/records/objects/required-records.js";
 import type { RustOperationAnalysisContext } from "../program/operation-context.js";
-import { selectedRustCallSignature } from "../program/records/selected-call.js";
+import { selectedRustCallSignature } from "../program/records/calls/selected-call.js";
 import { rustSelectedCallTypeParameters } from "../source-evidence/types/resolution/generic-arguments.js";
 
 import { rustStructuralMethodCallableCarrier, rustStructuralObjectCarrierValue, rustTargetGenericBindingsForArguments, substituteRustTargetGenerics } from "../../target-model/types/index.js";
@@ -30,10 +30,10 @@ import type { RustCheckedCallSelectionInput, RustCheckedCallSelectionResult, Rus
 import type { Node } from "@tsonic/tsts";
 import type { RustOperationsProviderOptions } from "./members/model.js";
 import type { RustTargetMember, TargetTypeRef } from "../../target-model/types/model.js";
-import type { RustSelectedTargetSignature } from "../../target-model/records/member-selections.js";
+import type { RustSelectedTargetSignature } from "../../target-model/records/operations/member-selections.js";
 
 import { runtimeCallableProtocol } from "../../policy/types/callables/runtime-protocols.js";
-import type { RustOptionalCallGuard } from "../../target-model/records/optional-calls.js";
+import type { RustOptionalCallGuard } from "../../target-model/records/calls/optional-calls.js";
 export function acceptRuntimeCallableCall(
   request: RustCheckedCallSelectionInput,
   context: RustOperationAnalysisContext,

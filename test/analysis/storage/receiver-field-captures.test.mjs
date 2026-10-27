@@ -1,5 +1,5 @@
-import { rustCapturedFieldStorageEquals } from "../../../dist/target-model/records/equality.js";
-import { rustClosureCaptureEquals } from "../../../dist/target-model/records/equality.js";
+import { rustCapturedFieldStorageEquals } from "../../../dist/target-model/records/operations/equality.js";
+import { rustClosureCaptureEquals } from "../../../dist/target-model/records/operations/equality.js";
 import assert from "node:assert/strict";
 import test from "node:test";
 

@@ -82,7 +82,7 @@ function path(name: string): RustExpr {
 
 export function planRustProgramErrorModule(
   input: RustPlanningContext,
-  domain: import("../../../target-model/records/source-package-errors.js").RustSourcePackageErrorDomainPlan,
+  domain: import("../../../target-model/records/errors/source-package-errors.js").RustSourcePackageErrorDomainPlan,
 ): RustSourceFileModel | undefined {
   if (domain.forwardModulePath !== undefined) {
     return createRustSourceFile([{

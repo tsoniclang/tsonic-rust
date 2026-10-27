@@ -7,7 +7,7 @@ import { closedMetadataKey, snapshotClosedMetadata } from "../../../target-model
 import { normalizeRustErrorType, type RustErrorTypeContext } from "../../errors/error-types.js";
 import type { RustTypeDefinitionRegistry } from "../../project-types/type-definitions.js";
 import { rustGenericCallableInvocationBindings, type RustGenericCallableBindingContext } from "./generic-bindings.js";
-import type { RustGenericCallablePhysicalDefinition, RustGenericCallablePhysicalMember } from "../../../target-model/records/generic-callables.js";
+import type { RustGenericCallablePhysicalDefinition, RustGenericCallablePhysicalMember } from "../../../target-model/records/callables/generic-callables.js";
 
 export interface RustGenericCallableCompletionPlan {
   forDefinition(definition: RustGenericCallablePhysicalDefinition): RustGenericCallableCompletionSelection;
@@ -78,5 +78,5 @@ export function createRustGenericCallableCompletionPlan(
   });
 }
 
-import type { RustGenericCallableCompletionSelection } from "../../../target-model/records/generic-callable-completions.js";
-import { sealRustGenericCallableCompletionSelection } from "../../program/records/generic-callable-completions.js";
+import type { RustGenericCallableCompletionSelection } from "../../../target-model/records/callables/generic-callable-completions.js";
+import { sealRustGenericCallableCompletionSelection } from "../../program/records/callables/generic-callable-completions.js";

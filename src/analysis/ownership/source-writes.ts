@@ -2,8 +2,8 @@ import type { Node } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
 import { KindParenthesizedExpression, KindPropertyAccessExpression, KindElementAccessExpression, KindCallExpression,
   KindIdentifier, Node_Expression } from "@tsonic/target-api/source";
-import { requireRustRecord } from "../program/records/required-records.js";
-import type { RustReferentWrite } from "../program/records/mutated-referent.js";
+import { requireRustRecord } from "../program/records/objects/required-records.js";
+import type { RustReferentWrite } from "../program/records/storage/mutated-referent.js";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";

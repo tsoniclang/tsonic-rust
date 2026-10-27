@@ -11,9 +11,9 @@ const prelude = `
 import { createRustProgramRecordBuilder } from "${join(root, "dist/analysis/program/records/create.js")}";
 import type { AstReader, Node } from "@tsonic/tsts";
 import type { TargetTypeRef } from "${join(root, "dist/target-model/types/model.js")}";
-import type { RustAsyncFunctionFact, RustGeneratorFact } from "${join(root, "dist/target-model/records/callables-and-resources.js")}";
-import type { RustTargetOperationFact } from "${join(root, "dist/target-model/records/operations.js")}";
-import type { RustComputedMemberFact } from "${join(root, "dist/target-model/records/operation-selections.js")}";
+import type { RustAsyncFunctionFact, RustGeneratorFact } from "${join(root, "dist/target-model/records/callables/callables-and-resources.js")}";
+import type { RustTargetOperationFact } from "${join(root, "dist/target-model/records/operations/operations.js")}";
+import type { RustComputedMemberFact } from "${join(root, "dist/target-model/records/operations/operation-selections.js")}";
 declare const ast: AstReader;
 declare const node: Node;
 declare const carrier: TargetTypeRef;

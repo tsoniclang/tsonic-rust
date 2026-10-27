@@ -4,9 +4,9 @@ import { asSourceNode, sourceCallableValueParameters } from "@tsonic/target-api/
 import type { RustProgramRecords } from "../../../target-model/records/program.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustTypeDefinitions } from "../../../target-model/types/source-union-definitions.js";
-import type { RustNativeCallableInput } from "../../../target-model/records/native-protocols.js";
+import type { RustNativeCallableInput } from "../../../target-model/records/native/native-protocols.js";
 import type { RustSourceCallParameterPlan } from "../../../target-model/operations/model.js";
-import type { RustSourceCallableSpecializationIssue } from "../../../target-model/records/callable-issues.js";
+import type { RustSourceCallableSpecializationIssue } from "../../../target-model/records/callables/callable-issues.js";
 import type { RustNativeCallableInputPlan } from "../native/native-inputs.js";
 import { callableValueCarrier } from "./native-storage-values.js";
 import type { RustStructuralStorageLookup } from "../../../policy/model/operation-record-inputs.js";

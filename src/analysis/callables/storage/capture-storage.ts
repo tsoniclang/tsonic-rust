@@ -1,4 +1,4 @@
-import { requireRustRecord } from "../../program/records/required-records.js";
+import { requireRustRecord } from "../../program/records/objects/required-records.js";
 import type { Node, SourceFile, Symbol } from "@tsonic/tsts";
 import { Node_Expression, sourceBindingHasSingleCaptureOwner, sourceBindingScope, sourceBindingIterationScope } from "@tsonic/target-api/source";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
@@ -154,4 +154,4 @@ function singleOwnerDirectBinding(
     });
 }
 
-import type { RustCaptureStorage } from "../../../target-model/records/capture-storage.js";
+import type { RustCaptureStorage } from "../../../target-model/records/callables/capture-storage.js";

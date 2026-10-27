@@ -20,7 +20,7 @@ import { isRustCopyCarrier } from "../../policy/constraints/native-traits.js";
 
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 
-import type { RustGenericRequirement } from "../../target-model/records/generic-requirements.js";
+import type { RustGenericRequirement } from "../../target-model/records/types/generic-requirements.js";
 
 import { rustGenericCallableMemberInvocationBindings } from "../callables/generics/generic-bindings.js";
 

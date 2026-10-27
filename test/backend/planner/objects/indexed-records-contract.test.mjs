@@ -5,7 +5,7 @@ import test from "node:test";
 import { analyzeRust } from "../../../helpers/rust-session.mjs";
 
 import { analyzeRustIndexedRecords } from "../../../../dist/analysis/objects/indexed-records.js";
-import { createRustIndexedRecordProducer } from "../../../../dist/analysis/program/records/indexed-records.js";
+import { createRustIndexedRecordProducer } from "../../../../dist/analysis/program/records/objects/indexed-records.js";
 
 test("optional record selection validates the effective result without weakening member evidence", () => {
   const { program } = analyzeRust({ files: { "index.ts": `

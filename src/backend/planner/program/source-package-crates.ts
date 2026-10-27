@@ -2,7 +2,7 @@ import { rustHiddenAttribute } from "../../target-ast/syntax/attributes.js";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustSourceFileOutputIdentity } from "../../../target-model/names/source-output-identities.js";
 import type { CargoManifestPlan } from "../../../target-model/project/cargo.js";
-import type { RustSourcePackageCargoPlan } from "../../../target-model/records/source-package-crates.js";
+import type { RustSourcePackageCargoPlan } from "../../../target-model/records/program/source-package-crates.js";
 import { failRustPlannerInvariant } from "../diagnostics.js";
 import type { RustPlannedArtifact } from "../../artifact-model/output.js";
 import { createRustSourceFile, type RustItem, type RustSourceFileModel } from "../../target-ast/syntax/nodes.js";
@@ -16,8 +16,8 @@ import { createRustSourcePackageTypeRenderingContext } from "./source-package-co
 import type {
   RustSourcePackageComponentPlan, RustSourcePackageFacadeExport, RustSourcePackageFacadePlan,
   RustSourcePackageInitializerPlan,
-} from "../../../target-model/records/source-packages.js";
-import type { RustSourcePackageErrorPlan } from "../../../target-model/records/source-package-errors.js";
+} from "../../../target-model/records/program/source-packages.js";
+import type { RustSourcePackageErrorPlan } from "../../../target-model/records/errors/source-package-errors.js";
 import { createRustCrateRootSourceFile } from "../project/foundation.js";
 import { rustItemsReferenceModuleAlias } from "../../target-ast/syntax/module-references.js";
 import { rustRuntimeAliasImports, rustRuntimeAliasUseItems } from "./plan-context.js";

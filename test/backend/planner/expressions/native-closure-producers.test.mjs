@@ -13,7 +13,7 @@ import { rustSourcePrimitiveTargetType, rustClosureTargetType }
 import { compileRust, rustSourceText, analyzeRust } from "../../../helpers/rust-session.mjs";
 import { createRustProviderPackage } from "../../../../dist/public/provider.js";
 import { analyzeRustLambdaEmission } from "../../../../dist/analysis/callables/emission/lambda-emission.js";
-import { createRustLambdaEmissionProducer } from "../../../../dist/analysis/program/records/lambda-emission.js";
+import { createRustLambdaEmissionProducer } from "../../../../dist/analysis/program/records/callables/lambda-emission.js";
 import { rustGenericCallableValue } from "../../../../dist/target-model/types/carriers/generic-callables.js";
 import { rustJsValueTargetType } from "../../../../dist/target-model/types/carriers/js.js";
 

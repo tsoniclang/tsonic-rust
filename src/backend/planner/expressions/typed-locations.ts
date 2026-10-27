@@ -1,7 +1,7 @@
 import { rustValueBlock } from "../../target-ast/syntax/value-block.js";
 import { rustPropagateLocalError, rustErrorType } from "../program/fallible-boundaries.js";
 import { cloneRustExpression } from "../../target-ast/syntax/expressions.js";
-import type { RustBindingStorageFact } from "../../../target-model/records/operation-selections.js";
+import type { RustBindingStorageFact } from "../../../target-model/records/operations/operation-selections.js";
 import type { Node } from "@tsonic/tsts";
 import { rustBindingStorageOperations, type RustBindingStorageOperations } from "./binding-storage.js";
 import type {
@@ -41,7 +41,7 @@ import { rustRecordFieldStorageType, rustRecordFieldSelector } from "../objects/
 import { rustExpressionHasReferenceObjectField, planRustReferenceObjectFieldLocation } from "./object-field-locations.js";
 import { rustPreparedValueLocation } from "../objects/value-fields.js";
 import type { RustExpressionAccess } from "./entry.js";
-import type { RustCaptureReadOwnership, RustReadOwnershipFact } from "../../../target-model/records/ownership.js";
+import type { RustCaptureReadOwnership, RustReadOwnershipFact } from "../../../target-model/records/storage/ownership.js";
 
 export type RustExpressionPlanner = (
   node: Node,

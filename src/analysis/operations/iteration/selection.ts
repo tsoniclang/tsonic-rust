@@ -6,7 +6,7 @@ import { isRustStringCarrier } from "../../../target-model/types/index.js";
 import { KindArrayLiteralExpression, KindCallExpression, KindNewExpression, KindNonNullExpression, KindParenthesizedExpression, KindSatisfiesExpression, Node_Expression } from "@tsonic/target-api/source";
 
 import { rejectSelectedOperation } from "../members/result.js";
-import { acceptRustOperation } from "../../program/records/selected-operation-values.js";
+import { acceptRustOperation } from "../../program/records/operations/selected-operation-values.js";
 
 import { resolveRustTargetTypeRef } from "../../source-evidence/types/resolution/source.js";
 
@@ -16,7 +16,7 @@ import type { RustCheckedIterationSelectionInput, RustCheckedOperationSelectionR
 import type { Node } from "@tsonic/tsts";
 import type { RustOperationsProviderOptions } from "../members/model.js";
 
-import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
+import type { RustTargetOperationFact } from "../../../target-model/records/operations/operations.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
 import { selectedRustForInKeys } from "./for-in-keys.js";

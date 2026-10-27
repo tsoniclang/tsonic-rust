@@ -1,5 +1,5 @@
 import { rustProviderOperationSourceReceiverMode } from "../../policy/operations/members/abi/source-modes.js";
-import { requireRustRecord } from "../program/records/required-records.js";
+import { requireRustRecord } from "../program/records/objects/required-records.js";
 import { ElementAccessExpression_ArgumentExpression, BinaryExpression_Left, BinaryExpression_Right, ForInOrOfStatement_Initializer, ForInOrOfStatement_Statement, Node_Operand, KindBinaryExpression, KindCallExpression, KindDeleteExpression, KindElementAccessExpression, KindIdentifier, KindArrayBindingPattern, KindNewExpression, KindObjectBindingPattern, KindPostfixUnaryExpression, KindPrefixUnaryExpression, KindPropertyAccessExpression, KindVoidExpression, KindAwaitExpression, KindVariableDeclaration, Node_Expression, Node_Name } from "@tsonic/target-api/source";
 
 import { appendRustDiagnostic, recordPolicySelection, rustOperationContext } from "../program/walk.js";
@@ -16,12 +16,12 @@ import { selectRustCheckedIteration } from "./iteration/selection.js";
 import { setCarrierFact } from "./project-calls.js";
 import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
-import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
+import type { RustTargetOperationFact } from "../../target-model/records/operations/operations.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 
 import { rustMemberAccessReceiver } from "../../target-model/syntax/expressions.js";
 import type { RustCheckedCallSelectionInput } from "../../policy/model/contracts.js";
-import type { RustPreparedDeferredCheckedCall } from "../../target-model/records/deferred-callbacks.js";
+import type { RustPreparedDeferredCheckedCall } from "../../target-model/records/callables/deferred-callbacks.js";
 import { selectedCallArgumentNodes } from "./members/operators.js";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 

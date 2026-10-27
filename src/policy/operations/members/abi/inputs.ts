@@ -8,7 +8,7 @@ import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality
 import { selectRustSourceValueConversion } from "../../../conversions/selection.js";
 import { selectRustRestSequenceConversion } from "../../../conversions/rest-sequence.js";
 import type { RustArgumentMode, RustProviderConstantArgument, RustProviderOperationForm, RustValueConversion } from "../../../../target-model/operations/model.js";
-import type { FinalizeRustProviderOperationAbiOptions, RustFinalizedConstantInput, RustFinalizedOperationAbi, RustFinalizedSourceArgument, RustFinalizedSourceInput, RustFinalizedTargetInput } from "../../../../target-model/records/finalized-operation.js";
+import type { FinalizeRustProviderOperationAbiOptions, RustFinalizedConstantInput, RustFinalizedOperationAbi, RustFinalizedSourceArgument, RustFinalizedSourceInput, RustFinalizedTargetInput } from "../../../../target-model/records/operations/finalized-operation.js";
 import type { RustFinalizedOperationKind } from "../../../../target-model/operations/model.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 

@@ -7,7 +7,7 @@ import { rustRecordCarrierValue } from "../../../target-model/types/carriers/rec
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { selectedValueCarrier } from "../selected-values.js";
 import { acceptRustMemberOperation, rejectSelectedOperation } from "./result.js";
-import { acceptRustOperation, elementProvenance } from "../../program/records/selected-operation-values.js";
+import { acceptRustOperation, elementProvenance } from "../../program/records/operations/selected-operation-values.js";
 import { normalizeSelectedLiteralCarrier } from "../../source-evidence/types/resolution/selected-literals.js";
 import { isRustStringCarrier } from "../../../target-model/types/index.js";
 import type { SelectedObjectShapeProjection } from "../../../policy/operations/source-profiles/js/object-fields.js";

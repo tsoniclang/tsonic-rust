@@ -1,7 +1,7 @@
 import type { Node } from "@tsonic/tsts";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustAnalysisProgram } from "../program/model.js";
-import type { RustCallableConversionProducer } from "../program/records/callable-conversions.js";
+import type { RustCallableConversionProducer } from "../program/records/callables/callable-conversions.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";

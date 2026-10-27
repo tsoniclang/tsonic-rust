@@ -1,5 +1,5 @@
 import type { RustTypePositionInput } from "../../model/type-emission.js";
-import type { RustTypePositions } from "../../../target-model/records/type-emission.js";
+import type { RustTypePositions } from "../../../target-model/records/types/type-emission.js";
 
 export function selectRustTypePositions(input: RustTypePositionInput): RustTypePositions {
   const opaque = input.opaque !== "none" || input.children.some(child => child.opaque);

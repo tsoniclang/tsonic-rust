@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRustErrorVariantEmission } from "../../../dist/analysis/errors/transport-emission.js";
-import { createRustErrorTransportEmissionProducer } from "../../../dist/analysis/program/records/error-transport.js";
+import { createRustErrorTransportEmissionProducer } from "../../../dist/analysis/program/records/errors/error-transport.js";
 
 for (const name of ["HttpError", "Runtime", "SourceCreated", "Suppressed"]) {
   test(`error transport admission rejects the original ${name} variant conflict before publication`, () => {

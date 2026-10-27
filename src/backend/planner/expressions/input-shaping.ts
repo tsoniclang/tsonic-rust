@@ -1,5 +1,5 @@
 import type { Node } from "@tsonic/tsts";
-import type { RustFinalizedSourceInput } from "../../../target-model/records/finalized-operation.js";
+import type { RustFinalizedSourceInput } from "../../../target-model/records/operations/finalized-operation.js";
 
 import type { RustArgumentMode } from "../../../target-model/operations/model.js";
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";

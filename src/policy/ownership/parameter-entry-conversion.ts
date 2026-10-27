@@ -1,5 +1,5 @@
 import type { TargetTypeRef } from "../../target-model/types/model.js";
-import type { RustParameterEntryConversion } from "../../target-model/records/callables-and-resources.js";
+import type { RustParameterEntryConversion } from "../../target-model/records/callables/callables-and-resources.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import { rustValueConversionContract } from "../conversions/contracts.js";
 import { rustIntegerKindIsExactlyRepresentableAsFloat64 } from "../conversions/numeric-promotion.js";

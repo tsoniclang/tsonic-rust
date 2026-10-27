@@ -2,10 +2,10 @@ import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { Node } from "@tsonic/tsts";
 import type { SourceStorageProducer, SourceStorageProducersSelection, SourceStorageSubject } from "@tsonic/target-api/analysis";
 import { createRustCallableOwnershipComponentQueries } from "./ownership-components.js";
-import { type RustCallableOwnershipComponentQueries } from "../../../target-model/records/callable-ownership.js";
-import type { RustCallableOwnershipComponent } from "../../../target-model/records/callable-ownership.js";
+import { type RustCallableOwnershipComponentQueries } from "../../../target-model/records/callables/callable-ownership.js";
+import type { RustCallableOwnershipComponent } from "../../../target-model/records/callables/callable-ownership.js";
 
-import type { RustCallableActivation } from "../../../target-model/records/callable-ownership.js";
+import type { RustCallableActivation } from "../../../target-model/records/callables/callable-ownership.js";
 
 export type RustCallableOwnershipInput =
   | { readonly kind: "storage"; readonly producers: SourceStorageProducersSelection }

@@ -3,7 +3,7 @@ import { rustProgramNodeIsOutsideNativeCode } from "../control-flow/compile-time
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import { BinaryExpression_Left, BinaryExpression_Right, Node_Initializer, Node_Operand, Node_Type, type TargetSourceProgram } from "@tsonic/target-api/source";
 import type { RustAnalysisProgram } from "../program/model.js";
-import type { RustLiteralEmissionProducer } from "../program/records/literal-emission.js";
+import type { RustLiteralEmissionProducer } from "../program/records/operations/literal-emission.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { isRustIntegerCarrier, isRustBigIntCarrier, rustPrimitiveTypeName } from "../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";

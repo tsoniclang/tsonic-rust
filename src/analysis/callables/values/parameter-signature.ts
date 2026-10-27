@@ -9,7 +9,7 @@ import { resolveRustContextualParameterAbi } from "../calls/source-callable-abi.
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { rustCallableProtocol, rustClosureProtocol, rustSourceOptionalTargetType } from "../../../target-model/types/index.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
-import type { RustSourceParameterAbiFact } from "../../../target-model/records/callables-and-resources.js";
+import type { RustSourceParameterAbiFact } from "../../../target-model/records/callables/callables-and-resources.js";
 import { selectRustClosedCallableContext, selectRustClosedCallableInputs } from "../../expected-types/callable-contexts.js";
 
 export function recordCallableParameterInputFacts(

@@ -7,7 +7,7 @@ import { analyzeSourceGenericAdoption, sourceGenericAdoptionDiagnosticCode, sour
 import { sourceEnclosingCallable, sourceExpressionResultDisposition, sourceCallableValueParameters, sourceDeclarationIsModuleScoped, type TargetSourceProgram } from "@tsonic/target-api/source";
 import type { RustProgramRecords } from "../../../target-model/records/program.js";
 import type { RustPreparedReadSelection } from "../../ownership/reads.js";
-import type { RustPromiseResult, RustPromiseResults, RustPromiseResultUses } from "../../../target-model/records/promise-results.js";
+import type { RustPromiseResult, RustPromiseResults, RustPromiseResultUses } from "../../../target-model/records/callables/promise-results.js";
 import { mapRustAwaitSelection, rustAwaitSelectionLeaves } from "../../../target-model/types/await.js";
 import { rustAwaitSelection } from "../../../policy/operations/flow/await.js";
 import { selectRustDiscardedFutureSpawn } from "./discarded-futures.js";
@@ -20,17 +20,17 @@ import type { RustSourceTypeFamilyRegistry } from "../../../target-model/types/t
 import { classifyCarrierRequirements, rustFinalContractSupportsStatic,
   rustStructuralMethodStorageWithoutSelf, type RustStaticRequirementEvidence } from "../../declarations/generic-carrier-requirements.js";
 import type { AnalyzeRustDeclarationGenericRequirementsResult } from "../../declarations/generic-requirements.js";
-import type { RustGenericRequirement } from "../../../target-model/records/generic-requirements.js";
+import type { RustGenericRequirement } from "../../../target-model/records/types/generic-requirements.js";
 import { rustEnclosingStorageContract } from "../storage/storage-contracts.js";
 import type { RustNativeStoragePlan } from "../storage/native-storage.js";
 import type { RustNativeCallableInputPlan } from "../native/native-inputs.js";
-import type { RustPromiseBodies } from "../../../target-model/records/callables-and-resources.js";
+import type { RustPromiseBodies } from "../../../target-model/records/callables/callables-and-resources.js";
 
 import { rustTargetTypeParameterIdentities } from "../../../target-model/types/carriers/generic-references.js";
 import { completeRustNativeCaptureCarrier } from "../native/native-captures.js";
-import type { RustNativeCapturePlan } from "../../../target-model/records/native-captures.js";
+import type { RustNativeCapturePlan } from "../../../target-model/records/native/native-captures.js";
 import { normalizeRustErrorType, type RustErrorTypeContext } from "../../errors/error-types.js";
-import type { RustStructuralShapeField } from "../../../target-model/records/structural-shapes.js";
+import type { RustStructuralShapeField } from "../../../target-model/records/objects/structural-shapes.js";
 import { rustOptionElementCarrier } from "../../../target-model/types/carriers/optional.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import type { RustSourceTypeRegistry } from "../../project-types/source-type-model.js";
@@ -43,7 +43,7 @@ import { rustCallableProtocol } from "../../../target-model/types/carriers/calla
 import { rustFutureTargetId } from "../../../target-model/types/carriers/primitives.js";
 import { selectRustNativePendingEnvironment } from "../ownership/retained-environments.js";
 import type { createRustCallableEntryHeaderPlacements } from "../emission/entry-header-placements.js";
-import type { RustNativeCallableProducerPlan } from "../../../target-model/records/native-producers.js";
+import type { RustNativeCallableProducerPlan } from "../../../target-model/records/native/native-producers.js";
 import type { RustSourceCallableSpecializationPlan } from "../generics/specializations.js";
 
 export function analyzeRustPromiseResultUses(ast: AstReader, nodes: readonly Node[]): RustPromiseResultUses {

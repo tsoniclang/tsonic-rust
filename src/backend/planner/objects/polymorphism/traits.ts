@@ -12,7 +12,7 @@ import type { RustPlanContext } from "../../program/plan-context.js";
 import { rustErrorBoundaryForProjectMember } from "../../program/plan-context.js";
 import { rustErrorType } from "../../program/fallible-boundaries.js";
 import type { RustProjectTypeDefinition } from "../../../../target-model/types/project-types.js";
-import type { RustObjectRepresentation } from "../../../../target-model/records/object-representation.js";
+import type { RustObjectRepresentation } from "../../../../target-model/records/objects/object-representation.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import { rustProjectImplementationVisibility } from "../project-storage-abi.js";
 import { rustProjectObjectIdentityImplementation } from "../project-identity.js";

@@ -6,7 +6,7 @@ import type { RustValueConversion } from "../operations/model.js";
 
 import type { RustPrimitiveTypeName } from "../syntax/tokens.js";
 
-import type { RustUnionMappingEmission, RustUnionProjectionEmission } from "../records/union-mappings.js";
+import type { RustUnionMappingEmission, RustUnionProjectionEmission } from "../records/types/union-mappings.js";
 
 import { type RustUnionLeaf, type RustUnionArmMapping, type RustUnionPathStep } from "../types/union-relations.js";
 

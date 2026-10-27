@@ -16,8 +16,8 @@ import { rustStringTargetType } from "../../../../dist/target-model/types/index.
 import { rustSourceOptionalElementCarrier } from "../../../../dist/target-model/types/carriers/optional.js";
 import { analyzeRustUnionEquality } from "../../../../dist/analysis/operations/union-equality.js";
 import { analyzeRustBinaryEmission } from "../../../../dist/analysis/operations/binary-emission.js";
-import { createRustUnionEqualityProducer } from "../../../../dist/analysis/program/records/union-equality.js";
-import { createRustBinaryEmissionProducer } from "../../../../dist/analysis/program/records/expression-binary.js";
+import { createRustUnionEqualityProducer } from "../../../../dist/analysis/program/records/operations/union-equality.js";
+import { createRustBinaryEmissionProducer } from "../../../../dist/analysis/program/records/operations/expression-binary.js";
 
 function planningContext(program, node) {
   const { ast } = program.source;

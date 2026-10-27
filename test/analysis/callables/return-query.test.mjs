@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRustErrorEffects } from "../../helpers/rust-error-analysis.mjs";
-import { createRustSourceCallableReturnProducer } from "../../../dist/analysis/program/records/source-callable-return.js";
-import { createRustRetainedEnvironmentProducer } from "../../../dist/analysis/program/records/retained-environment.js";
+import { createRustSourceCallableReturnProducer } from "../../../dist/analysis/program/records/callables/source-callable-return.js";
+import { createRustRetainedEnvironmentProducer } from "../../../dist/analysis/program/records/callables/retained-environment.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 import { selectedSourceCallableReturn, selectRustCallableLogicalReturn } from "../../../dist/analysis/callables/calls/source-callable-abi.js";
 

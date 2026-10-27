@@ -1,4 +1,4 @@
-import type { RustJsPromiseLowering } from "../../../../target-model/records/callables-and-resources.js";
+import type { RustJsPromiseLowering } from "../../../../target-model/records/callables/callables-and-resources.js";
 import type { RustBlock, RustExpr } from "../../../target-ast/syntax/nodes.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import { isRustUnitCarrier } from "../../../../target-model/types/index.js";

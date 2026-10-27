@@ -2,7 +2,7 @@ import { isRustBigIntCarrier, isRustIntegerCarrier, isRustBoolCarrier, isRustNum
 
 import type { RustOperatorToken } from "../../../target-model/syntax/tokens.js";
 
-import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
+import type { RustTargetOperationFact } from "../../../target-model/records/operations/operations.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
 export function selectRustCheckedUnaryOperation(operator: string, operand: TargetTypeRef | undefined): RustTargetOperationFact | undefined {

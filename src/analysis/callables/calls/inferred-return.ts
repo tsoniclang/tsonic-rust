@@ -20,7 +20,7 @@ import { selectRustConditionalNumericCarrier } from "../../../policy/types/condi
 import { resolveRustBranchUnion } from "../../source-evidence/types/resolution/branch-unions.js";
 import { finalizeRustCallableSignature } from "./signature-query.js";
 import { setCarrierFact } from "../../operations/project-calls.js";
-import type { RustSourceParameterAbiFact } from "../../../target-model/records/callables-and-resources.js";
+import type { RustSourceParameterAbiFact } from "../../../target-model/records/callables/callables-and-resources.js";
 import type { RustProgramRecordBuilder } from "../../program/records/model.js";
 import { rustClassCallableMemberOwner, rustClassReceiverCarriers } from "../../declarations/classes/receivers.js";
 import { rustSourceStorageSubjectContext } from "../../source-evidence/types/resolution/source-storage-projection.js";

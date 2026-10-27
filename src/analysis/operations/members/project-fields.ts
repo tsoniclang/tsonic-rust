@@ -1,5 +1,5 @@
 import type { RustOperationAnalysisContext } from "../../program/operation-context.js";
-import type { RustProjectFieldSelection } from "../../../target-model/records/project-fields.js";
+import type { RustProjectFieldSelection } from "../../../target-model/records/objects/project-fields.js";
 import type { Node, Type } from "@tsonic/tsts";
 import { resolveRustTargetTypeRef } from "../../source-evidence/types/resolution/source.js";
 import { rustSourceStorageSubjectContext } from "../../source-evidence/types/resolution/source-storage-projection.js";

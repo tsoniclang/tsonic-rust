@@ -1,8 +1,8 @@
 import { selectTargetNativePointerOperation } from "@tsonic/target-api/analysis";
-import type { RustRawLocationPlan } from "../../../target-model/records/native-memory.js";
-import type { RustRawAddressPlan } from "../../../target-model/records/raw-addresses.js";
-import type { RustNativePointerOperationSelection } from "../../../target-model/records/native-pointers.js";
-import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
+import type { RustRawLocationPlan } from "../../../target-model/records/native/native-memory.js";
+import type { RustRawAddressPlan } from "../../../target-model/records/storage/raw-addresses.js";
+import type { RustNativePointerOperationSelection } from "../../../target-model/records/native/native-pointers.js";
+import type { RustTargetOperationFact } from "../../../target-model/records/operations/operations.js";
 import type { RustMemoryLayoutObservationFact } from "../../../target-model/records/analysis.js";
 
 export function selectRustNativePointerOperation(

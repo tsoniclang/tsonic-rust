@@ -13,9 +13,9 @@ import { rustJsValueTargetType } from "../../../target-model/types/carriers/js.j
 import { rustCallableProtocol } from "../../../target-model/types/carriers/callables.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 
-import type { RustErrorEffectsFact } from "../../../target-model/records/error-effects.js";
+import type { RustErrorEffectsFact } from "../../../target-model/records/errors/error-effects.js";
 
-import type { RustNativeCallableProducerPlan } from "../../../target-model/records/native-producers.js";
+import type { RustNativeCallableProducerPlan } from "../../../target-model/records/native/native-producers.js";
 
 export interface RustProducerErrorContext {
   readonly producers: RustNativeCallableProducerPlan;

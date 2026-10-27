@@ -1,7 +1,7 @@
 import type { Node } from "@tsonic/tsts";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { RustAnalysisProgram } from "../program/model.js";
-import type { RustNativeLayoutProducer } from "../program/records/native-layout-emission.js";
+import type { RustNativeLayoutProducer } from "../program/records/native/native-layout-emission.js";
 import type { RustNativeMemoryLayout } from "../../target-model/operations/native-memory.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustRuntimeNativeLayoutTargetType } from "../../target-model/types/carriers/runtime-carriers.js";

@@ -1,4 +1,4 @@
-import type { RustFinalizedArrayInput, RustFinalizedConstantInput, RustFinalizedDispatchContextInput, RustFinalizedOperationAbi, RustFinalizedSliceInput, RustFinalizedSourceInput, RustFinalizedTaggedArrayInput, RustFinalizedTargetInput } from "../records/finalized-operation.js";
+import type { RustFinalizedArrayInput, RustFinalizedConstantInput, RustFinalizedDispatchContextInput, RustFinalizedOperationAbi, RustFinalizedSliceInput, RustFinalizedSourceInput, RustFinalizedTaggedArrayInput, RustFinalizedTargetInput } from "../records/operations/finalized-operation.js";
 
 export function isRustFinalizedSourceInput(input: RustFinalizedTargetInput): input is RustFinalizedSourceInput {
   return input.source.kind === "receiver" || input.source.kind === "argument";

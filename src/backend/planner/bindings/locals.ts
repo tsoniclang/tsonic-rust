@@ -1,7 +1,7 @@
 import type { Node } from "@tsonic/tsts";
 import type { RustExpr, RustStmt, RustType } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
-import type { RustLocalBindingCompletion } from "../../../target-model/records/local-bindings.js";
+import type { RustLocalBindingCompletion } from "../../../target-model/records/storage/local-bindings.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { collectVariableDeclarations } from "../statements/resource-management.js";
 import { failRustPlannerInvariant } from "../diagnostics.js";

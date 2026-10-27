@@ -1,11 +1,11 @@
-import { requireRustRecord } from "../program/records/required-records.js";
+import { requireRustRecord } from "../program/records/objects/required-records.js";
 
 import type { RustOperationAnalysisContext } from "../program/operation-context.js";
 import { isProjectSourceDeclaration, resolveSelectedProviderDeclaration } from "../../policy/identities/selected-source.js";
 import { Node_Type, sourceParameterIsProperty } from "@tsonic/target-api/source";
 import { rustFixedArrayCarrierValue, rustSourcePrimitiveTargetType } from "../../target-model/types/index.js";
 import { acceptRustMemberOperation, isDeclarationFileSubject, normalizeSelectedOperationInputCarrier, rejectSelectedOperation, selectedArgumentMatchScore, selectedMemberReceiverCarrier, sourceOperationId } from "./members/result.js";
-import { acceptDeclarationOperation, elementProvenance } from "../program/records/selected-operation-values.js";
+import { acceptDeclarationOperation, elementProvenance } from "../program/records/operations/selected-operation-values.js";
 import { normalizeSelectedLiteralCarrier } from "../source-evidence/types/resolution/selected-literals.js";
 import { finalizeProviderOperationFromSubjects, mapProviderCheckedOperation } from "./members/conversions.js";
 import { resolveRustTargetTypeRef } from "../source-evidence/types/resolution/source.js";

@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
-import type { RustSourceErrorEffectEdge } from "../../../../target-model/records/source-error-effects.js";
-import type { RustSourceErrorRegionEmission } from "../../../../target-model/records/error-emission.js";
+import type { RustSourceErrorEffectEdge } from "../../../../target-model/records/errors/source-error-effects.js";
+import type { RustSourceErrorRegionEmission } from "../../../../target-model/records/errors/error-emission.js";
 
 import type { RustExpr, RustType } from "../../../target-ast/syntax/nodes.js";
 import { rustTypeEquals } from "../../../target-ast/syntax/type-equality.js";

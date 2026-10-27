@@ -40,4 +40,4 @@ function rustProjectViewTargetMatches(viewTarget: TargetTypeRef, targetCarrier: 
     rustTargetTypeRefEquals(substituteRustTargetGenerics(viewTarget, bindings.types, bindings.lifetimes, bindings.consts), targetCarrier);
 }
 
-import type { RustProjectStructuralView } from "../../../target-model/records/project-structural-views.js";
+import type { RustProjectStructuralView } from "../../../target-model/records/objects/project-structural-views.js";

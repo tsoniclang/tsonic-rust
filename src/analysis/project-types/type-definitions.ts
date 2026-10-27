@@ -1,6 +1,6 @@
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
-import type { RustNativeEnumDeclaration } from "../../target-model/records/native-value-declarations.js";
+import type { RustNativeEnumDeclaration } from "../../target-model/records/native/native-value-declarations.js";
 import { rustTsValueTargetType } from "../../target-model/types/carriers/native.js";
 import { isRustClosedValueCarrier } from "../../target-model/types/carriers/closed-value-kind.js";
 import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../../target-model/types/equality.js";

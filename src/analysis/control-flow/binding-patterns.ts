@@ -11,12 +11,12 @@ import { BindingElement_IsRest, BindingElement_PropertyName, KindArrayBindingPat
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 
-import type { RustSelectedBindingProjection } from "../../target-model/records/value-projections.js";
+import type { RustSelectedBindingProjection } from "../../target-model/records/objects/value-projections.js";
 import { selectRustBindingPatternProjection } from "../../policy/types/objects/binding-projection-policy.js";
 import { isRustJsArrayCarrier, isRustVecCarrier, rustFixedArrayCarrierValue, rustSourceTypeCarrierValue, rustStructuralObjectCarrierValue, rustStructuralObjectTargetType } from "../../target-model/types/index.js";
 import type { RustAnalysisContext } from "../program/context.js";
 import type { RustSourceTypeRegistry } from "../project-types/source-type-model.js";
-import type { RustSourceObjectField } from "../../target-model/records/source-types.js";
+import type { RustSourceObjectField } from "../../target-model/records/types/source-types.js";
 import { isRustStructuralObjectFieldDeclaration } from "../../policy/types/objects/source-shapes.js";
 import { rustProjectObjectLayout } from "../project-types/object-layout.js";
 import { rustOptionElementCarrier } from "../../target-model/types/carriers/optional.js";

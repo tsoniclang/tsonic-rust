@@ -15,7 +15,7 @@ import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equali
 import { createRustSourceErrorEffectSelection } from "../../../dist/analysis/errors/source-error-effects.js";
 import { rustProducerErrorReference } from "../../../dist/target-model/types/carriers/producer-errors.js";
 import { rustTargetGenericReferences } from "../../../dist/target-model/types/carriers/generic-references.js";
-import { rustJsRejectionErrorIdentity } from "../../../dist/target-model/records/error-effects.js";
+import { rustJsRejectionErrorIdentity } from "../../../dist/target-model/records/errors/error-effects.js";
 import { rustJsErrorTargetType, rustJsValueTargetType } from "../../../dist/target-model/types/carriers/js.js";
 import { Node_Expression, Node_Initializer, TryStatement_TryBlock, TryStatement_CatchClause,
   CatchClause_Block, TryStatement_FinallyBlock } from "@tsonic/target-api/source";

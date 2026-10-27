@@ -1,4 +1,4 @@
-import type { RustGeneratorFact } from "../../../../target-model/records/callables-and-resources.js";
+import type { RustGeneratorFact } from "../../../../target-model/records/callables/callables-and-resources.js";
 import { isRustUnitCarrier } from "../../../../target-model/types/index.js";
 import type { RustBlock, RustExpr } from "../../../target-ast/syntax/nodes.js";
 import { applyRustTailShape } from "../../../target-ast/normalization/block-flow.js";

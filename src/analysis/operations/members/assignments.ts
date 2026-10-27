@@ -3,7 +3,7 @@ import { isRustAbsenceCarrier, rustOptionElementCarrier } from "../../../target-
 
 import { normalizeSelectedOperationInputCarrier, providerIdentityText, rejectSelectedOperation, selectedArgumentMatchScore } from "./result.js";
 import { providerOperationTemplate } from "../../../policy/operations/members/provider-templates.js";
-import { acceptRustOperation } from "../../program/records/selected-operation-values.js";
+import { acceptRustOperation } from "../../program/records/operations/selected-operation-values.js";
 import { normalizeSelectedLiteralCarrier } from "../../source-evidence/types/resolution/selected-literals.js";
 
 import { asNode, resolveSelectedJsSourceMember, resolveSelectedProviderDeclaration } from "../../../policy/identities/selected-source.js";
@@ -16,7 +16,7 @@ import { instantiateProviderOperationTemplate } from "../../../policy/types/call
 import { resolveRustTargetTypeRef } from "../../source-evidence/types/resolution/source.js";
 import { resolveRustExactNullishValueCarrier } from "../../source-evidence/types/resolution/target.js";
 import { rustEffectiveValueCarrier } from "../../conversions/value-carrier-queries.js";
-import { recordRustValueCarrierReconciliation } from "../../program/records/value-carrier-admission.js";
+import { recordRustValueCarrierReconciliation } from "../../program/records/types/value-carrier-admission.js";
 import { rustUnitTargetType } from "../../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 
@@ -34,7 +34,7 @@ import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustTargetOperationSupportsAssignment } from "../../../policy/operations/members/native-contracts.js";
 
 import { selectRustProviderSourceReceiver } from "./source-qualifiers.js";
-import type { RustProviderSourceReceiver } from "../../../target-model/records/finalized-operation.js";
+import type { RustProviderSourceReceiver } from "../../../target-model/records/operations/finalized-operation.js";
 import { assignmentTarget } from "../operator-inputs.js";
 
 type RustMemberWriteInput = Pick<RustCheckedOperatorSelectionInput, "expression" | "left" | "right">;

@@ -9,9 +9,9 @@ import { applyRustFallibleResultExpression } from "../../types/fallible-shape.js
 import { rustSelfParameter } from "../../declarations/callables/self-parameter.js";
 import type { RustProjectTypeDefinition } from "../../../../target-model/types/project-types.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
-import type { RustObjectRepresentation } from "../../../../target-model/records/object-representation.js";
-import type { RustProjectMethodDispatchVariant } from "../../../../target-model/records/method-dispatch.js";
-import type { RustProjectRootContractEmission } from "../../../../target-model/records/project-classes.js";
+import type { RustObjectRepresentation } from "../../../../target-model/records/objects/object-representation.js";
+import type { RustProjectMethodDispatchVariant } from "../../../../target-model/records/operations/method-dispatch.js";
+import type { RustProjectRootContractEmission } from "../../../../target-model/records/objects/project-classes.js";
 import { projectFieldStoragePath, projectOwnFields, renderProjectMethodProperty } from "./model.js";
 import type { ProjectClassStateLayer } from "./model.js";
 import {

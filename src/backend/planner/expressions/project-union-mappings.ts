@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import type { RustProjectUnionMapConversion } from "../../../target-model/conversions/project-union.js";
-import type { RustFlowReadProjectionFact, RustProjectUpcastFact } from "../../../target-model/records/value-projections.js";
+import type { RustFlowReadProjectionFact, RustProjectUpcastFact } from "../../../target-model/records/objects/value-projections.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";

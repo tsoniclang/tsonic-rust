@@ -2,7 +2,7 @@ import type { Node } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
 import { rustResolutionContext } from "../program/walk.js";
 import type { RustTargetGenericArgument, TargetTypeRef } from "../../target-model/types/model.js";
-import type { RustSelectedTargetSignature } from "../../target-model/records/member-selections.js";
+import type { RustSelectedTargetSignature } from "../../target-model/records/operations/member-selections.js";
 import { rustIndexedFieldTrait } from "../../target-model/types/carriers/indexed-fields.js";
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
@@ -10,7 +10,7 @@ import { closedMetadataEquals } from "../../target-model/metadata/closed-data.js
 import { resolveRustIndexedField } from "../source-evidence/types/resolution/indexed-fields.js";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { RustProgramRecordWriter } from "../program/records/model.js";
-import { requireRustRecord, type RustRequiredRecord } from "../program/records/required-records.js";
+import { requireRustRecord, type RustRequiredRecord } from "../program/records/objects/required-records.js";
 
 export function selectRustIndexedCallKeys(
   walk: RustFactWalk,

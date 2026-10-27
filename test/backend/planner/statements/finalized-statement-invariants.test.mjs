@@ -18,7 +18,7 @@ import { planRustAssignmentWrite } from "../../../../dist/backend/planner/statem
 import { validateRustFinalizedOperationAbi } from "../../../../dist/policy/operations/members/abi/validation.js";
 import { analyzeRustStatementCompletions } from "../../../../dist/analysis/control-flow/statement-completion.js";
 import { analyzeRustCountedLoopRepresentations } from "../../../../dist/analysis/control-flow/counted-loop-representations.js";
-import { createRustStatementCompletionProducer } from "../../../../dist/analysis/program/records/statement-completion.js";
+import { createRustStatementCompletionProducer } from "../../../../dist/analysis/program/records/operations/statement-completion.js";
 import { createRustProgramRecordBuilder } from "../../../../dist/analysis/program/records/create.js";
 import { analyzeRustProgramErrorModuleEmission } from "../../../../dist/analysis/errors/module-emission.js";
 import { planStatement } from "../../../../dist/backend/planner/statements/planning.js";

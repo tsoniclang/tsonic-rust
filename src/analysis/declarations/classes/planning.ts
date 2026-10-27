@@ -3,9 +3,9 @@ import { failTargetAnalysisInvariant, type TargetDiagnostic } from "@tsonic/targ
 import { Node_Initializer, sourceClassFieldIsTypeOnly, sourceObjectMemberDeclarations, sourceParameterIsProperty,
   type TargetSourceProgram } from "@tsonic/target-api/source";
 import type { RustAnalysisProgram } from "../../program/model.js";
-import type { RustReachability } from "../../../target-model/records/reachability.js";
-import type { RustClassEmissionProducer } from "../../program/records/class-emission.js";
-import type { RustNativeClassField, RustNativeClassEmission } from "../../../target-model/records/class-emission.js";
+import type { RustReachability } from "../../../target-model/records/program/reachability.js";
+import type { RustClassEmissionProducer } from "../../program/records/objects/class-emission.js";
+import type { RustNativeClassField, RustNativeClassEmission } from "../../../target-model/records/objects/class-emission.js";
 import { isValidRustIdentifier } from "../../../target-model/names/identifiers.js";
 import { rustSourceItemIdentity } from "../../../target-model/names/source-output-identities.js";
 import { rustProjectMemberIsPrivate } from "../../project-types/member-privacy.js";

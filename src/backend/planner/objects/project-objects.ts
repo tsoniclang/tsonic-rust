@@ -6,7 +6,7 @@ import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustAssignmentOperator } from "../../../target-model/syntax/tokens.js";
 import { requireRustCarrierRead } from "../types/carrier-reads.js";
 import type { RustExpr, RustType } from "../../target-ast/syntax/nodes.js";
-import type { RustObjectRepresentation } from "../../../target-model/records/object-representation.js";
+import type { RustObjectRepresentation } from "../../../target-model/records/objects/object-representation.js";
 import type { RustPlannedProjectFieldDispatchRole } from "./project-field-dispatch.js";
 import type { RustCapturedFieldStorage } from "../../../target-model/types/field-storage.js";
 import { rustCapturedFieldLocation, writeRustCapturedFieldFromStorage } from "./captured-fields.js";

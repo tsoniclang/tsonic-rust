@@ -1,11 +1,11 @@
 import type { Node, SourceFile } from "@tsonic/tsts";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { RustAnalysisProgram } from "../../program/model.js";
-import type { RustFrameEmissionProducer } from "../../program/records/frame-emission.js";
-import type { RustGenericRequirement } from "../../../target-model/records/generic-requirements.js";
+import type { RustFrameEmissionProducer } from "../../program/records/callables/frame-emission.js";
+import type { RustGenericRequirement } from "../../../target-model/records/types/generic-requirements.js";
 import { closedMetadataKey } from "../../../target-model/metadata/closed-data.js";
 import { isRustCopyCarrier } from "../../../policy/constraints/native-traits.js";
-import type { RustFrameCallableDefinition } from "../../../target-model/records/frame-callables.js";
+import type { RustFrameCallableDefinition } from "../../../target-model/records/callables/frame-callables.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { rustFrameCallableValue } from "../../../target-model/types/carriers/frame-callables.js";
@@ -18,7 +18,7 @@ export function analyzeRustFrameEmission(input: {
   readonly sourceFiles: readonly SourceFile[];
   readonly nodes: readonly Node[];
   readonly producer: RustFrameEmissionProducer;
-  readonly nativeTypeFor: (carrier: TargetTypeRef) => import("../../../target-model/records/frame-emission.js").RustFrameNativeType | undefined;
+  readonly nativeTypeFor: (carrier: TargetTypeRef) => import("../../../target-model/records/callables/frame-emission.js").RustFrameNativeType | undefined;
 }): void {
   const { program } = input;
   const frames = program.callableValues.frames;

@@ -1,7 +1,7 @@
 import type { Node } from "@tsonic/tsts";
 import { rustInlineBindingStoragePath } from "../../expressions/binding-storage.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
-import type { SourceCallableContract } from "../../../../target-model/records/source-callable-contract.js";
+import type { SourceCallableContract } from "../../../../target-model/records/callables/source-callable-contract.js";
 import type { RustExpr, RustFunctionParam, RustStmt } from "../../../target-ast/syntax/nodes.js";
 import { failRustPlannerInvariant } from "../../diagnostics.js";
 import { planRustBindingPattern, type RustBindingExpressionPlanner } from "../../bindings/binding-patterns.js";
@@ -12,7 +12,7 @@ import { planRustNativeAllocation } from "../../expressions/native-memory.js";
 import { rustOptionDefaultValue } from "../../expressions/option-default.js";
 import { planRustParameterEntryConversion } from "./parameter-entry-conversion.js";
 import { rustBindingLivenessAttributes } from "../../bindings/liveness.js";
-import type { RustCallableParameterInitialization } from "../../../../target-model/records/parameter-emission.js";
+import type { RustCallableParameterInitialization } from "../../../../target-model/records/calls/parameter-emission.js";
 
 type RustParameterPrelude =
   | { readonly kind: "statement"; readonly statement: RustStmt }

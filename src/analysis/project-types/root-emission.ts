@@ -1,11 +1,11 @@
 import type { Node } from "@tsonic/tsts";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { RustAnalysisProgram } from "../program/model.js";
-import type { RustProjectClassProducer } from "../program/records/project-classes.js";
+import type { RustProjectClassProducer } from "../program/records/objects/project-classes.js";
 import type { RustProjectTypeDefinition } from "../../target-model/types/project-types.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
-import type { RustProjectRootContractEmission, RustProjectRootFieldEmission, RustProjectRootMethodEmission } from "../../target-model/records/project-classes.js";
-import type { RustProjectMethodDispatchVariant } from "../../target-model/records/method-dispatch.js";
+import type { RustProjectRootContractEmission, RustProjectRootFieldEmission, RustProjectRootMethodEmission } from "../../target-model/records/objects/project-classes.js";
+import type { RustProjectMethodDispatchVariant } from "../../target-model/records/operations/method-dispatch.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustProjectMemberIsPrivate } from "./member-privacy.js";
 

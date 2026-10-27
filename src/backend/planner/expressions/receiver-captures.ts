@@ -1,5 +1,5 @@
 import type { Node } from "@tsonic/tsts";
-import type { RustClosureCaptureFact } from "../../../target-model/records/operation-selections.js";
+import type { RustClosureCaptureFact } from "../../../target-model/records/operations/operation-selections.js";
 import type { RustExpr, RustType } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";

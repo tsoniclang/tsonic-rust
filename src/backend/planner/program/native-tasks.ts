@@ -1,5 +1,5 @@
 import type { Node, SourceFile } from "@tsonic/tsts";
-import type { RustNativeTaskScope, RustNativeTaskUse } from "../../../target-model/records/native-tasks.js";
+import type { RustNativeTaskScope, RustNativeTaskUse } from "../../../target-model/records/native/native-tasks.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustExpr, RustFunctionParam } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "./plan-context.js";

@@ -1,5 +1,5 @@
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
-import type { RustTargetOperationFact } from "../../../../target-model/records/operations.js";
+import type { RustTargetOperationFact } from "../../../../target-model/records/operations/operations.js";
 import type { RustProviderOperationTemplate } from "../../../../target-model/operations/model.js";
 import { rustSourcePrimitiveTargetType, rustJsArrayTargetType } from "../../../../target-model/types/index.js";
 import { rustTupleTargetType } from "../../../types/collections/tuple-carrier.js";

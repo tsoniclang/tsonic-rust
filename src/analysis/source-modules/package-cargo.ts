@@ -1,9 +1,9 @@
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustAnalysisProgram } from "../program/model.js";
-import type { RustSourcePackageEmissionProducer } from "../program/records/source-packages.js";
+import type { RustSourcePackageEmissionProducer } from "../program/records/program/source-packages.js";
 import type { CargoDependency, CargoManifestPlan } from "../../target-model/project/cargo.js";
-import type { RustSourcePackageComponentPlan } from "../../target-model/records/source-packages.js";
-import type { RustSourcePackageCargoPlan } from "../../target-model/records/source-package-crates.js";
+import type { RustSourcePackageComponentPlan } from "../../target-model/records/program/source-packages.js";
+import type { RustSourcePackageCargoPlan } from "../../target-model/records/program/source-package-crates.js";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 
 export function analyzeRustPackageCargo(program: Omit<RustAnalysisProgram, "reachability">,

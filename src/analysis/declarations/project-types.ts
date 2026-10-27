@@ -1,4 +1,4 @@
-import { requireRustRecord } from "../program/records/required-records.js";
+import { requireRustRecord } from "../program/records/objects/required-records.js";
 import {
   ClassStaticBlock_Body,
   KindClassStaticBlockDeclaration,
@@ -28,7 +28,7 @@ import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustAnalysisContext } from "../program/context.js";
 import type { RustFactWalk } from "../program/walk.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
-import type { RustCapturedFieldStorageFact } from "../../target-model/records/receiver-captures.js";
+import type { RustCapturedFieldStorageFact } from "../../target-model/records/callables/receiver-captures.js";
 import { rustSourceTypeDeclarations } from "../project-types/source-declarations.js";
 import { closeRustSuspendedStorage } from "../../policy/types/storage/suspended-storage.js";
 import { rustNativePropertyNameIssue } from "../objects/computed-field-names.js";

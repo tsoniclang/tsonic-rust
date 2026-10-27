@@ -6,7 +6,7 @@ import { selectRustNativeGuardResult } from "../source-evidence/types/resolution
 import type { RustFactWalk } from "../program/walk.js";
 import { rustResolutionContext } from "../program/walk.js";
 import { resolveRustTargetTypeRef } from "../source-evidence/types/resolution/source.js";
-import { requireRustRecord } from "../program/records/required-records.js";
+import { requireRustRecord } from "../program/records/objects/required-records.js";
 
 export function recordRustNativeGuardResult(walk: RustFactWalk, expression: Node): boolean | undefined {
   const context = walk.context;

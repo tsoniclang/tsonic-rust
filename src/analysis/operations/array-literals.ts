@@ -4,13 +4,13 @@ import { rustProgramNodeIsOutsideNativeCode } from "../control-flow/compile-time
 import { isSourceCallableBodyBoundary, sourceBoundTypeRelationship, sourceSequenceInputChoice, sourceSequenceInputIsEmpty, KindOmittedExpression, Node_Expression, type SourceLiteralValue } from "@tsonic/target-api/source";
 import { type TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import { type RustAnalysisProgram } from "../program/model.js";
-import { type RustArrayLiteralProducer } from "../program/records/array-literals.js";
-import { type RustBorrowedSequenceEmission } from "../../target-model/records/array-literals.js";
+import { type RustArrayLiteralProducer } from "../program/records/operations/array-literals.js";
+import { type RustBorrowedSequenceEmission } from "../../target-model/records/operations/array-literals.js";
 import { rustValueConversionContract } from "../../policy/conversions/contracts.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustVecTargetType, isRustJsArrayCarrier, isRustNumericCarrier, rustJsArrayLikeElementTargetType, rustOptionElementCarrier, rustOptionTargetType, isRustVecCarrier, rustFixedArrayCarrierValue, rustTargetConstInteger } from "../../target-model/types/index.js";
 import { rustArrayLiteralCarrier } from "../../policy/types/collections/array-literals.js";
-import { requireRustRecord } from "../program/records/required-records.js";
+import { requireRustRecord } from "../program/records/objects/required-records.js";
 import { appendMalformedSourceAst } from "../declarations/project-types.js";
 import { appendRustDiagnostic, rustResolutionContext, type RustFactWalk } from "../program/walk.js";
 import { resolveExpressionCarrier } from "../source-evidence/types/resolution/expression-carriers.js";
@@ -20,7 +20,7 @@ import { resolveRustTargetTypeRef } from "../source-evidence/types/resolution/so
 import { resolveRustInferredUnion } from "../source-evidence/types/resolution/inferred-unions.js";
 import { resolveRustSourceUnionCarrier, resolveRustUnionValueCarrier } from "../source-evidence/types/resolution/source-unions.js";
 import { setCarrierFact } from "./project-calls.js";
-import { type RustTargetOperationFact } from "../../target-model/records/operations.js";
+import { type RustTargetOperationFact } from "../../target-model/records/operations/operations.js";
 import { type TargetTypeRef } from "../../target-model/types/model.js";
 import { rustBorrowedSequenceElementCandidates, selectRustBorrowedSequenceInput } from "./borrowed-sequences.js";
 import { collectRustArrayElementStorageDemands } from "../storage/array-storage.js";
@@ -45,7 +45,7 @@ export function analyzeRustArrayLiterals(program: Omit<RustAnalysisProgram, "rea
     let owner: Node | undefined = program.source.ast.parent(node);
     while (owner !== undefined && !isSourceCallableBodyBoundary(program.source.ast, owner)) owner = program.source.ast.parent(owner);
     const body = owner !== undefined && program.records.callableDeclaration.get(owner)?.nativeBody !== undefined ? true : undefined;
-    const pending: { readonly input: import("../../target-model/records/borrowed-sequences.js").RustBorrowedSequenceInput;
+    const pending: { readonly input: import("../../target-model/records/storage/borrowed-sequences.js").RustBorrowedSequenceInput;
       readonly inputs: RustBorrowedSequenceEmission["inputs"] }[] = [];
     let valid = true;
     for (const contribution of literal.contributions) {

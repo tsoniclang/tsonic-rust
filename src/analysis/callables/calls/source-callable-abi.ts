@@ -1,5 +1,5 @@
 import { rustParameterModeForCarriers, selectRustSourceParameterAbi, selectRustSourceParameterBorrowCarrier, rustSourceParameterSupportsMemberWrites } from "../../../policy/ownership/source-parameter-contracts.js";
-import type { RustSourceParameterAbiFact } from "../../../target-model/records/callables-and-resources.js";
+import type { RustSourceParameterAbiFact } from "../../../target-model/records/callables/callables-and-resources.js";
 import { flowStateFactKey } from "@tsonic/tsts";
 import { selectRustParameterEntryConversion } from "../../../policy/ownership/parameter-entry-conversion.js";
 import type { Node, Type } from "@tsonic/tsts";
@@ -31,8 +31,8 @@ import { retainRustStructuralInstantiation } from "../../source-evidence/types/r
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import { rustSourceStorageSubjectContext } from "../../source-evidence/types/resolution/source-storage-projection.js";
 import { appendRustDiagnostic, rustResolutionContext, type RustFactWalk } from "../../program/walk.js";
-import type { RustSourceCallableReturnFact } from "../../../target-model/records/source-declarations.js";
-import type { RustRetainedEnvironment } from "../../../target-model/records/retained-environments.js";
+import type { RustSourceCallableReturnFact } from "../../../target-model/records/program/source-declarations.js";
+import type { RustRetainedEnvironment } from "../../../target-model/records/callables/retained-environments.js";
 import { selectRustPointerReturnContract } from "../ownership/pointer-return.js";
 import { rustGenericCallableValueOwner } from "../../../policy/types/callables/callable-origins.js";
 import { resolveRustRetainedResult } from "../../source-evidence/types/resolution/retained-results.js";
@@ -40,13 +40,13 @@ import { selectRustInferredReturn, selectRustRetainedReturn, type RustInferredRe
 import { rustOptionalStorageValue } from "../../../target-model/types/projections.js";
 import { rustUnionPayloadAdmission } from "../../../policy/conversions/union-injection.js";
 import { rustAbsenceTargetType } from "../../../target-model/types/carriers/native.js";
-import { requireRustRecord } from "../../program/records/required-records.js";
-import { rustSourceCallableReturnFactEquals } from "../../../target-model/records/equality.js";
+import { requireRustRecord } from "../../program/records/objects/required-records.js";
+import { rustSourceCallableReturnFactEquals } from "../../../target-model/records/operations/equality.js";
 import type { TargetSourceProgram } from "@tsonic/target-api/source";
 import type { RustProgramRecords } from "../../../target-model/records/program.js";
 import type { RustLifetimeIndex } from "../../../target-model/lifetimes/index.js";
-import type { SourceCallableNativeContract, SourceCallableSourceContract } from "../../../target-model/records/source-callable-contract.js";
-import type { RustImplicitConstructorParameter } from "../../../target-model/records/construction.js";
+import type { SourceCallableNativeContract, SourceCallableSourceContract } from "../../../target-model/records/callables/source-callable-contract.js";
+import type { RustImplicitConstructorParameter } from "../../../target-model/records/objects/construction.js";
 
 export function createRustSourceCallableContract(input: {
   readonly source: TargetSourceProgram;

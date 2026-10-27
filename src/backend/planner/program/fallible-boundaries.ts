@@ -1,7 +1,7 @@
 import type { RustExpr, RustType } from "../../target-ast/syntax/nodes.js";
 import { rustTypeEquals } from "../../target-ast/syntax/type-equality.js";
 import type { RustNativeErrorJoinPlan, RustNativeErrorJoinSelection } from "../types/native-error-joins.js";
-import type { RustSourcePackageErrorBoundary } from "../../../target-model/records/source-package-errors.js";
+import type { RustSourcePackageErrorBoundary } from "../../../target-model/records/errors/source-package-errors.js";
 
 export interface RustLocalErrorChannel {
   readonly owner: RustSourcePackageErrorBoundary;

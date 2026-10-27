@@ -3,8 +3,8 @@ import { Node_Expression, ElementAccessExpression_ArgumentExpression, type Sourc
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustAnalysisProgram } from "../program/model.js";
-import type { RustProviderEvaluationProducer } from "../program/records/provider-evaluation.js";
-import type { RustMutableProviderStorage } from "../../target-model/records/provider-evaluation.js";
+import type { RustProviderEvaluationProducer } from "../program/records/native/provider-evaluation.js";
+import type { RustMutableProviderStorage } from "../../target-model/records/native/provider-evaluation.js";
 import { rustTargetOperationIsDirectLocation } from "../../policy/operations/members/native-contracts.js";
 import { rustNativeStorageRoot } from "./native-paths.js";
 import { isValidRustIdentifier } from "../../target-model/names/identifiers.js";

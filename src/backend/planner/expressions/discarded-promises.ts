@@ -1,7 +1,7 @@
 import { failRustPlannerInvariant } from "../diagnostics.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustAwaitSelection } from "../../../target-model/types/await.js";
-import type { RustDiscardedFutureSpawn, RustDiscardedPromiseLeaf } from "../../../target-model/records/promise-results.js";
+import type { RustDiscardedFutureSpawn, RustDiscardedPromiseLeaf } from "../../../target-model/records/callables/promise-results.js";
 import { planExpression } from "./entry.js";
 import type { RustExpr, RustPattern } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";

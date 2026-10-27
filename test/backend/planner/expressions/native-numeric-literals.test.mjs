@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeSourceLiteralValues } from "@tsonic/target-api/source";
 import { analyzeRustLiteralEmission } from "../../../../dist/analysis/operations/literals.js";
-import { createRustLiteralEmissionProducer } from "../../../../dist/analysis/program/records/literal-emission.js";
+import { createRustLiteralEmissionProducer } from "../../../../dist/analysis/program/records/operations/literal-emission.js";
 import { planNumericLiteralWithCarrier, planBigIntLiteral } from "../../../../dist/backend/planner/expressions/literal-conversions.js";
 import { rustSourcePrimitiveTargetType } from "../../../../dist/target-model/types/index.js";
 import { fakeAstReader, fakeCompileInput, fakeSourceFile, fakeStatement } from "../../../helpers/fake-compile-input.mjs";

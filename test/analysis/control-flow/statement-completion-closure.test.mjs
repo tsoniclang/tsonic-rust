@@ -5,8 +5,8 @@ import { analyzeRustStatementCompletions, rustRuntimeSetSourceInputs } from "../
 import { createRustProviderPackage } from "../../../dist/public/provider.js";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 import { rustNativeFixtureNodes } from "../../helpers/records.mjs";
-import { createRustStatementCompletionProducer } from "../../../dist/analysis/program/records/statement-completion.js";
-import { createRustDirectStorageProducer } from "../../../dist/analysis/program/records/direct-storage.js";
+import { createRustStatementCompletionProducer } from "../../../dist/analysis/program/records/operations/statement-completion.js";
+import { createRustDirectStorageProducer } from "../../../dist/analysis/program/records/storage/direct-storage.js";
 
 // Statement decisions are published as sealed record families; the queries below read those families.
 const statementQueries = Object.freeze({ conditionFor: "statementCondition", controlTargetsFor: "statementControlTargets",

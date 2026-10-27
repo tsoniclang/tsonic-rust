@@ -12,7 +12,7 @@ const prelude = `
   import type { RustProgramRecordBuilder } from "${join(root, "dist/analysis/program/records/model.js")}";
   import type { RustProgramRecords } from "${join(root, "dist/target-model/records/program.js")}";
   import type { TargetTypeRef } from "${join(root, "dist/target-model/types/model.js")}";
-  import type { RustRetainedEnvironment } from "${join(root, "dist/target-model/records/retained-environments.js")}";
+  import type { RustRetainedEnvironment } from "${join(root, "dist/target-model/records/callables/retained-environments.js")}";
   declare const builder: RustProgramRecordBuilder;
   declare const records: RustProgramRecords;
   declare const reference: Node;

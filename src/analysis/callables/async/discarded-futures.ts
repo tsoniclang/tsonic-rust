@@ -1,7 +1,7 @@
 import type { AstReader, Node } from "@tsonic/tsts";
 import { Node_Expression } from "@tsonic/target-api/source";
 import type { RustProgramRecords } from "../../../target-model/records/program.js";
-import type { RustDiscardedFutureSpawn } from "../../../target-model/records/promise-results.js";
+import type { RustDiscardedFutureSpawn } from "../../../target-model/records/callables/promise-results.js";
 import type { RustTypeDefinitions } from "../../../target-model/types/source-union-definitions.js";
 import { isRustCopyCarrier, rustCarrierSupportsClone } from "../../../policy/constraints/native-traits.js";
 import { selectRustJsRejectionRegion } from "../../../policy/operations/flow/js-rejection.js";

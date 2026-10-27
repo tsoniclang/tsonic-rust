@@ -22,7 +22,7 @@ import { rustJsPromiseOutputTargetType } from "../../target-model/types/carriers
 
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 
-import type { RustGenericRequirement } from "../../target-model/records/generic-requirements.js";
+import type { RustGenericRequirement } from "../../target-model/records/types/generic-requirements.js";
 import { normalizeRustGenericRequirements } from "./generic-requirement-contract.js";
 
 import { rustNativeCallableErrorChannel } from "../../policy/types/callables/native-protocols.js";

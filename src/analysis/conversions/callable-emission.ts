@@ -1,8 +1,8 @@
 import type { Node } from "@tsonic/tsts";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { RustAnalysisProgram } from "../program/model.js";
-import type { RustCallableConversionProducer } from "../program/records/callable-conversions.js";
-import type { RustCallableOperandEmission, RustCallableConversionEmission, RustNativeCallablePhysicalSource } from "../../target-model/records/callable-conversions.js";
+import type { RustCallableConversionProducer } from "../program/records/callables/callable-conversions.js";
+import type { RustCallableOperandEmission, RustCallableConversionEmission, RustNativeCallablePhysicalSource } from "../../target-model/records/callables/callable-conversions.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustCallableConversion } from "../../target-model/conversions/callable.js";
 import { type RustCallablePhysicalConversion, type RustCallablePhysicalSignature } from "../../target-model/conversions/callable-physical.js";
@@ -14,12 +14,12 @@ import { rustCallableWithError, rustUninhabitedError } from "../../policy/conver
 import { rustCallablePhysicalSignature } from "../../target-model/conversions/callable-physical.js";
 import { rustCallableProtocol } from "../../target-model/types/index.js";
 import { rustCallableTargetId } from "../../target-model/types/carriers/source-types.js";
-import type { RustCallableJoinWrite } from "../../target-model/records/native-storage.js";
+import type { RustCallableJoinWrite } from "../../target-model/records/native/native-storage.js";
 import { rustCallableConversionPhysical } from "../../policy/conversions/callable-physical.js";
 import { rustCallableInputProtocol } from "../../target-model/types/index.js";
 import { rustNativeCallableOperand } from "../callables/native/native-conversions.js";
 import { rustProgramNodeIsOutsideNativeCode } from "../control-flow/compile-time-statements.js";
-import type { RustCallableValueAdapter } from "../../target-model/records/callable-adapters.js";
+import type { RustCallableValueAdapter } from "../../target-model/records/callables/callable-adapters.js";
 import { rustNativeCallablePhysicalSource } from "../../policy/conversions/native-callables.js";
 
 export function analyzeRustCallableEmission(program: Omit<RustAnalysisProgram, "reachability">,

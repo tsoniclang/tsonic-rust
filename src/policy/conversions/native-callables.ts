@@ -1,5 +1,5 @@
 import { rustCallablePhysicalSignature, type RustCallablePhysicalSignature } from "../../target-model/conversions/callable-physical.js";
-import type { RustNativeCallablePhysicalSource } from "../../target-model/records/callable-conversions.js";
+import type { RustNativeCallablePhysicalSource } from "../../target-model/records/callables/callable-conversions.js";
 import type { RustTargetGenericArgument, TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
@@ -8,15 +8,15 @@ import { rustOnlyTypeGenericArguments, rustTypeGenericArguments } from "../../ta
 import { substituteRustTargetGenerics } from "../../target-model/types/carriers/substitution.js";
 import { snapshotClosedMetadata } from "../../target-model/metadata/closed-data.js";
 
-import type { RustNativeCallableInput } from "../../target-model/records/native-protocols.js";
+import type { RustNativeCallableInput } from "../../target-model/records/native/native-protocols.js";
 
-import type { RustNativeStorageSelection } from "../../target-model/records/native-storage.js";
+import type { RustNativeStorageSelection } from "../../target-model/records/native/native-storage.js";
 import { rustCallableSignatureAbsenceWitness } from "../../target-model/types/carriers/callable-input-witness.js";
 import { instantiateRustNativeCompletion } from "../../target-model/types/callable-completions.js";
 import { rustJsPromiseTargetType } from "../../target-model/types/carriers/promises.js";
 import { rustInfallibleTargetId, rustJsPromiseTargetId } from "../../target-model/types/carriers/source-types.js";
 import { rustFrameCallableProtocol } from "../../target-model/types/carriers/frame-callables.js";
-import type { RustFrameCallablePlan } from "../../target-model/records/frame-callables.js";
+import type { RustFrameCallablePlan } from "../../target-model/records/callables/frame-callables.js";
 import { rustGenericCallablePhysicalBindings } from "../types/callables/generic-bindings.js";
 
 export function rustNativeCallableAbsenceWitness(

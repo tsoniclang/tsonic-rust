@@ -3,7 +3,7 @@ import test from "node:test";
 import { selectJsSurfaceMemberRead, selectJsSurfaceMemberWrite } from "../../../dist/policy/operations/source-profiles/js/member-reads.js";
 import { emptyRustTypeDefinitions } from "../../../dist/target-model/types/source-union-definitions.js";
 import { rustJsArrayTargetType, rustSourcePrimitiveTargetType, rustStringTargetType } from "../../../dist/target-model/types/index.js";
-import { finalizeProviderOperationFact } from "../../../dist/analysis/program/records/provider-operations.js";
+import { finalizeProviderOperationFact } from "../../../dist/analysis/program/records/native/provider-operations.js";
 import { rustIndexedLocationContract } from "../../../dist/policy/operations/members/abi/indexed-location.js";
 
 const integer = rustSourcePrimitiveTargetType("int32");

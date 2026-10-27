@@ -2,10 +2,10 @@ import type { Node } from "@tsonic/tsts";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { substituteRustTargetGenerics } from "../../../target-model/types/carriers/substitution.js";
 import type { RustNativeErrorSource } from "../../../target-model/types/native-error-joins.js";
-import type { RustSourceCallEffectsFact } from "../../../target-model/records/object-methods.js";
+import type { RustSourceCallEffectsFact } from "../../../target-model/records/objects/object-methods.js";
 
-import type { RustGenericCallablePhysicalDefinition, RustGenericCallablePhysicalMember } from "../../../target-model/records/generic-callables.js";
-import type { RustNativeCallableProducerPlan } from "../../../target-model/records/native-producers.js";
+import type { RustGenericCallablePhysicalDefinition, RustGenericCallablePhysicalMember } from "../../../target-model/records/callables/generic-callables.js";
+import type { RustNativeCallableProducerPlan } from "../../../target-model/records/native/native-producers.js";
 import type { RustGenericCallableBindingContext } from "./generic-bindings.js";
 import { createRustEffectsWorkBudget } from "../../errors/effects-work-budget.js";
 import { rejectedTargetStage, resolvedTargetStage, type TargetStageResult } from "@tsonic/target-api/artifacts";
@@ -68,5 +68,5 @@ export function selectRustGenericCallableErrors(
   });
 }
 
-import type { RustGenericCallableErrorIndex, RustGenericCallableErrorSelection, RustGenericCallableMemberErrors } from "../../../target-model/records/generic-callable-errors.js";
-import { sealRustGenericCallableErrorIndex, sealRustGenericCallableErrorSelection } from "../../program/records/generic-callable-errors.js";
+import type { RustGenericCallableErrorIndex, RustGenericCallableErrorSelection, RustGenericCallableMemberErrors } from "../../../target-model/records/callables/generic-callable-errors.js";
+import { sealRustGenericCallableErrorIndex, sealRustGenericCallableErrorSelection } from "../../program/records/callables/generic-callable-errors.js";

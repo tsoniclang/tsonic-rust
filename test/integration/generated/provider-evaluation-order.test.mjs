@@ -15,9 +15,9 @@ import { selectRustProviderSourceOccurrence } from "../../../dist/analysis/opera
 import { printRustExpr } from "../../../dist/print/source/expressions/core.js";
 import { rustNamedTypeCarrierValue } from "../../../dist/target-model/types/index.js";
 import { analyzeRustProviderEvaluation } from "../../../dist/analysis/storage/provider-evaluation.js";
-import { createRustProviderEvaluationProducer } from "../../../dist/analysis/program/records/provider-evaluation.js";
+import { createRustProviderEvaluationProducer } from "../../../dist/analysis/program/records/native/provider-evaluation.js";
 import { analyzeRustProviderForms, selectRustProviderReads } from "../../../dist/analysis/operations/provider-forms.js";
-import { createRustProviderFormProducer } from "../../../dist/analysis/program/records/provider-forms.js";
+import { createRustProviderFormProducer } from "../../../dist/analysis/program/records/native/provider-forms.js";
 import { createRustRecordFixture } from "../../helpers/records.mjs";
 import { analyzeRustProviderMutableEmission } from "../../../dist/analysis/storage/provider-mutable-emission.js";
 import { rustSourceFilePlanContext } from "../../helpers/plan-context.mjs";

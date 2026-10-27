@@ -6,7 +6,7 @@ import { analyzeRustErrorEffects } from "../../../helpers/rust-error-analysis.mj
 import { createRustRecordFixture } from "../../../helpers/records.mjs";
 import { createRustProgramRecordBuilder } from "../../../../dist/analysis/program/records/create.js";
 import { createRustCarrierProbe } from "../../../../dist/analysis/program/carrier-probe.js";
-import { assertRustRequiredRecords, requireRustRecord } from "../../../../dist/analysis/program/records/required-records.js";
+import { assertRustRequiredRecords, requireRustRecord } from "../../../../dist/analysis/program/records/objects/required-records.js";
 
 const { context, walk } = analyzeRustOperations("export function selected(value: number): number { return value; }", { surfaces: [] });
 const subject = context.sourceStorage.nodes.find(node => context.ast.is.IsFunctionDeclaration(node));

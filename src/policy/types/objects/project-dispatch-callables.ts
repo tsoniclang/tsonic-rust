@@ -1,5 +1,5 @@
 import type { RustProjectCallablePolicyInput } from "../../model/project-dispatch-callables.js";
-import type { RustProjectCallableSignature } from "../../../target-model/records/project-classes.js";
+import type { RustProjectCallableSignature } from "../../../target-model/records/objects/project-classes.js";
 import { isRustUnitCarrier, isRustNeverCarrier } from "../../../target-model/types/index.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";

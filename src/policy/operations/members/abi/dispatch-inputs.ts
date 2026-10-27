@@ -2,7 +2,7 @@ import { isDenseDataArray } from "../../../../target-model/metadata/closed-data.
 import type { RustResolvedDispatchContextInput } from "../../../../target-model/operations/dispatch-contexts.js";
 import { isRustResolvedDispatchContextInput, rustProviderOperationFormAcceptsDispatchInputs } from "../../../../target-model/operations/dispatch-contexts.js";
 import { carrierAfterMode } from "./conversions.js";
-import type { RustFinalizedOperationAbi, RustFinalizedTargetInput } from "../../../../target-model/records/finalized-operation.js";
+import type { RustFinalizedOperationAbi, RustFinalizedTargetInput } from "../../../../target-model/records/operations/finalized-operation.js";
 
 export function insertRustDispatchContextInputs(
   mapping: Pick<RustFinalizedOperationAbi, "targetReceiver" | "targetArguments">,

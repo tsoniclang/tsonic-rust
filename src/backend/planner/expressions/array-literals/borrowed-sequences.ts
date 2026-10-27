@@ -1,5 +1,5 @@
 import type { Node } from "@tsonic/tsts";
-import type { RustBorrowedSequenceInput } from "../../../../target-model/records/borrowed-sequences.js";
+import type { RustBorrowedSequenceInput } from "../../../../target-model/records/storage/borrowed-sequences.js";
 import type { RustExpr } from "../../../target-ast/syntax/nodes.js";
 import { allocateRustSyntheticName } from "../../names/synthetic.js";
 import type { RustPlanContext } from "../../program/plan-context.js";

@@ -4,13 +4,13 @@ import type { Node } from "@tsonic/tsts";
 import type { RustProjectTypeDefinition } from "../project-types/index.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustProjectProjectionSelection } from "../../target-model/types/project-projections.js";
-import type { RustProjectUpcastFact } from "../../target-model/records/value-projections.js";
+import type { RustProjectUpcastFact } from "../../target-model/records/objects/value-projections.js";
 import { rustOptionElementCarrier, rustSourceUnionCarrierValue } from "../../target-model/types/index.js";
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
 import { rustStructuralUsageKey } from "./generated-item-usage-helpers.js";
 import type { RustStructuralUsageKey } from "./generated-item-usage-helpers.js";
 import type { RustGeneratedItemUsageInput } from "./generated-item-usage-model.js";
-import type { RustDispatchMemberRole, RustGeneratedItemUsage, RustGeneratedProjectFieldRole, RustStructuralReachability, RustVariantReachability } from "../../target-model/records/reachability.js";
+import type { RustDispatchMemberRole, RustGeneratedItemUsage, RustGeneratedProjectFieldRole, RustStructuralReachability, RustVariantReachability } from "../../target-model/records/program/reachability.js";
 
 export function createRustGeneratedItemUsageState(input: RustGeneratedItemUsageInput) {
   const storageKeys = new Map<TargetTypeRef, RustStructuralUsageKey>();

@@ -1,8 +1,8 @@
 import type { Node } from "@tsonic/tsts";
 import { BinaryExpression_Left, BinaryExpression_Right, ElementAccessExpression_ArgumentExpression, Node_Expression, sourceTransparentExpressionOperand } from "@tsonic/target-api/source";
 import type { RustAnalysisProgram } from "../program/model.js";
-import type { RustNativeComparisonProducer } from "../program/records/native-comparisons.js";
-import type { RustNativeComparison } from "../../target-model/records/native-comparisons.js";
+import type { RustNativeComparisonProducer } from "../program/records/native/native-comparisons.js";
+import type { RustNativeComparison } from "../../target-model/records/native/native-comparisons.js";
 import { isRustIntegerCarrier, isRustSignedNumericCarrier, isRustBoolCarrier, isRustStringCarrier } from "../../target-model/types/index.js";
 import { rustBorrowValueIsUnprojected } from "../storage/borrowed-element-purity.js";
 import { rustProgramNodeIsOutsideNativeCode } from "../control-flow/compile-time-statements.js";

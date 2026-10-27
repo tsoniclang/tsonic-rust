@@ -12,9 +12,9 @@ import { rustCallableTargetId } from "../../../target-model/types/carriers/sourc
 import { closedMetadataKey, snapshotClosedMetadata } from "../../../target-model/metadata/closed-data.js";
 
 import { selectRustPhysicalProgramErrorOwner } from "../../errors/error-types.js";
-import type { RustSourcePackageComponentClassifications } from "../../../target-model/records/source-package-semantics.js";
+import type { RustSourcePackageComponentClassifications } from "../../../target-model/records/program/source-package-semantics.js";
 import type { RustNativeCallableInputPlan } from "../native/native-inputs.js";
-import type { RustNativeCallableInput } from "../../../target-model/records/native-protocols.js";
+import type { RustNativeCallableInput } from "../../../target-model/records/native/native-protocols.js";
 import type { RustNativeStoragePlan } from "../storage/native-storage.js";
 import { createRustEffectsWorkBudget } from "../../errors/effects-work-budget.js";
 
@@ -120,6 +120,6 @@ export function analyzeRustRetainedCallableInputs(input: {
   return resolvedTargetStage(sealRustRetainedCallableInputs(requirements, boundaries));
 }
 
-import type { RustRetainedCallableBoundary, RustRetainedCallableInputPlan } from "../../../target-model/records/retained-inputs.js";
-import { sealRustRetainedCallableInputs } from "../../program/records/retained-inputs.js";
+import type { RustRetainedCallableBoundary, RustRetainedCallableInputPlan } from "../../../target-model/records/callables/retained-inputs.js";
+import { sealRustRetainedCallableInputs } from "../../program/records/callables/retained-inputs.js";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";

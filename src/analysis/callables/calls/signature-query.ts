@@ -4,11 +4,11 @@ import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { RustFactWalk } from "../../program/walk.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
-import type { RustAsyncFunctionFact, RustGeneratorFact, RustSourceParameterAbiFact } from "../../../target-model/records/callables-and-resources.js";
-import type { RustSourceCallableReturnFact } from "../../../target-model/records/source-declarations.js";
+import type { RustAsyncFunctionFact, RustGeneratorFact, RustSourceParameterAbiFact } from "../../../target-model/records/callables/callables-and-resources.js";
+import type { RustSourceCallableReturnFact } from "../../../target-model/records/program/source-declarations.js";
 
 import { closedMetadataKey } from "../../../target-model/metadata/closed-data.js";
-import { rustAsyncFunctionFactEquals, rustGeneratorFactEquals } from "../../../target-model/records/equality.js";
+import { rustAsyncFunctionFactEquals, rustGeneratorFactEquals } from "../../../target-model/records/operations/equality.js";
 import { rustCallableTargetType, rustCallableProtocol, rustClosureProtocol } from "../../../target-model/types/carriers/callables.js";
 import { rustCallableInvocationResult } from "../../../policy/types/callables/return-contexts.js";
 import { recordCallableParameterInputFacts, recordCallableParameterSignatureFacts } from "../values/parameter-signature.js";
@@ -18,7 +18,7 @@ import { requireDenseSourceNodes } from "../../source-evidence/dense-nodes.js";
 import { selectRustCallableSuspension } from "../async/suspension.js";
 import type { RustCallableSuspensionSelection } from "../async/suspension.js";
 import { recordRustSourceCallableReturn, selectRustCallableLogicalReturn } from "./source-callable-abi.js";
-import { requireRustRecord } from "../../program/records/required-records.js";
+import { requireRustRecord } from "../../program/records/objects/required-records.js";
 import { rustClassCallableMemberOwner, rustClassReceiverCarriers } from "../../declarations/classes/receivers.js";
 
 export interface RustCallableSignatureRequest {

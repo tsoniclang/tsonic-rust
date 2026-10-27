@@ -12,8 +12,8 @@ import { createRustProgramRecordBuilder } from "${join(root, "dist/analysis/prog
 import type { Node } from "@tsonic/tsts";
 import type { TargetTypeRef } from "${join(root, "dist/target-model/types/model.js")}";
 import type { RustProviderOperationTemplate } from "${join(root, "dist/target-model/operations/model.js")}";
-import type { RustOptionalChainContract } from "${join(root, "dist/analysis/program/records/optional-chain.js")}";
-import type { RustClosureCaptureFact } from "${join(root, "dist/target-model/records/operation-selections.js")}";
+import type { RustOptionalChainContract } from "${join(root, "dist/analysis/program/records/operations/optional-chain.js")}";
+import type { RustClosureCaptureFact } from "${join(root, "dist/target-model/records/operations/operation-selections.js")}";
 declare const node: Node;
 declare const carrier: TargetTypeRef;
 declare const operation: RustProviderOperationTemplate;

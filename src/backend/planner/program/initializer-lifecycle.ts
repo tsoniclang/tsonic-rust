@@ -1,4 +1,4 @@
-import type { RustInitializerErrorSelection } from "../../../target-model/records/error-regions.js";
+import type { RustInitializerErrorSelection } from "../../../target-model/records/errors/error-regions.js";
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import { rustTypeEquals } from "../../target-ast/syntax/type-equality.js";
 import { failRustPlannerInvariant } from "../diagnostics.js";

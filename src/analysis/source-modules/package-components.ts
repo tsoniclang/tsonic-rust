@@ -1,6 +1,6 @@
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustAnalysisProgram } from "../program/model.js";
-import type { RustSourcePackageComponentPlan, RustSourcePackageFacadePlan } from "../../target-model/records/source-packages.js";
+import type { RustSourcePackageComponentPlan, RustSourcePackageFacadePlan } from "../../target-model/records/program/source-packages.js";
 import type { RustSourceFileOutputIdentity } from "../../target-model/names/source-output-identities.js";
 import { allocateRustComponentSupportModuleName } from "../../policy/identities/support-modules.js";
 export function analyzeRustSourcePackageComponentEmission(

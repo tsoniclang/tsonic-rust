@@ -6,7 +6,7 @@ import { analyzeRustErrorEffects } from "../../../helpers/rust-error-analysis.mj
 import { rustAwaitSelectionLeaves } from "../../../../dist/target-model/types/await.js";
 import { rustTargetTypeRefEquals } from "../../../../dist/target-model/types/equality.js";
 import { rustJsValueTargetType } from "../../../../dist/target-model/types/carriers/js.js";
-import { rustJsRejectionErrorIdentity } from "../../../../dist/target-model/records/error-effects.js";
+import { rustJsRejectionErrorIdentity } from "../../../../dist/target-model/records/errors/error-effects.js";
 
 function fixture(text, surfaces = ["js"]) {
   const context = analyzeRustErrorEffects(text, { surfaces });

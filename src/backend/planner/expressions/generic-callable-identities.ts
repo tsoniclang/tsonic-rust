@@ -1,5 +1,5 @@
 import type { Node } from "@tsonic/tsts";
-import type { RustGenericCallableIdentityComparison } from "../../../target-model/records/generic-callables.js";
+import type { RustGenericCallableIdentityComparison } from "../../../target-model/records/callables/generic-callables.js";
 import { rustCallableIdentityPredicate } from "../../target-ast/syntax/callable-identities.js";
 import type { RustExpr, RustPattern } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";

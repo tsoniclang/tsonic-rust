@@ -1,5 +1,5 @@
 import { type TargetTypeRef } from "../../../target-model/types/model.js";
-import { type RustBindingProjectionFact } from "../../../target-model/records/value-projections.js";
+import { type RustBindingProjectionFact } from "../../../target-model/records/objects/value-projections.js";
 import { rustJsArrayLikeElementTargetType } from "../../../target-model/types/carriers/js.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { rustOptionElementCarrier } from "../../../target-model/types/carriers/optional.js";

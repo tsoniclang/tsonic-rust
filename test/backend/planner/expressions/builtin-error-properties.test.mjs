@@ -6,9 +6,9 @@ import { analyzeRustOptionalChainEmission } from "../../../../dist/analysis/oper
 import { analyzeRustErrorFieldBorrows } from "../../../../dist/analysis/operations/error-field-borrows.js";
 import { admitRustOperationSelection } from "../../../../dist/analysis/operations/operation-admission.js";
 import { createRustProgramRecordBuilder } from "../../../../dist/analysis/program/records/create.js";
-import { assertRustRequiredRecords } from "../../../../dist/analysis/program/records/required-records.js";
-import { createRustOptionalChainEmissionProducer } from "../../../../dist/analysis/program/records/optional-chain-emission.js";
-import { createRustErrorFieldProducer } from "../../../../dist/analysis/program/records/error-field-borrows.js";
+import { assertRustRequiredRecords } from "../../../../dist/analysis/program/records/objects/required-records.js";
+import { createRustOptionalChainEmissionProducer } from "../../../../dist/analysis/program/records/operations/optional-chain-emission.js";
+import { createRustErrorFieldProducer } from "../../../../dist/analysis/program/records/errors/error-field-borrows.js";
 import { planPropertyAccess } from "../../../../dist/backend/planner/expressions/properties.js";
 import { createRustSyntheticNameState } from "../../../../dist/backend/planner/names/synthetic.js";
 import { rustSourcePrimitiveTargetType } from "../../../../dist/target-model/types/index.js";

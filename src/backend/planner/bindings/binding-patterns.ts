@@ -1,7 +1,7 @@
 import type { Node } from "@tsonic/tsts";
 import { KindArrayBindingPattern, KindBindingElement, KindIdentifier, KindObjectBindingPattern, KindOmittedExpression, Node_Initializer, Node_Name } from "@tsonic/target-api/source";
-import type { RustBindingProjectionFact, RustBindingValueProjectionFact } from "../../../target-model/records/value-projections.js";
-import type { RustBindingProjectionOwnership } from "../../../target-model/records/binding-emission.js";
+import type { RustBindingProjectionFact, RustBindingValueProjectionFact } from "../../../target-model/records/objects/value-projections.js";
+import type { RustBindingProjectionOwnership } from "../../../target-model/records/storage/binding-emission.js";
 import type { RustExpr, RustStmt } from "../../target-ast/syntax/nodes.js";
 import { createRustStructuralObjectFromCarrier, readRustStoredObjectField } from "../objects/project-storage.js";
 import { failRustPlannerInvariant } from "../diagnostics.js";

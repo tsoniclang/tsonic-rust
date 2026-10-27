@@ -1,7 +1,7 @@
 import type { Node } from "@tsonic/tsts";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { RustAnalysisProgram } from "../../program/model.js";
-import type { RustLocationCallbackProducer } from "../../program/records/location-callbacks.js";
+import type { RustLocationCallbackProducer } from "../../program/records/callables/location-callbacks.js";
 import { rustCallableProtocol, rustClosureProtocol } from "../../../target-model/types/index.js";
 import { rustNativeCallableOperand } from "./native-conversions.js";
 import { rustValueCarrierBeforeContextualConversion } from "../../conversions/value-carrier-queries.js";

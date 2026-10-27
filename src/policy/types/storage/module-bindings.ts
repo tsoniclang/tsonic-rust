@@ -1,5 +1,5 @@
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
-import type { RustModuleBindingFact } from "../../../target-model/records/operation-selections.js";
+import type { RustModuleBindingFact } from "../../../target-model/records/operations/operation-selections.js";
 import { isRustStringCarrier } from "../../../target-model/types/index.js";
 
 export function selectRustModuleValueStorage(

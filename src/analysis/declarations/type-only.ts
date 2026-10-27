@@ -5,7 +5,7 @@ import { appendRustDiagnostic, rustOperationContext } from "../program/walk.js";
 import { resolveSelectedProviderDeclaration } from "../../policy/identities/selected-source.js";
 import { selectedRustProviderGlobal } from "../../policy/identities/provider-globals.js";
 import { selectRustProviderSourceReceiver } from "../operations/members/source-qualifiers.js";
-import { requireRustRecord } from "../program/records/required-records.js";
+import { requireRustRecord } from "../program/records/objects/required-records.js";
 
 export function recordRustTypeOnlyDeclarations(walk: RustFactWalk, sourceFiles: readonly SourceFile[]): void {
   walk.context.records.typeOnlyDeclarations.finalize(walk, sourceFiles);

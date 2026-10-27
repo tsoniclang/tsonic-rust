@@ -1,8 +1,8 @@
 import type { AstReader, Node } from "@tsonic/tsts";
 import { VariableDeclarationList_Declarations, VariableStatement_DeclarationList } from "@tsonic/target-api/source";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
-import type { RustCompileTimeSourceProducer } from "../program/records/compile-time-source.js";
-import { requireRustRecord, type RustRequiredRecord } from "../program/records/required-records.js";
+import type { RustCompileTimeSourceProducer } from "../program/records/program/compile-time-source.js";
+import { requireRustRecord, type RustRequiredRecord } from "../program/records/objects/required-records.js";
 
 /** A variable statement whose authored declarations are all compile-time source emits nothing and is compile-time too. */
 export function eraseRustCompileTimeVariableStatements(input: {

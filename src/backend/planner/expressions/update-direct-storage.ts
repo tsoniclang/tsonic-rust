@@ -1,7 +1,7 @@
 import type { Node } from "@tsonic/tsts";
-import type { RustFinalizedSourceInput } from "../../../target-model/records/finalized-operation.js";
-import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
-import type { RustDirectStorageEmission } from "../../../target-model/records/direct-storage.js";
+import type { RustFinalizedSourceInput } from "../../../target-model/records/operations/finalized-operation.js";
+import type { RustTargetOperationFact } from "../../../target-model/records/operations/operations.js";
+import type { RustDirectStorageEmission } from "../../../target-model/records/storage/direct-storage.js";
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import type { RustFinalizedInputPlanOverrides } from "../project/provider-evaluation-scope.js";
 import type { RustPlanContext } from "../program/plan-context.js";

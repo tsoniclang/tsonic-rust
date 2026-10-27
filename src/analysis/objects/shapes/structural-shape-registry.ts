@@ -1,9 +1,9 @@
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
-import type { RustSourceObjectShape, RustStructuralFieldImplementation, RustStructuralInstantiation } from "../../../target-model/records/source-types.js";
+import type { RustSourceObjectShape, RustStructuralFieldImplementation, RustStructuralInstantiation } from "../../../target-model/records/types/source-types.js";
 import type { RustSourceUnionDefinition } from "../../../target-model/types/source-union-definitions.js";
 import type { RustNativeObjectField } from "../../../target-model/operations/native-memory.js";
-import type { RustStructuralMethodExposure, RustStructuralMethodStorageSelection } from "../../../target-model/records/structural-shapes.js";
+import type { RustStructuralMethodExposure, RustStructuralMethodStorageSelection } from "../../../target-model/records/objects/structural-shapes.js";
 import { createRustGeneratedUnionPlan, type RustGeneratedUnionPlan } from "./generated-union-plan.js";
 import { createRustStructuralShapeConstruction, type RustStructuralShapeLayout, type RustStructuralShapeLayoutPlan,
   type RustStructuralShapePlan, type RustStructuralPhysicalCarrierSelection } from "./structural-shape-plan.js";

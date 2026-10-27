@@ -5,7 +5,7 @@ import type { SourceStorageQueries } from "@tsonic/target-api/analysis";
 import { createRustSourceLexicalCallableQueries } from "../values/lexical-bindings.js";
 import { rustSourceValueWrapperContains } from "../../../policy/ownership/source-value-wrappers.js";
 
-import type { RustSourceCallableQueries, RustSourceLexicalCallableQueries } from "../../../target-model/records/source-callables.js";
+import type { RustSourceCallableQueries, RustSourceLexicalCallableQueries } from "../../../target-model/records/callables/source-callables.js";
 
 export function createRustSourceCallableQueries(sourceStorage: SourceStorageQueries,
   explicitUnsafe: RustExplicitUnsafeContexts,

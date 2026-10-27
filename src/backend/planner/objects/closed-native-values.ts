@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import type { RustProjectTypeTestPlan } from "../../../target-model/operations/type-tests.js";
-import type { RustFlowReadProjectionFact } from "../../../target-model/records/value-projections.js";
+import type { RustFlowReadProjectionFact } from "../../../target-model/records/objects/value-projections.js";
 import type { RustExpr, RustType } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";

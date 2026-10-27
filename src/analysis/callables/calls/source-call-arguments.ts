@@ -3,7 +3,7 @@ import { rustCallableTargetForSourceLifetime } from "../../../policy/conversions
 import { rustProgramNodeIsOutsideNativeCode } from "../../control-flow/compile-time-statements.js";
 import { failTargetAnalysisInvariant, type TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustAnalysisProgram } from "../../program/model.js";
-import type { RustSourceCallArgumentProducer } from "../../program/records/source-call-arguments.js";
+import type { RustSourceCallArgumentProducer } from "../../program/records/calls/source-call-arguments.js";
 import { rustSliceElementCarrier, isRustJsArrayCarrier, isRustVecCarrier, rustFixedArrayCarrierValue } from "../../../target-model/types/index.js";
 import { isRustCopyCarrier } from "../../../policy/constraints/native-traits.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
@@ -18,7 +18,7 @@ import { sourceCallSelectedMemberMatches } from "./source-call-evidence.js";
 import { rustSourceCallArgumentCarriers } from "../ownership/source-call-lifetimes.js";
 import { rustRetainedCallSubstitutions } from "../ownership/retained-call-lifetimes.js";
 import { rustArgumentPassingMode } from "../../../policy/ownership/argument-passing.js";
-import type { RustSourceCallInputEmission, RustSourceParameterEmission, RustSourceCallEvaluationEmission } from "../../../target-model/records/source-call-arguments.js";
+import type { RustSourceCallInputEmission, RustSourceParameterEmission, RustSourceCallEvaluationEmission } from "../../../target-model/records/calls/source-call-arguments.js";
 import { rustTargetConstInteger } from "../../../target-model/types/generic-arguments.js";
 
 export function analyzeRustSourceCallArguments(program: Omit<RustAnalysisProgram, "reachability">,

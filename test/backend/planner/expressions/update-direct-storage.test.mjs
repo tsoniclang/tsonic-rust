@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { planRustDirectStorageCore } from "../../../../dist/backend/planner/expressions/update-direct-storage.js";
 import { analyzeRustDirectStorage } from "../../../../dist/analysis/storage/direct-storage.js";
-import { createRustDirectStorageProducer } from "../../../../dist/analysis/program/records/direct-storage.js";
+import { createRustDirectStorageProducer } from "../../../../dist/analysis/program/records/storage/direct-storage.js";
 import { analyzeRust, compileRust } from "../../../helpers/rust-session.mjs";
 import { rustSourceFilePlanContext } from "../../../helpers/plan-context.mjs";
 import { BinaryExpression_Left, Node_Expression } from "@tsonic/target-api/source";

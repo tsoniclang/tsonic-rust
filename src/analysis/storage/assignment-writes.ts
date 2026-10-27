@@ -5,10 +5,10 @@ import { failTargetAnalysisInvariant, type TargetDiagnostic } from "@tsonic/targ
 import { isRustStringCarrier, rustStructuralObjectCarrierValue } from "../../target-model/types/index.js";
 import { isRustCopyCarrier } from "../../policy/constraints/native-traits.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
-import type { RustStringAppendPart } from "../../target-model/records/assignment-writes.js";
+import type { RustStringAppendPart } from "../../target-model/records/storage/assignment-writes.js";
 import type { RustAnalysisProgram } from "../program/model.js";
-import type { RustAssignmentWriteProducer } from "../program/records/assignment-writes.js";
-import { requireRustRecord, type RustRequiredRecord } from "../program/records/required-records.js";
+import type { RustAssignmentWriteProducer } from "../program/records/storage/assignment-writes.js";
+import { requireRustRecord, type RustRequiredRecord } from "../program/records/objects/required-records.js";
 import { rustEffectiveValueCarrier, rustValueCarrierBeforeContextualConversion } from "../conversions/value-carrier-queries.js";
 
 export function analyzeRustAssignmentWrites(input: {
@@ -137,7 +137,7 @@ export function analyzeRustAssignmentWrites(input: {
       reject(node, "rust.backend.assignment", "Assignments require an exact direct, promoted or module storage owner.");
       continue;
     }
-    let stringAppend: import("../../target-model/records/assignment-writes.js").RustAssignmentWriteCompletion["stringAppend"];
+    let stringAppend: import("../../target-model/records/storage/assignment-writes.js").RustAssignmentWriteCompletion["stringAppend"];
     if (!specialized && assignment.operator === "+=" && isRustStringCarrier(assignment.resultCarrier)) {
       const strategy = assignment.kind === "operator-token" ? assignment.writeStrategy : undefined;
       const declaration = records.sourceBinding.get(target)?.sourceDeclaration;
@@ -157,7 +157,7 @@ export function analyzeRustAssignmentWrites(input: {
     const deferReceiverBorrow = assignment.operator === "=" && representation(target) === "value" &&
       (receiverKind === "KindThisExpression" || receiverKind === "KindThisKeyword");
     requireRustRecord(input.required, "assignmentWrite", node, "native assignment write", "analyzeRustAssignmentWrites");
-    let valueResult: import("../../target-model/records/assignment-writes.js").RustAssignmentWriteCompletion["valueResult"];
+    let valueResult: import("../../target-model/records/storage/assignment-writes.js").RustAssignmentWriteCompletion["valueResult"];
     if (selected?.kind !== "nullish-assignment" && assignment.operator === "=" && sourceExpressionResultDisposition(ast, node).kind !== "discarded") {
       const carrier = rustValueCarrierBeforeContextualConversion(records, value);
       if (carrier === undefined || !rustTargetTypeRefEquals(carrier, records.runtimeCarrier.get(node)?.carrier)) {

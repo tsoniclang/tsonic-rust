@@ -1,20 +1,20 @@
-import { requireRustRecord } from "../../program/records/required-records.js";
+import { requireRustRecord } from "../../program/records/objects/required-records.js";
 import type { RustOperationAnalysisContext } from "../../program/operation-context.js";
 import type { RustCheckedOperatorSelectionInput, RustCheckedOperationSelectionResult, RustCheckedCallSelectionInput, RustCheckedCallSelectionResult, RustPolicySelection } from "../../../policy/model/contracts.js";
 import { acceptRustPolicy } from "../../../policy/model/contracts.js";
 import type { RustOperationsProviderOptions } from "./model.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
-import type { RustSelectedTargetOperation } from "../../../target-model/records/member-selections.js";
+import type { RustSelectedTargetOperation } from "../../../target-model/records/operations/member-selections.js";
 import { resolveRustInstanceType } from "../../source-evidence/types/resolution/instance-tests.js";
 import { closedMetadataKey } from "../../../target-model/metadata/closed-data.js";
 import { rustSourcePrimitiveTargetType } from "../../../target-model/types/index.js";
 import { selectRustClosedTypeTestPlan } from "../../../policy/operations/operators/type-tests.js";
 import { rejectSelectedOperation } from "./result.js";
-import { acceptRustOperation } from "../../program/records/selected-operation-values.js";
+import { acceptRustOperation } from "../../program/records/operations/selected-operation-values.js";
 import { selectedValueCarrier } from "../selected-values.js";
 
-import { selectedRustCallSignature } from "../../program/records/selected-call.js";
-import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
+import { selectedRustCallSignature } from "../../program/records/calls/selected-call.js";
+import type { RustTargetOperationFact } from "../../../target-model/records/operations/operations.js";
 import { selectRustArrayTypeGuard } from "../source-profiles/js/type-tests.js";
 
 export function selectRustArrayTypeTest(

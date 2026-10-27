@@ -1,20 +1,20 @@
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { RustProjectTypeDefinition, RustProjectTypePolicy } from "../project-types/index.js";
-import type { RustProjectStructuralView } from "../../target-model/records/project-structural-views.js";
-import type { RustReceiverFieldCapture } from "../../target-model/records/receiver-captures.js";
+import type { RustProjectStructuralView } from "../../target-model/records/objects/project-structural-views.js";
+import type { RustReceiverFieldCapture } from "../../target-model/records/callables/receiver-captures.js";
 import type { RustReceiverFieldCaptureQueries } from "../project-types/receiver-captures.js";
 
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import type { RustStructuralShapePlan } from "./shapes/structural-shape-plan.js";
-import type { RustStructuralShapeDefinition } from "../../target-model/records/structural-shapes.js";
+import type { RustStructuralShapeDefinition } from "../../target-model/records/objects/structural-shapes.js";
 import { inferRustTargetTypeParameterBindings } from "../../target-model/types/carriers/generic-inference.js";
 import { rustTargetTypeParameterIdentities } from "../../target-model/types/carriers/generic-references.js";
 
-import type { RustFrozenReceiverCapturePlan } from "../../target-model/records/frozen-data.js";
-import { createRustFrozenReceiverCaptureRecords } from "../program/records/frozen-data.js";
+import type { RustFrozenReceiverCapturePlan } from "../../target-model/records/storage/frozen-data.js";
+import { createRustFrozenReceiverCaptureRecords } from "../program/records/storage/frozen-data.js";
 
 export function analyzeRustFrozenReceiverCaptures(input: {
   readonly ast: AstReader;

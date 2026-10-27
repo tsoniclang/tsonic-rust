@@ -1,4 +1,4 @@
-import { requireRustRecord } from "../program/records/required-records.js";
+import { requireRustRecord } from "../program/records/objects/required-records.js";
 import type { RustOperationAnalysisContext } from "../program/operation-context.js";
 import type { Node, Type } from "@tsonic/tsts";
 import type { RustCheckedCallSelectionInput } from "../../policy/model/contracts.js";
@@ -13,14 +13,14 @@ import { selectRustSourceValueConversion } from "../../policy/conversions/select
 import { selectRustProjectedValueConversion } from "../../policy/conversions/property-projection.js";
 import { rustValueConversionContract } from "../../policy/conversions/contracts.js";
 import { resolveRustProjectField } from "../operations/members/project-fields.js";
-import type { RustProjectFieldSelection } from "../../target-model/records/project-fields.js";
+import type { RustProjectFieldSelection } from "../../target-model/records/objects/project-fields.js";
 import { resolveRustProjectAccessor } from "../operations/members/project-accessors.js";
-import type { RustProjectAccessorSelection } from "../../target-model/records/project-accessors.js";
+import type { RustProjectAccessorSelection } from "../../target-model/records/objects/project-accessors.js";
 
-import type { RustPropertyProjectionCase, RustPropertyProjectionFact } from "../../target-model/records/property-projections.js";
+import type { RustPropertyProjectionCase, RustPropertyProjectionFact } from "../../target-model/records/objects/property-projections.js";
 import type { RustProjectTypePolicy } from "../project-types/index.js";
 import type { RustProjectFieldDispatchQueries } from "../project-types/field-dispatch.js";
-import { rustPropertyProjectionFactEquals } from "../../target-model/records/operation-equality.js";
+import { rustPropertyProjectionFactEquals } from "../../target-model/records/operations/operation-equality.js";
 
 const maximumPropertyProjectionMembers = 1_048_576;
 

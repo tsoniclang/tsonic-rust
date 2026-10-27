@@ -1,4 +1,4 @@
-import type { RustRetainedEnvironmentSelection } from "../../../target-model/records/retained-environments.js";
+import type { RustRetainedEnvironmentSelection } from "../../../target-model/records/callables/retained-environments.js";
 import { rustHasOpenOwnedStorage, rustHasOpenCallableEnvironment, closeRustRetainedCallableCarrier } from "../../../policy/ownership/retained-storage.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustSourcePolicyContext } from "../../../policy/model/context.js";

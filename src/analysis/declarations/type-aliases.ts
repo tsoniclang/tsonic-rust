@@ -9,7 +9,7 @@ import { rustSourceUnionTargetType, rustSourceUnionCarrierValue, rustOptionEleme
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { setCarrierFact } from "../operations/project-calls.js";
 import { sourceTypeCarrierForDeclaration } from "../operations/inputs.js";
-import type { RustTypeAliasDeclarationFact } from "../../target-model/records/callables-and-resources.js";
+import type { RustTypeAliasDeclarationFact } from "../../target-model/records/callables/callables-and-resources.js";
 import { resolveRustTypeFamilyApplication, rustSourceTypeFamilyDeclaration } from "../source-evidence/types/resolution/type-families.js";
 import { resolveRustEvidenceNodesToCommonCarrier } from "../source-evidence/types/resolution/source-evidence.js";
 import { rustSourceUnionMemberDeclarationIsOwned } from "../../policy/identities/source-union-members.js";

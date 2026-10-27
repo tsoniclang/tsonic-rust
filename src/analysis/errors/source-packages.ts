@@ -1,15 +1,15 @@
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustProjectTypeDefinition } from "../../target-model/types/project-types.js";
-import type { RustSourcePackageComponentPlan } from "../../target-model/records/source-packages.js";
-import type { RustSourcePackageErrorPlan, RustSourcePackageErrorBoundary, RustSourcePackageErrorDomainPlan, RustExternalSourcePackageError } from "../../target-model/records/source-package-errors.js";
-import type { RustSourcePackageErrorRoute } from "../../target-model/records/source-package-errors.js";
+import type { RustSourcePackageComponentPlan } from "../../target-model/records/program/source-packages.js";
+import type { RustSourcePackageErrorPlan, RustSourcePackageErrorBoundary, RustSourcePackageErrorDomainPlan, RustExternalSourcePackageError } from "../../target-model/records/errors/source-package-errors.js";
+import type { RustSourcePackageErrorRoute } from "../../target-model/records/errors/source-package-errors.js";
 import type { RustErrorDomain } from "../../target-model/operations/error-boundary.js";
 import { rustRuntimeErrorTypeIdentity } from "../../target-model/types/carriers/runtime-carriers.js";
 import type { RustProgramErrorOwner } from "../../target-model/types/model.js";
 import { isRustProgramErrorOwner } from "../../target-model/types/carriers/program-errors.js";
 import { rustPascalCaseIdentifier } from "../../target-model/names/identifiers.js";
-import type { RustSourcePackageEmissionProducer } from "../program/records/source-packages.js";
+import type { RustSourcePackageEmissionProducer } from "../program/records/program/source-packages.js";
 export function rustSourcePackageErrorTypeIdentity(
   componentId: string,
   errorDomain: RustErrorDomain,

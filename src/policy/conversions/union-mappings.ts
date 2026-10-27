@@ -3,7 +3,7 @@ import type { RustTypeDefinitions } from "../../target-model/types/source-union-
 import type { RustUnionArmMapping } from "../../target-model/types/union-relations.js";
 import { rustUnionLeaves } from "../../target-model/types/union-relations.js";
 import { composeRustUnionArmMappings, rustUnionArmMappingsMatch, rustUnionProjectionContract } from "./union-relations.js";
-import type { RustUnionProjectionEmission, RustUnionMappingEmission } from "../../target-model/records/union-mappings.js";
+import type { RustUnionProjectionEmission, RustUnionMappingEmission } from "../../target-model/records/types/union-mappings.js";
 
 export function selectRustUnionProjectionEmission(source: TargetTypeRef, target: TargetTypeRef,
   definitions: RustTypeDefinitions): RustUnionProjectionEmission | undefined {

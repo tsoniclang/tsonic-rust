@@ -1,4 +1,4 @@
-import type { RustFlowReadProjectionFact } from "../../target-model/records/value-projections.js";
+import type { RustFlowReadProjectionFact } from "../../target-model/records/objects/value-projections.js";
 import type { RustProjectTypePolicy } from "../../target-model/types/project-types.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import { isRustTargetTypeRef } from "../../target-model/types/equality.js";
@@ -8,9 +8,9 @@ import type { ExtensionFactSubject, Node } from "@tsonic/tsts";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustRecordFamily } from "../../target-model/records/program.js";
-import { rustFlowReadProjectionEquals } from "../../target-model/records/equality.js";
+import { rustFlowReadProjectionEquals } from "../../target-model/records/operations/equality.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
-import { requireRustRecord, type RustRequiredRecord } from "../program/records/required-records.js";
+import { requireRustRecord, type RustRequiredRecord } from "../program/records/objects/required-records.js";
 
 export interface RustFlowReadProjectionQueries {
   readonly resolve: (requiredRecords: RustRequiredRecord[], subject: Node, source: TargetTypeRef, selected: TargetTypeRef,

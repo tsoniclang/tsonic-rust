@@ -6,7 +6,7 @@ import { planRustValueProjection } from "../../../../dist/backend/planner/expres
 import { createRustSyntheticNameState } from "../../../../dist/backend/planner/names/synthetic.js";
 import { rustSourcePrimitiveTargetType } from "../../../../dist/target-model/types/index.js";
 import { analyzeRustFlowReadEmission } from "../../../../dist/analysis/control-flow/flow-read-emission.js";
-import { createRustFlowReadEmissionProducer } from "../../../../dist/analysis/program/records/flow-read-emission.js";
+import { createRustFlowReadEmissionProducer } from "../../../../dist/analysis/program/records/operations/flow-read-emission.js";
 
 test("owned optional project projections consume the proven payload without cloning", () => {
   const { program } = analyzeRust({ files: { "index.ts": `

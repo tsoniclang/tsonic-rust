@@ -2,7 +2,7 @@ import type { Node } from "@tsonic/tsts";
 
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
-import type { RustRawAddressPlan } from "../../../target-model/records/raw-addresses.js";
+import type { RustRawAddressPlan } from "../../../target-model/records/storage/raw-addresses.js";
 
 export function planRustRawAddress(
   _node: Node, plan: RustRawAddressPlan, context: RustPlanContext,

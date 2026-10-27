@@ -8,7 +8,7 @@ import { compileRustTarget } from "../../dist/backend/compile.js";
 import { composeRustProviderSemantics } from "../../dist/providers/packages/semantics.js";
 import { createRustTargetConfiguration } from "../../dist/options/target.js";
 import { analyzeRustPackageCargo } from "../../dist/analysis/source-modules/package-cargo.js";
-import { createRustSourcePackageEmissionProducer } from "../../dist/analysis/program/records/source-packages.js";
+import { createRustSourcePackageEmissionProducer } from "../../dist/analysis/program/records/program/source-packages.js";
 import { materializeRustRuntimeReferences } from "../../dist/providers/runtime/materialization.js";
 import { planRustCargoProject } from "../../dist/backend/planner/project/project-artifacts.js";
 import {

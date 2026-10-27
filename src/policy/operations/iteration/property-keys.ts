@@ -1,5 +1,5 @@
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
-import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
+import type { RustTargetOperationFact } from "../../../target-model/records/operations/operations.js";
 import { rustFixedArrayCarrierValue, isRustJsArrayLikeCarrier, isRustStringCarrier } from "../../../target-model/types/index.js";
 import { rustRecordCarrierValue } from "../../../target-model/types/carriers/records.js";
 

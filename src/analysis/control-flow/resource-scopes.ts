@@ -2,8 +2,8 @@ import type { AstReader, Node } from "@tsonic/tsts";
 import { analyzeSourceResourceScopes } from "@tsonic/target-api/analysis";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 import { isRustNeverCarrier } from "../../target-model/types/carriers/js.js";
-import type { RustResourceScopeProducer } from "../program/records/resource-scopes.js";
-import { requireRustRecord, type RustRequiredRecord } from "../program/records/required-records.js";
+import type { RustResourceScopeProducer } from "../program/records/storage/resource-scopes.js";
+import { requireRustRecord, type RustRequiredRecord } from "../program/records/objects/required-records.js";
 
 export function analyzeRustResourceScopes(input: {
   readonly ast: AstReader; readonly nodes: readonly Node[]; readonly records: RustProgramRecords;

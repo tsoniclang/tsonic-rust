@@ -1,4 +1,4 @@
-import type { RustFrozenWriteReceiver } from "../../../target-model/records/field-writes.js";
+import type { RustFrozenWriteReceiver } from "../../../target-model/records/storage/field-writes.js";
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import { rustTargetRuntimeErrorType } from "../types/error-boundary.js";
 import { rustPropagateLocalError, type RustFallibleBoundary } from "../program/fallible-boundaries.js";

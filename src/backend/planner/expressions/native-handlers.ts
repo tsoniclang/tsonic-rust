@@ -1,5 +1,5 @@
 import type { Node } from "@tsonic/tsts";
-import type { RustNativeHandler } from "../../../target-model/records/native-handlers.js";
+import type { RustNativeHandler } from "../../../target-model/records/native/native-handlers.js";
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import type { RustExpressionResultUse } from "./entry.js";

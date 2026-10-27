@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import type { RustProgramErrorConversion } from "../../../target-model/conversions/program-error.js";
-import type { RustSourcePackageErrorBoundary } from "../../../target-model/records/source-package-errors.js";
+import type { RustSourcePackageErrorBoundary } from "../../../target-model/records/errors/source-package-errors.js";
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { registerAliasFromPath, rustCurrentErrorBoundary, type RustPlanContext } from "../program/plan-context.js";

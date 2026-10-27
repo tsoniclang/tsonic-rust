@@ -1,4 +1,4 @@
-import { requireRustRecord } from "../program/records/required-records.js";
+import { requireRustRecord } from "../program/records/objects/required-records.js";
 import type { RustOperationAnalysisContext } from "../program/operation-context.js";
 import { isRustNumericCarrier } from "../../target-model/types/index.js";
 import { acceptRustPolicy } from "../../policy/model/contracts.js";
@@ -19,7 +19,7 @@ import { rustLifetimeKey } from "../../target-model/lifetimes/index.js";
 import { rustProjectGenericContractCorrespondence } from "../../policy/types/project/project-generic-contract.js";
 import { selectedCallCalleeDeclaration } from "./members/operators.js";
 import { selectedValueCarrier } from "./selected-values.js";
-import { selectedRustCallSignature } from "../program/records/selected-call.js";
+import { selectedRustCallSignature } from "../program/records/calls/selected-call.js";
 
 import type { RustCheckedCallSelectionInput, RustCheckedCallSelectionResult, RustPolicySelection } from "../../policy/model/contracts.js";
 import type { Node } from "@tsonic/tsts";

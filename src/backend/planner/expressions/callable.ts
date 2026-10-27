@@ -34,7 +34,7 @@ import { wrapRustJsPromiseBody } from "../declarations/callables/async-promise.j
 import { planRustSuspendedCallableConstruction } from "./suspended-callables.js";
 import { planRustParameterEntryConversion } from "../declarations/callables/parameter-entry-conversion.js";
 import { rustCallableParameterReturnContext } from "../declarations/callables/parameters.js";
-import type { RustCallableParameterInitialization } from "../../../target-model/records/parameter-emission.js";
+import type { RustCallableParameterInitialization } from "../../../target-model/records/calls/parameter-emission.js";
 import { planRustCallableLeadingParameters } from "../declarations/callables/leading-parameters.js";
 import { applyFinalizedValueConversion } from "./value-conversions.js";
 import { planRustCapturedReceiverFields, planRustCapturedReceivers, rustRecursiveReceiverFieldContext } from "./receiver-captures.js";

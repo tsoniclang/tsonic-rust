@@ -1,7 +1,7 @@
 import { failRustPlannerInvariant } from "../../diagnostics.js";
 import { rustValueBlock } from "../../../target-ast/syntax/value-block.js";
 import type { RustExpr } from "../../../target-ast/syntax/nodes.js";
-import type { RustTargetOperationFact } from "../../../../target-model/records/operations.js";
+import type { RustTargetOperationFact } from "../../../../target-model/records/operations/operations.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import { isValidRustIdentifier } from "../../../../target-model/names/identifiers.js";
 import { sourceModuleItemPath } from "../../program/plan-context.js";

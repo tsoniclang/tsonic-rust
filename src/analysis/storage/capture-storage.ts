@@ -3,7 +3,7 @@ import { sourceBindingScope, sourceBindingIterationScope } from "@tsonic/target-
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
-import type { RustCaptureStorageProducer } from "../program/records/capture-storage.js";
+import type { RustCaptureStorageProducer } from "../program/records/callables/capture-storage.js";
 
 export function analyzeRustCaptureStorage(input: {
   readonly ast: AstReader;

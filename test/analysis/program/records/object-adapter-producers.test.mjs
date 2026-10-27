@@ -5,7 +5,7 @@ import { createRustProgramRecordBuilder } from "../../../../dist/analysis/progra
 import { rustCallableTargetType, rustSourceTypeCarrier, rustStructuralObjectTargetType } from "../../../../dist/target-model/types/index.js";
 import { rustClassConstructorTargetType } from "../../../../dist/target-model/types/carriers/class-constructors.js";
 import { createRustRecordFixture } from "../../../helpers/records.mjs";
-import { createRustObjectReferenceViewProducer } from "../../../../dist/analysis/program/records/object-reference-view.js";
+import { createRustObjectReferenceViewProducer } from "../../../../dist/analysis/program/records/objects/object-reference-view.js";
 import { createCompilerSessionFromFiles, formatDiagnostics } from "@tsonic/tsts";
 import { createTargetSourceProgram } from "@tsonic/target-api/source";
 import { rustTargetTypeRefEquals } from "../../../../dist/target-model/types/equality.js";

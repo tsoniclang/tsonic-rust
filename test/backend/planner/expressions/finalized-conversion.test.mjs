@@ -11,7 +11,7 @@ import { emptyRustTypeDefinitions } from "../../../../dist/target-model/types/so
 import { rustStringToBorrowedStrValueConversion, rustBorrowedStrToStringValueConversion } from "../../../../dist/public/provider.js";
 import { fakeAstReader, fakeSourceFile, fakeStatement } from "../../../helpers/fake-compile-input.mjs";
 import { admitRustConversionEmission } from "../../../../dist/analysis/conversions/emission.js";
-import { createRustConversionEmissionProducer } from "../../../../dist/analysis/program/records/conversion-emission.js";
+import { createRustConversionEmissionProducer } from "../../../../dist/analysis/program/records/operations/conversion-emission.js";
 import { rustProgramPlanContext, rustProgramWithTypeEmissions } from "../../../helpers/plan-context.mjs";
 import { rustJsErrorTargetType } from "../../../../dist/target-model/types/index.js";
 

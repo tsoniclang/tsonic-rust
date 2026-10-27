@@ -1,4 +1,4 @@
-import { rustComputedMemberEquals } from "../../../../dist/target-model/records/equality.js";
+import { rustComputedMemberEquals } from "../../../../dist/target-model/records/operations/equality.js";
 import { createRustRecordFixture } from "../../../helpers/records.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createRustProgramRecordBuilder } from "../../../../dist/analysis/program/records/create.js";
-import { rustFlowReadProjectionEquals } from "../../../../dist/target-model/records/equality.js";
+import { rustFlowReadProjectionEquals } from "../../../../dist/target-model/records/operations/equality.js";
 import { rustOptionTargetType } from "../../../../dist/target-model/types/carriers/optional.js";
 import { rustSourcePrimitiveTargetType } from "../../../../dist/target-model/types/index.js";
 import { assertRustInheritedRecordConflict } from "../../../helpers/records.mjs";

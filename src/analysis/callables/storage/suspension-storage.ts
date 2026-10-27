@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 
-import type { RustSuspendedCallableStorage } from "../../../target-model/records/callables-and-resources.js";
+import type { RustSuspendedCallableStorage } from "../../../target-model/records/callables/callables-and-resources.js";
 import { selectRustCallableStorageLifetime, selectRustSuspendedStorageLifetime } from "../../../policy/ownership/suspended-storage.js";
 import { rustEnclosingStorageContract } from "./storage-contracts.js";
 import { type RustLifetimeRef } from "../../../target-model/lifetimes/index.js";
@@ -9,8 +9,8 @@ import { sourceLexicalEnvironment, sourceCallableValueParameters } from "@tsonic
 
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustFactWalk } from "../../program/walk.js";
-import type { RustSuspendedOwnedReceiver } from "../../../target-model/records/callables-and-resources.js";
-import type { RustRetainedEnvironment } from "../../../target-model/records/retained-environments.js";
+import type { RustSuspendedOwnedReceiver } from "../../../target-model/records/callables/callables-and-resources.js";
+import type { RustRetainedEnvironment } from "../../../target-model/records/callables/retained-environments.js";
 
 import { rustCallableInputLifetimeParameters } from "../ownership/source-input-lifetimes.js";
 import { resolveExpressionCarrier } from "../../source-evidence/types/resolution/expression-carriers.js";

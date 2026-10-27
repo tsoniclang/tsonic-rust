@@ -31,7 +31,7 @@ import { rustStringConcat } from "../../target-ast/syntax/expressions.js";
 import { planRustStringConcatOperand } from "../expressions/string-concat-parts.js";
 import { planRustDirectStorage } from "../expressions/update-target.js";
 import type { Node } from "@tsonic/tsts";
-import type { RustAssignmentOperationPlan } from "../../../target-model/records/operator-selection.js";
+import type { RustAssignmentOperationPlan } from "../../../target-model/records/operations/operator-selection.js";
 import type { RustExpr, RustStmt } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 

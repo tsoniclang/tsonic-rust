@@ -1,5 +1,5 @@
 import type { Node } from "@tsonic/tsts";
-import type { RustEmissionProviderOperation } from "../../../target-model/records/physical-emission-contexts.js";
+import type { RustEmissionProviderOperation } from "../../../target-model/records/native/physical-emission-contexts.js";
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import type { RustPlanContext } from "../program/plan-context.js";

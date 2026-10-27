@@ -18,9 +18,9 @@ import { selectRustProjectStructuralView } from "./project-structural-views.js";
 import { rustClassConstructorInstance } from "../../target-model/types/carriers/class-constructors.js";
 
 import { selectRustCallableValueAdapter } from "../../policy/conversions/callable-adapters.js";
-import type { RustClassValueFact } from "../../target-model/records/class-values.js";
+import type { RustClassValueFact } from "../../target-model/records/objects/class-values.js";
 
-import type { RustClassValueView } from "../../target-model/records/class-values.js";
+import type { RustClassValueView } from "../../target-model/records/objects/class-values.js";
 export function selectRustClassValue(
   walk: RustFactWalk,
   expression: Node,

@@ -22,11 +22,11 @@ import { planRustSourceErrorPropagation } from "../expressions/calls/source-erro
 import type { Node } from "@tsonic/tsts";
 import type { RustExpr, RustStmt } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
-import type { RustIterationBindingCompletion } from "../../../target-model/records/statement-completion.js";
+import type { RustIterationBindingCompletion } from "../../../target-model/records/operations/statement-completion.js";
 
 export function planRuntimeSetStatement(
   expression: Node,
-  fact: Extract<import("../../../target-model/records/operations.js").RustTargetOperationFact, { kind: "runtime-set" }>,
+  fact: Extract<import("../../../target-model/records/operations/operations.js").RustTargetOperationFact, { kind: "runtime-set" }>,
   context: RustPlanContext,
 ): readonly RustStmt[] | undefined {
   return [{ kind: "expr", expr: planRustRuntimeSetExpression(expression, fact, context) }];

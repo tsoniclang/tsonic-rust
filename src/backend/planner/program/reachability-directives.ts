@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import type { RustPlanningContext } from "../context.js";
-import type { RustDeadCodeDisposition, RustStructuralLivenessEmission } from "../../../target-model/records/native-liveness.js";
+import type { RustDeadCodeDisposition, RustStructuralLivenessEmission } from "../../../target-model/records/native/native-liveness.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { failRustPlannerInvariant } from "../diagnostics.js";
 

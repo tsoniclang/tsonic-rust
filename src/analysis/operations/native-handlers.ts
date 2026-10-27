@@ -1,9 +1,9 @@
 import { sourceMarkerFactKey, type Node, type ReadonlySourceFactResolver } from "@tsonic/tsts";
 import { selectRustNativeHandler } from "../../policy/operations/pointers/native-handlers.js";
 import { selectRustNativePointerOperation } from "../../policy/operations/pointers/native-pointers.js";
-import type { RustSafetyOperation } from "../../target-model/records/safety.js";
+import type { RustSafetyOperation } from "../../target-model/records/storage/safety.js";
 import type { RustProgramRecordWriter } from "../program/records/model.js";
-import { requireRustRecord, type RustRequiredRecord } from "../program/records/required-records.js";
+import { requireRustRecord, type RustRequiredRecord } from "../program/records/objects/required-records.js";
 
 export function analyzeRustNativeHandlers(
   nodes: readonly Node[],

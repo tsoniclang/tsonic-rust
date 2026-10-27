@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
-import type { RustEmissionProviderOperation } from "../../../target-model/records/physical-emission-contexts.js";
-import type { RustProviderEvaluationRecords } from "../../../target-model/records/provider-evaluation.js";
+import type { RustEmissionProviderOperation } from "../../../target-model/records/native/physical-emission-contexts.js";
+import type { RustProviderEvaluationRecords } from "../../../target-model/records/native/provider-evaluation.js";
 
 export function sourceRuntimeSlots(
   records: RustProviderEvaluationRecords, node: Node, operation: RustEmissionProviderOperation,

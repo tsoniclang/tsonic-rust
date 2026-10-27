@@ -5,8 +5,8 @@ import { ClassStaticBlock_Body, Node_Initializer } from "@tsonic/target-api/sour
 import { rustProjectStaticFieldStorage } from "./object-layout.js";
 import { isRustCopyCarrier, rustCarrierSupportsClone } from "../../policy/constraints/native-traits.js";
 import type { RustAnalysisProgram } from "../program/model.js";
-import type { RustClassInitializationEntry } from "../../target-model/records/class-initialization.js";
-import type { RustClassInitializationProducer } from "../program/records/class-initialization.js";
+import type { RustClassInitializationEntry } from "../../target-model/records/objects/class-initialization.js";
+import type { RustClassInitializationProducer } from "../program/records/objects/class-initialization.js";
 
 export function analyzeRustClassInitialization(input: {
   readonly program: Pick<RustAnalysisProgram, "source" | "records" | "projectTypes" | "typeDefinitions" | "classValues" | "safetyApplications">;

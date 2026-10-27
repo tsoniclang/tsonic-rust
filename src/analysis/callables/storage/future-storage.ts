@@ -3,14 +3,14 @@ import type { SourceStorageBindings, SourceStorageProducer, SourceStorageSubject
 import { sourceEnclosingCallable } from "@tsonic/target-api/source";
 import type { RustFactWalk } from "../../program/walk.js";
 
-import type { RustFutureValueFact } from "../../../target-model/records/object-methods.js";
+import type { RustFutureValueFact } from "../../../target-model/records/objects/object-methods.js";
 import { rustFutureValueForOperation, rustFutureValueMatchesCarrier, rustNativeFutureValueForSourceCallBranch } from "../async/future-values.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustAwaitSelectionLeaves } from "../../../target-model/types/await.js";
 import { rustAwaitSelection } from "../../../policy/operations/flow/await.js";
 import { closedMetadataEquals } from "../../../target-model/metadata/closed-data.js";
 import type { RustSourceErrorBindings, RustSourceErrorEffectSelection } from "../../errors/source-error-effects.js";
-import type { RustFinalizedValueConversion } from "../../../target-model/records/finalized-operation.js";
+import type { RustFinalizedValueConversion } from "../../../target-model/records/operations/finalized-operation.js";
 import { finalizedConversionIsValid } from "../../../policy/operations/members/abi/conversions.js";
 import { substituteRustValueConversion } from "../../../target-model/conversions/substitution.js";
 import type { RustTypeDefinitions } from "../../../target-model/types/source-union-definitions.js";

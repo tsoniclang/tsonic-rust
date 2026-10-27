@@ -204,7 +204,7 @@ test("the three superseded keys and the type-alias forwarder are deleted rather 
     import { rustTypeAliasDeclarationFactKey } from "../../dist/analysis/program/records/keys/callables-and-resources.js";
     import { rustMutatedBindingFactKey } from "../../dist/analysis/program/records/keys/value-projections.js";
     import { rustMutatedReferentFactKey } from "../../dist/analysis/program/records/keys/value-projections.js";
-    import { registerTypeAlias } from "../../dist/analysis/program/records/type-alias-declaration.js";
+    import { registerTypeAlias } from "../../dist/analysis/program/records/types/type-alias-declaration.js";
   `);
   assert.equal(result.error === undefined, true, result.error?.message);
   assert.equal(result.status === 0, false, "no removed key or forwarder has a surviving import path");

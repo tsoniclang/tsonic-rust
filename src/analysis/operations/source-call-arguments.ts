@@ -21,12 +21,12 @@ import { snapshotClosedMetadata } from "../../target-model/metadata/closed-data.
 import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
-import type { RustSelectedTargetSignature } from "../../target-model/records/member-selections.js";
+import type { RustSelectedTargetSignature } from "../../target-model/records/operations/member-selections.js";
 
 import type { RustArgumentMode, RustSourceCallArgumentProjection, RustSourceCallParameterPlan } from "../../target-model/operations/model.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 
-import { requireRustRecord } from "../program/records/required-records.js";
+import { requireRustRecord } from "../program/records/objects/required-records.js";
 
 interface RustSelectedSourceCallArgument {
   readonly argument: Node;

@@ -14,11 +14,11 @@ import {
 
 import { rustProjectStaticFieldStorage } from "../project-types/object-layout.js";
 import type { RustAnalysisContext } from "../program/context.js";
-import type { RustClassValuePlan } from "../../target-model/records/class-values.js";
+import type { RustClassValuePlan } from "../../target-model/records/objects/class-values.js";
 
 import type { RustModuleInitializationIssue, RustModuleInitializationPlan, RustModuleInitializationRequirement,
-  RustUnsupportedTopLevelStatementIssue } from "../../target-model/records/module-initialization.js";
-import { createRustModuleInitializationRecords } from "../program/records/module-initialization.js";
+  RustUnsupportedTopLevelStatementIssue } from "../../target-model/records/program/module-initialization.js";
+import { createRustModuleInitializationRecords } from "../program/records/program/module-initialization.js";
 
 type RustModuleInitializationPlanInput = Pick<
   RustAnalysisContext,
@@ -29,7 +29,7 @@ export function createRustModuleInitializationPlan(
   input: RustModuleInitializationPlanInput,
   classValues: RustClassValuePlan,
   entry: { readonly outputType: "bin" | "lib"; readonly projectRoot: string; readonly entryPoint: string },
-  moduleCycles: readonly import("../../target-model/records/module-initialization.js").RustModuleCycleSelection[],
+  moduleCycles: readonly import("../../target-model/records/program/module-initialization.js").RustModuleCycleSelection[],
 ): RustModuleInitializationPlan {
   const entryPath = resolve(entry.projectRoot, entry.entryPoint).split("\\").join("/");
   const entrySourceFile = entry.outputType === "lib" ? undefined : input.sourceFiles.find(sourceFile =>

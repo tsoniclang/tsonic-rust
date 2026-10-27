@@ -2,7 +2,7 @@ import type { Node } from "@tsonic/tsts";
 import { ElementAccessExpression_ArgumentExpression, Node_Expression } from "@tsonic/target-api/source";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { RustAnalysisProgram } from "../program/model.js";
-import type { RustIndexedLocationProducer } from "../program/records/indexed-locations.js";
+import type { RustIndexedLocationProducer } from "../program/records/storage/indexed-locations.js";
 import { rustProgramErrorTargetType } from "../../target-model/types/index.js";
 
 export function analyzeRustIndexedLocations(program: Omit<RustAnalysisProgram, "reachability">,

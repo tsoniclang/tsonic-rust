@@ -7,7 +7,7 @@ import { failRustPlannerInvariant } from "../../diagnostics.js";
 import { planExpression } from "../entry.js";
 import { planNativeRustArray } from "../native-arrays.js";
 import { rustTypeFromCarrierInContext } from "../../types/render.js";
-import type { RustBorrowedSequenceInput } from "../../../../target-model/records/borrowed-sequences.js";
+import type { RustBorrowedSequenceInput } from "../../../../target-model/records/storage/borrowed-sequences.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import { planRustBorrowedSequenceAppend } from "./borrowed-sequences.js";
 

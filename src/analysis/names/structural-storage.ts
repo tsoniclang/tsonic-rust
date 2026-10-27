@@ -1,4 +1,4 @@
-import type { RustStructuralShapeField } from "../../target-model/records/structural-shapes.js";
+import type { RustStructuralShapeField } from "../../target-model/records/objects/structural-shapes.js";
 
 import { rustPascalCaseIdentifier } from "../../target-model/names/identifiers.js";
 

@@ -1,8 +1,8 @@
 import type { Node } from "@tsonic/tsts";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustAnalysisProgram } from "../../program/model.js";
-import type { RustSourceCallableEmissionProducer } from "../../program/records/source-callable-emission.js";
-import type { RustSourceCallableValueFact } from "../../../target-model/records/operation-selections.js";
+import type { RustSourceCallableEmissionProducer } from "../../program/records/callables/source-callable-emission.js";
+import type { RustSourceCallableValueFact } from "../../../target-model/records/operations/operation-selections.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustCallableProtocol, rustUnitTargetType } from "../../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";

@@ -1,5 +1,5 @@
 import type { SourceLiteralValue } from "@tsonic/target-api/source";
-import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
+import type { RustTargetOperationFact } from "../../../target-model/records/operations/operations.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { isRustAbsenceCarrier, isRustUnitCarrier, isRustNeverCarrier, isRustOptionCarrier,
   rustOptionElementCarrier, rustOptionValueCarrier, rustSourceOptionalTargetType, rustSourcePrimitiveTargetType } from "../../../target-model/types/index.js";

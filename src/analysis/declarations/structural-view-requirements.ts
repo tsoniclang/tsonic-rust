@@ -1,8 +1,8 @@
-import type { RustProjectStructuralView } from "../../target-model/records/project-structural-views.js";
+import type { RustProjectStructuralView } from "../../target-model/records/objects/project-structural-views.js";
 import type { RustTargetGenericBindings } from "../../target-model/types/carriers/generic-inference.js";
 import { substituteRustTargetGenerics } from "../../target-model/types/carriers/substitution.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
-import type { RustGenericRequirement } from "../../target-model/records/generic-requirements.js";
+import type { RustGenericRequirement } from "../../target-model/records/types/generic-requirements.js";
 
 export function rustStructuralViewRequirementUses(
   view: RustProjectStructuralView, bindings?: RustTargetGenericBindings,

@@ -4,9 +4,9 @@ import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { flowStateFactKey } from "@tsonic/tsts";
 import { resolveExpressionCarrier } from "../source-evidence/types/resolution/expression-carriers.js";
 import { appendRustDiagnostic } from "../program/walk.js";
-import { requireRustRecord } from "../program/records/required-records.js";
+import { requireRustRecord } from "../program/records/objects/required-records.js";
 import { setCarrierFact } from "./project-calls.js";
-import { rustTargetOperationFactEquals } from "../../target-model/records/operation-equality.js";
+import { rustTargetOperationFactEquals } from "../../target-model/records/operations/operation-equality.js";
 
 interface FlowMarkerResolution {
   readonly carrier: TargetTypeRef | undefined;

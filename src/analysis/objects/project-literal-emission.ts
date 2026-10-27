@@ -2,7 +2,7 @@ import type { Node } from "@tsonic/tsts";
 import type { TargetSourceProgram } from "@tsonic/target-api/source";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { RustAnalysisProgram } from "../program/model.js";
-import type { RustProjectLiteralEmission, RustProjectLiteralImplementation, RustProjectLiteralMethodEmission, RustRecordLiteralFact } from "../../target-model/records/object-literal-emission.js";
+import type { RustProjectLiteralEmission, RustProjectLiteralImplementation, RustProjectLiteralMethodEmission, RustRecordLiteralFact } from "../../target-model/records/objects/object-literal-emission.js";
 import { rustCallableProtocol, rustProgramErrorTargetType, substituteRustTargetTypeParameters } from "../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { closedMetadataEquals } from "../../target-model/metadata/closed-data.js";

@@ -1,8 +1,8 @@
 import { recordRustProgramClassEnvironments } from "../objects/class-environment-admission.js";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import { analyzeRustModuleCycles } from "../module-initialization/cycles.js";
-import type { RustModuleCycleSelection } from "../../target-model/records/module-initialization.js";
-import { requireRustRecord } from "./records/required-records.js";
+import type { RustModuleCycleSelection } from "../../target-model/records/program/module-initialization.js";
+import { requireRustRecord } from "./records/objects/required-records.js";
 import { appendMalformedSourceAstDiagnostic, recordClassBodyFacts, recordClassSignatureFacts, recordInterfaceFacts, recordMethodSelfModeFacts } from "../declarations/project-types.js";
 import { appendRustDiagnostic, rustResolutionContext, rustOperationContext } from "./walk.js";
 import { resolveRustProjectField } from "../operations/members/project-fields.js";
@@ -57,17 +57,17 @@ import { closeRustInheritedStructuralViews } from "../objects/inherited-structur
 import { createRustSourceProfileCallableAliasQuery } from "../operations/source-profiles/callable-aliases.js";
 import { collectRustDeclaredProviderErrorCarriers } from "./provider-errors.js";
 import { createRustLexicalFunctionEnvironmentPlan, finalizeRustLexicalFunctionQueries } from "../callables/values/lexical-functions.js";
-import { type RustLexicalFunctionQueries } from "../../target-model/records/lexical-functions.js";
+import { type RustLexicalFunctionQueries } from "../../target-model/records/callables/lexical-functions.js";
 import { recordRustLexicalValueEnvironments } from "../callables/values/lexical-value-environments.js";
 
-import type { RustSourceCallableSpecializationIssue } from "../../target-model/records/callable-issues.js";
+import type { RustSourceCallableSpecializationIssue } from "../../target-model/records/callables/callable-issues.js";
 import { rustSourceErrorTargetType, rustWritableSourceErrorTargetType } from "../../target-model/types/carriers/source-error.js";
 import { analyzeRustReceiverStorage } from "../project-types/receiver-storage.js";
 import { rustRetainedValueLifetime } from "../callables/ownership/retained-values.js";
 import { resolveRustCallableOwnershipCarrier } from "../callables/ownership/ownership-carriers.js";
 import { createSourceStorageBudget, defaultSourceStorageLimits, type SourceNativeTaskGraph } from "@tsonic/target-api/analysis";
 import { analyzeRustSourcePackageComponents } from "../source-modules/component-semantics.js";
-import { type RustSourcePackageComponentClassifications } from "../../target-model/records/source-package-semantics.js";
+import { type RustSourcePackageComponentClassifications } from "../../target-model/records/program/source-package-semantics.js";
 import type { RustSourceTypeRegistry } from "../project-types/source-type-model.js";
 import { completeRustNativeTaskValues, type RustNativeTaskCompletion } from "../callables/native/native-tasks.js";
 

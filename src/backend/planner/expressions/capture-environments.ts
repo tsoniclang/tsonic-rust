@@ -1,6 +1,6 @@
 import { requireRustCaptureOwnership } from "./typed-locations.js";
 import type { Node } from "@tsonic/tsts";
-import type { RustClosureCaptureFact } from "../../../target-model/records/operation-selections.js";
+import type { RustClosureCaptureFact } from "../../../target-model/records/operations/operation-selections.js";
 
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import type { RustCapturedBinding, RustPlanContext } from "../program/plan-context.js";

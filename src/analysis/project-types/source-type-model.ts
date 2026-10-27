@@ -1,7 +1,7 @@
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 
-import type { RustSourceTypeQueries, RustSourceObjectShape, RustStructuralFieldImplementation, RustSourceUnion } from "../../target-model/records/source-types.js";
+import type { RustSourceTypeQueries, RustSourceObjectShape, RustStructuralFieldImplementation, RustSourceUnion } from "../../target-model/records/types/source-types.js";
 export type RustStructuralObjectRegistration =
   | { readonly kind: "root" }
   | { readonly kind: "generic-instantiation"; readonly template: TargetTypeRef };

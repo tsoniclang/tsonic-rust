@@ -11,7 +11,7 @@ import { rustTargetTypeParameterIdentities, substituteRustTargetTypeParameters }
 import type { RustProjectTypePolicy } from "../../project-types/index.js";
 import type { RustProgramRecords } from "../../../target-model/records/program.js";
 
-import type { RustSourceCallableSpecializationVariant } from "../../../target-model/records/callable-emission.js";
+import type { RustSourceCallableSpecializationVariant } from "../../../target-model/records/callables/callable-emission.js";
 
 export interface RustProjectMethodSpecializationRequest {
   readonly declaration: Node;
@@ -570,4 +570,4 @@ function rejected(reason: string): RustSourceCallableSpecializationRegistration 
 
 const accepted: RustSourceCallableSpecializationRegistration = Object.freeze({ kind: "accepted" });
 
-import type { RustSourceCallableSpecializationIssue } from "../../../target-model/records/callable-issues.js";
+import type { RustSourceCallableSpecializationIssue } from "../../../target-model/records/callables/callable-issues.js";

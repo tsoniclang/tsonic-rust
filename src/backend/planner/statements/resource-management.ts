@@ -8,12 +8,12 @@ import { planVariableStatement } from "../bindings/locals.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustBlock, RustExpr, RustStmt } from "../../target-ast/syntax/nodes.js";
 import type { RustCompletionBoundary, RustControlTarget, RustPlanContext } from "../program/plan-context.js";
-import type { RustResourceManagementFact } from "../../../target-model/records/callables-and-resources.js";
+import type { RustResourceManagementFact } from "../../../target-model/records/callables/callables-and-resources.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { planRustVirtualProjectMethodCall } from "../objects/project-method-dispatch.js";
 import type {
   RustFinalizedTargetInput, RustFinalizedSourceInput, RustFinalizedDispatchContextInput,
-} from "../../../target-model/records/finalized-operation.js";
+} from "../../../target-model/records/operations/finalized-operation.js";
 import { finishProviderOperationExpression, planFinalizedTargetInput } from "../expressions/conversions.js";
 import { planRustFinalizedOperationForm } from "../expressions/finalized-operation-form.js";
 import { applyFinalizedValueConversion } from "../expressions/value-conversions.js";
@@ -297,7 +297,7 @@ function planResourceDisposalExpression(
   const { abi } = target;
   const dispatch = planRustDispatchContextInputScope(abi.targetArguments.filter(isDisposalContextInput), subject, context);
   if (dispatch === undefined) failRustPlannerInvariant("An admitted resource disposer requires its native dispatch inputs.", subject);
-  const planReceiver = (input: import("../../../target-model/records/finalized-operation.js").RustFinalizedSourceInput,
+  const planReceiver = (input: import("../../../target-model/records/operations/finalized-operation.js").RustFinalizedSourceInput,
     position: "receiver" | "argument"): RustExpr | undefined => {
     if (input.source.kind !== "receiver") failRustPlannerInvariant("A zero-argument disposer requires its admitted resource input.", subject);
     const borrowed = alreadyBorrowed && target.receiverMode !== "value";

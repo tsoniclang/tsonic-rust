@@ -219,7 +219,7 @@ export function analyzeRustAnalysisProgram(
       if (existing !== undefined) return existing;
       const selection = lexicalFunctions.forDeclaration(closure);
       if (selection?.kind !== "resolved") return undefined;
-      const captures: import("../../target-model/records/operation-selections.js").RustClosureCaptureFact["captures"][number][] = [];
+      const captures: import("../../target-model/records/operations/operation-selections.js").RustClosureCaptureFact["captures"][number][] = [];
       for (const capture of selection.captures) {
         const carrier = records.runtimeCarrier.get(capture.declaration)?.carrier ??
           records.runtimeCarrier.get(capture.reference)?.carrier;

@@ -1,4 +1,4 @@
-import type { RustStructuralShapeDefinition, RustStructuralMethodPlan, RustStructuralMethodPayload } from "../../../target-model/records/structural-shapes.js";
+import type { RustStructuralShapeDefinition, RustStructuralMethodPlan, RustStructuralMethodPayload } from "../../../target-model/records/objects/structural-shapes.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";

@@ -2,7 +2,7 @@ import type { Node } from "@tsonic/tsts";
 import { rustProgramNodeIsOutsideNativeCode } from "../control-flow/compile-time-statements.js";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustAnalysisProgram } from "../program/model.js";
-import type { RustProjectUnionMappingProducer } from "../program/records/project-union-mappings.js";
+import type { RustProjectUnionMappingProducer } from "../program/records/types/project-union-mappings.js";
 import { rustProjectUnionMapConversionMatches } from "../../policy/conversions/project-union.js";
 import { rustProjectUnionUpcastRelation } from "../../policy/model/project-union-relations.js";
 import { rustFlowReadProjectionMatches } from "../control-flow/flow-read-projections.js";
@@ -12,8 +12,8 @@ import { isClosedMetadata } from "../../target-model/metadata/closed-data.js";
 import { selectRustUnionMappingEmission } from "../../policy/conversions/union-mappings.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustProjectUnionMapConversion } from "../../target-model/conversions/project-union.js";
-import type { RustFlowReadProjectionFact } from "../../target-model/records/value-projections.js";
-import type { RustCallableParameterAdapter, RustCallableValueAdapter } from "../../target-model/records/callable-adapters.js";
+import type { RustFlowReadProjectionFact } from "../../target-model/records/objects/value-projections.js";
+import type { RustCallableParameterAdapter, RustCallableValueAdapter } from "../../target-model/records/callables/callable-adapters.js";
 
 export function analyzeRustProjectUnionMappings(program: Omit<RustAnalysisProgram, "reachability">,
   nodes: readonly Node[], producer: RustProjectUnionMappingProducer): readonly TargetDiagnostic[] {

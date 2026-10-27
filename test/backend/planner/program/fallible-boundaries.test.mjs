@@ -11,7 +11,7 @@ import { printRustExpr } from "../../../../dist/print/source/expressions/core.js
 import { checkRustDataWrite } from "../../../../dist/backend/planner/objects/data-writes.js";
 import { readRustProjectDispatchedField, writeRustProjectDispatchedField } from "../../../../dist/backend/planner/objects/project-objects.js";
 import { analyzeRustSourcePackageErrorBoundaries } from "../../../../dist/analysis/errors/source-packages.js";
-import { createRustSourcePackageEmissionProducer } from "../../../../dist/analysis/program/records/source-packages.js";
+import { createRustSourcePackageEmissionProducer } from "../../../../dist/analysis/program/records/program/source-packages.js";
 
 const owner = Object.freeze({ componentId: "root", errorDomain: "project",
   errorTypePath: "rt::TsonicError", errorTypeIdentity: "root:error" });

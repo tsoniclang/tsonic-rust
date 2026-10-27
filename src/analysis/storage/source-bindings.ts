@@ -1,15 +1,15 @@
-import { requireRustRecord } from "../program/records/required-records.js";
+import { requireRustRecord } from "../program/records/objects/required-records.js";
 
 import { KindExportAssignment, sourceDeclarationIsModuleScoped } from "@tsonic/target-api/source";
 
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
-import { rustSourceBindingFactEquals, rustSourceCallableValueEquals } from "../../target-model/records/equality.js";
-import type { RustSourceCallableValueFact } from "../../target-model/records/operation-selections.js";
+import { rustSourceBindingFactEquals, rustSourceCallableValueEquals } from "../../target-model/records/operations/equality.js";
+import type { RustSourceCallableValueFact } from "../../target-model/records/operations/operation-selections.js";
 
 import type { Node } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
 
-import type { RustSourceBindingFact } from "../../target-model/records/value-projections.js";
+import type { RustSourceBindingFact } from "../../target-model/records/objects/value-projections.js";
 
 export function recordProjectSourceBinding(
   walk: RustFactWalk,

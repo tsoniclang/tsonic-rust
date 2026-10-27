@@ -1,8 +1,8 @@
 import type { Node } from "@tsonic/tsts";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { RustAnalysisProgram } from "../../program/model.js";
-import type { RustUnionCallProducer } from "../../program/records/union-calls.js";
-import type { RustConversionEmissionProducer } from "../../program/records/conversion-emission.js";
+import type { RustUnionCallProducer } from "../../program/records/calls/union-calls.js";
+import type { RustConversionEmissionProducer } from "../../program/records/operations/conversion-emission.js";
 import { rustMemberAccessReceiver } from "../../../target-model/syntax/expressions.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { rustTargetGenericBindingsForArguments, substituteRustTargetGenerics } from "../../../target-model/types/index.js";

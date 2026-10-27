@@ -1,6 +1,6 @@
 import { rustValueBlock } from "../../target-ast/syntax/value-block.js";
 import type { Node } from "@tsonic/tsts";
-import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
+import type { RustTargetOperationFact } from "../../../target-model/records/operations/operations.js";
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import type { RustAssignmentOperator } from "../../../target-model/syntax/tokens.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";

@@ -1,5 +1,5 @@
 import type { RustExpr, RustStmt } from "../../target-ast/syntax/nodes.js";
-import type { RustBinaryHookPlan } from "../../../target-model/records/binary-execution.js";
+import type { RustBinaryHookPlan } from "../../../target-model/records/operations/binary-execution.js";
 import type { RustPlanningContext } from "../context.js";
 import { applyRustDispatchContextBindings, projectRustDispatchContext } from "../project/dispatch-contexts.js";
 import type { RustDispatchContextBinding } from "../project/dispatch-contexts.js";

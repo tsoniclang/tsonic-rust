@@ -2,7 +2,7 @@ import { rustOptionElementCarrier } from "../../../../target-model/types/index.j
 import { emptyRustTypeDefinitions } from "../../../../target-model/types/source-union-definitions.js";
 import type { RustTypeDefinitions } from "../../../../target-model/types/source-union-definitions.js";
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
-import type { RustTargetOperationFact } from "../../../../target-model/records/operations.js";
+import type { RustTargetOperationFact } from "../../../../target-model/records/operations/operations.js";
 import { isRustFinalizedSourceInput } from "../../../../target-model/operations/finalized-inputs.js";
 import { validateRustFinalizedOperationAbi } from "./validation.js";
 

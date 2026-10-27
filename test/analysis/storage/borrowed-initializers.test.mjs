@@ -5,7 +5,7 @@ import { analyzeRust, compileRust } from "../../helpers/rust-session.mjs";
 import { borrowedNullishSequencesSource } from "../../../../tsonic/test/fixtures/borrowed-nullish-sequences.mjs";
 import { createTsonicPlugin } from "../../../../rust-nodejs/dist/index.js";
 import { analyzeRustBorrowedInitializers } from "../../../dist/analysis/storage/borrowed-initializers.js";
-import { createRustBorrowedInitializerProducer } from "../../../dist/analysis/program/records/borrowed-initializers.js";
+import { createRustBorrowedInitializerProducer } from "../../../dist/analysis/program/records/storage/borrowed-initializers.js";
 
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 import { rustTargetGenericReferences } from "../../../dist/target-model/types/carriers/generic-references.js";

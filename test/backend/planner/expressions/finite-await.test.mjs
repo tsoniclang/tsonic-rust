@@ -7,7 +7,7 @@ import { rustSourceFilePlanContext } from "../../../helpers/plan-context.mjs";
 import { sourceEnclosingCallable } from "@tsonic/target-api/source";
 import { planRustErrorRegion } from "../../../../dist/backend/planner/program/error-regions.js";
 import { rustAwaitValueMatchesCarrier } from "../../../../dist/analysis/callables/async/await-values.js";
-import { createRustAwaitValueProducer } from "../../../../dist/analysis/program/records/await-value.js";
+import { createRustAwaitValueProducer } from "../../../../dist/analysis/program/records/callables/await-value.js";
 import { selectRustSourceValueConversion } from "../../../../dist/policy/conversions/selection.js";
 import { rustAwaitSelectionLeaves } from "../../../../dist/target-model/types/await.js";
 import { rustSourcePrimitiveTargetType } from "../../../../dist/target-model/types/index.js";

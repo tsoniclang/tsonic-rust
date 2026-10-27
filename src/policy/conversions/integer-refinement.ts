@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
-import type { RustIntegerRangeIndex } from "../../target-model/records/integer-ranges.js";
+import type { RustIntegerRangeIndex } from "../../target-model/records/operations/integer-ranges.js";
 import { rustUnsignedIntegerCounterpart } from "../../target-model/conversions/integer-refinement.js";
 import type { RustIntegerRefinementConversion } from "../../target-model/conversions/integer-refinement.js";
 

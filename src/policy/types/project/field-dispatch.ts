@@ -1,5 +1,5 @@
 import type { Node } from "@tsonic/tsts";
-import type { RustProjectFieldDispatchPlan } from "../../../target-model/records/field-writes.js";
+import type { RustProjectFieldDispatchPlan } from "../../../target-model/records/storage/field-writes.js";
 
 export function selectRustProjectFieldDispatch(input: {
   readonly declaration: Node;

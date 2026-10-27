@@ -6,7 +6,7 @@ import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js
 import { rustStructuralObjectCarrierValue, rustTargetGenericReferences } from "../../../target-model/types/index.js";
 import type { RustProjectProjectionRequirement, RustProjectProjectionSelection } from "../../../target-model/types/project-projections.js";
 
-import type { RustProjectProjectionImplementation } from "../../../target-model/records/project-projections.js";
+import type { RustProjectProjectionImplementation } from "../../../target-model/records/objects/project-projections.js";
 
 export function selectRustProjectProjectionImplementation(
   requirement: Pick<RustProjectProjectionRequirement, "sourceCarrier" | "targetCarrier">, route: RustProjectDowncastRoute, projectTypes: RustProjectTypePolicy,

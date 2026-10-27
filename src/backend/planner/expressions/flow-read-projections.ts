@@ -3,7 +3,7 @@ import { requireRustReadOwnership } from "./typed-locations.js";
 import { rustValueBlock } from "../../target-ast/syntax/value-block.js";
 import type { Node } from "@tsonic/tsts";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
-import type { RustFlowReadProjectionFact } from "../../../target-model/records/value-projections.js";
+import type { RustFlowReadProjectionFact } from "../../../target-model/records/objects/value-projections.js";
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import { rustCurrentErrorBoundary } from "../program/plan-context.js";
 import type { RustPlanContext } from "../program/plan-context.js";

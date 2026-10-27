@@ -1,5 +1,5 @@
-import type { RustStructuralShapeDefinition } from "../../target-model/records/structural-shapes.js";
-import type { RustShapeGenericRequirementContract } from "../../target-model/records/generic-requirements.js";
+import type { RustStructuralShapeDefinition } from "../../target-model/records/objects/structural-shapes.js";
+import type { RustShapeGenericRequirementContract } from "../../target-model/records/types/generic-requirements.js";
 
 export interface RustStructuralEmissionPolicyInput {
   readonly definition: RustStructuralShapeDefinition;

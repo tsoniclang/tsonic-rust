@@ -3,8 +3,8 @@ import type { RustProjectTypePolicy } from "../../target-model/types/project-typ
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import { emptyRustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import type { RustCallableParameterAbi, RustCallableParameterAdapter, RustCallableParameterRead,
-  RustCallableRestIteration, RustCallableRestSegment, RustCallableValueAdapter } from "../../target-model/records/callable-adapters.js";
-import { callableRestElement } from "../../target-model/records/callable-adapters.js";
+  RustCallableRestIteration, RustCallableRestSegment, RustCallableValueAdapter } from "../../target-model/records/callables/callable-adapters.js";
+import { callableRestElement } from "../../target-model/records/callables/callable-adapters.js";
 import { rustOptionalStorageValue } from "../../target-model/types/projections.js";
 import { isDenseDataArray, snapshotClosedMetadata } from "../../target-model/metadata/closed-data.js";
 import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../../target-model/types/equality.js";

@@ -5,8 +5,8 @@ import { getRustGeneratorProtocol } from "../../target-model/types/carriers/call
 import { rustUninhabitedError } from "../../policy/conversions/callable-physical.js";
 import { rustProducerErrorReference } from "../../target-model/types/carriers/producer-errors.js";
 import { mapRustTargetTypes } from "../../target-model/types/carriers/substitution.js";
-import type { RustDeclarationEmissionProducer } from "../program/records/declaration-emission.js";
-import { requireRustRecord, type RustRequiredRecord } from "../program/records/required-records.js";
+import type { RustDeclarationEmissionProducer } from "../program/records/program/declaration-emission.js";
+import { requireRustRecord, type RustRequiredRecord } from "../program/records/objects/required-records.js";
 import { rustProgramNodeIsOutsideNativeCode } from "../control-flow/compile-time-statements.js";
 
 export function analyzeRustDeclarationEmission(input: {

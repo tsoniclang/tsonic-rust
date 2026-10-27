@@ -1,15 +1,15 @@
 import type { RustStructuralStorageLookup, RustProjectFieldDispatchLookup } from "../../model/operation-record-inputs.js";
 import { emptyRustTypeDefinitions } from "../../../target-model/types/source-union-definitions.js";
 import type { RustTypeDefinitions } from "../../../target-model/types/source-union-definitions.js";
-import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
+import type { RustTargetOperationFact } from "../../../target-model/records/operations/operations.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
 import { isRustFinalizedArrayInput, isRustFinalizedSliceInput, isRustFinalizedSourceInput, isRustFinalizedTaggedArrayInput } from "../../../target-model/operations/finalized-inputs.js";
-import type { RustFinalizedOperationAbi } from "../../../target-model/records/finalized-operation.js";
+import type { RustFinalizedOperationAbi } from "../../../target-model/records/operations/finalized-operation.js";
 import { rustValueConversionIsFallible } from "../../conversions/contracts.js";
 
-import type { RustStructuralShapeField } from "../../../target-model/records/structural-shapes.js";
+import type { RustStructuralShapeField } from "../../../target-model/records/objects/structural-shapes.js";
 import { rustGenericCallableValue } from "../../../target-model/types/carriers/generic-callables.js";
 import { rustOptionElementCarrier } from "../../../target-model/types/carriers/optional.js";
 import { rustCarrierProvidesErrorMutation } from "../../constraints/error-protocols.js";
@@ -64,7 +64,7 @@ export function rustTargetOperationIsFallible(
   fact: RustTargetOperationFact | undefined,
   structuralStorage: RustStructuralStorageLookup,
   projectFieldDispatch: RustProjectFieldDispatchLookup,
-  frozenDataWrites: import("../../../target-model/records/frozen-data.js").RustFrozenDataWritePlan,
+  frozenDataWrites: import("../../../target-model/records/storage/frozen-data.js").RustFrozenDataWritePlan,
   definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
 ): boolean {
   if (fact === undefined) {

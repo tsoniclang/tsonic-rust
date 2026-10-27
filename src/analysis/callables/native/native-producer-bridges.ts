@@ -1,6 +1,6 @@
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
-import type { RustNativeCallableProtocol } from "../../../target-model/records/native-protocols.js";
-import type { RustNativeProducerBridge } from "../../../target-model/records/native-protocol-emission.js";
+import type { RustNativeCallableProtocol } from "../../../target-model/records/native/native-protocols.js";
+import type { RustNativeProducerBridge } from "../../../target-model/records/native/native-protocol-emission.js";
 import type { RustTargetGenericArgument, TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustTypeDefinitions } from "../../../target-model/types/source-union-definitions.js";
 import { instantiateRustNativeCompletion, rustNativeCompletionFutureType } from "../../../target-model/types/callable-completions.js";

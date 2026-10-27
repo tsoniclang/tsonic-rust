@@ -1,6 +1,6 @@
 import type { Node, SourceFile } from "@tsonic/tsts";
 import { VariableDeclarationList_Declarations, VariableStatement_DeclarationList, type TargetSourceProgram } from "@tsonic/target-api/source";
-import type { RustSourceProfileErrorContract } from "../../target-model/records/source-profiles.js";
+import type { RustSourceProfileErrorContract } from "../../target-model/records/program/source-profiles.js";
 
 export function readRustSourceProfileErrorContract(
   source: TargetSourceProgram,

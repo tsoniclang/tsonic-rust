@@ -6,7 +6,7 @@ import { rustNativeFixtureNodes } from "../../../helpers/records.mjs";
 import { rustSourceFilePlanContext } from "../../../helpers/plan-context.mjs";
 import { createTargetSourceProgram } from "@tsonic/target-api/source";
 import { analyzeRustStatementCompletions } from "../../../../dist/analysis/control-flow/statement-completion.js";
-import { createRustStatementCompletionProducer } from "../../../../dist/analysis/program/records/statement-completion.js";
+import { createRustStatementCompletionProducer } from "../../../../dist/analysis/program/records/operations/statement-completion.js";
 
 test("canonical block planning retains empty native bodies and rejects every missing statement slot", () => {
   const { source: checked, program } = analyzeRust({ files: { "index.ts": "export function empty(): void { ; }" } });

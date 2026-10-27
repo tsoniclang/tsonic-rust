@@ -10,11 +10,11 @@ import { emptyRustTypeDefinitions } from "../../../target-model/types/source-uni
 import type { RustTypeDefinitions } from "../../../target-model/types/source-union-definitions.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustValueConversion } from "../../../target-model/operations/model.js";
-import type { RustFutureValueFact } from "../../../target-model/records/object-methods.js";
+import type { RustFutureValueFact } from "../../../target-model/records/objects/object-methods.js";
 import { finalizedConversionIsValid, finalizeValueConversion } from "../../../policy/operations/members/abi/conversions.js";
 import { rustFutureValueMatchesCarrier } from "./future-values.js";
 
-import type { RustAwaitValueLeafFact, RustAwaitValueFact } from "../../../target-model/records/await-values.js";
+import type { RustAwaitValueLeafFact, RustAwaitValueFact } from "../../../target-model/records/callables/await-values.js";
 
 function admitsAbsentCompletion(carrier: TargetTypeRef): boolean {
   return isRustUnitCarrier(carrier) || rustOptionElementCarrier(carrier) !== undefined || rustOptionalStorageValue(carrier) !== undefined;

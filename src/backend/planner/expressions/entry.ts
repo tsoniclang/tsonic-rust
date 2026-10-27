@@ -1,7 +1,7 @@
 import type { Node } from "@tsonic/tsts";
 import type { RustExpr, RustPattern } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
-import type { RustFlowReadProjectionFact, RustProjectUpcastFact, RustContextualValueConversionFact } from "../../../target-model/records/value-projections.js";
+import type { RustFlowReadProjectionFact, RustProjectUpcastFact, RustContextualValueConversionFact } from "../../../target-model/records/objects/value-projections.js";
 import { rustValueBlock } from "../../target-ast/syntax/value-block.js";
 import { cloneRustExpression } from "../../target-ast/syntax/expressions.js";
 import { failRustPlannerInvariant } from "../diagnostics.js";

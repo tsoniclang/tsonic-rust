@@ -1,6 +1,6 @@
-import type { RustGenericCallablePhysicalDefinition, RustGenericCallablePhysicalMember } from "../../../../target-model/records/generic-callables.js";
-import type { RustSourceCallEffectsFact } from "../../../../target-model/records/object-methods.js";
-import type { RustGenericCallableEffectsFact } from "../../../../target-model/records/generic-callable-effects.js";
+import type { RustGenericCallablePhysicalDefinition, RustGenericCallablePhysicalMember } from "../../../../target-model/records/callables/generic-callables.js";
+import type { RustSourceCallEffectsFact } from "../../../../target-model/records/objects/object-methods.js";
+import type { RustGenericCallableEffectsFact } from "../../../../target-model/records/callables/generic-callable-effects.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import { rustTypeFromCarrierInContext } from "../../types/render.js";
 import type { RustNativeErrorSource } from "../../../../target-model/types/native-error-joins.js";

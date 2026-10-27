@@ -9,12 +9,12 @@ import { rustGenericCallableCarrier, rustGenericCallableValue } from "../../../t
 import type { RustGenericCallableStorageMember } from "../../../target-model/types/carriers/generic-callable-storage.js";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import { rustGenericCallableEnvironment } from "./generic-environments.js";
-import { type RustGenericCallableEnvironment } from "../../../target-model/records/generic-callables.js";
+import { type RustGenericCallableEnvironment } from "../../../target-model/records/callables/generic-callables.js";
 import type { RustNativeCaptureConstruction } from "../native/native-captures.js";
 import type { RustNativeCallableInputPlan } from "../native/native-inputs.js";
-import type { RustNativeCallableInput } from "../../../target-model/records/native-protocols.js";
-import type { RustNativeStorageSelection } from "../../../target-model/records/native-storage.js";
-import type { RustGenericCallableDefinition, RustGenericCallableImplementation } from "../../../target-model/records/generic-callables.js";
+import type { RustNativeCallableInput } from "../../../target-model/records/native/native-protocols.js";
+import type { RustNativeStorageSelection } from "../../../target-model/records/native/native-storage.js";
+import type { RustGenericCallableDefinition, RustGenericCallableImplementation } from "../../../target-model/records/callables/generic-callables.js";
 import { substituteRustTargetGenericArgument, substituteRustTargetGenerics, substituteRustTargetTypeParameters } from "../../../target-model/types/carriers/substitution.js";
 import { allocateRustGeneratedName } from "../../../target-model/names/generated.js";
 import { rustTargetTypeChildren } from "../../../target-model/types/carriers/children.js";
@@ -22,10 +22,10 @@ import type { RustLifetimeIndex } from "../../../target-model/lifetimes/index.js
 
 import { rustGenericCallableMemberBindings } from "./generic-bindings.js";
 import { snapshotRustCallableBindings } from "../../../policy/types/callables/generic-bindings.js";
-import type { RustPhysicalCallableSourceSelection } from "../../../target-model/records/physical-emission-contexts.js";
+import type { RustPhysicalCallableSourceSelection } from "../../../target-model/records/native/physical-emission-contexts.js";
 import type { RustNativeStoragePlan } from "../storage/native-storage.js";
 
-import type { RustGenericCallablePhysicalMember, RustGenericCallablePhysicalDefinition, RustGenericCallablePhysicalSelection, RustGenericCallablePhysicalConversion } from "../../../target-model/records/generic-callables.js";
+import type { RustGenericCallablePhysicalMember, RustGenericCallablePhysicalDefinition, RustGenericCallablePhysicalSelection, RustGenericCallablePhysicalConversion } from "../../../target-model/records/callables/generic-callables.js";
 
 export type RustGenericCallablePhysicalCarrierSelector = (carrier: TargetTypeRef, ownerFileName: string,
   subject: SourceStorageSubject, bindings: SourceStorageBindings, producers: readonly SourceStorageProducer[]) =>
@@ -337,5 +337,5 @@ export function createRustGenericCallablePhysicalPlan(
   });
 }
 
-import type { RustGenericCallablePhysicalPlan } from "../../../target-model/records/generic-callables.js";
-import { createRustGenericCallablePhysicalRecords } from "../../program/records/generic-callable-physical.js";
+import type { RustGenericCallablePhysicalPlan } from "../../../target-model/records/callables/generic-callables.js";
+import { createRustGenericCallablePhysicalRecords } from "../../program/records/callables/generic-callable-physical.js";

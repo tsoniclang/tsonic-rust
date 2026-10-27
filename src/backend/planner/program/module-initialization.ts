@@ -1,11 +1,11 @@
 import { failRustPlannerInvariant } from "../diagnostics.js";
 import { rustHiddenAttribute } from "../../target-ast/syntax/attributes.js";
 import type { SourceFile } from "@tsonic/tsts";
-import type { RustInitializerSelection } from "../../../target-model/records/error-regions.js";
-import type { RustNativeTaskUse } from "../../../target-model/records/native-tasks.js";
+import type { RustInitializerSelection } from "../../../target-model/records/errors/error-regions.js";
+import type { RustNativeTaskUse } from "../../../target-model/records/native/native-tasks.js";
 import type { RustItem, RustStmt, RustType } from "../../target-ast/syntax/nodes.js";
 import { emptyRustGenerics } from "../../target-ast/syntax/nodes.js";
-import type { RustSourcePackageInitializerPlan } from "../../../target-model/records/source-packages.js";
+import type { RustSourcePackageInitializerPlan } from "../../../target-model/records/program/source-packages.js";
 import { resolveRustPhysicalProgramErrorBoundary } from "./source-package-errors.js";
 import { rustTypeFromCarrierInContext, type RustTypeRenderingContext } from "../types/render.js";
 import { planRustSelectedErrorRegion } from "./error-regions.js";

@@ -6,13 +6,13 @@ import type { TargetDiagnostic, TargetStageResult } from "@tsonic/target-api/art
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { RustErrorJoinDeclaration, RustErrorRegionRecords, RustErrorRegionSelection,
   RustInitializationErrorRecords, RustSourceErrorRegionSelection, RustInitializerSelection,
-  RustLifecycleErrorSelection, RustPhysicalErrorOwner } from "../../target-model/records/error-regions.js";
+  RustLifecycleErrorSelection, RustPhysicalErrorOwner } from "../../target-model/records/errors/error-regions.js";
 import type { RustNamePlan } from "../../target-model/names/model.js";
 import { allocateRustGeneratedName } from "../../target-model/names/generated.js";
 import type { RustCallableConversion } from "../../target-model/conversions/callable.js";
 import { rustCallableConversionErrorArities } from "../../policy/conversions/callable-physical.js";
-import type { RustCallableValueAdapter } from "../../target-model/records/callable-adapters.js";
-import type { RustNativeCallableProducer } from "../../target-model/records/native-producers.js";
+import type { RustCallableValueAdapter } from "../../target-model/records/callables/callable-adapters.js";
+import type { RustNativeCallableProducer } from "../../target-model/records/native/native-producers.js";
 import type { RustCallableValuePlan } from "../callables/values/value-plan.js";
 import type { RustProducerErrorReference } from "../../target-model/types/carriers/producer-errors.js";
 import { rustProducerErrorReference, rustProducerErrorTargetType } from "../../target-model/types/carriers/producer-errors.js";
@@ -26,25 +26,25 @@ import { rustTargetTypeChildren } from "../../target-model/types/carriers/childr
 import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustInfallibleTargetId } from "../../target-model/types/carriers/source-types.js";
 import { isRustNeverCarrier } from "../../target-model/types/carriers/js.js";
-import type { RustSourceErrorEffectEdge } from "../../target-model/records/source-error-effects.js";
-import type { RustErrorEffectsFact } from "../../target-model/records/error-effects.js";
+import type { RustSourceErrorEffectEdge } from "../../target-model/records/errors/source-error-effects.js";
+import type { RustErrorEffectsFact } from "../../target-model/records/errors/error-effects.js";
 import { closedMetadataKey, isClosedMetadata, snapshotClosedMetadata } from "../../target-model/metadata/closed-data.js";
 import { snapshotRustNativeErrorSources } from "../../target-model/types/native-error-joins.js";
 import { selectRustJsRejectionRegion } from "../../policy/operations/flow/js-rejection.js";
 import { rustCallableProtocol } from "../../target-model/types/carriers/callables.js";
 import { rustJsValueTargetType, rustProgramErrorTargetType } from "../../target-model/types/carriers/js.js";
-import type { RustPromiseBodies } from "../../target-model/records/callables-and-resources.js";
+import type { RustPromiseBodies } from "../../target-model/records/callables/callables-and-resources.js";
 import type { RustNativeTaskCompletion } from "../callables/native/native-tasks.js";
 import { mapRustAwaitSelection, type RustAwaitSelection } from "../../target-model/types/await.js";
-import type { RustAwaitValueLeafFact } from "../../target-model/records/await-values.js";
+import type { RustAwaitValueLeafFact } from "../../target-model/records/callables/await-values.js";
 import type { RustBinaryHookPlan } from "../project/index.js";
 import { rustRuntimeErrorTargetType } from "../../target-model/types/carriers/runtime-carriers.js";
-import { rustJsRejectionErrorIdentity } from "../../target-model/records/error-effects.js";
+import { rustJsRejectionErrorIdentity } from "../../target-model/records/errors/error-effects.js";
 import type { RustFrameCallableDefinition, RustFrameCallableEntryDefinition, RustFrameCallableImplementation,
-  RustFrameEntryErrorSelection, RustFrameImplementationErrorSelection } from "../../target-model/records/frame-callables.js";
+  RustFrameEntryErrorSelection, RustFrameImplementationErrorSelection } from "../../target-model/records/callables/frame-callables.js";
 import { mergeRustErrorEffects, rustProducerInvocationErrorEffects } from "./error-effects.js";
 import { rustUninhabitedError } from "../../policy/conversions/callable-physical.js";
-import type { RustFrameCallablePlan } from "../../target-model/records/frame-callables.js";
+import type { RustFrameCallablePlan } from "../../target-model/records/callables/frame-callables.js";
 import { rustFrameCallableValue } from "../../target-model/types/carriers/frame-callables.js";
 import { rustFrameCallableEnvironmentBindings } from "../callables/values/frame-values.js";
 

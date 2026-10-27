@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { selectJsSurfaceOperation } from "../../../dist/policy/operations/source-profiles/js/index.js";
-import { finalizeProviderOperationFact } from "../../../dist/analysis/program/records/provider-operations.js";
+import { finalizeProviderOperationFact } from "../../../dist/analysis/program/records/native/provider-operations.js";
 import { rustIndexedLocationContract } from "../../../dist/policy/operations/members/abi/indexed-location.js";
 import { rustJsArrayTargetType, rustSourcePrimitiveTargetType, rustSourceOptionalTargetType, rustOptionTargetType } from "../../../dist/target-model/types/index.js";
 

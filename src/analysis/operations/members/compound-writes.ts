@@ -1,4 +1,4 @@
-import { requireRustRecord } from "../../program/records/required-records.js";
+import { requireRustRecord } from "../../program/records/objects/required-records.js";
 import type { Node } from "@tsonic/tsts";
 import { recordPolicySelection, rustOperationContext, type RustFactWalk } from "../../program/walk.js";
 import type { RustCheckedOperationSelectionResult, RustPolicySelection } from "../../../policy/model/contracts.js";

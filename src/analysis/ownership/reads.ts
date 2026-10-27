@@ -2,17 +2,17 @@ import type { Node } from "@tsonic/tsts";
 import { Node_Expression, sourceEnclosingCallable, sourceParameterIsProperty, sourceTransparentExpressionOperand } from "@tsonic/target-api/source";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import { createSourceStorageBudget, defaultSourceStorageLimits, type SourceStorageLimits, type SourceStorageQueries } from "@tsonic/target-api/analysis";
-import type { RustCaptureReadOwnership, RustOwnershipRecords, RustReadOwnershipFact, RustReadUse } from "../../target-model/records/ownership.js";
+import type { RustCaptureReadOwnership, RustOwnershipRecords, RustReadOwnershipFact, RustReadUse } from "../../target-model/records/storage/ownership.js";
 import type { RustAnalysisRecords } from "../../target-model/records/analysis.js";
-import type { RustClosureCaptureFact } from "../../target-model/records/operation-selections.js";
+import type { RustClosureCaptureFact } from "../../target-model/records/operations/operation-selections.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import { isRustStringCarrier, rustLocationTargetType } from "../../target-model/types/index.js";
 import { isRustCopyCarrier, rustCarrierSupportsClone } from "../../policy/constraints/native-traits.js";
 import type { AnalyzeRustDeclarationGenericRequirementsResult, RustDeclarationGenericRequirementIndex } from "../declarations/generic-requirements.js";
 import type { RustGenericCallablePlan } from "../callables/generics/generic-values.js";
-import type { RustOwnershipFlow } from "../../target-model/records/ownership-flow.js";
+import type { RustOwnershipFlow } from "../../target-model/records/storage/ownership-flow.js";
 import { selectRustBorrowRelationship, type RustBorrowEffectsInput } from "./effects.js";
-import { type RustBorrowEffects } from "../../target-model/records/ownership-effects.js";
+import { type RustBorrowEffects } from "../../target-model/records/storage/ownership-effects.js";
 import { selectRustValueReadOwnership } from "../../policy/ownership/value-read.js";
 import { rustBorrowedOperationArguments } from "../storage/provider-borrows.js";
 import { BinaryExpression_Left, BinaryExpression_Right } from "@tsonic/target-api/source";
@@ -167,7 +167,7 @@ export function prepareRustReadOwnership(input: {
     const requirements = { kind: "resolved" as const, index: genericRequirements };
     const reads = new Map<Node, RustReadOwnershipFact>();
     const captures = new Map<Node, readonly RustCaptureReadOwnership[]>();
-    const writes = new Map<Node, import("../../target-model/records/ownership.js").RustBorrowedFieldWrite>();
+    const writes = new Map<Node, import("../../target-model/records/storage/ownership.js").RustBorrowedFieldWrite>();
     for (const node of input.nativeNodes) {
       const selected = valueReadFor(node, requirements);
       if (selected !== undefined) {

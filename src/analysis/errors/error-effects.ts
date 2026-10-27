@@ -1,13 +1,13 @@
 import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { closedMetadataKey, snapshotClosedMetadata } from "../../target-model/metadata/closed-data.js";
-import type { RustErrorEffectsFact, RustNativeErrorEffect } from "../../target-model/records/error-effects.js";
-import { rustJsRejectionErrorIdentity } from "../../target-model/records/error-effects.js";
+import type { RustErrorEffectsFact, RustNativeErrorEffect } from "../../target-model/records/errors/error-effects.js";
+import { rustJsRejectionErrorIdentity } from "../../target-model/records/errors/error-effects.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustProgramErrorOwner } from "../../target-model/types/carriers/program-errors.js";
 import { rustJsValueTargetType } from "../../target-model/types/carriers/js.js";
 import { rustUninhabitedError } from "../../policy/conversions/callable-physical.js";
 import type { Node } from "@tsonic/tsts";
-import type { RustPromiseBodies } from "../../target-model/records/callables-and-resources.js";
+import type { RustPromiseBodies } from "../../target-model/records/callables/callables-and-resources.js";
 import { rustCallableProtocol } from "../../target-model/types/carriers/callables.js";
 import { selectRustProducerError, type RustProducerErrorContext } from "../callables/calls/producer-errors.js";
 

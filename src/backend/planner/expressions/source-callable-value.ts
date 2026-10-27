@@ -1,4 +1,4 @@
-import type { RustSourceCallableValueFact } from "../../../target-model/records/operation-selections.js";
+import type { RustSourceCallableValueFact } from "../../../target-model/records/operations/operation-selections.js";
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import { failRustPlannerInvariant } from "../diagnostics.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";

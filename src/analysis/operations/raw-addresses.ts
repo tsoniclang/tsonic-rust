@@ -1,4 +1,4 @@
-import { requireRustRecord } from "../program/records/required-records.js";
+import { requireRustRecord } from "../program/records/objects/required-records.js";
 import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
 import { appendRustDiagnostic } from "../program/walk.js";
@@ -8,7 +8,7 @@ import type { RustSourceRawAddress } from "../../source/extension/raw-addresses.
 import { rustSourceRawAddressWidth } from "../../source/extension/raw-addresses.js";
 import { rustOptionTargetType, rustRawPointerTargetType, rustSourcePrimitiveTargetType } from "../../target-model/types/index.js";
 
-import type { RustRawAddressPlan } from "../../target-model/records/raw-addresses.js";
+import type { RustRawAddressPlan } from "../../target-model/records/storage/raw-addresses.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { readRustSourceRawPointerIdentity } from "../../source/extension/raw-pointers.js";
 import { rustPrimitiveTypeName } from "../../target-model/types/carriers/primitives.js";

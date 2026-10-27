@@ -1,4 +1,4 @@
-import type { RustCallableParameterAdapter } from "../../target-model/records/callable-adapters.js";
+import type { RustCallableParameterAdapter } from "../../target-model/records/callables/callable-adapters.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 
 export function rustCallableRestCloneSources(adapters: readonly RustCallableParameterAdapter[]): readonly TargetTypeRef[] {

@@ -1,12 +1,12 @@
 import type { Node } from "@tsonic/tsts";
 import { failTargetAnalysisInvariant, type TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustAnalysisProgram } from "../program/model.js";
-import type { RustReachability } from "../../target-model/records/reachability.js";
-import type { RustDispatchMemberRole } from "../../target-model/records/reachability.js";
-import type { RustProjectClassProducer } from "../program/records/project-classes.js";
+import type { RustReachability } from "../../target-model/records/program/reachability.js";
+import type { RustDispatchMemberRole } from "../../target-model/records/program/reachability.js";
+import type { RustProjectClassProducer } from "../program/records/objects/project-classes.js";
 import type { RustProjectTypeDefinition } from "../../target-model/types/project-types.js";
-import type { RustProjectDispatchEmission } from "../../target-model/records/project-classes.js";
-import type { RustDeadCodeDisposition } from "../../target-model/records/native-liveness.js";
+import type { RustProjectDispatchEmission } from "../../target-model/records/objects/project-classes.js";
+import type { RustDeadCodeDisposition } from "../../target-model/records/native/native-liveness.js";
 import { rustSourceItemIdentity } from "../../target-model/names/source-output-identities.js";
 import { selectRustStructuralDispatchArguments } from "../../policy/types/objects/structural-generics.js";
 

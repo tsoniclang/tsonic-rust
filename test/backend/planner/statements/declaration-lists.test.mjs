@@ -4,7 +4,7 @@ import { analyzeRust } from "../../../helpers/rust-session.mjs";
 import { rustSourceFilePlanContext } from "../../../helpers/plan-context.mjs";
 import { collectVariableDeclarations } from "../../../../dist/backend/planner/statements/resource-management.js";
 import { analyzeRustResourceScopes } from "../../../../dist/analysis/control-flow/resource-scopes.js";
-import { createRustResourceScopeProducer } from "../../../../dist/analysis/program/records/resource-scopes.js";
+import { createRustResourceScopeProducer } from "../../../../dist/analysis/program/records/storage/resource-scopes.js";
 
 function fixture() {
   const { program } = analyzeRust({ files: { "index.ts": `

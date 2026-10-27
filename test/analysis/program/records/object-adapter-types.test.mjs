@@ -30,7 +30,7 @@ const imports = `
   import type { RustFactWalk } from "../../dist/analysis/program/walk.js";
   import type { RustProgramRecords } from "../../dist/target-model/records/program.js";
   import type { RustObjectLiteralMethodAdapterInput } from "../../dist/analysis/objects/method-adapters.js";
-  import type { RustObjectReferenceView } from "../../dist/target-model/records/object-reference-views.js";
+  import type { RustObjectReferenceView } from "../../dist/target-model/records/objects/object-reference-views.js";
   import type { TargetTypeRef } from "../../dist/target-model/types/model.js";
   declare const builder: RustProgramRecordBuilder;
   declare const records: RustProgramRecords;

@@ -12,12 +12,12 @@ import {
 import type { RustNamePlan } from "../../target-model/names/model.js";
 import { isValidRustIdentifier } from "../../target-model/names/identifiers.js";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
-import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
-import type { RustErrorRegionRecords, RustErrorRegionSelection } from "../../target-model/records/error-regions.js";
+import type { RustTargetOperationFact } from "../../target-model/records/operations/operations.js";
+import type { RustErrorRegionRecords, RustErrorRegionSelection } from "../../target-model/records/errors/error-regions.js";
 import type {
   RustAssignmentCompletion, RustControlExitCompletion, RustIterationBindingCompletion,
   RustIterationCompletion, RustRuntimeSetterCompletion, RustStatementCompletionRecords,
-} from "../../target-model/records/statement-completion.js";
+} from "../../target-model/records/operations/statement-completion.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import { isRustBoolCarrier, isRustStringCarrier, isRustUnitCarrier, isRustProgramErrorCarrier, rustProgramErrorTargetType } from "../../target-model/types/index.js";
 import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
@@ -27,9 +27,9 @@ import { rustEffectiveValueCarrier } from "../conversions/value-carrier-queries.
 import { rustSwitchComparisonMatches } from "../operations/control-flow/switch.js";
 import type { RustProjectFlowReadSelectionIndex } from "./project-flow-read-selections.js";
 import { validateRustDisposalLifecycle } from "./resource-lifecycle.js";
-import type { RustStatementCompletionProducer } from "../program/records/statement-completion.js";
-import { requireRustRecord, type RustRequiredRecord } from "../program/records/required-records.js";
-import type { RustCountedLoopRepresentation } from "../../target-model/records/counted-loops.js";
+import type { RustStatementCompletionProducer } from "../program/records/operations/statement-completion.js";
+import { requireRustRecord, type RustRequiredRecord } from "../program/records/objects/required-records.js";
+import type { RustCountedLoopRepresentation } from "../../target-model/records/operations/counted-loops.js";
 import type { RustSafetyApplicationFactIndex } from "../safety/application-index.js";
 import { rustSourceHasExplicitUnsafeContext } from "../safety/regions.js";
 import { admitRustThrowCompletion } from "../errors/throw-admission.js";
@@ -38,12 +38,12 @@ import { analyzeRustOptionalChainBodyFallibility } from "../errors/optional-chai
 import { admitRustAwaitBoundary } from "../callables/async/await-admission.js";
 import { admitRustSourceValueConversions } from "../conversions/source-admission.js";
 import type { RustProjectFieldDispatchQueries } from "../project-types/field-dispatch.js";
-import type { RustSourcePackageComponentClassifications } from "../../target-model/records/source-package-semantics.js";
-import type { RustThrowCompletion, RustCatchBinding, RustCatchErrorConversion } from "../../target-model/records/exception-flow.js";
+import type { RustSourcePackageComponentClassifications } from "../../target-model/records/program/source-package-semantics.js";
+import type { RustThrowCompletion, RustCatchBinding, RustCatchErrorConversion } from "../../target-model/records/operations/exception-flow.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
-import type { RustAssignmentValueSelection } from "../../target-model/records/operator-selection.js";
+import type { RustAssignmentValueSelection } from "../../target-model/records/operations/operator-selection.js";
 import { selectRustAssignmentValue } from "../../policy/operations/operators/assignment-value.js";
-import type { RustOwnershipRecords } from "../../target-model/records/ownership.js";
+import type { RustOwnershipRecords } from "../../target-model/records/storage/ownership.js";
 import type { RustProjectTypePolicy } from "../../target-model/types/project-types.js";
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 import { rustErrorRegionCarrier } from "../errors/regions.js";

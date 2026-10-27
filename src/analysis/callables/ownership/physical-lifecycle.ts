@@ -3,9 +3,9 @@ import type { SourceStorageQueries, TargetUseSiteRef } from "@tsonic/target-api/
 import { failTargetAnalysisInvariant, rejectedTargetStage, resolvedTargetStage, type TargetDiagnostic, type TargetStageResult } from "@tsonic/target-api/artifacts";
 import { ConditionalExpression_WhenFalse, ConditionalExpression_WhenTrue, Node_Expression, Node_Initializer, sourceEnclosingCallable } from "@tsonic/target-api/source";
 import type { RustProgramRecords } from "../../../target-model/records/program.js";
-import type { RustPhysicalEmissionSourceOccurrence, RustPhysicalEmissionSourceSlot } from "../../../target-model/records/physical-emission-contexts.js";
-import type { RustPhysicalCallableFlowApplication } from "../../../target-model/records/physical-callables.js";
-import type { RustGenericCallableFlowProducer } from "../../program/records/generic-callable-flow.js";
+import type { RustPhysicalEmissionSourceOccurrence, RustPhysicalEmissionSourceSlot } from "../../../target-model/records/native/physical-emission-contexts.js";
+import type { RustPhysicalCallableFlowApplication } from "../../../target-model/records/native/physical-callables.js";
+import type { RustGenericCallableFlowProducer } from "../../program/records/callables/generic-callable-flow.js";
 import { type RustGenericCallableConversion } from "../../../target-model/conversions/generic-callable.js";
 import { rustGenericCallableConversionMatches } from "../../../policy/conversions/generic-callable.js";
 import { rustCallableProtocol } from "../../../target-model/types/carriers/callables.js";
@@ -20,15 +20,15 @@ import { type RustStructuralStorageLookup } from "../../../policy/model/operatio
 import { rustSourceCallCallableStorageCarrier } from "../../../policy/operations/members/native-contracts.js";
 import type { RustTargetGenericBindings } from "../../../target-model/types/carriers/generic-inference.js";
 import type { RustGenericCallablePhysicalConstruction } from "../generics/generic-physical.js";
-import type { RustLexicalFunctionEnvironments } from "../../../target-model/records/lexical-functions.js";
+import type { RustLexicalFunctionEnvironments } from "../../../target-model/records/callables/lexical-functions.js";
 import type { RustNativeStorageConstruction } from "../storage/native-storage.js";
-import type { RustNativeStorageSelection } from "../../../target-model/records/native-storage.js";
+import type { RustNativeStorageSelection } from "../../../target-model/records/native/native-storage.js";
 import type { RustNativeCallableProducerConstruction } from "../native/native-producers.js";
-import type { RustNativeCallableProducerPlan } from "../../../target-model/records/native-producers.js";
+import type { RustNativeCallableProducerPlan } from "../../../target-model/records/native/native-producers.js";
 import { rustEmissionSourceIdentity } from "../emission/emission-contexts.js";
 
-import type { RustPhysicalCallableStorage } from "../../../target-model/records/native-storage.js";
-import { sealRustPhysicalCallableStorage } from "../../program/records/physical-callable-storage.js";
+import type { RustPhysicalCallableStorage } from "../../../target-model/records/native/native-storage.js";
+import { sealRustPhysicalCallableStorage } from "../../program/records/native/physical-callable-storage.js";
 
 export interface RustPhysicalCallablePublication {
   readonly nativeStorage: RustPhysicalCallableStorage;

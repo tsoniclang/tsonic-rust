@@ -11,7 +11,7 @@ import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { allocateRustGeneratedName } from "../../../target-model/names/generated.js";
 import type { RustNamePlan } from "../../../target-model/names/model.js";
 
-import type { RustSourceCallableSpecializationIssue } from "../../../target-model/records/callable-issues.js";
+import type { RustSourceCallableSpecializationIssue } from "../../../target-model/records/callables/callable-issues.js";
 import { sourceDeclarationIsModuleScoped, sourceNodeIdentity, type SourceProgramNavigation } from "@tsonic/target-api/source";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 
@@ -21,9 +21,9 @@ import type { RustGenericCallableConversion } from "../../../target-model/conver
 import { rustTargetTypeChildren } from "../../../target-model/types/carriers/children.js";
 
 import { createRustGenericCallablePhysicalPlan, type RustGenericCallablePhysicalConstruction, type RustGenericCallablePhysicalInput } from "./generic-physical.js";
-import type { RustGenericCallablePhysicalPlan } from "../../../target-model/records/generic-callables.js";
+import type { RustGenericCallablePhysicalPlan } from "../../../target-model/records/callables/generic-callables.js";
 
-import type { RustGenericCallableImplementation, RustGenericCallableDefinition } from "../../../target-model/records/generic-callables.js";
+import type { RustGenericCallableImplementation, RustGenericCallableDefinition } from "../../../target-model/records/callables/generic-callables.js";
 import type { RustStructuralShapeLayoutPlan } from "../../objects/shapes/structural-shape-plan.js";
 import { rustStructuralObjectCarrierValue } from "../../../target-model/types/carriers/source-types.js";
 

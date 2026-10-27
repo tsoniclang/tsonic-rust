@@ -5,7 +5,7 @@ import { Node_Expression, Node_Initializer } from "@tsonic/target-api/source";
 import type { RustRuntimeValueUsePlan } from "../program/runtime-value-uses.js";
 import { rustSourceValueWrapperContains } from "../../policy/ownership/source-value-wrappers.js";
 import type { RustReachabilityInput } from "./model.js";
-import type { RustReachability } from "../../target-model/records/reachability.js";
+import type { RustReachability } from "../../target-model/records/program/reachability.js";
 
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustSourceUnionDefinitionIdentity } from "../../target-model/types/source-union-definitions.js";
@@ -20,7 +20,7 @@ type DeclarationOwner =
   | { readonly kind: "root" };
 
 export function analyzeRustReachability(program: RustReachabilityInput, nativeNodes: readonly Node[],
-  conversionEmission: import("../program/records/conversion-emission.js").RustConversionEmissionProducer,
+  conversionEmission: import("../program/records/operations/conversion-emission.js").RustConversionEmissionProducer,
   semanticsFor: (node: Node) => SourceFileSemantics, runtimeValueUses: RustRuntimeValueUsePlan): RustReachability {
   const ast = program.source.ast;
   const nativeNodeSet = new Set(nativeNodes);

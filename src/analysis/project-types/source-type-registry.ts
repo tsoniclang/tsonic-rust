@@ -26,7 +26,7 @@ import type { RustSourceTypeRegistry } from "./source-type-model.js";
 import type {
   RustSourceEnumVariant, RustSourceObjectShape, RustSourceUnion, RustStructuralFieldImplementation,
   RustStructuralFieldRegistration, RustStructuralInstantiation,
-} from "../../target-model/records/source-types.js";
+} from "../../target-model/records/types/source-types.js";
 
 export function createRustSourceTypeRegistry(
   typeFamilies: RustSourceTypeFamilyRegistry = createRustSourceTypeFamilyRegistry(),

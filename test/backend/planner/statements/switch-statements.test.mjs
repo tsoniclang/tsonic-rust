@@ -9,7 +9,7 @@ import { createRustSyntheticNameState } from "../../../../dist/backend/planner/n
 import { rustSourcePrimitiveTargetType } from "../../../../dist/target-model/types/index.js";
 import { rustSourceFilePlanContext } from "../../../helpers/plan-context.mjs";
 import { analyzeRustStatementCompletions } from "../../../../dist/analysis/control-flow/statement-completion.js";
-import { createRustStatementCompletionProducer } from "../../../../dist/analysis/program/records/statement-completion.js";
+import { createRustStatementCompletionProducer } from "../../../../dist/analysis/program/records/operations/statement-completion.js";
 import { createTargetSourceProgram } from "@tsonic/target-api/source";
 
 test("switch rejects missing or forged case equality and absence evidence", () => {

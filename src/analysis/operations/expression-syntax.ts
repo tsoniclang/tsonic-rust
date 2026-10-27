@@ -2,7 +2,7 @@ import type { Node } from "@tsonic/tsts";
 import { Node_Expression, sourceEnclosingCallable } from "@tsonic/target-api/source";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustAnalysisProgram } from "../program/model.js";
-import type { RustExpressionSyntaxProducer } from "../program/records/expression-syntax.js";
+import type { RustExpressionSyntaxProducer } from "../program/records/operations/expression-syntax.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { isRustAbsenceCarrier, rustOptionElementCarrier, getRustGeneratorProtocol, rustAbsenceTargetType, rustSourceUnionCarrierValue }
   from "../../target-model/types/index.js";

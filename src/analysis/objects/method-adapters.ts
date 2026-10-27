@@ -5,9 +5,9 @@ import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import type { RustProgramRecordBuilder } from "../program/records/model.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 
-import type { RustObjectLiteralMethodAdapterFact } from "../../target-model/records/object-methods.js";
-import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
-import type { RustCallableParameterAbi } from "../../target-model/records/callable-adapters.js";
+import type { RustObjectLiteralMethodAdapterFact } from "../../target-model/records/objects/object-methods.js";
+import type { RustTargetOperationFact } from "../../target-model/records/operations/operations.js";
+import type { RustCallableParameterAbi } from "../../target-model/records/callables/callable-adapters.js";
 import { inferRustTargetTypeParameterBindings, rustTargetTypeContainsTypeParameter, substituteRustTargetTypeParameters } from "../../target-model/types/index.js";
 import type { RustProjectMethodDispatchPlan } from "../project-types/method-dispatch.js";
 import { instantiateRustProjectMethodDispatchArguments } from "../project-types/method-dispatch.js";

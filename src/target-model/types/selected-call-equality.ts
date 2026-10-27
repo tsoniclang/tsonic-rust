@@ -1,7 +1,7 @@
 import { closedMetadataEquals } from "../metadata/closed-data.js";
-import { rustFlowReadProjectionEquals } from "../records/equality.js";
+import { rustFlowReadProjectionEquals } from "../records/operations/equality.js";
 import { rustTargetTypeRefEquals } from "./equality.js";
-import type { RustSelectedTargetSignature } from "../records/member-selections.js";
+import type { RustSelectedTargetSignature } from "../records/operations/member-selections.js";
 
 export function rustSelectedTargetSignatureEquals(
   left: RustSelectedTargetSignature,

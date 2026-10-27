@@ -1,11 +1,11 @@
 import type { Node } from "@tsonic/tsts";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { RustAnalysisProgram } from "../program/model.js";
-import type { RustReachability } from "../../target-model/records/reachability.js";
-import type { RustNativeDeclarationLiveness, RustDeadCodeDisposition } from "../../target-model/records/native-liveness.js";
-import type { RustNativeLivenessProducer } from "../program/records/native-liveness.js";
+import type { RustReachability } from "../../target-model/records/program/reachability.js";
+import type { RustNativeDeclarationLiveness, RustDeadCodeDisposition } from "../../target-model/records/native/native-liveness.js";
+import type { RustNativeLivenessProducer } from "../program/records/native/native-liveness.js";
 import { rustSourceItemIdentity } from "../../target-model/names/source-output-identities.js";
-import { requireRustRecord, type RustRequiredRecord } from "../program/records/required-records.js";
+import { requireRustRecord, type RustRequiredRecord } from "../program/records/objects/required-records.js";
 
 export function analyzeRustDeclarationLiveness(input: {
   readonly program: Pick<RustAnalysisProgram, "source" | "records" | "sourcePackageComponents" | "sourcePackageFacades">;

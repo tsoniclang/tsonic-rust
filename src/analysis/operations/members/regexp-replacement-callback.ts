@@ -8,7 +8,7 @@ import type { RustOperationsProviderOptions } from "./model.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { Type } from "@tsonic/tsts";
 
-import type { RustRegExpReplacementCallbackEvidence } from "../../../target-model/records/regexp-callbacks.js";
+import type { RustRegExpReplacementCallbackEvidence } from "../../../target-model/records/callables/regexp-callbacks.js";
 export function selectedRustRegExpReplacementCallbackEvidence(
   request: RustCheckedCallSelectionInput,
   sourceArgumentIndex: number,

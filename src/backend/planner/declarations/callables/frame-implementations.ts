@@ -1,6 +1,6 @@
 import type {
   RustFrameCallableDefinition, RustFrameCallableEntryDefinition, RustFrameCallableImplementation,
-} from "../../../../target-model/records/frame-callables.js";
+} from "../../../../target-model/records/callables/frame-callables.js";
 
 import type { RustExpr, RustGenerics, RustItem, RustPattern, RustType } from "../../../target-ast/syntax/nodes.js";
 import { emptyRustGenerics } from "../../../target-ast/syntax/nodes.js";
@@ -21,7 +21,7 @@ import { rustInvariantTypeMarker } from "../../types/invariant-marker.js";
 import { rustGenericRequirementBounds, rustGenericsWithAssociatedBounds } from "../../types/generic-bounds.js";
 import { rustAssociatedPredicates } from "../../types/associated-bounds.js";
 import { rustProjectProjectionPredicates } from "../../types/project-projection-bounds.js";
-import type { RustFrameDefinitionEmission } from "../../../../target-model/records/frame-emission.js";
+import type { RustFrameDefinitionEmission } from "../../../../target-model/records/callables/frame-emission.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../../names/synthetic.js";
 import type { RustLiveFrameOwner } from "../../program/frame-owners.js";
 import { planRustFrameCallableFamilyItems } from "./frame-family-implementations.js";

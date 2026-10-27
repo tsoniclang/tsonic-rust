@@ -7,9 +7,9 @@ import { analyzeRust, artifactText, compileRust } from "../../../helpers/rust-se
 import { BinaryExpression_Left } from "@tsonic/target-api/source";
 import { planBinaryExpression } from "../../../../dist/backend/planner/expressions/binary.js";
 import { analyzeRustBinaryEmission } from "../../../../dist/analysis/operations/binary-emission.js";
-import { createRustBinaryEmissionProducer } from "../../../../dist/analysis/program/records/expression-binary.js";
+import { createRustBinaryEmissionProducer } from "../../../../dist/analysis/program/records/operations/expression-binary.js";
 import { admitRustConversionEmission } from "../../../../dist/analysis/conversions/emission.js";
-import { createRustConversionEmissionProducer } from "../../../../dist/analysis/program/records/conversion-emission.js";
+import { createRustConversionEmissionProducer } from "../../../../dist/analysis/program/records/operations/conversion-emission.js";
 import { createRustSyntheticNameState } from "../../../../dist/backend/planner/names/synthetic.js";
 import { rustSourcePrimitiveTargetType } from "../../../../dist/target-model/types/index.js";
 

@@ -5,7 +5,7 @@ import type { RustProgramErrorRoute } from "../../target-model/conversions/progr
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { appendRustDiagnostic } from "../program/walk.js";
 import { isRustProgramErrorCarrier } from "../../target-model/types/index.js";
-import { requireRustRecord } from "../program/records/required-records.js";
+import { requireRustRecord } from "../program/records/objects/required-records.js";
 import { Node_Expression } from "@tsonic/target-api/source";
 import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustAnalysisContext } from "../program/context.js";

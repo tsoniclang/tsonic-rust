@@ -1,5 +1,5 @@
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
-import type { RustFinalizedSourceInput } from "../../../target-model/records/finalized-operation.js";
+import type { RustFinalizedSourceInput } from "../../../target-model/records/operations/finalized-operation.js";
 
 export function rustProviderInputBorrowMode(input: RustFinalizedSourceInput): "ref" | "mut-ref" | undefined {
   if (input.sharedConversion) return "ref";

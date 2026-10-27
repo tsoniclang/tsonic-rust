@@ -7,15 +7,15 @@ import { rustGenericCallableSignaturesMatch } from "../../../policy/conversions/
 import { isRustBoolCarrier } from "../../../target-model/types/index.js";
 import { rustEffectiveValueCarrier } from "../../conversions/value-carrier-queries.js";
 
-import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
-import type { RustGenericCallablePhysicalPlan } from "../../../target-model/records/generic-callables.js";
-import type { RustGenericCallablePhysicalDefinition, RustGenericCallablePhysicalMember } from "../../../target-model/records/generic-callables.js";
+import type { RustTargetOperationFact } from "../../../target-model/records/operations/operations.js";
+import type { RustGenericCallablePhysicalPlan } from "../../../target-model/records/callables/generic-callables.js";
+import type { RustGenericCallablePhysicalDefinition, RustGenericCallablePhysicalMember } from "../../../target-model/records/callables/generic-callables.js";
 import type { RustNativeStoragePlan } from "../storage/native-storage.js";
-import type { RustNativeStorageSelection } from "../../../target-model/records/native-storage.js";
-import type { RustSourceCallableSpecializationIssue } from "../../../target-model/records/callable-issues.js";
+import type { RustNativeStorageSelection } from "../../../target-model/records/native/native-storage.js";
+import type { RustSourceCallableSpecializationIssue } from "../../../target-model/records/callables/callable-issues.js";
 import { createRustEffectsWorkBudget, type RustEffectsWorkBudget } from "../../errors/effects-work-budget.js";
 
-import type { RustGenericCallableIdentityPair, RustGenericCallableIdentitySelection, RustGenericCallableIdentityComparison } from "../../../target-model/records/generic-callables.js";
+import type { RustGenericCallableIdentityPair, RustGenericCallableIdentitySelection, RustGenericCallableIdentityComparison } from "../../../target-model/records/callables/generic-callables.js";
 
 export function selectRustGenericCallableIdentity(
   leftCarrier: TargetTypeRef, rightCarrier: TargetTypeRef, physical: RustGenericCallablePhysicalPlan,
@@ -200,6 +200,6 @@ export function createRustGenericCallableIdentityPlan(input: {
   return sealRustGenericCallableIdentityPlan(comparisons, definitions, issues);
 }
 
-import type { RustGenericCallableIdentityPlan } from "../../../target-model/records/generic-callable-identity.js";
-import { sealRustGenericCallableIdentityPlan } from "../../program/records/generic-callable-identity.js";
+import type { RustGenericCallableIdentityPlan } from "../../../target-model/records/callables/generic-callable-identity.js";
+import { sealRustGenericCallableIdentityPlan } from "../../program/records/callables/generic-callable-identity.js";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";

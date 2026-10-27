@@ -1,7 +1,7 @@
 import type { Node } from "@tsonic/tsts";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { RustAnalysisProgram } from "../program/model.js";
-import type { RustSourcePackageEmissionProducer } from "../program/records/source-packages.js";
+import type { RustSourcePackageEmissionProducer } from "../program/records/program/source-packages.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
 import { rustSourceTypeCarrierValue, rustSourceUnionCarrierValue } from "../../target-model/types/index.js";

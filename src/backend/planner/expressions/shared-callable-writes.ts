@@ -1,7 +1,7 @@
 import type { Node } from "@tsonic/tsts";
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
-import type { RustCallableJoinWrite } from "../../../target-model/records/native-storage.js";
+import type { RustCallableJoinWrite } from "../../../target-model/records/native/native-storage.js";
 import { rustCallablePhysicalSignature } from "../../../target-model/conversions/callable-physical.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";

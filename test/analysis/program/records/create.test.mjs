@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { assertRustInheritedRecordConflict, assertRustInheritedRecordCorrespondence } from "../../../helpers/records.mjs";
 import { createRustProgramRecordBuilder, createRustProgramRecords } from "../../../../dist/analysis/program/records/create.js";
-import { recordRustValueCarrierReconciliation } from "../../../../dist/analysis/program/records/value-carrier-admission.js";
+import { recordRustValueCarrierReconciliation } from "../../../../dist/analysis/program/records/types/value-carrier-admission.js";
 import { rustEffectiveValueCarrier } from "../../../../dist/analysis/conversions/value-carrier-queries.js";
 
 

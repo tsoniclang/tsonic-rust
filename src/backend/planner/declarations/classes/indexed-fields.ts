@@ -1,4 +1,4 @@
-import type { RustNativeDeclarationForms } from "../../../../target-model/records/native-declaration-forms.js";
+import type { RustNativeDeclarationForms } from "../../../../target-model/records/native/native-declaration-forms.js";
 import { rustPackageFallibleBoundary } from "../../program/fallible-boundaries.js";
 import { rustProgramErrorTargetType } from "../../../../target-model/types/index.js";
 import type { RustGenerics, RustItem, RustType } from "../../../target-ast/syntax/nodes.js";

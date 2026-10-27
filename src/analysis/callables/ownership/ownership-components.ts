@@ -13,10 +13,10 @@ export const defaultRustCallableOwnershipLimits: RustCallableOwnershipLimits = O
   maximumNodes: 1_048_576, maximumEdges: 1_048_576, maximumSteps: 4_194_304,
 });
 
-import type { RustCallableOwnershipCapture, RustCallableOwnershipReceiverRelation, RustCallableOwnershipComponent } from "../../../target-model/records/callable-ownership.js";
+import type { RustCallableOwnershipCapture, RustCallableOwnershipReceiverRelation, RustCallableOwnershipComponent } from "../../../target-model/records/callables/callable-ownership.js";
 
-import type { RustCallableOwnershipIssue, RustCallableOwnershipComponentQueries } from "../../../target-model/records/callable-ownership.js";
-import { sealRustCallableOwnershipComponents } from "../../program/records/callable-ownership.js";
+import type { RustCallableOwnershipIssue, RustCallableOwnershipComponentQueries } from "../../../target-model/records/callables/callable-ownership.js";
+import { sealRustCallableOwnershipComponents } from "../../program/records/callables/callable-ownership.js";
 
 type Vertex = { readonly kind: "callable" | "slot"; readonly declaration: Node };
 type Owner = { readonly kind: "lexical" | "class"; readonly declaration: Node; readonly scope: Node };

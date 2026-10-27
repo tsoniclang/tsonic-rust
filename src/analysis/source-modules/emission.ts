@@ -1,6 +1,6 @@
 import { failTargetAnalysisInvariant, type TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustAnalysisProgram } from "../program/model.js";
-import type { RustSourceFileEmissionProducer } from "../program/records/source-file-emission.js";
+import type { RustSourceFileEmissionProducer } from "../program/records/program/source-file-emission.js";
 import type { Node } from "@tsonic/tsts";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { isRustStringCarrier } from "../../target-model/types/index.js";

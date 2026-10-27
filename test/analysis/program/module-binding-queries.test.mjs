@@ -4,7 +4,7 @@ import test from "node:test";
 import { analyzeRustErrorEffects } from "../../helpers/rust-error-analysis.mjs";
 import { createRustModuleBindingAnalysis } from "../../../dist/analysis/program/module-bindings.js";
 import { createRustProgramRecordBuilder } from "../../../dist/analysis/program/records/create.js";
-import { createRustTypeOnlyDeclarationProducer } from "../../../dist/analysis/program/records/type-only-declaration.js";
+import { createRustTypeOnlyDeclarationProducer } from "../../../dist/analysis/program/records/types/type-only-declaration.js";
 
 const integer = { kind: "source-primitive", name: "int32" };
 

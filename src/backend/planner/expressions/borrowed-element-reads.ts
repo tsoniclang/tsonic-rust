@@ -2,12 +2,12 @@ import { rustValueBlock } from "../../target-ast/syntax/value-block.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustExpr, RustStmt } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
-import type { RustBorrowedElementRead } from "../../../target-model/records/borrowed-element-reads.js";
+import type { RustBorrowedElementRead } from "../../../target-model/records/storage/borrowed-element-reads.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { planExpression } from "./entry.js";
 import { planRustSharedReceiver } from "./typed-locations.js";
 import { rustStringTargetType } from "../../../target-model/types/index.js";
-import type { RustBorrowedElementLocal } from "../../../target-model/records/borrowed-element-reads.js";
+import type { RustBorrowedElementLocal } from "../../../target-model/records/storage/borrowed-element-reads.js";
 import { failRustPlannerInvariant } from "../diagnostics.js";
 
 export function planRustBorrowedElementRead(

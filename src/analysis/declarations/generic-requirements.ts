@@ -8,14 +8,14 @@ import { collectRustCallableDeclarations } from "./generic-reference-uses.js";
 import type { RustSourceTypeFamilyRegistry } from "../../target-model/types/type-families.js";
 import type { RustProjectTypePolicy } from "../project-types/index.js";
 import { analyzeRustShapeGenericRequirements } from "./generic-shape-requirements.js";
-import type { RustShapeGenericRequirementContract } from "../../target-model/records/generic-requirements.js";
+import type { RustShapeGenericRequirementContract } from "../../target-model/records/types/generic-requirements.js";
 import type { RustStructuralShapePlan } from "../objects/shapes/structural-shape-plan.js";
 import type { RustObjectRepresentationPlan } from "../project-types/object-representation.js";
-import type { RustProjectProjectionImplementation } from "../../target-model/records/project-projections.js";
+import type { RustProjectProjectionImplementation } from "../../target-model/records/objects/project-projections.js";
 import type { RustProjectProjectionRequirement } from "../../target-model/types/project-projections.js";
 import type { RustProjectTypeDefinition } from "../project-types/index.js";
 import { createRustProjectProjectionImplementationIndex } from "./project-projection-requirements.js";
-import type { RustOwnershipFlow } from "../../target-model/records/ownership-flow.js";
+import type { RustOwnershipFlow } from "../../target-model/records/storage/ownership-flow.js";
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
 import { resolveTargetContractFixedPoint } from "@tsonic/target-api/analysis";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
@@ -35,19 +35,19 @@ import { mapRustTargetTypes } from "../../target-model/types/carriers/substituti
 import { rustTypeFamilyNormalizer } from "../project-types/type-family-normalization.js";
 import type { RustGenericCallablePlan } from "../callables/generics/generic-values.js";
 import type { RustNativeCallableInputPlan } from "../callables/native/native-inputs.js";
-import type { RustFrameCallablePlan } from "../../target-model/records/frame-callables.js";
-import type { RustProjectStructuralView } from "../../target-model/records/project-structural-views.js";
+import type { RustFrameCallablePlan } from "../../target-model/records/callables/frame-callables.js";
+import type { RustProjectStructuralView } from "../../target-model/records/objects/project-structural-views.js";
 import { rustStructuralViewRequirementUses } from "./structural-view-requirements.js";
 import type { RustAnalyzedErrorRegions } from "../errors/regions.js";
 import type { RustErrorTypeContext } from "../errors/error-types.js";
-import type { RustPromiseBodies } from "../../target-model/records/callables-and-resources.js";
+import type { RustPromiseBodies } from "../../target-model/records/callables/callables-and-resources.js";
 import type { RustNativeStoragePlan } from "../callables/storage/native-storage.js";
-import type { RustClassValuePlan } from "../../target-model/records/class-values.js";
+import type { RustClassValuePlan } from "../../target-model/records/objects/class-values.js";
 import type { RustStaticRequirementEvidence } from "./generic-carrier-requirements.js";
 import type { RustProjectCallableFieldStorage } from "../callables/storage/project-field-storage.js";
 import { rustSuspendingPromiseBorrowReason } from "../callables/storage/suspension-storage.js";
 
-import type { RustGenericRequirement, RustDeclarationGenericRequirementContract } from "../../target-model/records/generic-requirements.js";
+import type { RustGenericRequirement, RustDeclarationGenericRequirementContract } from "../../target-model/records/types/generic-requirements.js";
 
 export interface RustDeclarationGenericRequirementIndex {
   projectionImplementationsFor(definition: RustProjectTypeDefinition): readonly RustProjectProjectionImplementation[];

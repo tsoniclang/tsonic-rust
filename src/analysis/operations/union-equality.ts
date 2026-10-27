@@ -2,7 +2,7 @@ import type { Node } from "@tsonic/tsts";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import { BinaryExpression_Left, BinaryExpression_Right } from "@tsonic/target-api/source";
 import type { RustAnalysisProgram } from "../program/model.js";
-import type { RustUnionEqualityProducer } from "../program/records/union-equality.js";
+import type { RustUnionEqualityProducer } from "../program/records/operations/union-equality.js";
 import { selectRustUnionEqualityEmission } from "../../policy/operations/operators/union-equality.js";
 import { rustUnionEqualityFactMatches } from "./union-equality-facts.js";
 import { rustProgramNodeIsOutsideNativeCode } from "../control-flow/compile-time-statements.js";

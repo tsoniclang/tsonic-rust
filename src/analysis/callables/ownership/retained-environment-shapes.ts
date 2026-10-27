@@ -6,13 +6,13 @@ import { Node_Initializer, sourceLexicalEnvironment,
   sourceNodeIdentity, sourceCallableValueParameters } from "@tsonic/target-api/source";
 import type { RustSourcePolicyContext } from "../../../policy/model/context.js";
 import { allocateRustGeneratedName } from "../../../target-model/names/generated.js";
-import type { RustRetainedEnvironment } from "../../../target-model/records/retained-environments.js";
-import type { RustRetainedEnvironmentSelection } from "../../../target-model/records/retained-environments.js";
+import type { RustRetainedEnvironment } from "../../../target-model/records/callables/retained-environments.js";
+import type { RustRetainedEnvironmentSelection } from "../../../target-model/records/callables/retained-environments.js";
 
 type RustRetainedEnvironmentHost = Pick<RustSourcePolicyContext, "source" | "sourceStorage" | "sourceLifetimes"> & {
   readonly nativeTasks: SourceNativeTaskGraph;
 };
-import type { RustRetainedEnvironmentQueries, RustRetainedLexicalSelection } from "../../../target-model/records/retained-environments.js";
+import type { RustRetainedEnvironmentQueries, RustRetainedLexicalSelection } from "../../../target-model/records/callables/retained-environments.js";
 
 export function createRustRetainedEnvironmentQueries(
   input: RustRetainedEnvironmentHost, maximumSteps = defaultSourceStorageLimits.maximumSteps,

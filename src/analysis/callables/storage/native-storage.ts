@@ -1,5 +1,5 @@
 import { createRustNativeStorageSelection } from "./native-storage-selection.js";
-import type { RustNativeCaptureSelection } from "../../../target-model/records/native-captures.js";
+import type { RustNativeCaptureSelection } from "../../../target-model/records/native/native-captures.js";
 import { createRustSourceErrorEffectSelection, type RustSourceErrorEffectSelection } from "../../errors/source-error-effects.js";
 import type { RustStructuralShapePlanRegistry } from "../../objects/shapes/structural-shape-registry.js";
 import type { AstReader, Node } from "@tsonic/tsts";
@@ -27,27 +27,27 @@ import { rustEffectiveValueCarrier, rustValueCarrierBeforeContextualConversion }
 
 import { asSourceNode } from "@tsonic/target-api/source";
 
-import type { RustSourceCallableSpecializationIssue } from "../../../target-model/records/callable-issues.js";
+import type { RustSourceCallableSpecializationIssue } from "../../../target-model/records/callables/callable-issues.js";
 
 import { selectRustNativeStorageGenericBindings, type RustNativeStorageGenericSelection } from "./native-storage-generics.js";
 import { createRustNativeFutureInputPlan } from "../native/native-future-inputs.js";
 import { collectRustNativeAbsenceWitnesses, selectRustNativeConversionBoundaries } from "./native-storage-witnesses.js";
 import { createRustRecordMemberProducers } from "./native-storage-members.js";
-import { type RustNativeFutureEnvironmentSelection } from "../../../target-model/records/native-future-inputs.js";
+import { type RustNativeFutureEnvironmentSelection } from "../../../target-model/records/native/native-future-inputs.js";
 import type { RustNativeCallableInputPlan } from "../native/native-inputs.js";
-import type { RustNativeCallableInput } from "../../../target-model/records/native-protocols.js";
-import type { RustNativeCallableProducerPlan } from "../../../target-model/records/native-producers.js";
+import type { RustNativeCallableInput } from "../../../target-model/records/native/native-protocols.js";
+import type { RustNativeCallableProducerPlan } from "../../../target-model/records/native/native-producers.js";
 import type { RustGenericCallablePlan } from "../generics/generic-values.js";
 import type { RustGenericCallablePhysicalCarrierSelector } from "../generics/generic-physical.js";
-import type { RustLexicalFunctionEnvironments } from "../../../target-model/records/lexical-functions.js";
+import type { RustLexicalFunctionEnvironments } from "../../../target-model/records/callables/lexical-functions.js";
 import { Node_Expression } from "@tsonic/target-api/source";
 import { rustSourceCallCallableStorageCarrier } from "../../../policy/operations/members/native-contracts.js";
-import type { RustFrameCallablePlan } from "../../../target-model/records/frame-callables.js";
+import type { RustFrameCallablePlan } from "../../../target-model/records/callables/frame-callables.js";
 import { rustSourceStorageProjectedCarrier, type RustValueDomainCarrierHost } from "../../objects/value-domain-carriers.js";
 import { selectRustSourceCallableInvocationBindings } from "./native-storage-generics.js";
 import type { RustTargetGenericBindings } from "../../../target-model/types/carriers/generic-inference.js";
 
-import type { RustCallableJoinWrite } from "../../../target-model/records/native-storage.js";
+import type { RustCallableJoinWrite } from "../../../target-model/records/native/native-storage.js";
 
 export type RustNativeInvocationBindingsSelection =
   | { readonly kind: "resolved"; readonly storageBindings: SourceStorageBindings;
@@ -306,4 +306,4 @@ export function createRustNativeStorageQueries(input: {
   return Object.freeze(queries);
 }
 
-import type { RustNativeStorageSelection } from "../../../target-model/records/native-storage.js";
+import type { RustNativeStorageSelection } from "../../../target-model/records/native/native-storage.js";

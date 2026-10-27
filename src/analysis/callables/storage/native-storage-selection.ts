@@ -40,13 +40,13 @@ import { createRustNativeFutureInputPlan } from "../native/native-future-inputs.
 import { selectRustNativeConversionBoundaries } from "./native-storage-witnesses.js";
 import { createRustRecordMemberProducers } from "./native-storage-members.js";
 
-import type { RustNativeCallableInput } from "../../../target-model/records/native-protocols.js";
+import type { RustNativeCallableInput } from "../../../target-model/records/native/native-protocols.js";
 
-import type { RustPhysicalCallableSourceSelection } from "../../../target-model/records/physical-emission-contexts.js";
-import type { RustCallableJoinWrite } from "../../../target-model/records/native-storage.js";
+import type { RustPhysicalCallableSourceSelection } from "../../../target-model/records/native/physical-emission-contexts.js";
+import type { RustCallableJoinWrite } from "../../../target-model/records/native/native-storage.js";
 import { selectRustJsConstructorStoredInputs } from "../../../policy/operations/source-profiles/js/constructors.js";
 import { selectRustJsStoredTypeArgumentSlots } from "../../../policy/operations/source-profiles/js/stored-slots.js";
-import type { RustNativeStorageSelection } from "../../../target-model/records/native-storage.js";
+import type { RustNativeStorageSelection } from "../../../target-model/records/native/native-storage.js";
 import { callableValueCarrier } from "./native-storage-values.js";
 import { createRustNativeStorageJoins } from "./native-storage-joins.js";
 import { rustNativeStorageAbsentOrigin, rustNativeStorageErasedUnionCallablePayload, rustNativeStorageFrameFieldCarrier, rustNativeStorageErasedClosureParameter, rustNativeStorageErasedFieldCallable, rustNativeStorageInstanceTypeBindings, rustNativeStorageFrameInstanceBindings } from "./native-storage-carriers.js";

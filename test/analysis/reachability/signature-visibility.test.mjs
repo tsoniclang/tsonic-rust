@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRustSignatureVisibility } from "../../../dist/analysis/reachability/signature-visibility.js";
-import { createRustSourcePackageEmissionProducer } from "../../../dist/analysis/program/records/source-packages.js";
+import { createRustSourcePackageEmissionProducer } from "../../../dist/analysis/program/records/program/source-packages.js";
 import { rustInfallibleTargetId, rustSourceTypeCarrier } from "../../../dist/target-model/types/carriers/source-types.js";
 import { createRustRecordFixture } from "../../helpers/records.mjs";
 

@@ -9,7 +9,7 @@ import type { RustReceiverFieldAliasQueries } from "./receiver-field-aliases.js"
 import type { RustReceiverFieldCaptureQueries } from "./receiver-captures.js";
 import type { RustReceiverStoragePlan } from "./receiver-storage.js";
 
-import type { RustObjectRepresentation, RustObjectNativeLifetimeContract } from "../../target-model/records/object-representation.js";
+import type { RustObjectRepresentation, RustObjectNativeLifetimeContract } from "../../target-model/records/objects/object-representation.js";
 
 export function prepareRustObjectNativeLifetimes(
   projectTypes: Pick<RustProjectTypePolicy, "definitions" | "isPolymorphic">,

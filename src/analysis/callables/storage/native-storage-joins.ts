@@ -11,7 +11,7 @@ import { rustTargetTypeChildren } from "../../../target-model/types/carriers/chi
 import { isRustNativeFutureCarrier } from "../../../target-model/types/carriers/primitives.js";
 import { rustSourceUnionCarrierValue, rustStructuralObjectCarrierName, rustStructuralObjectCarrierValue } from "../../../target-model/types/carriers/source-types.js";
 import { snapshotClosedMetadata } from "../../../target-model/metadata/closed-data.js";
-import type { RustCallableJoinWrite } from "../../../target-model/records/native-storage.js";
+import type { RustCallableJoinWrite } from "../../../target-model/records/native/native-storage.js";
 import type { RustTypeDefinitions } from "../../../target-model/types/source-union-definitions.js";
 import type { RustStructuralShapeLayoutPlan } from "../../objects/shapes/structural-shape-plan.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";

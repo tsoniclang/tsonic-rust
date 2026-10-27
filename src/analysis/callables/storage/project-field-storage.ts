@@ -4,12 +4,12 @@ import { failTargetAnalysisInvariant, rejectedTargetStage, resolvedTargetStage, 
 import { Node_Type } from "@tsonic/target-api/source";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustProgramRecords } from "../../../target-model/records/program.js";
-import type { RustNativeStorageSelection } from "../../../target-model/records/native-storage.js";
+import type { RustNativeStorageSelection } from "../../../target-model/records/native/native-storage.js";
 import { rustCallableProtocol } from "../../../target-model/types/carriers/callables.js";
 import type { RustProjectTypePolicy } from "../../project-types/index.js";
-import type { RustProjectStructuralView } from "../../../target-model/records/project-structural-views.js";
+import type { RustProjectStructuralView } from "../../../target-model/records/objects/project-structural-views.js";
 import type { RustStructuralShapePlanRegistry } from "../../objects/shapes/structural-shape-registry.js";
-import type { RustSourceCallableSpecializationIssue } from "../../../target-model/records/callable-issues.js";
+import type { RustSourceCallableSpecializationIssue } from "../../../target-model/records/callables/callable-issues.js";
 import { rustCallableTargetForSourceLifetime } from "../../../policy/conversions/value-carrier-reconciliation.js";
 import { rustStructuralObjectCarrierValue, rustStructuralObjectTargetType } from "../../../target-model/types/carriers/source-types.js";
 import { rustOptionElementCarrier } from "../../../target-model/types/carriers/optional.js";

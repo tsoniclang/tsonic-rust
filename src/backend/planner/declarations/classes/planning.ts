@@ -25,7 +25,7 @@ import { emptyRustGenerics } from "../../../target-ast/syntax/nodes.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
-import type { RustObjectRepresentation } from "../../../../target-model/records/object-representation.js";
+import type { RustObjectRepresentation } from "../../../../target-model/records/objects/object-representation.js";
 import {
   rustProjectImplementationVisibility,
 } from "../../objects/project-storage-abi.js";
@@ -37,8 +37,8 @@ import { rustClassEnvironmentHandleType } from "../../objects/class-environment-
 import { rustCapturedFieldType } from "../../objects/captured-fields.js";
 import { rustFrameBindingType } from "../../bindings/frame-storage.js";
 import { rustClassFrameLayout } from "../../objects/frame-storage.js";
-import type { RustNativeClassEmission } from "../../../../target-model/records/class-emission.js";
-import type { RustDeadCodeDisposition } from "../../../../target-model/records/native-liveness.js";
+import type { RustNativeClassEmission } from "../../../../target-model/records/objects/class-emission.js";
+import type { RustDeadCodeDisposition } from "../../../../target-model/records/native/native-liveness.js";
 
 export interface PlannedProjectObjectField {
   readonly declaration: Node;

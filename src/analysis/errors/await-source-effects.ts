@@ -2,8 +2,8 @@ import type { Node } from "@tsonic/tsts";
 import { asSourceNode, sourceEnclosingCallable } from "@tsonic/target-api/source";
 import type { RustFactWalk } from "../program/walk.js";
 
-import type { RustErrorEffectsFact } from "../../target-model/records/error-effects.js";
-import type { RustAwaitSourceErrorBranch } from "../../target-model/records/await-source-error-effects.js";
+import type { RustErrorEffectsFact } from "../../target-model/records/errors/error-effects.js";
+import type { RustAwaitSourceErrorBranch } from "../../target-model/records/callables/await-source-error-effects.js";
 import { rustSourceErrorEffectEdgeEquals } from "./source-error-effects.js";
 import { rustAwaitSelectionLeaves } from "../../target-model/types/await.js";
 import { rustAwaitSelection } from "../../policy/operations/flow/await.js";

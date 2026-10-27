@@ -4,7 +4,7 @@ import { analyzeRust } from "../../../helpers/rust-session.mjs";
 import { rustSourceFilePlanContext } from "../../../helpers/plan-context.mjs";
 import { analyzeRustNativeCallableGenerics } from "../../../../dist/analysis/callables/native/native-inputs.js";
 import { selectRustCallableEntryGenerics } from "../../../../dist/analysis/callables/emission/entry-generics.js";
-import { createRustNativeGenericProducer } from "../../../../dist/analysis/program/records/native-generics.js";
+import { createRustNativeGenericProducer } from "../../../../dist/analysis/program/records/native/native-generics.js";
 import { planRustNativeCallableGenerics } from "../../../../dist/backend/planner/declarations/callables/native-generics.js";
 import { selectRustCallableEntryHeader } from "../../../../dist/policy/ownership/callable-entry-headers.js";
 import { rustCallablePayloadContext } from "../../../../dist/backend/planner/expressions/capture-payloads.js";

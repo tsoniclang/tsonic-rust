@@ -2,7 +2,7 @@ import type { AstReader, Node } from "@tsonic/tsts";
 import { CatchClause_Block, TryStatement_CatchClause, TryStatement_FinallyBlock,
   TryStatement_TryBlock, forEachSourceImmediateEvaluationChild } from "@tsonic/target-api/source";
 import { mergeRustErrorEffects, rustErrorEffectsAreFallible } from "./error-effects.js";
-import type { RustErrorEffectsFact } from "../../target-model/records/error-effects.js";
+import type { RustErrorEffectsFact } from "../../target-model/records/errors/error-effects.js";
 
 export function collectRustErrorRegionEffects(
   root: Node,

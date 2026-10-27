@@ -2,7 +2,7 @@ import type { Node } from "@tsonic/tsts";
 import { rustProgramNodeIsOutsideNativeCode } from "../control-flow/compile-time-statements.js";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustAnalysisProgram } from "../program/model.js";
-import type { RustIntegerTruncationProducer } from "../program/records/integer-truncation.js";
+import type { RustIntegerTruncationProducer } from "../program/records/operations/integer-truncation.js";
 import { rustIntegerTruncationConversionMatches } from "../../policy/conversions/integer-truncation.js";
 
 export function analyzeRustIntegerTruncation(program: Omit<RustAnalysisProgram, "reachability">,

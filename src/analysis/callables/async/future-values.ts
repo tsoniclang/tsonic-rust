@@ -11,8 +11,8 @@ import { hasExactObjectKeys, isClosedMetadata } from "../../../target-model/meta
 import { rustAwaitSelectionLeaves } from "../../../target-model/types/await.js";
 import { rustAwaitSelection } from "../../../policy/operations/flow/await.js";
 import { rustNativeCallableCompletion } from "../../../policy/types/callables/native-completion.js";
-import type { RustFutureValueFact, RustSourceCallEffectsFact } from "../../../target-model/records/object-methods.js";
-import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
+import type { RustFutureValueFact, RustSourceCallEffectsFact } from "../../../target-model/records/objects/object-methods.js";
+import type { RustTargetOperationFact } from "../../../target-model/records/operations/operations.js";
 
 export function rustFutureValueForOperation(
   operation: RustTargetOperationFact | undefined,

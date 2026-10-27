@@ -1,11 +1,11 @@
 import type { RustTargetGenericArgument, TargetTypeRef } from "../../../target-model/types/model.js";
 import { registerAliasFromPath, rustCurrentErrorBoundary } from "../program/plan-context.js";
 import { rustErrorType } from "../program/fallible-boundaries.js";
-import type { RustSourcePackageErrorPlan } from "../../../target-model/records/source-package-errors.js";
+import type { RustSourcePackageErrorPlan } from "../../../target-model/records/errors/source-package-errors.js";
 import { resolveRustPhysicalProgramErrorBoundary } from "../program/source-package-errors.js";
 import { collectAliasesFromRustType } from "./type-observations.js";
 import { failRustPlannerInvariant } from "../diagnostics.js";
-import type { RustTypeEmission } from "../../../target-model/records/type-emission.js";
+import type { RustTypeEmission } from "../../../target-model/records/types/type-emission.js";
 import type { RustCallGenericArgument, RustGenericArgument, RustType } from "../../target-ast/syntax/nodes.js";
 import { rustLifetimeKey, type RustLifetimeRef } from "../../../target-model/lifetimes/index.js";
 import {

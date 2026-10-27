@@ -8,7 +8,7 @@ import { asNode, resolveSelectedProviderDeclaration } from "../../../policy/iden
 import { selectRustProviderExport } from "../../../policy/operations/provider-selection.js";
 import { isRustCallableCarrier } from "../../../target-model/types/index.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
-import type { RustProviderSourceReceiver } from "../../../target-model/records/finalized-operation.js";
+import type { RustProviderSourceReceiver } from "../../../target-model/records/operations/finalized-operation.js";
 
 export function selectRustProviderSourceReceiver(
   subject: ExtensionFactSubject,

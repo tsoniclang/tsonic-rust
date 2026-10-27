@@ -11,8 +11,8 @@ import { planRustSelectedErrorRegion } from "../../../dist/backend/planner/progr
 import { analyzeRustSourceFileEmission } from "../../../dist/analysis/source-modules/emission.js";
 import { analyzeRustSourcePackageInitializers } from "../../../dist/analysis/source-modules/package-initializers.js";
 import { analyzeRustWorkerEntries } from "../../../dist/analysis/source-modules/worker-entries.js";
-import { createRustSourceFileEmissionProducer } from "../../../dist/analysis/program/records/source-file-emission.js";
-import { createRustSourcePackageEmissionProducer } from "../../../dist/analysis/program/records/source-packages.js";
+import { createRustSourceFileEmissionProducer } from "../../../dist/analysis/program/records/program/source-file-emission.js";
+import { createRustSourcePackageEmissionProducer } from "../../../dist/analysis/program/records/program/source-packages.js";
 import { rustSourceFilePlanContext } from "../../helpers/plan-context.mjs";
 
 for (const surfaces of [[], ["js"]]) {

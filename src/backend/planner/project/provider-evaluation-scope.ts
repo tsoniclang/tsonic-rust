@@ -1,7 +1,7 @@
 import { rustValueBlock } from "../../target-ast/syntax/value-block.js";
 import type { Node } from "@tsonic/tsts";
-import type { RustFinalizedSourceInput } from "../../../target-model/records/finalized-operation.js";
-import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
+import type { RustFinalizedSourceInput } from "../../../target-model/records/operations/finalized-operation.js";
+import type { RustTargetOperationFact } from "../../../target-model/records/operations/operations.js";
 
 import { planExpressionBeforeContextualConversion } from "../expressions/entry.js";
 import { planRustDiscardedValue } from "../expressions/discarded-values.js";

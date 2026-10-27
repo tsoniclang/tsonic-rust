@@ -1,12 +1,12 @@
 import { type Node, type ProviderDeclarationIdentity, type SourceFile, type Type } from "@tsonic/tsts";
 import { type TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import { type RustAnalysisProgram } from "../program/model.js";
-import { type RustReferenceOperationProducer } from "../program/records/reference-operations.js";
+import { type RustReferenceOperationProducer } from "../program/records/operations/reference-operations.js";
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { isRustStringCarrier, rustUnitTargetType } from "../../target-model/types/index.js";
 import { rustValueCarrierBeforeOptionProjection } from "../conversions/value-carrier-queries.js";
-import { requireRustRecord } from "../program/records/required-records.js";
+import { requireRustRecord } from "../program/records/objects/required-records.js";
 import { BinaryExpression_Left, BinaryExpression_Right, sourceTransparentExpressionOperand } from "@tsonic/target-api/source";
 import { appendRustDiagnostic, type RustFactWalk } from "../program/walk.js";
 import { setCarrierFact } from "./project-calls.js";
@@ -17,8 +17,8 @@ import { selectRustEquivalentAssignment } from "../../policy/operations/operator
 import { rustSourceOperationExportIds, rustSourceOperationSignatureIds } from "../../target-model/identities/source.js";
 import { readRustLanguageCall } from "./native-language-call.js";
 import { type TargetTypeRef } from "../../target-model/types/model.js";
-import { type RustTargetOperationFact } from "../../target-model/records/operations.js";
-import type { RustReferenceOperationRecipe } from "../../target-model/records/reference-operations.js";
+import { type RustTargetOperationFact } from "../../target-model/records/operations/operations.js";
+import type { RustReferenceOperationRecipe } from "../../target-model/records/operations/reference-operations.js";
 
 export function analyzeRustReferenceOperations(program: Omit<RustAnalysisProgram, "reachability">,
   nodes: readonly Node[], producer: RustReferenceOperationProducer): readonly TargetDiagnostic[] {

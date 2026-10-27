@@ -3,10 +3,10 @@ import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import { Node_Expression } from "@tsonic/target-api/source";
 import { sourceSafetyPositionIssue } from "@tsonic/target-api/analysis";
 import { createRustExplicitUnsafeContexts, isRustIndependentSafetyBoundary } from "./explicit-regions.js";
-import type { RustSafetyApplication, RustSafetyOperation } from "../../target-model/records/safety.js";
-import type { RustSafetyPlacement, RustSafetyEmission } from "../../target-model/records/safety-emission.js";
+import type { RustSafetyApplication, RustSafetyOperation } from "../../target-model/records/storage/safety.js";
+import type { RustSafetyPlacement, RustSafetyEmission } from "../../target-model/records/storage/safety-emission.js";
 import type { RustAnalysisProgram } from "../program/model.js";
-import type { RustSafetyEmissionProducer } from "../program/records/safety-emission.js";
+import type { RustSafetyEmissionProducer } from "../program/records/storage/safety-emission.js";
 
 interface RustSafetyAnalysisInput {
   readonly program: Pick<RustAnalysisProgram, "source" | "sourceFiles" | "safetyApplications" | "records">;

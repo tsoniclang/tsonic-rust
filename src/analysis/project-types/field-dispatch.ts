@@ -11,12 +11,12 @@ import type {
   RustProjectTypePolicy,
 } from "./index.js";
 import { rustProjectMemberIsPrivate } from "./member-privacy.js";
-import type { RustFrozenDataWritePlan } from "../../target-model/records/frozen-data.js";
+import type { RustFrozenDataWritePlan } from "../../target-model/records/storage/frozen-data.js";
 import type { RustReceiverFieldAliasQueries } from "./receiver-field-aliases.js";
 
-import type { RustProjectFieldDispatchPlan } from "../../target-model/records/field-writes.js";
+import type { RustProjectFieldDispatchPlan } from "../../target-model/records/storage/field-writes.js";
 
-import type { RustProjectFieldImplementation } from "../../target-model/records/field-writes.js";
+import type { RustProjectFieldImplementation } from "../../target-model/records/storage/field-writes.js";
 
 export interface RustProjectFieldDispatchQueries {
   planFor(declaration: Node): RustProjectFieldDispatchPlan | undefined;

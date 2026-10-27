@@ -10,7 +10,7 @@ import { isRustTargetGenericArgument, isRustTargetTypeRef, rustTargetTypeRefEqua
 import { rustFutureOutputCarrier, rustFutureTargetType, rustSliceRefTargetType } from "../../../../target-model/types/index.js";
 import { rustProviderOperationFormContractViolation } from "../forms.js";
 import { rustProviderOperationFormAcceptsTargetGenericArguments } from "../../../../target-model/operations/form-inputs.js";
-import type { RustFinalizedOperationAbi, RustFinalizedOperationResult, RustFinalizedSourceArgument, RustFinalizedSourceArgumentRole, RustFinalizedSourceInput, RustFinalizedTargetInput } from "../../../../target-model/records/finalized-operation.js";
+import type { RustFinalizedOperationAbi, RustFinalizedOperationResult, RustFinalizedSourceArgument, RustFinalizedSourceArgumentRole, RustFinalizedSourceInput, RustFinalizedTargetInput } from "../../../../target-model/records/operations/finalized-operation.js";
 import type { RustProviderChainStep, RustProviderConstantArgument, RustProviderOperationForm } from "../../../../target-model/operations/model.js";
 import { rustLengthEmptinessContractIsValid } from "../../../../target-model/operations/length-emptiness.js";
 import { isFinalizedConversion } from "./conversion-shape.js";

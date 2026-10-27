@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { assertRustInheritedRecordConflict, assertRustInheritedRecordCorrespondence } from "../../../helpers/records.mjs";
 import test from "node:test";
-import { createRustSelectedOperationProducer } from "../../../../dist/analysis/program/records/selected-operation.js";
-import * as selectedOperationModule from "../../../../dist/analysis/program/records/selected-operation.js";
+import { createRustSelectedOperationProducer } from "../../../../dist/analysis/program/records/operations/selected-operation.js";
+import * as selectedOperationModule from "../../../../dist/analysis/program/records/operations/selected-operation.js";
 import { createRustProgramRecordBuilder } from "../../../../dist/analysis/program/records/create.js";
 import {
   rustPostCheckBinaryOperationId,

@@ -1,8 +1,8 @@
 import type { Node } from "@tsonic/tsts";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { RustAnalysisProgram } from "../../program/model.js";
-import type { RustStringComparisonViewProducer } from "../../program/records/string-comparison-views.js";
-import type { RustStringComparisonView } from "../../../target-model/records/string-comparison-views.js";
+import type { RustStringComparisonViewProducer } from "../../program/records/operations/string-comparison-views.js";
+import type { RustStringComparisonView } from "../../../target-model/records/operations/string-comparison-views.js";
 import { BinaryExpression_Left, BinaryExpression_Right, sourceTransparentExpressionOperand } from "@tsonic/target-api/source";
 import { rustContextualRuntimeConversionContract } from "../../../policy/conversions/contextual.js";
 import { rustValueConversionContract } from "../../../policy/conversions/contracts.js";

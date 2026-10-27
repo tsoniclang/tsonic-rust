@@ -11,7 +11,7 @@ import { operationKinds, validateRustFinalizedOperationAbi } from "./validation.
 import { rustFutureOutputCarrier, rustFutureTargetType } from "../../../../target-model/types/index.js";
 import { rustProviderOperationFormContractViolation } from "../forms.js";
 import { rustProviderOperationFormAcceptsTargetGenericArguments } from "../../../../target-model/operations/form-inputs.js";
-import type { FinalizeRustProviderOperationAbiOptions, RustFinalizedOperationAbiFor, RustFinalizedOperationResult, RustFinalizedTargetInput } from "../../../../target-model/records/finalized-operation.js";
+import type { FinalizeRustProviderOperationAbiOptions, RustFinalizedOperationAbiFor, RustFinalizedOperationResult, RustFinalizedTargetInput } from "../../../../target-model/records/operations/finalized-operation.js";
 import type { RustFinalizedOperationKind } from "../../../../target-model/operations/model.js";
 import { insertRustDispatchContextInputs } from "./dispatch-inputs.js";
 import { isRustNativeErrorCarriers } from "../../../../target-model/operations/native-error-carriers.js";

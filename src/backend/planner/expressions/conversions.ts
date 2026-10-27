@@ -1,9 +1,9 @@
 import type { Node } from "@tsonic/tsts";
 import type { RustProviderConstantArgument } from "../../../target-model/operations/model.js";
-import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
+import type { RustTargetOperationFact } from "../../../target-model/records/operations/operations.js";
 import type { RustFinalizedArrayInput, RustFinalizedSliceInput, RustFinalizedTaggedArrayInput,
   RustFinalizedConstantInput, RustFinalizedDispatchContextInput, RustFinalizedOperationAbi,
-  RustFinalizedSourceInput, RustFinalizedTargetInput } from "../../../target-model/records/finalized-operation.js";
+  RustFinalizedSourceInput, RustFinalizedTargetInput } from "../../../target-model/records/operations/finalized-operation.js";
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import type { RustFinalizedInputPlanOverrides } from "../project/provider-evaluation-scope.js";

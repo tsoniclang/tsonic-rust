@@ -1,11 +1,11 @@
 import type { RustStructuralEmissionPolicyInput } from "../../model/structural-emission.js";
-import type { RustConstructorShapeEmission, RustStructuralFieldEmission, RustStructuralShapeEmission } from "../../../target-model/records/structural-emission.js";
+import type { RustConstructorShapeEmission, RustStructuralFieldEmission, RustStructuralShapeEmission } from "../../../target-model/records/objects/structural-emission.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustCallableProtocol, rustLocationTargetType, rustOptionTargetType, rustProgramErrorTargetType, rustUnitTargetType, rustStructuralObjectCarrierValue, rustStructuralPropertyValueCarrier } from "../../../target-model/types/index.js";
 import { rustStructuralPropertyGetterStorageCarrier, rustStructuralPropertySetterStorageCarrier } from "./member-storage.js";
 import { rustRuntimeNativeMethodTargetType, rustRuntimeRecordFieldTargetType } from "../../../target-model/types/carriers/runtime-carriers.js";
 import { rustPascalCaseIdentifier } from "../../../target-model/names/identifiers.js";
-import type { RustStructuralMethodPayload, RustStructuralShapeDefinition } from "../../../target-model/records/structural-shapes.js";
+import type { RustStructuralMethodPayload, RustStructuralShapeDefinition } from "../../../target-model/records/objects/structural-shapes.js";
 import { rustNamedTargetType } from "../../../target-model/types/carriers/native.js";
 import { rustTypeGenericArguments } from "../../../target-model/types/generic-arguments.js";
 import { rustTargetGenericReferences } from "../../../target-model/types/carriers/generic-references.js";

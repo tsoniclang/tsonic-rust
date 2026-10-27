@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
-import type { RustCarrierReadEmission } from "../../../target-model/records/carrier-reads.js";
+import type { RustCarrierReadEmission } from "../../../target-model/records/storage/carrier-reads.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { failRustPlannerInvariant } from "../diagnostics.js";
 

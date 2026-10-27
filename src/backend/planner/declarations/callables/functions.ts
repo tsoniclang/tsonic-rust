@@ -12,7 +12,7 @@ import {
 } from "./generics.js";
 import type {
   RustSourceCallableSpecializationVariant,
-} from "../../../../target-model/records/callable-emission.js";
+} from "../../../../target-model/records/callables/callable-emission.js";
 import {
   allocateRustSyntheticName,
   createRustSyntheticNameState,
@@ -34,7 +34,7 @@ import { planRustLexicalFunctionEnvironment } from "./lexical-functions.js";
 import { planRustErrorRegion } from "../../program/error-regions.js";
 import { planRustPromiseBodyObjectAdapter, rustPromiseBodyGenericArguments } from "./promise-body-adapters.js";
 import { planRustNativeTaskOwner } from "../../program/native-tasks.js";
-import type { RustNativeCallableEntryFacets } from "../../../../target-model/records/declaration-emission.js";
+import type { RustNativeCallableEntryFacets } from "../../../../target-model/records/program/declaration-emission.js";
 
 interface RustNativeMethodReceiver {
   readonly name: string;

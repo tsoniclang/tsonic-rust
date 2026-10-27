@@ -1,7 +1,7 @@
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import { rustUnionAlternatives, rustUnionLeaves, rustUnionPathsMatching, type RustUnionLeaf } from "../../target-model/types/union-relations.js";
-import type { RustValueReadOwnership } from "../../target-model/records/ownership.js";
+import type { RustValueReadOwnership } from "../../target-model/records/storage/ownership.js";
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
 import { rustOptionElementCarrier } from "../../target-model/types/carriers/optional.js";
 import { rustNativeRepresentationMatches } from "./native-representation.js";

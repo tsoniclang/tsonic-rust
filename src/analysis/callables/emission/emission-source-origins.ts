@@ -1,16 +1,16 @@
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { Node } from "@tsonic/tsts";
 import type { SourceStorageBindings, SourceStorageBindingsSelection, SourceStorageConstructionSelection, SourceStorageDomainBoundary, SourceStorageSubject, SourceStorageQueries, TargetUseSiteRef } from "@tsonic/target-api/analysis";
-import type { RustInitializationErrorRecords, RustInitializerSelection, RustModuleErrorInitializer } from "../../../target-model/records/error-regions.js";
-import type { RustPhysicalCallableSourceProducer, RustPhysicalCallableSourceSelection, RustPhysicalEmissionSourceOccurrence, RustPhysicalEmissionSourceOrigin, RustPhysicalEmissionSourceOrigins } from "../../../target-model/records/physical-emission-contexts.js";
+import type { RustInitializationErrorRecords, RustInitializerSelection, RustModuleErrorInitializer } from "../../../target-model/records/errors/error-regions.js";
+import type { RustPhysicalCallableSourceProducer, RustPhysicalCallableSourceSelection, RustPhysicalEmissionSourceOccurrence, RustPhysicalEmissionSourceOrigin, RustPhysicalEmissionSourceOrigins } from "../../../target-model/records/native/physical-emission-contexts.js";
 import type { RustTargetGenericBindings } from "../../../target-model/types/carriers/generic-inference.js";
 import type { RustProgramRecords } from "../../../target-model/records/program.js";
 import type { RustProjectConstructionPlan } from "../../project-types/construction-plan.js";
-import type { RustConstructionLayer } from "../../../target-model/records/construction.js";
-import type { RustGenericCallablePhysicalPlan } from "../../../target-model/records/generic-callables.js";
+import type { RustConstructionLayer } from "../../../target-model/records/objects/construction.js";
+import type { RustGenericCallablePhysicalPlan } from "../../../target-model/records/callables/generic-callables.js";
 import type { RustNativeStoragePlan } from "../storage/native-storage.js";
 import type { RustPhysicalCallableEmissionRequest } from "../ownership/physical-lifecycle.js";
-import type { RustPhysicalCallableStorage } from "../../../target-model/records/native-storage.js";
+import type { RustPhysicalCallableStorage } from "../../../target-model/records/native/native-storage.js";
 
 export type RustEmissionSourceOwner =
   | { readonly kind: "declaration" }

@@ -1,6 +1,6 @@
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { RustAnalysisProgram } from "../../program/model.js";
-import type { RustErasedInputArgumentProducer } from "../../program/records/erased-input-arguments.js";
+import type { RustErasedInputArgumentProducer } from "../../program/records/calls/erased-input-arguments.js";
 import { rustCallableProtocol } from "../../../target-model/types/index.js";
 import { rustOptionElementCarrier } from "../../../target-model/types/carriers/optional.js";
 

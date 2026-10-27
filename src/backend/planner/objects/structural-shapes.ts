@@ -12,7 +12,7 @@ import { rustLifetimeToAst } from "../types/lifetime-syntax.js";
 import { rustStructuralShapeGenerics, rustStructuralShapeContext } from "./structural-generics.js";
 import { planRustNumberArrayUnionImplementation } from "./number-array-unions.js";
 import { planRustConstructorShape } from "./constructor-shapes.js";
-import type { RustSourcePackageErrorPlan } from "../../../target-model/records/source-package-errors.js";
+import type { RustSourcePackageErrorPlan } from "../../../target-model/records/errors/source-package-errors.js";
 import { planRustSourceUnionPayloadTemplate } from "../types/source-union-payloads.js";
 import { failRustPlannerInvariant } from "../diagnostics.js";
 import { rustInvariantTypeMarker } from "../types/invariant-marker.js";

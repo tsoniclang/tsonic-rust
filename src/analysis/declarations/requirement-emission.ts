@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import type { RustAnalysisProgram } from "../program/model.js";
-import type { RustNativeGenericProducer } from "../program/records/native-generics.js";
+import type { RustNativeGenericProducer } from "../program/records/native/native-generics.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustCarrierSupportsClone } from "../../policy/constraints/native-traits.js";
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
