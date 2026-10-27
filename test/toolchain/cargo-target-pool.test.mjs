@@ -2,9 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { spawn, spawnSync } from "node:child_process";
 import { once } from "node:events";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { setTimeout as delay } from "node:timers/promises";
 import { createTestWorkspace } from "../../../tsonic/test/scripts/test-workspaces.mjs";
 
@@ -234,6 +234,12 @@ test("native owner", () => {
 
 test("a timed-out Cargo owner abandons its locked slot without cleaning or reusing native descendant artifacts", async () => {
   const directory = scratch("timeout");
+  const helpers = join(directory, "test/helpers");
+  mkdirSync(helpers, { recursive: true });
+  for (const name of ["cargo-target-pool.mjs", "rust-session-paths.mjs"]) {
+    copyFileSync(new URL(`../helpers/${name}`, import.meta.url), join(helpers, name));
+  }
+  const isolatedPoolModule = pathToFileURL(join(helpers, "cargo-target-pool.mjs")).href;
   const native = join(directory, "native");
   const next = join(directory, "next");
   const marker = join(directory, "native.json");
@@ -249,7 +255,7 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import test from "node:test";
-import { finishGeneratedCargoProject, spawnGeneratedCargo } from ${JSON.stringify(poolModule)};
+import { finishGeneratedCargoProject, spawnGeneratedCargo } from ${JSON.stringify(isolatedPoolModule)};
 test("live timeout owner", async () => {
   const native = ${JSON.stringify(native)};
   const options = { cwd: native, encoding: "utf8", timeout: 3000 };
@@ -291,7 +297,7 @@ fn main() {
 });
 `);
   const owner = spawn(process.execPath, [script], {
-    env: { ...environment, TSONIC_CARGO_POOL_SIZE: String(Math.max(2, Number(environment.TSONIC_CARGO_POOL_SIZE))) },
+    env: { ...environment, TSONIC_CARGO_POOL_SIZE: "2" },
     stdio: ["ignore", "pipe", "pipe"],
   });
   let output = "";
@@ -304,6 +310,8 @@ fn main() {
       return existsSync(report);
     }, "the live owner times out and completes a later call in a fresh slot");
     const observed = JSON.parse(readFileSync(report, "utf8"));
+    assert.equal(dirname(observed.old), join(directory, ".temp/cargo-target-pool"), "the timeout fixture owns its pool independently of other test workers");
+    assert.equal(dirname(observed.current), dirname(observed.old), "both native calls use the same fixture-owned pool");
     assert.notEqual(observed.old, observed.current, "the interrupted slot is not reused by the same owner");
     const attempt = () => spawnSync("flock", ["--nonblock", `${observed.old}.lock`, "true"], { timeout: 10_000 }).status;
     assert.equal(attempt(), 1, "native descendants retain the old kernel lock after Cargo's timeout");
