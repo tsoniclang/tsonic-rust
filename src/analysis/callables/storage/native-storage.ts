@@ -53,7 +53,7 @@ import type { RustCallableJoinWrite } from "../../../target-model/records/native
 export type RustNativeInvocationBindingsSelection =
   | { readonly kind: "resolved"; readonly storageBindings: SourceStorageBindings;
       readonly targetBindings: RustTargetGenericBindings }
-  | { readonly kind: "unresolved"; readonly reason: string };
+  | Extract<RustNativeStorageSelection, { readonly kind: "unresolved" }>;
 
 export interface RustNativeStoragePlan {
   readonly issues: readonly RustSourceCallableSpecializationIssue[];

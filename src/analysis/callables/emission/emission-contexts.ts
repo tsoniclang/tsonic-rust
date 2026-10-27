@@ -435,7 +435,7 @@ export function prepareRustEmissionContextRequests(
         return occurrence.receiverProjection.variant.carrier;
       const selected = role === "value" ? input.nativeStorage.valueFor(slot.node) : input.nativeStorage.operandFor(slot.node);
       if (selected.kind === "unresolved") {
-        diagnostics.push(emissionDiagnostic(slot.node, selected.reason));
+        diagnostics.push(selected.diagnostic ?? emissionDiagnostic(slot.node, selected.reason));
         return undefined;
       }
       return selected.carrier;

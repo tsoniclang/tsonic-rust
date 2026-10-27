@@ -539,6 +539,29 @@ test("required unresolved selections reject all roles before publishing a partia
   assert.equal(current.sealedRequests() === undefined, true, "native producer publication has not run");
 });
 
+test("required unresolved selections preserve the original deciding-owner diagnostics for all runtime roles", () => {
+  const current = fixture();
+  const requests = [current.request("value", current.declaration), current.request("operand", current.operand),
+    current.request("return", current.owner), current.request("invocation", current.invocation)];
+  const decided = requests.map(request => Object.freeze({
+    code: "RUST_SOURCE_CALLABLE_SPECIALIZATION_NOT_CLOSED", category: "error", source: "tsonic-rust",
+    sourceNode: request.subject,
+    message: "Native callable storage has distinct physical input alternatives requiring a sealed join.",
+    evidence: Object.freeze(["target.capability=rust.source-callable.finite-specialization"]),
+  }));
+  for (const [index, request] of requests.entries()) current.outcomes.set(request.kind,
+    Object.freeze({ kind: "unresolved", reason: decided[index].message, diagnostic: decided[index] }));
+  const result = completeLifecycle(current.input(requests), current.physical);
+  assert.equal(result.kind, "rejected", "an owner refusal prevents every physical publication");
+  assert.equal("value" in result, false, "no partial program escapes its source refusal");
+  assert.equal(result.diagnostics.length, decided.length, "every original obligation retains its diagnostic multiplicity");
+  for (const [index, diagnostic] of result.diagnostics.entries()) {
+    assert.equal(diagnostic === decided[index], true, `${requests[index].kind}: the complete deciding-owner object is preserved`);
+    assert.equal(diagnostic.sourceNode === requests[index].subject, true, `${requests[index].kind}: the exact original source span is retained`);
+  }
+  assert.equal(current.sealedRequests() === undefined, true, "the rejected program never publishes native producers");
+});
+
 test("foreign source subjects and owners reject before storage queries or carrier inspection", () => {
   for (const position of ["subject", "owner", "declaration", "context"]) {
     const current = fixture();

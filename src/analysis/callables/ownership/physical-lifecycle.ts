@@ -254,7 +254,10 @@ export function createRustPhysicalCallableLifecycle(input: RustPhysicalCallableL
       storageReady = true;
       for (const request of input.requests) {
         const selection = requestStorage(request);
-        if (selection?.kind === "unresolved") reject(request.subject, selection.reason);
+        if (selection?.kind === "unresolved") {
+          if (selection.diagnostic !== undefined) diagnostics.push(selection.diagnostic);
+          else reject(request.subject, selection.reason);
+        }
       }
       if (diagnostics.length !== 0) return rejectedTargetStage(diagnostics);
       for (const flow of flows) inheritedDestination(flow.node);

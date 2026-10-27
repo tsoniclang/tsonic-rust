@@ -882,7 +882,7 @@ export function createRustNativeStorageSelection(
     };
     if (request.kind === "invocation")
       return boundInvocation(request.declaration, subject.node, bindings, 0)
-        ?? unresolved(reason ?? "Native invocation binding has no complete original physical inputs.");
+        ?? unresolved(reason ?? "Native invocation binding has no complete original physical inputs.", sourceDiagnostic);
     const physical = visit(request.carrier, subject, bindings, 0, false, position);
     return selectionFor(physical, request.carrier);
   }
