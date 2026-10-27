@@ -5,6 +5,12 @@ import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 import { retainedPointerInputSource as source, reorderedPointerInputSource, widePointerInputSource,
   incompatiblePointerInputSources } from "../../../../tsonic/test/fixtures/retained-pointer-inputs.mjs";
 
+function diagnosticSummary(diagnostics) {
+  return JSON.stringify(diagnostics.slice(0, 8).map(({ code, message, evidence }) => ({
+    code, message: message.slice(0, 512), evidence: evidence?.slice(0, 8).map(value => value.slice(0, 512)),
+  })));
+}
+
 test("retained native requirements propagate through exact aliases and caller inputs, not unrelated callbacks", () => {
   const { program } = analyzeRust({ files: { "index.ts": source } });
   const ast = program.source.ast;
@@ -38,7 +44,7 @@ for (const surfaces of [undefined, ["js"]]) {
   test(`native retained callback constraints execute through aliases and forwarding in ${surfaces?.[0] ?? "native"}`, { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces,
       target: { id: "rust", options: { outputType: "bin" } }, files: { "index.ts": (source + "\nmain();\n") } });
-    assert.equal(result.diagnostics.length, 0, result.diagnostics.map(row => `${row.code}: ${row.message}`).join("\n"));
+    assert.equal(result.diagnostics.length, 0, diagnosticSummary(result.diagnostics));
     const code = artifactText(result, "src/index.rs");
     assert.match(code, /InvocationError:\s*core::convert::Into</u);
     assert.match(code, /::invoke\(/u);
@@ -50,7 +56,7 @@ for (const surfaces of [undefined, ["js"]]) {
 for (const [name, text] of [["reordered", reorderedPointerInputSource], ["int64", widePointerInputSource]]) {
   test(`native contextual callback inference retains ${name} source metadata`, { timeout: 300_000 }, () => {
     const { result } = compileRust({ target: { id: "rust", options: { outputType: "bin" } }, files: { "index.ts": text + "\nmain();\n" } });
-    assert.equal(result.diagnostics.length, 0, result.diagnostics.map(row => row.message).join("\n"));
+    assert.equal(result.diagnostics.length, 0, diagnosticSummary(result.diagnostics));
     const code = artifactText(result, "src/index.rs");
     if (name === "int64") {
       assert.match(code, /Location<i64,/u);
