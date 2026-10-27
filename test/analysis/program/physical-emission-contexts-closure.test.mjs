@@ -193,9 +193,18 @@ test("higher-ranked emission identity bindings preserve distinct actual binder i
 function observeCallablePublication(registry, assertions, carriers, observations) {
   let physical;
   let reordered;
+  let inventory;
+  let joined;
   const invariantCode = attempt => {
     try { attempt(); } catch (failure) { return failure.diagnostic?.code; }
     return undefined;
+  };
+  const verifyClosedReads = phase => {
+    assertions.equal(physical.definitionFor(reordered) === undefined, true, phase + ": optional definition stays absent");
+    assertions.equal(physical.argumentsFor(reordered) === undefined, true, phase + ": optional arguments stay absent");
+    assertions.equal(physical.conversionFor(reordered, joined.carrier) === undefined, true, phase + ": optional conversion stays absent");
+    assertions.equal(physical.definitionFor(joined.carrier) === joined, true, phase + ": known family keeps its original identity");
+    assertions.equal(physical.definitions() === inventory, true, phase + ": optional reads do not change the inventory");
   };
   const descriptors = Object.getOwnPropertyDescriptors(registry);
   return Object.freeze(Object.create(Object.getPrototypeOf(registry), {
@@ -209,12 +218,15 @@ function observeCallablePublication(registry, assertions, carriers, observations
       assertions.equal(observations.requestSelections, 1, "one actual early physical-use selection precedes the late seal");
       observations.verifyHandlerInputs();
       physical = registry.selected.generic.physical;
-      const joined = physical.definitions().find(definition => definition.members.length === 2);
+      inventory = physical.definitions();
+      joined = inventory.find(definition => definition.members.length === 2);
       assertions.equal(joined !== undefined, true, "the real pipeline selects the original two-member family");
       const value = carriers.rustGenericCallableValue(joined.carrier);
       reordered = carriers.rustGenericCallableCarrier({ ...value, physical: {
         ...value.physical, members: [...value.physical.members].reverse(),
       } });
+      observations.unpreparedPhysicalCarrier = reordered;
+      observations.physicalDeclaration = joined.members[0].implementation.declaration;
       assertions.equal(invariantCode(() => physical.definitionFor(reordered)), "TSONIC_INTERNAL_ANALYSIS_INVARIANT", "closed, not sealed");
       assertions.equal(observations.components.at(-1)?.kind, "resolved", "the existing component owner completes before publication");
       observations.earlyStoragePhase = "materializing";
@@ -223,14 +235,14 @@ function observeCallablePublication(registry, assertions, carriers, observations
       assertions.equal(published.kind, "resolved", "the real late-stage tuple seals successfully");
       assertions.equal(published.value !== registry.selected, true, "publication does not expose the analysis construction view");
       assertions.equal(registry.seal(input) === published, true, "repeated seals read the same completed publication");
-      assertions.equal(invariantCode(() => physical.definitionFor(reordered)), "TSONIC_INTERNAL_ANALYSIS_INVARIANT", "sealed, not published");
+      verifyClosedReads("sealed, not published");
       observations.published = published.value;
       observations.verifyHandlerInputs();
       return published;
     } },
     publish: { value() {
       const result = registry.publish();
-      assertions.equal(invariantCode(() => physical.definitionFor(reordered)), "TSONIC_INTERNAL_PLANNER_INVARIANT", "published");
+      verifyClosedReads("published");
       observations.publications++;
       return result;
     } },
@@ -311,6 +323,8 @@ test("the planner phase label starts at publication, after the actual callable s
   const dispatchUrl = new URL("../../../dist/analysis/callables/generics/generic-dispatch.js", import.meta.url).href;
   const carriersUrl = new URL("../../../dist/target-model/types/carriers/generic-callables.js", import.meta.url).href;
   const helperUrl = new URL("../../helpers/rust-session.mjs", import.meta.url).href;
+  const planContextUrl = new URL("../../helpers/plan-context.mjs", import.meta.url).href;
+  const renderUrl = new URL("../../../dist/backend/planner/types/render.js", import.meta.url).href;
   const key = "r14-instrumented-callable-publication-proof";
   const registryObservation = `export function createRustCallableValuePlanRegistry() { return globalThis[Symbol.for(${JSON.stringify(key)})].registry(observedCreateRustCallableValuePlanRegistry()); }`;
   const componentsObservation = `export function analyzeRustSourcePackageComponents(...inputs) { const result = observedAnalyzeRustSourcePackageComponents(...inputs); globalThis[Symbol.for(${JSON.stringify(key)})].components.push(result); return result; }`;
@@ -421,6 +435,20 @@ const compiled = compileRust(${JSON.stringify(options)});
 assert.equal(compiled.result.diagnostics.length, 0, compiled.result.diagnostics.map(issue => issue.message).join("\\n").slice(0, 2048));
 assert.equal(compiled.result.program === observations.published, false, "the observed publication is the callable product, not the enclosing program");
 assert.equal(compiled.result.program.callableValues === observations.published, true, "the pipeline publishes the exact observed completed product");
+const { rustSourceFilePlanContext } = await import(${JSON.stringify(planContextUrl)});
+const { rustTypeFromCarrierInContext } = await import(${JSON.stringify(renderUrl)});
+const renderingContext = rustSourceFilePlanContext(compiled.result.program, observations.physicalDeclaration);
+assert.equal(compiled.result.program.records.typeEmission.get(observations.unpreparedPhysicalCarrier) === undefined, true,
+  "the unprepared physical carrier has no admitted native type record");
+let rendered;
+let requiredFailure;
+try { rendered = rustTypeFromCarrierInContext(observations.unpreparedPhysicalCarrier, renderingContext); }
+catch (failure) { requiredFailure = failure; }
+assert.equal(requiredFailure?.diagnostic?.code, "TSONIC_INTERNAL_PLANNER_INVARIANT",
+  "the actual required native renderer refuses the unprepared physical carrier");
+assert.equal(requiredFailure?.diagnostic?.message, "An admitted native type requires its sealed physical storage selection.",
+  "the required native consumer preserves its exact existing refusal");
+assert.equal(rendered === undefined, true, "no native type is produced for the unprepared carrier");
 assert.equal(observations.anchors.has(${JSON.stringify(registryUrl)}) && observations.anchors.has(${JSON.stringify(componentsUrl)}), true,
   "both original production functions are observed without writing dist");
 assert.equal(observations.anchors.size, 9, "each original stage, required input and actual producer-seal observer has one exact anchor");
