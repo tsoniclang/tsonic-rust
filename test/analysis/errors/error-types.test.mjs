@@ -46,6 +46,33 @@ function fixture(text = `
   return { context, input, producer, error, native: context.callableValues.native };
 }
 
+for (const body of ["reason", "{ return reason; }"]) {
+  test(`physical rejection callback bodies own intrinsic effects before fixed construction (${body})`, () => {
+    const current = fixture(`
+      import type { int32 } from "@tsonic/core/types.js";
+      class Failure extends Error { constructor(readonly code: int32) { super("failure"); } }
+      const original = new Failure(7);
+      const pending = new Promise<number>((resolve, reject) => { reject(original); });
+      export const recovered = pending.catch(reason => ${body});
+    `);
+    const candidates = current.input.producers.producers.filter(producer => {
+      const ast = current.context.ast;
+      return ast.is.IsArrowFunction(producer.declaration) &&
+        ast.parameters(producer.declaration).some(parameter => ast.text(ast.name(parameter)) === "reason");
+    });
+    assert.equal(candidates.length, 1, "the original checked rejection handler has exactly one physical producer");
+    const declaration = candidates[0].declaration;
+    const effects = current.input.records.errorEffects.get(declaration);
+    assert.equal(effects !== undefined, true, "the real body owns a completed intrinsic record before construction");
+    assert.equal(effects.localErrors, false, "returning the original payload introduces no local throw");
+    assert.equal(effects.nativeErrors.length, 0, "a pure return does not fabricate native invocation errors");
+    const error = current.input.producers.errorFor(declaration, "invoke");
+    assert.equal(error !== undefined && normalizeRustErrorType(error, current.input) !== undefined, true,
+      "the exact owned producer error can be completed without a missing-record default");
+    assert.equal(current.input.records.errorEffects.get({}) === undefined, true, "foreign identities acquire no purity proof");
+  });
+}
+
 for (const surfaces of [[], ["js"]]) {
   test(`implicit disposal preserves closed native channels without inventing invocation bindings (${surfaces[0] ?? "native"})`, () => {
     const failure = rustNamedTargetType("fixture:ProducerFailure", "ProducerFailure");

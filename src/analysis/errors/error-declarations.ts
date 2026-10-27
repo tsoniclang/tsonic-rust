@@ -65,6 +65,9 @@ export function collectRustErrorDeclarations(walk: RustFactWalk, projectSourceFi
     return kind === "KindMethodDeclaration" || kind === "KindMethodSignature" ||
       kind === "KindGetAccessor" || kind === "KindSetAccessor";
   };
+  for (const producer of walk.context.callableValues.nativeProducers.producers) {
+    registerCallableDeclaration(producer.declaration);
+  }
   for (const sourceFile of projectSourceFiles) {
     for (const statement of ast.statements(sourceFile) as readonly Node[]) {
       const kind = ast.kindName(statement);
