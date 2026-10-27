@@ -15,7 +15,7 @@ import { rustNativeMemoryLayoutsEqual } from "../../../target-model/operations/n
 import { rustTargetGenericArgumentEquals, rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { closedMetadataKey } from "../../../target-model/metadata/closed-data.js";
 
-import { rustStructuralObjectCarrierValue, rustTargetGenericReferences, rustOptionElementCarrier, rustCallableProtocol, rustProgramErrorTargetType, rustNamedTypeCarrierValue } from "../../../target-model/types/index.js";
+import { rustStructuralObjectCarrierValue, rustTargetGenericReferences, rustOptionElementCarrier, rustOptionTargetType, rustCallableProtocol, rustCallableTargetType, rustProgramErrorTargetType, rustNamedTypeCarrierValue } from "../../../target-model/types/index.js";
 import { rustStructuralMethodStorageCarrier } from "../../../policy/types/objects/member-storage.js";
 import { rustRuntimeRecordFieldTargetType } from "../../../target-model/types/carriers/runtime-carriers.js";
 import { rustCallablePhysicalSignature } from "../../../target-model/conversions/callable-physical.js";
@@ -27,7 +27,6 @@ import { substituteRustTargetGenerics } from "../../../target-model/types/carrie
 import type { RustSourceObjectShape, RustStructuralFieldImplementation } from "../../../target-model/records/types/source-types.js";
 import { selectRustStructuralMethodContextCarrier } from "../../../policy/types/objects/structural-emission.js";
 import { selectRustStructuralPhysicalDestinations } from "./physical-destinations.js";
-import { createRustStructuralMethodDestinationReader } from "./method-destinations.js";
 import { rustProgramErrorOwner } from "../../../target-model/types/carriers/program-errors.js";
 
 
@@ -535,10 +534,8 @@ export function createRustStructuralShapeConstruction(
       if (methodStorageFinalized) throw new Error("Structural method physical storage finalizes exactly once.");
       if (typeof errorForFile !== "function") failTargetAnalysisInvariant("tsonic-rust",
         "Structural physical finalization requires its complete declared-component error selection.");
-      const methodFor = createRustStructuralMethodDestinationReader(selections,
-        carrier => originsByKey.get(closedMetadataKey(carrier)), physicalTemplateFor);
       const selectPhysicalCarrier = (carrier: TargetTypeRef): TargetTypeRef =>
-        selectRustStructuralPhysicalDestinations(carrier, errorForFile, methodFor);
+        selectRustStructuralPhysicalDestinations(carrier, errorForFile);
       normalizeCompletionCarrier = selectPhysicalCarrier;
       const replacements = new Map<RustStructuralShapeLayout, RustStructuralShapeDefinition>();
       for (const definition of definitions) {
@@ -613,7 +610,9 @@ export function createRustStructuralShapeConstruction(
             if (methodPlan.kind !== "fixed") {
               if (selection.nativeBody !== undefined) failTargetAnalysisInvariant("tsonic-rust", "Only a selected fixed method publishes a native body payload.");
               if (destination === undefined) failTargetAnalysisInvariant("tsonic-rust", "A stored structural method requires its exact selected physical invocation protocol.");
-              return Object.freeze({ ...field, carrier: rustTargetTypeRefEquals(field.carrier, nativeField.type) ? field.carrier : nativeField.type,
+              const valueCarrier = rustCallableTargetType(methodPlan.receiver === "included" ? destination.parameters.slice(1)
+                : destination.parameters, destination.result, destination.lifetime, destination.error);
+              return Object.freeze({ ...field, carrier: field.presence === "optional" ? rustOptionTargetType(valueCarrier) : valueCarrier,
                 methodPlan: Object.freeze({ ...methodPlan, carrier: selection.carrier, constructions }) });
             }
             const physical = rustStructuralObjectCarrierValue(carrier)?.implementation?.methods.find(method => method.sourceName === field.sourceName);

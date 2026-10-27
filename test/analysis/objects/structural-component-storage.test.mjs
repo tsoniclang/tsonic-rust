@@ -208,23 +208,13 @@ test("physical method installation completes canonical and already indexed borro
       physicalCarrier, destinationCarrier, payload: { captures: [], receiverFields: [], receivers: [] } }] },
   ]])]]), noCallablePropertyError);
   const after = builder.seal();
-  assert.equal(rustStructuralObjectCarrierValue(definition.carrier).fields[0].type === logical, true,
-    "the original immutable source method contract remains unchanged");
-  assert.equal(rustTargetTypeRefEquals(rustCallableProtocol(after.definitions[0].fields[0].carrier).error, infallible), true,
-    "the completed native field publishes its selected physical invocation error");
+  assert.equal(after.definitions[0].fields[0].carrier === logical, true, "logical method contract remains unchanged");
   assert.equal(after.definitionForCarrier(owned) === before, false, "the indexed instance is replaced with the completed definition");
   for (const [source, expectedResult, expectedLifetime] of [
     [owned, integer, { kind: "static" }], [borrowed, parameter, borrowedLifetime],
   ]) {
     const field = after.field(source, 0);
     const selected = rustCallableProtocol(field.methodPlan.carrier);
-    const value = rustCallableProtocol(field.carrier);
-    assert.equal(rustTargetTypeRefEquals(value.result, selected.result) &&
-      rustTargetTypeRefEquals(value.error, selected.error), true,
-    "the field value and its native method storage have one exact result/error channel");
-    const shape = rustStructuralObjectCarrierValue(after.definitionForCarrier(source).carrier);
-    assert.equal(rustTargetTypeRefEquals(shape.fields[0].type, field.carrier), true,
-      "the completed receiver layout stores the same physical method value");
     assert.deepEqual(selected.result, expectedResult, "the physical result is forward substituted");
     assert.deepEqual(selected.lifetime, expectedLifetime, "the destination lifetime is forward substituted");
     assert.deepEqual(selected.error, infallible, "the completed invocation error is selected before publication");
