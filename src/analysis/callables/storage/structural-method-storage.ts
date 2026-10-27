@@ -364,7 +364,7 @@ export function createRustStructuralMethodStorage(input: {
             if (failure !== undefined) return failure;
           }
         }
-        if (ast.typeNode(invocation) !== undefined) {
+        if (ast.is.IsPropertyDeclaration(invocation) && ast.typeNode(invocation) !== undefined) {
           const initial = Node_Initializer(ast, invocation);
           const carrier = records.runtimeCarrier.get(invocation)?.carrier;
           if (initial !== undefined && carrier !== undefined) {
