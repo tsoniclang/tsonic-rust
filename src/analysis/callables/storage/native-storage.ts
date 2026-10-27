@@ -58,6 +58,7 @@ export type RustNativeInvocationBindingsSelection =
 export interface RustNativeStoragePlan {
   readonly issues: readonly RustSourceCallableSpecializationIssue[];
   logicalCarrierFor(subject: SourceStorageSubject, bindings: SourceStorageBindings): TargetTypeRef | undefined;
+  projectCarrierFor(subject: SourceStorageSubject, bindings: SourceStorageBindings, carrier: TargetTypeRef): TargetTypeRef | undefined;
   genericBindingsFor(declaration: Node, bindings: SourceStorageBindings): RustNativeStorageGenericSelection;
   boundInvocationFor(declaration: Node, invocation: Node, callerBindings: SourceStorageBindings): RustNativeInvocationBindingsSelection;
   futureEnvironmentFor(declaration: Node): RustNativeFutureEnvironmentSelection;
@@ -219,6 +220,8 @@ export function createRustNativeStorageQueries(input: {
   const queries: RustNativeStorageQueries = {
     get sourceErrors() { return sourceErrors; },
     logicalCarrierFor,
+    projectCarrierFor: (subject, bindings, carrier) => rustSourceStorageProjectedCarrier(input.carrierHost,
+      { subject, bindings }, carrier),
     boundInvocationFor: selection.boundInvocationFor,
     issues: witnesses.issues,
     invocationCallableFor: (node: Node) => invocationCallableFor(node, bindingsFor(ownerFor(node))),

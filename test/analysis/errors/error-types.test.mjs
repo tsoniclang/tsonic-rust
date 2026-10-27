@@ -260,6 +260,50 @@ test("returned native callback calls publish the bound observer and resolver err
 });
 
 for (const surfaces of [[], ["js"]]) {
+  test(`higher-order error bindings preserve projected callable leaves (${surfaces[0] ?? "native"})`, () => {
+    const context = analyzeRustErrorEffects(`
+      type Box = { readonly callback: () => number; readonly other: (value: number) => number };
+      function invoke(value: Box): number { return value.callback() + value.other(3); }
+      function apply(operation: (value: Box) => number, value: Box): number { return operation(value); }
+      export function run(): number { return apply(invoke, { callback: () => 7, other: value => value }); }
+    `, { surfaces });
+    const nodes = context.sourceStorage.nodes;
+    const declaration = name => nodes.find(node => context.ast.is.IsFunctionDeclaration(node) &&
+      context.ast.text(context.ast.name(node)) === name);
+    const invoke = declaration("invoke");
+    const apply = declaration("apply");
+    assert.equal(invoke !== undefined && apply !== undefined, true, "the original producer and receiving owner exist");
+    const supplied = context.callableValues.native.inputsFor(invoke);
+    assert.equal(supplied.length, 2, "both distinct original callable members own implementation inputs");
+    const operation = context.callableValues.native.inputsFor(apply).find(input =>
+      context.ast.text(context.ast.name(input.subject.node)) === "operation");
+    const aggregate = rustCallableProtocol(operation?.carrier)?.parameters[0];
+    assert.equal(aggregate !== undefined, true, "the receiving operation has its exact aggregate parameter");
+    const call = nodes.find(node => {
+      if (!context.ast.is.IsCallExpression(node)) return false;
+      const callee = Node_Expression(context.ast, node);
+      return callee !== undefined && context.ast.is.IsIdentifier(callee) && context.ast.text(callee) === "apply";
+    });
+    assert.equal(call !== undefined, true, "the original checked apply invocation owns this binding");
+    const effects = context.records.errorEffects.get(apply);
+    assert.equal(effects !== undefined, true, "the receiving owner publishes its actual error effects");
+    const selection = createRustSourceErrorEffectSelection({ context });
+    assert.equal(selection.register(effects.nativeErrors), true, "the real higher-order error channels are registered");
+    const bindings = selection.bindingsFor(call, apply, effects.nativeErrors.map(error => error.errorType));
+    assert.equal(bindings !== undefined, true, "the actual source invocation binds both projected inputs");
+    for (const input of supplied) {
+      assert.equal(input.subject.projection.length, 1, "the original member path is retained");
+      const component = input.subject.projection[0];
+      const name = context.ast.text(context.ast.name(component.declaration));
+      const bound = bindings.types.get(input.implementation.identity);
+      assert.equal(bound !== undefined, true, `${name}: the original implementation has its selected leaf`);
+      assert.equal(rustTargetTypeRefEquals(bound, aggregate), false, `${name}: the aggregate never replaces its callable leaf`);
+      const signature = rustCallablePhysicalSignature(bound);
+      assert.equal(signature !== undefined, true, `${name}: the native implementation has a Result invocation signature`);
+      assert.equal(signature.parameters.length, name === "callback" ? 0 : 1, `${name}: sibling signatures stay distinct`);
+    }
+  });
+
   test(`higher-order error bindings use physical implementations without changing logical slots (${surfaces[0] ?? "native"})`, () => {
     const context = analyzeRustErrorEffects(`
       function invoke(callback: () => number): number { return callback(); }

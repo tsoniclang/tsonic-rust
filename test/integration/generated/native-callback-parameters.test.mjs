@@ -18,6 +18,22 @@ for (const surfaces of [[], ["js"]]) {
   });
 }
 
+for (const surfaces of [[], ["js"]]) {
+  test(`higher-order callbacks preserve distinct aggregate member implementations (${surfaces[0] ?? "native"})`, { timeout: 300_000 }, () => {
+    const { result } = compileRust({ surfaces,
+      target: { id: "rust", options: { outputType: "bin", crateName: "native_projected_callback_errors" } },
+      files: { "index.ts": `
+type Box = { readonly callback: () => number; readonly other: (value: number) => number };
+function invoke(value: Box): number { return value.callback() + value.other(3); }
+function apply(operation: (value: Box) => number, value: Box): number { return operation(value); }
+export function run(): number { return apply(invoke, { callback: () => 7, other: value => value }); }
+if (run() !== 10) throw "wrong projected callback implementation";
+` } });
+    assertNoTargetDiagnostics(result.diagnostics);
+    validateGeneratedProject(`native-projected-callback-errors-${surfaces[0] ?? "native"}`, result.artifacts, { run: true });
+  });
+}
+
 test("Map and Set callbacks preserve their native generic invocation error without erasure", { timeout: 300_000 }, () => {
   const { result } = compileRust({ surfaces: ["js"],
     target: { id: "rust", options: { outputType: "bin", crateName: "native_collection_callback_errors" } },

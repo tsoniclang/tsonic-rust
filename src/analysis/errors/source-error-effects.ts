@@ -41,7 +41,7 @@ type RustSourceErrorContext = {
   readonly callableValues: {
     readonly native: RustNativeCallableInputPlan;
     readonly nativeProducers: Pick<RustNativeCallableProducerPlan, "forDeclaration" | "errorFor">;
-    readonly nativeStorage: Pick<RustNativeStoragePlan, "invocationWitnessFor">;
+    readonly nativeStorage: Pick<RustNativeStoragePlan, "invocationWitnessFor" | "projectCarrierFor">;
   };
 };
 
@@ -264,9 +264,6 @@ export function createRustSourceErrorEffectSelection(walk: { readonly context: R
         else return false;
         bindings.add(identity);
       }
-      // A producer that fills a callable slot is materialized with the slot's parameter carriers, so each of the
-      // producer's own native callable inputs is the slot's formal parameter at the same position. Without this the
-      // producer's error keeps its inputs' implementation parameters, which no caller outside the producer can bind.
       for (const [identity, producer] of producers) {
         const slot = inputs.get(identity)!.carrier;
         const slotCarrier = rustOptionElementCarrier(slot) ?? slot;
@@ -281,7 +278,12 @@ export function createRustSourceErrorEffectSelection(walk: { readonly context: R
           const position = parameters.indexOf(own.subject.node);
           const parameter = position < 0 ? undefined : formal.parameters[position];
           if (parameter === undefined) continue;
-          const carrier = substituteRustTargetGenerics(parameter, types, lifetimes, consts);
+          const ownerBindings = native.bindingsFor(producer.declaration);
+          if (own.subject.projection.length !== 0 && ownerBindings === undefined) return false;
+          const projected = own.subject.projection.length === 0 ? parameter
+            : walk.context.callableValues.nativeStorage.projectCarrierFor(own.subject, ownerBindings!, parameter);
+          if (projected === undefined) return false;
+          const carrier = substituteRustTargetGenerics(projected, types, lifetimes, consts);
           const selected = rustOptionElementCarrier(carrier) ?? carrier;
           if (selected.kind === "target-named" && selected.id === rustCallableTargetId) {
             const physical = rustCallablePhysicalCarrier(selected);
