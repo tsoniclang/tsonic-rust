@@ -1,9 +1,8 @@
-import { spawnSync } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { repositoryRoot } from "./rust-session-paths.mjs";
 import { createTestWorkspace } from "../../../tsonic/test/scripts/test-workspaces.mjs";
-import { finishGeneratedCargoProject, generatedCargoOptions } from "./cargo-target-pool.mjs";
+import { finishGeneratedCargoProject, spawnGeneratedCargo } from "./cargo-target-pool.mjs";
 
 const generatedRoot = resolve(repositoryRoot, ".temp/generated");
 
@@ -18,12 +17,12 @@ export function writeGeneratedProject(name, artifacts) {
 }
 
 export function runCargo(projectRoot, args, options = {}) {
-  const result = spawnSync("cargo", args, generatedCargoOptions(projectRoot, args, {
+  const result = spawnGeneratedCargo(projectRoot, args, {
     cwd: projectRoot,
     encoding: "utf8",
     timeout: 300_000,
     ...options,
-  }));
+  });
   if (result.status !== 0) {
     throw new Error(`cargo ${args.join(" ")} failed in ${projectRoot}:\n${result.stdout}\n${result.stderr}`);
   }

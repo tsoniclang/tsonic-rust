@@ -13,7 +13,7 @@ import {
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
-import { generatedCargoOptions } from "../../../helpers/cargo-target-pool.mjs";
+import { spawnGeneratedCargo } from "../../../helpers/cargo-target-pool.mjs";
 import { createRustCompilerWorkerClient } from "../../../../dist/providers/native/acquisition/worker-client.js";
 
 
@@ -649,13 +649,13 @@ function createCargoCountingShim() {
 }
 
 function runCargo(manifestPath, arguments_) {
-  return spawnSync("cargo", [...arguments_, "--manifest-path", manifestPath], generatedCargoOptions(dirname(manifestPath), arguments_, {
+  return spawnGeneratedCargo(dirname(manifestPath), [...arguments_, "--manifest-path", manifestPath], {
     cwd: dirname(manifestPath),
     encoding: "utf8",
     env: { ...process.env, CARGO_BUILD_JOBS: process.env.CARGO_BUILD_JOBS ?? "2" },
     timeout: 300_000,
     maxBuffer: 16 * 1024 * 1024,
-  }));
+  });
 }
 
 function uniquePath(label) {

@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { spawnSync } from "node:child_process";
-import { generatedCargoOptions } from "../../helpers/cargo-target-pool.mjs";
+import { spawnGeneratedCargo } from "../../helpers/cargo-target-pool.mjs";
 import { realpathSync, mkdirSync, writeFileSync } from "node:fs";
 import { dirname, resolve, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -181,9 +180,9 @@ unexpected_cfgs = { level = "deny", check-cfg = [${controls.map(control => JSON.
   runCargo(project, ["rustc", "--offline", "--locked", "--", "-D", "warnings"]);
   assert.match(runCargo(project, ["run", "--offline", "--locked", "--quiet"]).stdout, /PASS: producer-owned closure errors/u);
   for (const control of controls) {
-    const rejected = spawnSync("cargo", ["rustc", "--offline", "--locked", "--message-format=json", "--", "--emit=metadata", "--cfg", control], generatedCargoOptions(project, ["rustc"], {
+    const rejected = spawnGeneratedCargo(project, ["rustc", "--offline", "--locked", "--message-format=json", "--", "--emit=metadata", "--cfg", control], {
       cwd: project, encoding: "utf8", timeout: 60_000, maxBuffer: 1_048_576,
-    }));
+    });
     assert.equal(rejected.signal, null, control);
     assert.equal(rejected.status !== 0, true, control);
     const messages = rejected.stdout.split("\n").filter(line => line.startsWith("{")).map(line => JSON.parse(line));

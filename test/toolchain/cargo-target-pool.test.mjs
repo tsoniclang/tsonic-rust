@@ -48,16 +48,29 @@ test("generated Cargo options preserve isolation and extend only each project's 
   const directory = scratch("options");
   const observed = runChild(`
 import assert from "node:assert/strict";
-import { generatedCargoOptions } from ${JSON.stringify(poolModule)};
+import childProcess from "node:child_process";
+import { syncBuiltinESMExports } from "node:module";
+const calls = [];
+const nativeSpawnSync = childProcess.spawnSync;
+childProcess.spawnSync = (command, args, options) => {
+  if (command !== "cargo") return nativeSpawnSync(command, args, options);
+  calls.push(options);
+  return { status: 0, signal: null, stdout: "", stderr: "" };
+};
+syncBuiltinESMExports();
+const pool = await import(${JSON.stringify(poolModule)});
+const { spawnGeneratedCargo } = pool;
+assert.equal("generatedCargoOptions" in pool, false);
 const root = process.argv[1];
 process.env.CARGO_TARGET_DIR = root + "/foreign";
 const original = process.env.CARGO_TARGET_DIR;
-const first = generatedCargoOptions(root + "/not-created", ["generate-lockfile"], { timeout: 1234 });
-const build = generatedCargoOptions(root + "/not-created", ["build"], { timeout: 1234 });
-const again = generatedCargoOptions(root + "/not-created", ["check"], { timeout: 1234 });
-const release = generatedCargoOptions(root + "/not-created", ["test", "--release"]);
-const nextProject = generatedCargoOptions(root + "/other-not-created", ["build"]);
-const isolated = generatedCargoOptions(root, ["build"], { isolated: true, timeout: 1234 });
+spawnGeneratedCargo(root + "/not-created", ["generate-lockfile"], { timeout: 1234 });
+spawnGeneratedCargo(root + "/not-created", ["build"], { timeout: 1234 });
+spawnGeneratedCargo(root + "/not-created", ["check"], { timeout: 1234 });
+spawnGeneratedCargo(root + "/not-created", ["test", "--release"]);
+spawnGeneratedCargo(root + "/other-not-created", ["build"]);
+spawnGeneratedCargo(root, ["build"], { isolated: true, timeout: 1234 });
+const [first, build, again, release, nextProject, isolated] = calls;
 assert.equal(process.env.CARGO_TARGET_DIR, original);
 assert.equal(first.timeout, 1234);
 assert.equal(build.timeout, 900000);
@@ -92,13 +105,21 @@ test("one generated project keeps build/run identity and cleanup preserves share
 import assert from "node:assert/strict";
 import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
-import { runCargo } from ${JSON.stringify(cargoModule)};
-import { finishGeneratedCargoProject, generatedCargoOptions } from ${JSON.stringify(poolModule)};
+import childProcess from "node:child_process";
+import { syncBuiltinESMExports } from "node:module";
+let target;
+const nativeSpawnSync = childProcess.spawnSync;
+childProcess.spawnSync = (command, args, options) => {
+  if (command === "cargo") target = options.env.CARGO_TARGET_DIR;
+  return nativeSpawnSync(command, args, options);
+};
+syncBuiltinESMExports();
+const { runCargo } = await import(${JSON.stringify(cargoModule)});
+const { finishGeneratedCargoProject } = await import(${JSON.stringify(poolModule)});
 const [first, second] = process.argv.slice(1);
 runCargo(first, ["generate-lockfile", "--offline"]);
 runCargo(first, ["build", "--locked", "--offline"]);
 runCargo(first, ["build", "--release", "--locked", "--offline"]);
-const target = generatedCargoOptions(first, []).env.CARGO_TARGET_DIR;
 assert.equal(existsSync(join(target, "debug/pool_generated")), true);
 assert.equal(existsSync(join(target, "release/pool_generated")), true);
 assert.equal(runCargo(first, ["run", "--locked", "--offline", "--quiet"]).stdout, "first:17\\n");
@@ -156,31 +177,29 @@ test("the slot remains kernel locked through Cargo and build-script descendants 
   const native = join(directory, "native");
   const marker = join(directory, "native-pids.json");
   const release = join(directory, "release");
-  const cargoPidFile = join(directory, "cargo.pid");
   project(native, "pool_descendant", "fn main() {}\n");
   writeFileSync(join(native, "build.rs"), `
 fn main() {
     let lock = std::fs::read_link("/proc/self/fd/3").expect("build script inherits the slot lock");
     assert!(lock.file_name().unwrap().to_string_lossy().starts_with("slot-"));
     assert!(lock.to_string_lossy().ends_with(".lock"));
-    let child = std::process::Command::new("bash").arg("-c").arg(${JSON.stringify(`printf '{"build":%s,"child":%s}' "$PPID" "$$" > '${marker}'; while [ ! -f '${release}' ]; do sleep 0.05; done`)}).spawn().unwrap();
+    let stat = std::fs::read_to_string("/proc/self/stat").unwrap();
+    let cargo = stat.rsplit_once(')').unwrap().1.split_whitespace().nth(1).unwrap();
+    let target = std::env::var("CARGO_TARGET_DIR").unwrap();
+    let child = std::process::Command::new("bash").arg("-c").arg(${JSON.stringify(`printf '{"build":%s,"child":%s,"cargo":%s,"target":"%s"}' "$PPID" "$$" "$POOL_CARGO_PID" "$CARGO_TARGET_DIR" > '${marker}'; while [ ! -f '${release}' ]; do sleep 0.05; done`)}).env("POOL_CARGO_PID", cargo).spawn().unwrap();
+    assert!(!target.is_empty());
     let status = child.wait_with_output().unwrap().status;
     assert!(status.success());
 }
 `);
   const script = join(directory, "owner.mjs");
   writeFileSync(script, `
-import { spawn } from "node:child_process";
-import { writeFileSync } from "node:fs";
 import test from "node:test";
-import { generatedCargoOptions } from ${JSON.stringify(poolModule)};
-test("native owner", async () => {
+import { spawnGeneratedCargo } from ${JSON.stringify(poolModule)};
+test("native owner", () => {
   const native = ${JSON.stringify(native)};
-  const options = generatedCargoOptions(native, ["build"], { cwd: native });
-  const cargo = spawn("cargo", ["build", "--offline"], options);
-  writeFileSync(${JSON.stringify(cargoPidFile)}, JSON.stringify({ pid: cargo.pid, target: options.env.CARGO_TARGET_DIR }));
-  cargo.stdout.resume(); cargo.stderr.pipe(process.stderr);
-  await new Promise((resolve, reject) => cargo.on("exit", code => code === 0 ? resolve() : reject(new Error("cargo exited " + code))));
+  const result = spawnGeneratedCargo(native, ["build", "--offline"], { cwd: native, encoding: "utf8" });
+  if (result.status !== 0) throw new Error(result.stderr);
 });
 `);
   const owner = spawn(process.execPath, [script], { env: environment, stdio: ["ignore", "pipe", "pipe"] });
@@ -195,14 +214,13 @@ test("native owner", async () => {
       return existsSync(marker);
     }, "Cargo and its native build-script child become live");
     nativePids = JSON.parse(readFileSync(marker, "utf8"));
-    const cargoOwner = JSON.parse(readFileSync(cargoPidFile, "utf8"));
-    const lock = `${cargoOwner.target}.lock`;
+    const lock = `${nativePids.target}.lock`;
     const attempt = () => spawnSync("flock", ["--nonblock", lock, "true"], { timeout: 10_000 }).status;
     assert.equal(attempt(), 1, "a second process cannot enter a live owner's slot");
     owner.kill("SIGKILL");
     await ownerExit;
     assert.equal(attempt(), 1, "dead Node PID does not release a slot still inherited by Cargo");
-    process.kill(cargoOwner.pid, "SIGKILL");
+    process.kill(nativePids.cargo, "SIGKILL");
     assert.equal(attempt(), 1, "Cargo death does not release its live build-script descendant's lock");
     process.kill(nativePids.build, "SIGKILL");
     assert.equal(attempt(), 1, "the native grandchild still owns the inherited descriptor");
@@ -211,10 +229,102 @@ test("native owner", async () => {
   } finally {
     writeFileSync(release, "done");
     if (owner.exitCode === null && owner.signalCode === null) owner.kill("SIGKILL");
-    if (nativePids !== undefined) {
-      for (const pid of [nativePids.child, nativePids.build, JSON.parse(readFileSync(cargoPidFile, "utf8")).pid]) {
-        try { process.kill(pid, "SIGKILL"); } catch (error) { if (error.code !== "ESRCH") throw error; }
-      }
-    }
+  }
+});
+
+test("a timed-out Cargo owner abandons its locked slot without cleaning or reusing native descendant artifacts", async () => {
+  const directory = scratch("timeout");
+  const native = join(directory, "native");
+  const next = join(directory, "next");
+  const marker = join(directory, "native.json");
+  const report = join(directory, "owner.json");
+  const releaseNative = join(directory, "release-native");
+  const releaseOwner = join(directory, "release-owner");
+  project(native, "pool_timeout", "fn main() {}\n");
+  project(next, "pool_after_timeout", 'fn main() { println!("{}", std::env::var("CARGO_TARGET_DIR").unwrap()); }\n');
+  const script = join(directory, "owner.mjs");
+  writeFileSync(script, `
+import assert from "node:assert/strict";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
+import test from "node:test";
+import { finishGeneratedCargoProject, spawnGeneratedCargo } from ${JSON.stringify(poolModule)};
+test("live timeout owner", async () => {
+  const native = ${JSON.stringify(native)};
+  const options = { cwd: native, encoding: "utf8", timeout: 3000 };
+  assert.equal(spawnGeneratedCargo(native, ["build", "--offline"], options).status, 0);
+  writeFileSync(join(native, "build.rs"), ${JSON.stringify(`
+unsafe extern "C" { fn close(fd: i32) -> i32; }
+fn main() {
+    let target = std::env::var("CARGO_TARGET_DIR").unwrap();
+    assert!(std::fs::read_link("/proc/self/fd/3").unwrap().to_string_lossy().ends_with(".lock"));
+    let mut child = std::process::Command::new("bash")
+        .arg("-c").arg(${JSON.stringify(`while [ ! -f '${releaseNative}' ]; do sleep 0.05; done`)})
+        .stdin(std::process::Stdio::null()).stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null())
+        .spawn().unwrap();
+    std::fs::write(${JSON.stringify(marker)}, &target).unwrap();
+    unsafe { close(1); close(2); }
+    assert!(child.wait().unwrap().success());
+}
+`)});
+  const interrupted = spawnGeneratedCargo(native, ["build", "--offline"], options);
+  assert.equal(interrupted.error?.code, "ETIMEDOUT");
+  assert.equal(interrupted.signal, "SIGTERM");
+  const old = readFileSync(${JSON.stringify(marker)}, "utf8");
+  assert.equal(existsSync(join(old, "debug/pool_timeout")), true);
+  finishGeneratedCargoProject(native);
+  assert.equal(existsSync(join(old, "debug/pool_timeout")), true);
+  const fresh = spawnGeneratedCargo(${JSON.stringify(next)}, ["run", "--offline", "--quiet"],
+    { cwd: ${JSON.stringify(next)}, encoding: "utf8", timeout: 300000 });
+  assert.equal(fresh.status, 0, fresh.stderr);
+  const current = fresh.stdout.trim();
+  assert.notEqual(current, old);
+  finishGeneratedCargoProject(${JSON.stringify(next)});
+  assert.equal(existsSync(join(old, "debug/pool_timeout")), true);
+  writeFileSync(${JSON.stringify(report)}, JSON.stringify({ old, current }));
+  const deadline = Date.now() + 60000;
+  while (!existsSync(${JSON.stringify(releaseOwner)})) {
+    assert.equal(Date.now() < deadline, true, "owner release remains bounded");
+    await delay(20);
+  }
+});
+`);
+  const owner = spawn(process.execPath, [script], {
+    env: { ...environment, TSONIC_CARGO_POOL_SIZE: String(Math.max(2, Number(environment.TSONIC_CARGO_POOL_SIZE))) },
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  let output = "";
+  owner.stdout.on("data", chunk => { output = (output + chunk).slice(-16_384); });
+  owner.stderr.on("data", chunk => { output = (output + chunk).slice(-16_384); });
+  const ownerExit = once(owner, "exit");
+  try {
+    await waitFor(() => {
+      assert.equal(owner.exitCode, null, `the interrupted Cargo's Node owner remains live: ${output}`);
+      return existsSync(report);
+    }, "the live owner times out and completes a later call in a fresh slot");
+    const observed = JSON.parse(readFileSync(report, "utf8"));
+    assert.notEqual(observed.old, observed.current, "the interrupted slot is not reused by the same owner");
+    const attempt = () => spawnSync("flock", ["--nonblock", `${observed.old}.lock`, "true"], { timeout: 10_000 }).status;
+    assert.equal(attempt(), 1, "native descendants retain the old kernel lock after Cargo's timeout");
+    const blocked = spawnSync("flock", ["--nonblock", `${observed.old}.lock`, "cargo", "clean", "--offline",
+      "--target-dir", observed.old, "--package", "pool_timeout"], { cwd: native, encoding: "utf8", timeout: 30_000 });
+    assert.equal(blocked.status, 1, "locked-slot cleanup cannot start");
+    assert.equal(existsSync(join(observed.old, "debug/pool_timeout")), true, "neither owner cleanup nor external cleanup removes the live slot's artifact");
+    writeFileSync(releaseNative, "done");
+    await waitFor(() => attempt() === 0, "native descendants exit and the kernel releases the abandoned slot");
+    assert.equal(existsSync(join(observed.old, "debug/pool_timeout")), true, "abandonment is not deferred deletion");
+    const cleaned = spawnSync("flock", ["--nonblock", `${observed.old}.lock`, "cargo", "clean", "--offline",
+      "--target-dir", observed.old, "--package", "pool_timeout"], { cwd: native, encoding: "utf8", timeout: 30_000 });
+    assert.equal(cleaned.status, 0, cleaned.stderr);
+    assert.equal(existsSync(join(observed.old, "debug/pool_timeout")), false, "post-drain cleanup takes the released kernel lock first");
+    writeFileSync(releaseOwner, "done");
+    const [status, signal] = await ownerExit;
+    assert.equal(status, 0, output);
+    assert.equal(signal, null, "the original Node owner remained alive throughout the timeout witness");
+  } finally {
+    writeFileSync(releaseNative, "done");
+    writeFileSync(releaseOwner, "done");
+    if (owner.exitCode === null && owner.signalCode === null) owner.kill("SIGKILL");
   }
 });

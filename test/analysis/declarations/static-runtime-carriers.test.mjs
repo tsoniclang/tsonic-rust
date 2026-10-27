@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { generatedCargoOptions } from "../../helpers/cargo-target-pool.mjs";
+import { spawnGeneratedCargo } from "../../helpers/cargo-target-pool.mjs";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -224,9 +224,9 @@ test("registered concrete native types and explicit generic outlives inverses co
   runCargo(project, ["test", "--lib", "--locked", "--offline"]);
   for (const [name, , accepted, diagnostic] of probes) {
     const arguments_ = ["check", "--bin", name, "--locked", "--offline"];
-    const result = spawnSync("cargo", arguments_, generatedCargoOptions(project, arguments_, {
+    const result = spawnGeneratedCargo(project, arguments_, {
       cwd: project, encoding: "utf8", timeout: 300_000,
-    }));
+    });
     const log = `${result.stdout ?? ""}${result.stderr ?? ""}`;
     writeFileSync(join(project, `${name}.log`), log);
     assert.equal(result.error === undefined, true, `${name}: native compiler completed`);

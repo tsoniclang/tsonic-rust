@@ -2,8 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { spawnSync } from "node:child_process";
-import { generatedCargoOptions } from "../../helpers/cargo-target-pool.mjs";
+import { spawnGeneratedCargo } from "../../helpers/cargo-target-pool.mjs";
 import { compileRust, artifactText, repositoryRoot, rustRuntimeCratePath } from "../../helpers/rust-session.mjs";
 import { memoryAbiCapability } from "../../helpers/memory-abi.mjs";
 import { nativeMemoryProvider, nativeProviderProofSource, nativeProviderInferredProofSource } from "../../helpers/native-memory-provider.mjs";
@@ -53,10 +52,10 @@ function verifyProviderSource(sourceText, records = false) {
     ["clippy", "--all-targets", "--locked", "--offline", "--", "-D", "warnings"],
     ["test", "--locked", "--offline"], ["run", "--locked", "--offline"],
   ]) {
-    const native = spawnSync("cargo", args, generatedCargoOptions(output, args, {
+    const native = spawnGeneratedCargo(output, args, {
       cwd: output, encoding: "utf8", timeout: 240_000, maxBuffer: 4_194_304,
       env: { ...process.env, CARGO_BUILD_JOBS: "2" },
-    }));
+    });
     assert.equal(native.status, 0, `${args.join(" ")}\n${native.error ?? ""}\n${native.stdout}\n${native.stderr}`);
   }
 }

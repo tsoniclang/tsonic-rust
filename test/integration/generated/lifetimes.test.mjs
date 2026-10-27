@@ -1,7 +1,7 @@
 import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import { nativeFunction, nativeSource, nativeNodes, nativeCalls, nativeType, nativeBorrow } from "../../helpers/native-ast.mjs";
-import { spawnSync } from "node:child_process";
+import { spawnGeneratedCargo } from "../../helpers/cargo-target-pool.mjs";
 import { test } from "node:test";
 
 
@@ -452,7 +452,7 @@ export function invalid<L extends Life>(value: Ref<int32, L>): Ref<int32, L> {
   assert.match(source, /&local/u);
 
   const projectRoot = writeGeneratedProject("invalid-native-lifetime-proof", result.artifacts);
-  const cargo = spawnSync("cargo", ["check", "--all-targets", "--offline"], {
+  const cargo = spawnGeneratedCargo(projectRoot, ["check", "--all-targets", "--offline"], {
     cwd: projectRoot,
     encoding: "utf8",
     env: { ...process.env, CARGO_TERM_COLOR: "never" },
