@@ -39,9 +39,12 @@ function fixture(options = {}) {
     ast: selected.source.ast, source: { ...selected.source, sourceFacts: { getFact: get } }, currentSemantics: selected.semantics,
     sourceStorage: { storageSubjectFor: () => ({ kind: "unresolved" }) },
     semantics: file => selected.source.semantics.forFile(file), semanticsFor: () => selected.semantics,
-    records: createRustRecordFixture({ runtimeCarrier: { get: node => node === selected.evidence.owner ? {
-      carrier: options.referenceOwner ? { kind: "reference", mutable: options.mutableOwner === true, referent: ownerCarrier } : ownerCarrier,
-    } : undefined } }),
+    records: createRustRecordFixture({ runtimeCarrier: { get: node => {
+      if (options.forbidOwnerResolution) assert.fail("non-provider indexed evidence cannot materialize a native owner");
+      return node === selected.evidence.owner ? {
+        carrier: options.referenceOwner ? { kind: "reference", mutable: options.mutableOwner === true, referent: ownerCarrier } : ownerCarrier,
+      } : undefined;
+    } } }),
   };
   const resolutionOptions = {
     providerTypes: [{ ...owner, targetCarrier: options.wrongOwner ? rustNamedTargetType("native.other", "native::Other") : generic, genericParameters: parameters }],
@@ -102,6 +105,11 @@ test("provider indexed type policy closes native generics and optional propertie
   assert.deepEqual(fixture({ referenceOwner: true, mutableOwner: true }), integer);
   assert.deepEqual(fixture({ referenceOwner: true, keys: "string", nativeOptional: true }), rustOptionTargetType(integer));
   assert.equal(fixture({ unowned: true }), undefined);
+});
+
+test("ordinary indexed types decline provider selection before any owner materialization", () => {
+  assert.equal(fixture({ unowned: true, forbidOwnerResolution: true }), undefined,
+    "a source indexed type has no provider decision or speculative structural owner");
 });
 
 test("provider indexed type policy rejects incomplete, ambiguous and mismatched evidence", () => {

@@ -20,8 +20,8 @@ export function resolveRustProviderIndexedAccess(
 ): TargetTypeRef | undefined {
   const evidence = sourceIndexedTypeEvidence(context.ast, context.currentSemantics, node);
   if (evidence === undefined) return undefined;
-  const owner = resolveRustTargetTypeRef(evidence.owner, context, options);
-  return projectRustProviderIndexedMembers(owner, evidence.members, context, options);
+  return projectRustProviderIndexedMembers(() => resolveRustTargetTypeRef(evidence.owner, context, options),
+    evidence.members, context, options);
 }
 
 export function projectRustProviderIndexedStorageCarrier(
@@ -34,11 +34,11 @@ export function projectRustProviderIndexedStorageCarrier(
   const subjects = [...new Set([index.declaration, ...index.components,
     ...context.currentSemantics.facts.selectedSubjects(index.symbol, index.declaration)]
     .filter((subject): subject is ExtensionFactSubject => subject !== undefined))];
-  return projectRustProviderIndexedMembers(owner, [{ selection: { kind: "index", index }, subjects }], context, options);
+  return projectRustProviderIndexedMembers(() => owner, [{ selection: { kind: "index", index }, subjects }], context, options);
 }
 
 function projectRustProviderIndexedMembers(
-  resolvedOwner: TargetTypeRef | undefined,
+  resolveOwner: () => TargetTypeRef | undefined,
   members: readonly { readonly selection: RustIndexedCarrierSelection; readonly subjects: readonly ExtensionFactSubject[] }[],
   context: RustTargetTypeResolutionContext,
   options: RustTargetTypeResolutionOptions,
@@ -47,6 +47,7 @@ function projectRustProviderIndexedMembers(
     context.source.sourceFacts.getFact(subject, providerVirtualDeclarationFactKey) !== undefined))) return undefined;
   const identities = members.map(member => resolveProviderTypeIdentity(member.subjects, context));
   const rejected: TargetTypeRef = { kind: "opaque", id: "provider-indexed-type-evidence-unavailable" };
+  const resolvedOwner = resolveOwner();
   const owner = resolvedOwner?.kind === "reference" ? resolvedOwner.referent : resolvedOwner;
   const named = rustNamedTypeCarrierValue(owner);
   if (owner === undefined || named === undefined) return rejected;
