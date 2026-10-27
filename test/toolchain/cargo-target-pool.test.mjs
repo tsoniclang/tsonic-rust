@@ -120,15 +120,31 @@ console.log("POOL_RESULT=" + JSON.stringify({ dependencies: dependencies.length,
 test("a native failure retains its original diagnostics when generated-package cleanup also fails", () => {
   const observed = runChild(`
 import assert from "node:assert/strict";
-import { validateGeneratedProject } from ${JSON.stringify(cargoModule)};
+import childProcess from "node:child_process";
+import { writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { syncBuiltinESMExports } from "node:module";
+const nativeSpawnSync = childProcess.spawnSync;
+childProcess.spawnSync = (command, args, options) => {
+  const result = nativeSpawnSync(command, args, options);
+  if (command === "cargo" && args[0] === "clippy" && result.status !== 0) {
+    writeFileSync(join(options.cwd, "Cargo.toml"), "[invalid manifest");
+  }
+  return result;
+};
+syncBuiltinESMExports();
+const { validateGeneratedProject } = await import(${JSON.stringify(cargoModule)});
 let failure;
 try {
-  validateGeneratedProject("invalid-pool-manifest", [{ path: "Cargo.toml", text: "[invalid manifest" }]);
+  validateGeneratedProject("invalid-pool-manifest", [
+    { path: "Cargo.toml", text: '[package]\\nname="pool_compile_error"\\nversion="0.0.0"\\nedition="2024"\\n' },
+    { path: "src/lib.rs", text: 'pub fn invalid() -> u32 {\\n    true\\n}\\n' },
+  ]);
 } catch (error) { failure = error; }
 assert.equal(failure instanceof AggregateError, true);
 assert.equal(failure.errors.length, 2);
-assert.match(failure.errors[0].message, /cargo generate-lockfile --offline failed/);
-assert.match(failure.message, /cargo generate-lockfile --offline failed/);
+assert.match(failure.errors[0].message, /cargo clippy --all-targets --locked --offline -- -D warnings failed/);
+assert.match(failure.message, /E0308/);
 assert.match(failure.message, /Generated Cargo package metadata failed/);
 console.log("POOL_RESULT=" + JSON.stringify({ retained: true }));
 `);
