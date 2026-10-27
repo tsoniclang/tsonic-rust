@@ -1,6 +1,7 @@
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
+import { rustGeneratorSourceInvocationKind } from "../../policy/operations/source-profiles/generator-source-profile.js";
 import {
   Node_Expression, Node_Operand, BinaryExpression_Left, BinaryExpression_Right,
   sourceControlTransferTarget, sourceEnclosingCallable, sourceTransparentExpressionOperand,
@@ -507,7 +508,15 @@ export function analyzeRustStatementCompletions(input: RustStatementCompletionIn
       const issue = admitRustProjectFieldDispatch({ ast, region: frame(node).region, dispatch: input.projectFieldDispatch, records }, node, operation);
       if (issue !== undefined) diagnostics.push(issue);
     }
-    if ((operation?.kind === "provider-operation" || operation?.kind === "runtime-set") && operation.abi.effects.invocation === "fallible" && !frame(node).fallible)
+    const generatorEdges = operation?.kind === "provider-operation" &&
+      rustGeneratorSourceInvocationKind(operation.operationId) === "sync"
+      ? records.sourceErrorEffects.get(node)?.edges : undefined;
+    const generatorEdge = generatorEdges?.length === 1 ? generatorEdges[0] : undefined;
+    const infallibleGeneratorResult = generatorEdge !== undefined &&
+      records.generator.get(generatorEdge.declaration) !== undefined &&
+      input.errorRegions.sourceFor(generatorEdge)?.operand.kind === "infallible";
+    if ((operation?.kind === "provider-operation" || operation?.kind === "runtime-set") &&
+      operation.abi.effects.invocation === "fallible" && !infallibleGeneratorResult && !frame(node).fallible)
       diagnostics.push({ code: "RUST_UNSUPPORTED_AST", category: "error", source: "tsonic-rust", sourceNode: node,
         message: `Fallible operations require a finalized fallible lowering context. Node kind: ${ast.kindName(node)}.`,
         evidence: ["target.capability=rust.error.call"] });

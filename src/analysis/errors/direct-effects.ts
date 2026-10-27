@@ -74,10 +74,9 @@ export function createRustDirectErrorEffects(
       }
       if (carrierWork !== 0) {
         const selectedSignature = walk.context.records.selectedCall.get(invocation);
-        const selectedOperation = walk.context.records.targetOperation.get(invocation);
         budget.metadata(selectedSignature?.member.genericParameters);
         let replacementWork = 1;
-        for (const argument of selectedOperation?.kind === "source-call" ? selectedOperation.targetGenericArguments ?? [] : []) {
+        for (const argument of selectedSignature?.targetGenericArguments ?? []) {
           replacementWork = Math.max(replacementWork, budget.metadata(argument));
         }
         budget.expansion(carrierWork, replacementWork);
