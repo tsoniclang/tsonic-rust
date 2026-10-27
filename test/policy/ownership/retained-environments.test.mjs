@@ -232,6 +232,31 @@ export function make<Value>(value: Value, unused: Value) { return wrap(value); }
   }
 });
 
+for (const [name, body] of [
+  ["nested factory", "return { nested: wrap(value) };"],
+  ["copied factory", "const original = wrap(value); return { label: 'copy', ...original };"],
+  ["two activations", "return { first: wrap(value), second: wrap(other) };"],
+]) {
+  test(`returned ${name} keeps every producer's actual captured input`, () => {
+    const { source, queries, declarations } = fixture(`
+function wrap<Value>(captured: Value) { return { read(): Value { return captured; } }; }
+export function make<Value>(value: Value, other: Value, unused: Value) { ${body} }
+`);
+    const owner = declarations.get("make");
+    const parameters = source.ast.parameters(owner);
+    const selection = queries.environmentFor(owner);
+    const expected = name === "two activations" ? parameters.slice(0, 2) : parameters.slice(0, 1);
+    assert.equal(selection.kind, "selected", `${name}: the original returned captures retain their environment`);
+    assert.equal(selection.environment.inputs.length, expected.length, `${name}: exact actual input count`);
+    for (const [index, parameter] of expected.entries())
+      assert.equal(selection.environment.inputs[index].declaration === parameter, true,
+        `${name}: captured input ${index} is rebound through its own factory activation`);
+    assert.equal(selection.environment.inputs.some(input => input.declaration === parameters[2]), false,
+      `${name}: an unrelated formal never acquires a borrowed lifetime`);
+    assert.equal(selection.environment.lifetime.kind, "parameter", `${name}: no static lifetime is fabricated`);
+  });
+}
+
 test("returned source method traversal stays bounded and never invokes an accessor", () => {
   const source = `export function make<Value>(value: Value) { return { read(): Value { return value; } }; }`;
   const bounded = fixture(source, { maximumSteps: 2 });

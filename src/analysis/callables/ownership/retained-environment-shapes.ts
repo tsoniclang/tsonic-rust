@@ -207,19 +207,19 @@ export function createRustRetainedEnvironmentQueries(
           if (visits.has(bindings)) continue;
           visits.add(bindings);
           visited.set(subject, visits);
-          const origins = storage.boundOriginsFor(subject, bindings);
+          const origins = storage.boundValueFrontierFor(subject, bindings, []);
           if (origins.kind !== "resolved") return false;
-          for (const origin of origins.subjects) {
+          for (const { subject: origin, bindings: originBindings } of origins.frontier) {
             if (!step()) return false;
             if (origin.kind === "input") {
               if (candidates.has(origin.node)) retained.add(origin.node);
               continue;
             }
-            const suspendedInputs = suspendedCallInputs(origin, bindings);
+            const suspendedInputs = suspendedCallInputs(origin, originBindings);
             if (suspendedInputs.kind === "unresolved") return false;
             if (suspendedInputs.kind === "inputs") { pending.push(...suspendedInputs.inputs); continue; }
             if (origin.kind !== "value" || origin.projection.length !== 0 || ast.body(origin.node) === undefined) {
-              if (!components(origin, bindings)) return false;
+              if (!components(origin, originBindings)) return false;
               continue;
             }
             const captures = lexicalFor(origin.node);
@@ -228,7 +228,7 @@ export function createRustRetainedEnvironmentQueries(
               if (!step()) return false;
               const source = storage.subjectFor(capture.references[0]!);
               if (source.kind !== "resolved") return false;
-              pending.push({ subject: source.subject, bindings });
+              pending.push({ subject: source.subject, bindings: originBindings });
             }
           }
         }

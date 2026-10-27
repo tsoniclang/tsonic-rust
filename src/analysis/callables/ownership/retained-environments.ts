@@ -243,15 +243,12 @@ export function rustRetainedCallLifetimes(
     const parameter = retained.declaration;
     const subject = storage.subject(parameter, "input");
     if (subject.kind !== "resolved") return undefined;
-    const sources = storage.boundOriginsFor(subject.subject, activation.bindings);
-    if (sources.kind !== "resolved" || sources.subjects.length === 0) return undefined;
-    const producers = storage.storageProducersFor(subject.subject, activation.bindings);
-    if (producers.kind === "unresolved") return undefined;
-    const producerBindings = new Map(producers.producers.map(producer => [producer.subject, producer.bindings] as const));
-    for (const source of sources.subjects) {
+    const sources = storage.boundValueFrontierFor(subject.subject, activation.bindings, []);
+    if (sources.kind !== "resolved" || sources.frontier.length === 0) return undefined;
+    for (const { subject: source, bindings: sourceBindings } of sources.frontier) {
       const node = source.node;
-      const unsubstituted = carrierFor(source, producerBindings.get(source));
-      const carrier = unsubstituted === undefined ? undefined : throughCalls(source, producerBindings.get(source), unsubstituted);
+      const unsubstituted = carrierFor(source, sourceBindings);
+      const carrier = unsubstituted === undefined ? undefined : throughCalls(source, sourceBindings, unsubstituted);
       if (carrier === undefined) return undefined;
       const lifetime = rustCallableProtocol(carrier)?.lifetime;
       if (lifetime !== undefined && lifetime.kind !== "placeholder") {
