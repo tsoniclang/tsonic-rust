@@ -31,6 +31,7 @@ import type { RustTargetGenericBindings } from "../../target-model/types/carrier
 import type { RustNativeStoragePlan } from "../callables/storage/native-storage.js";
 import type { RustNativeCallableInputPlan } from "../callables/native/native-inputs.js";
 import type { RustNativeCallableProducerPlan } from "../../target-model/records/native/native-producers.js";
+import { rustCallablePhysicalCarrier } from "../../policy/conversions/callable-physical.js";
 
 type RustSourceErrorContext = {
   readonly ast: AstReader;
@@ -96,12 +97,17 @@ export function createRustSourceErrorEffectSelection(walk: { readonly context: R
     throw new Error("JS object rejection requires its one canonical identity and carrier.");
   // A closure cannot be generic: a callable parameter of a closure is not a native input and supplies its
   // type-erased runtime callable carrier.
-  const erasedClosureParameter = (subject: SourceStorageSubject): TargetTypeRef | undefined => {
+  const erasedClosureParameter = (subject: SourceStorageSubject): {
+    readonly logical: TargetTypeRef;
+    readonly physical: TargetTypeRef | undefined;
+  } | undefined => {
     const owner = subject.kind === "input" && subject.projection.length === 0 ? walk.context.ast.parent(subject.node) : undefined;
     if (owner === undefined || !walk.context.ast.is.IsArrowFunction(owner) && !walk.context.ast.is.IsFunctionExpression(owner)) return undefined;
     const carrier = walk.context.records.sourceParameterAbi.get(subject.node)?.valueCarrier;
     const selected = rustOptionElementCarrier(carrier) ?? carrier;
-    return selected?.kind === "target-named" && selected.id === rustCallableTargetId ? selected : undefined;
+    if (selected?.kind !== "target-named" || selected.id !== rustCallableTargetId) return undefined;
+    const physical = rustCallablePhysicalCarrier(selected);
+    return { logical: selected, physical };
   };
   const bindingsFor: RustSourceErrorEffectSelection["bindingsFor"] = (node, declaration, carriers, activation) => {
     const signature = walk.context.records.selectedCall.get(node);
@@ -200,16 +206,17 @@ export function createRustSourceErrorEffectSelection(walk: { readonly context: R
         : walk.context.sourceStorage.boundOriginsFor(input.subject, storageBindings);
       if (selected.kind !== "resolved") return undefined;
       let actual: TargetTypeRef | undefined;
-      let erasedActual = false;
+      let erasedActual: TargetTypeRef | undefined;
       let producer: RustNativeCallableProducer | undefined;
       for (const subject of selected.subjects) {
         const parameter = native.inputs.find(candidate => candidate.subject === subject);
         const erased = parameter === undefined ? erasedClosureParameter(subject) : undefined;
         if (erased !== undefined) {
-          if (producer !== undefined || actual !== undefined && !rustTargetTypeRefEquals(actual, erased)) return undefined;
-          actual = erased;
-          erasedActual = true;
-          if (storageBindings !== undefined && !bindSignature(input.carrier, erased)) return undefined;
+          if (erased.physical === undefined) return undefined;
+          if (producer !== undefined || actual !== undefined && !rustTargetTypeRefEquals(actual, erased.physical)) return undefined;
+          actual = erased.physical;
+          erasedActual = erased.logical;
+          if (storageBindings !== undefined && !bindSignature(input.carrier, erased.logical)) return undefined;
         } else if (parameter !== undefined) {
           if (producer !== undefined || actual !== undefined && !rustTargetTypeRefEquals(actual, parameter.implementation)) return undefined;
           actual = parameter.implementation;
@@ -231,7 +238,7 @@ export function createRustSourceErrorEffectSelection(walk: { readonly context: R
       }
       if (actual !== undefined) {
         types.set(identity, actual);
-        if (erasedActual) erasedInputs.set(identity, actual);
+        if (erasedActual !== undefined) erasedInputs.set(identity, erasedActual);
       }
       else if (producer !== undefined) {
         const carrier = substituteRustTargetGenerics(input.carrier, types, lifetimes, consts);
@@ -258,7 +265,12 @@ export function createRustSourceErrorEffectSelection(walk: { readonly context: R
         const parameter = position < 0 ? undefined : formal.parameters[position];
         if (parameter === undefined) continue;
         const carrier = substituteRustTargetGenerics(parameter, types, lifetimes, consts);
-        types.set(own.implementation.identity, rustOptionElementCarrier(carrier) ?? carrier);
+        const selected = rustOptionElementCarrier(carrier) ?? carrier;
+        if (selected.kind === "target-named" && selected.id === rustCallableTargetId) {
+          const physical = rustCallablePhysicalCarrier(selected);
+          if (physical === undefined) return undefined;
+          types.set(own.implementation.identity, physical);
+        } else types.set(own.implementation.identity, selected);
       }
     }
     const substitute = (carrier: TargetTypeRef, selectedTypes: ReadonlyMap<string, TargetTypeRef>): TargetTypeRef | undefined => {

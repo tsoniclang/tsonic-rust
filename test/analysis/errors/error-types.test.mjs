@@ -16,6 +16,10 @@ import { rustNativeCallableErrorType } from "../../../dist/policy/types/callable
 import { rustStaticLifetime } from "../../../dist/target-model/lifetimes/index.js";
 import { analyzeRust } from "../../helpers/rust-session.mjs";
 import { Node_Expression } from "@tsonic/target-api/source";
+import { createRustSourceErrorEffectSelection } from "../../../dist/analysis/errors/source-error-effects.js";
+import { rustCallableProtocol } from "../../../dist/target-model/types/carriers/callables.js";
+import { rustCallablePhysicalCarrier } from "../../../dist/policy/conversions/callable-physical.js";
+import { rustCallablePhysicalSignature } from "../../../dist/target-model/conversions/callable-physical.js";
 
 
 function fixture(text = `
@@ -117,6 +121,54 @@ test("returned native callback calls publish the bound observer and resolver err
   program.sourceFiles.forEach(visit);
   assert.equal(found.size, 2, "both independent actual creation channels are checked before publication");
 });
+
+for (const surfaces of [[], ["js"]]) {
+  test(`higher-order error bindings use physical implementations without changing logical slots (${surfaces[0] ?? "native"})`, () => {
+    const context = analyzeRustErrorEffects(`
+      function invoke(callback: () => number): number { return callback(); }
+      function apply(operation: (callback: () => number) => number, callback: () => number): number {
+        return operation(callback);
+      }
+      export function run(): number { return apply(invoke, () => 7); }
+    `, { surfaces });
+    const nodes = [];
+    const visit = node => {
+      nodes.push(node);
+      context.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+    };
+    context.sourceFiles.forEach(visit);
+    const declaration = name => nodes.find(node => context.ast.is.IsFunctionDeclaration(node) &&
+      context.ast.text(context.ast.name(node)) === name);
+    const invoke = declaration("invoke");
+    const apply = declaration("apply");
+    assert.equal(invoke !== undefined && apply !== undefined, true, "both original declarations are selected");
+    const inputs = context.callableValues.native.inputsFor(apply);
+    const operation = inputs.find(input => context.ast.text(context.ast.name(input.subject.node)) === "operation");
+    const invokedInput = context.callableValues.native.inputsFor(invoke)[0];
+    assert.equal(operation !== undefined && invokedInput !== undefined, true, "both original implementation binders exist");
+    const logical = rustCallableProtocol(operation.carrier)?.parameters[0];
+    const physical = logical === undefined ? undefined : rustCallablePhysicalCarrier(logical);
+    assert.equal(logical?.kind === "target-named" && logical.genericArguments.length === 4, true,
+      "the receiving slot retains its logical four-argument callable contract");
+    assert.equal(physical !== undefined && rustCallablePhysicalSignature(physical) !== undefined, true,
+      "the canonical physical implementation has its exact Result invocation signature");
+    const call = nodes.find(node => context.ast.is.IsCallExpression(node) &&
+      context.ast.text(Node_Expression(context.ast, node)) === "apply");
+    assert.equal(call !== undefined, true, "the source apply invocation is selected");
+    const effects = context.records.errorEffects.get(apply);
+    assert.equal(effects !== undefined, true, "the actual callee publishes its source error effects");
+    const selection = createRustSourceErrorEffectSelection({ context });
+    assert.equal(selection.register(effects.nativeErrors), true, "the original callee error channels are registered");
+    const bindings = selection.bindingsFor(call, apply, effects.nativeErrors.map(error => error.errorType));
+    assert.equal(bindings !== undefined, true, "the actual source invocation binds its native inputs");
+    assert.equal(bindings.types.has(invokedInput.implementation.identity), true,
+      "the supplied producer's own callback implementation is selected");
+    assert.equal(rustTargetTypeRefEquals(bindings.types.get(invokedInput.implementation.identity), physical), true,
+      "the implementation binder receives the physical carrier rather than the logical slot contract");
+    assert.equal(rustTargetTypeRefEquals(bindings.types.get(invokedInput.implementation.identity), logical), false,
+      "the original logical ABI is never substituted as a physical implementation");
+  });
+}
 
 test("native declaration error demand removes only template-proven impossible channels and retains Result ABI", () => {
   const current = fixture(nativeCallbackParametersSource, { surfaces: [] });
