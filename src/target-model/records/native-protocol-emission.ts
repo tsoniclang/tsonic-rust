@@ -1,7 +1,7 @@
 import type { RustNativeCallableProtocol, RustNativeCallableCall } from "./native-protocols.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustNativeCallableCompletion } from "../types/callable-completions.js";
-import type { TargetTypeRef } from "../types/model.js";
+import type { TargetTypeRef, RustTargetGenericArgument } from "../types/model.js";
 import type { RustGenericCallablePhysicalDefinition } from "./generic-callables.js";
 
 export interface RustNativeGenericProducerBridge {
@@ -17,7 +17,7 @@ export interface RustNativeProducerBridge {
   readonly implementation: RustProducerTypeParameter;
   readonly invocationError: RustProducerTypeParameter;
   readonly arguments: RustProducerTypeParameter;
-  readonly genericTypes: readonly RustProducerTypeParameter[];
+  readonly genericArguments: readonly RustTargetGenericArgument[];
   readonly boundTypes: readonly RustProducerTypeParameter[];
   readonly errors: readonly { readonly ordinal: number; readonly parameter: RustProducerTypeParameter }[];
   readonly futureBounds: readonly { readonly parameter: RustProducerTypeParameter; readonly output: TargetTypeRef; readonly error: RustProducerTypeParameter }[];

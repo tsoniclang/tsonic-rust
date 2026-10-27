@@ -1,4 +1,4 @@
-import type { TargetTypeRef, RustTargetTraitRef } from "../types/model.js";
+import type { TargetTypeRef, RustTargetTraitRef, RustTargetGenericArgument } from "../types/model.js";
 import type { RustCallableSignature } from "../types/carriers/callable-signatures.js";
 import type { RustNativeCallableCompletion } from "../types/callable-completions.js";
 import type { RustLifetimeBinder, RustLifetimeRef } from "../lifetimes/index.js";
@@ -36,6 +36,7 @@ export interface RustNativeCallableProtocol {
   readonly targetName: string;
   readonly boundProducerName?: string;
   readonly signature: RustCallableSignature;
+  readonly environmentParameters: readonly RustTargetGenericArgument[];
   readonly method: {
     readonly parameters: readonly TargetTypeRef[];
     readonly result: TargetTypeRef;
@@ -51,6 +52,6 @@ export interface RustNativeCallableProtocol {
 
 export interface RustNativeCallableProtocolBinding {
   readonly protocol: RustNativeCallableProtocol;
-  readonly environment: readonly TargetTypeRef[];
+  readonly environment: readonly RustTargetGenericArgument[];
   readonly trait: RustTargetTraitRef;
 }

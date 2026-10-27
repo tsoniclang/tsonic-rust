@@ -68,7 +68,7 @@ export function analyzeRustTypeEmission(program: Omit<RustAnalysisProgram, "reac
     pending.push(...emission.genericProducers.map(producer => producer.returnCarrier));
     const bridge = emission.producer;
     if (bridge !== undefined) pending.push(bridge.implementation, bridge.invocationError, bridge.arguments,
-      ...bridge.genericTypes, ...bridge.boundTypes, ...bridge.errors.map(error => error.parameter),
+      ...typeArguments(bridge.genericArguments), ...bridge.boundTypes, ...bridge.errors.map(error => error.parameter),
       ...bridge.futureBounds.flatMap(bound => [bound.parameter, bound.output, bound.error]),
       bridge.concreteResult, bridge.implementationResult,
       ...bridge.higherRanked === undefined ? [] : [bridge.higherRanked.helperResult, bridge.higherRanked.publicResult, ...bridge.higherRanked.outputs]);
@@ -116,7 +116,7 @@ export function analyzeRustTypeEmission(program: Omit<RustAnalysisProgram, "reac
       pending.push(...typeArguments(emission.entry.arguments),
         ...[...environment.captures, ...environment.receiverFields, ...environment.receivers].map(capture =>
           substituteRustTargetGenerics(capture.storageCarrier, bindings.types, bindings.lifetimes, bindings.consts)),
-        ...environment.inputs.flatMap(input => [input.carrier, input.implementation, input.trait, ...input.environment]).map(carrier =>
+        ...environment.inputs.flatMap(input => [input.carrier, input.implementation, input.trait, ...typeArguments(input.environment)]).map(carrier =>
           substituteRustTargetGenerics(carrier, bindings.types, bindings.lifetimes, bindings.consts)));
     }
   }

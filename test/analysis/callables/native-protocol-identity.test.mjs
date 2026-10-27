@@ -25,12 +25,15 @@ test("cross-file protocol definitions normalize types while each input retains i
   assert.equal(left.implementation.identity === right.implementation.identity, false);
   assert.equal(left.environment.length, 1);
   assert.equal(right.environment.length, 1);
-  assert.equal(rustTargetTypeRefEquals(left.environment[0], right.environment[0]), false);
+  assert.equal(left.environment[0].kind === "type" && right.environment[0].kind === "type", true,
+    "both actual native environments retain their required type argument kind");
+  assert.equal(rustTargetTypeRefEquals(left.environment[0].type, right.environment[0].type), false);
   assert.equal(rustTargetTypeRefEquals(left.trait, right.trait), false);
   for (const selected of [left, right]) {
     const error = rustNativeCallableErrorType(selected, selected.implementation, "invocation", []);
     assert.equal(error.owner === selected.implementation, true);
-    assert.equal(rustTargetTypeRefEquals(error.trait.genericArguments[0].type, selected.environment[0]), true);
+    assert.equal(selected.environment[0].kind === "type" &&
+      rustTargetTypeRefEquals(error.trait.genericArguments[0].type, selected.environment[0].type), true);
   }
   assert.equal(native.protocolForSourceItem(left.protocol.ownerFileName, left.protocol.targetName) === left.protocol, true);
   assert.equal(native.protocolForSourceItem("/foreign.ts", left.protocol.targetName) === undefined, true);

@@ -21,6 +21,7 @@ import { rustGenericCallableValue } from "../../../target-model/types/carriers/g
 import { rustCallableProtocol } from "../../../target-model/types/carriers/callables.js";
 import { rustOptionElementCarrier } from "../../../target-model/types/carriers/optional.js";
 import { bindRustCallableInputLifetimes } from "../../../target-model/types/carriers/callable-input-lifetimes.js";
+import { rustGenericCallablePhysicalBindings } from "./generic-bindings.js";
 
 export function selectRustNativeCallableOutlivesBounds(method: Pick<RustNativeCallableProtocol["method"], "parameters" | "binder">): readonly RustNativeCallableOutlivesBound[] {
   const lifetimes = new Set(method.binder.parameters.map(parameter => rustLifetimeKey(parameter.lifetime)));
@@ -48,7 +49,7 @@ export function rustNativeCallableErrorType(
 ): TargetTypeRef | undefined {
   const protocol = binding.protocol;
   if (binding.trait.id !== protocol.identity ||
-    binding.trait.genericArguments.length !== protocol.signature.environmentParameters.length) return undefined;
+    rustGenericCallablePhysicalBindings(protocol.environmentParameters, binding.trait.genericArguments) === undefined) return undefined;
   if (channel !== "invocation" && (!Number.isInteger(channel) || channel < 0 ||
     protocol.completion?.futures[channel]?.ordinal !== channel)) return undefined;
   const lifetimeCount = protocol.method.binder.parameters.length;
@@ -61,7 +62,7 @@ export function rustNativeCallableErrorType(
     name: channel === "invocation" ? "InvocationError" : `AwaitError${channel}`, genericArguments: arguments_ });
 }
 
-type RustNativeCallableProtocolResultInput = Pick<RustNativeCallableProtocol, "identity" | "signature" | "method" | "completion">;
+type RustNativeCallableProtocolResultInput = Pick<RustNativeCallableProtocol, "identity" | "signature" | "method" | "completion" | "environmentParameters">;
 
 function nativeCallableMethodArguments(protocol: RustNativeCallableProtocolResultInput): readonly RustTargetGenericArgument[] {
   return Object.freeze([...protocol.method.binder.parameters.map(parameter => ({ kind: "lifetime" as const,
@@ -105,8 +106,9 @@ export function selectRustNativeCallableProtocolResult(
   const self: TargetTypeRef = { kind: "type-parameter", identity: `${protocol.identity}:Self`, name: "Self" };
   const arguments_ = nativeCallableMethodArguments(protocol);
   const captures = [...arguments_.filter(argument => argument.kind === "lifetime"),
-    ...rustTypeGenericArguments([self, ...protocol.signature.environmentParameters,
-      ...protocol.signature.typeParameters])];
+    ...protocol.environmentParameters.filter(argument => argument.kind === "lifetime"),
+    ...rustTypeGenericArguments([self]), ...protocol.environmentParameters.filter(argument => argument.kind !== "lifetime"),
+    ...rustTypeGenericArguments(protocol.signature.typeParameters)];
   const error = (name: string): TargetTypeRef => ({ kind: "associated-type", owner: self, name, genericArguments: arguments_ });
   const completion = protocol.completion === undefined ? protocol.method.result :
     instantiateRustNativeCompletion(protocol.completion, future =>
@@ -131,6 +133,8 @@ export function selectRustNativeCallableProtocolSignature(source: TargetTypeRef,
       const method = Object.freeze({ ...selectedMethod, outlives: selectRustNativeCallableOutlivesBounds(selectedMethod) });
       const completion = rustNativeCallableCompletion(method.result, definitions);
 
-  return Object.freeze({ signature: binding.signature, environment: binding.environment, method,
+  return Object.freeze({ signature: binding.signature,
+    environmentParameters: Object.freeze(rustTypeGenericArguments(binding.signature.environmentParameters)),
+    environment: Object.freeze(rustTypeGenericArguments(binding.environment)), method,
     identityMethod: selectedMethod, ...(completion === undefined ? {} : { completion }) });
 }

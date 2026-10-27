@@ -19,7 +19,8 @@ export function analyzeRustNativeProducerBridge(protocol: RustNativeCallableProt
   if (signature.typeParameters.length !== 0) return undefined;
   const bound = protocol.method.binder.parameters.length !== 0;
   if (bound && protocol.boundProducerName === undefined) failTargetAnalysisInvariant("tsonic-rust", "An admitted higher-ranked protocol requires its exact bound producer name.");
-  const names = new Set(signature.environmentParameters.map(parameter => parameter.name));
+  const names = new Set(protocol.environmentParameters.flatMap(argument =>
+    argument.kind === "type" && argument.type.kind === "type-parameter" ? [argument.type.name] : []));
   const parameter = (preferred: string): Extract<TargetTypeRef, { readonly kind: "type-parameter" }> => Object.freeze({
     kind: "type-parameter", identity: `${protocol.identity}:producer:${preferred}`, name: allocateRustGeneratedName(names, preferred),
   });
@@ -38,7 +39,12 @@ export function analyzeRustNativeProducerBridge(protocol: RustNativeCallableProt
     if (!outputs.has(identity)) outputs.set(identity, Object.freeze({ source, parameter: parameter(`Output${outputs.size}`) }));
   }
   const boundTypes = Object.freeze([argumentsParameter, ...[...outputs.values()].map(output => output.parameter)]);
-  const genericTypes = Object.freeze([implementation, ...(bound ? boundTypes : signature.environmentParameters), invocationError, ...errors.values(), ...pending.values()]);
+  const genericArguments: readonly RustTargetGenericArgument[] = Object.freeze([
+    ...bound ? [] : protocol.environmentParameters.filter(argument => argument.kind === "lifetime"),
+    ...rustTypeGenericArguments([implementation]),
+    ...bound ? rustTypeGenericArguments(boundTypes) : protocol.environmentParameters.filter(argument => argument.kind !== "lifetime"),
+    ...rustTypeGenericArguments([invocationError, ...errors.values(), ...pending.values()]),
+  ]);
   const bindOutputs = (carrier: TargetTypeRef): TargetTypeRef => outputs.size === 0 ? carrier
     : mapRustTargetTypes(carrier, (type, source) => outputs.get(closedMetadataKey(source))?.parameter ?? type);
   const targetLifetimes: readonly RustTargetGenericArgument[] = protocol.method.binder.parameters.map(parameter => ({ kind: "lifetime", lifetime: parameter.lifetime }));
@@ -55,7 +61,7 @@ export function analyzeRustNativeProducerBridge(protocol: RustNativeCallableProt
     return rustNamedTargetType("rust.core.Result", "Result", rustTypeGenericArguments([bindOutputs(completion), error]));
   };
   const concreteResult = result(invocationError, ordinal => errors.get(ordinal)!, undefined);
-  const implementationResult = result(invocationError, ordinal => errors.get(ordinal)!, [...targetLifetimes, ...rustTypeGenericArguments(genericTypes)]);
+  const implementationResult = result(invocationError, ordinal => errors.get(ordinal)!, [...targetLifetimes, ...genericArguments]);
   let higherRanked: RustNativeProducerBridge["higherRanked"];
   if (bound) {
     const self: TargetTypeRef = { kind: "type-parameter", identity: `${protocol.identity}:Self`, name: "Self" };
@@ -67,7 +73,7 @@ export function analyzeRustNativeProducerBridge(protocol: RustNativeCallableProt
     });
     higherRanked = Object.freeze({ helperResult, publicResult, outputs: Object.freeze([...outputs.values()].map(output => output.source)) });
   }
-  return Object.freeze({ implementation, invocationError, arguments: argumentsParameter, genericTypes, boundTypes,
+  return Object.freeze({ implementation, invocationError, arguments: argumentsParameter, genericArguments, boundTypes,
     errors: Object.freeze([...errors].map(([ordinal, parameter]) => Object.freeze({ ordinal, parameter }))),
     futureBounds: Object.freeze(futures.flatMap(future => {
       const selected = pending.get(future.ordinal);

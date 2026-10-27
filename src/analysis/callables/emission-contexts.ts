@@ -249,7 +249,8 @@ export function prepareRustCallableEmissionContexts(
     }
     request(selected, "native-input", selected.owner, identity, declaredBindings(selected.owner), [],
       { kind: "declaration" },
-      [selected.carrier, selected.implementation, selected.trait, ...selected.environment,
+      [selected.carrier, selected.implementation, selected.trait,
+        ...selected.environment.flatMap(argument => argument.kind === "type" ? [argument.type] : []),
         ...selected.protocol.method.parameters, selected.protocol.method.result]);
   }
   for (const implementation of input.suspended.implementations) {

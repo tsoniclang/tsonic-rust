@@ -33,6 +33,7 @@ test("native callable input reconciliation publishes the original call-scoped li
 
 function inputs(parameterCarrier, valueCarrier = string, resultCarrier = number) {
   const binding = { environment: [], protocol: {
+    environmentParameters: [],
     signature: { environmentParameters: [], typeParameters: [] },
     method: { parameters: [parameterCarrier], result: number, binder: { parameters: [] } },
   } };

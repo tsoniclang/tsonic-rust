@@ -1,17 +1,18 @@
 import type { RustNativeCallableProtocol } from "../../../../target-model/records/native-protocols.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import type {
-  RustBlock, RustFunctionParam, RustGenericArgument, RustGenericParameter, RustItem, RustImplFunction, RustType,
+  RustBlock, RustFunctionParam, RustGenericArgument, RustItem, RustImplFunction, RustType,
   RustWherePredicate,
 } from "../../../target-ast/syntax/nodes.js";
 import { emptyRustGenerics } from "../../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import { registerAliasFromPath } from "../../program/plan-context.js";
 import { rustLifetimeBinderToAst } from "../../types/carrier-syntax.js";
-import { rustTypeFromCarrierInContext } from "../../types/render.js";
+import { rustTypeFromCarrierInContext, rustTargetGenericArgumentToAstInContext } from "../../types/render.js";
 import { planRustNativeCallableMethodGenerics } from "./native-method-generics.js";
 import { planRustNativeProtocolObligations } from "./native-protocol-obligations.js";
 import { failRustPlannerInvariant } from "../../diagnostics.js";
+import { rustGenericCallableEnvironmentGenerics } from "./generic-signatures.js";
 
 export function planRustNativeProducerBridge(protocol: RustNativeCallableProtocol, context: RustPlanContext): readonly RustItem[] {
   const emission = context.input.program.records.nativeProtocol.get(protocol);
@@ -19,13 +20,14 @@ export function planRustNativeProducerBridge(protocol: RustNativeCallableProtoco
   const bridge = emission.producer;
   if (bridge === undefined) return [];
   const { invoked } = emission;
-  const signature = protocol.signature;
   const higherRanked = bridge.higherRanked;
   const lifetimes = rustLifetimeBinderToAst(protocol.method.binder);
-  const genericParameters: readonly RustGenericParameter[] = bridge.genericTypes.map(type => ({ kind: "type", name: type.name, bounds: [] }));
-  const environmentParameters: readonly RustGenericParameter[] = signature.environmentParameters.map(type => ({ kind: "type", name: type.name, bounds: [] }));
+  const genericParameters = rustGenericCallableEnvironmentGenerics(bridge.genericArguments, context).parameters;
+  const environmentParameters = rustGenericCallableEnvironmentGenerics(protocol.environmentParameters, context).parameters;
   const lifetimeArguments: readonly RustGenericArgument[] = lifetimes.map(lifetime => ({ kind: "lifetime", lifetime: { kind: "named", name: lifetime.name } }));
-  const environmentArguments = signature.environmentParameters.map(type => typeArgument(named(type.name)));
+  const environmentArguments = protocol.environmentParameters.map(argument =>
+    rustTargetGenericArgumentToAstInContext(argument, context)
+      ?? failRustPlannerInvariant("An admitted native protocol requires its exact rendered environment argument."));
   const boundArguments = bridge.boundTypes.map(type => typeArgument(named(type.name)));
   const protocolType = named(protocol.targetName, environmentArguments);
   const implementationType = named(bridge.implementation.name);
@@ -71,7 +73,9 @@ export function planRustNativeProducerBridge(protocol: RustNativeCallableProtoco
       ...(invoked ? [{ kind: "function" as const, name: "invoke", generics: emptyRustGenerics,
         selfParam: { kind: "reference" as const, mutable: false }, params: directParameters, returnType: helperResult }] : [])],
   }, direct, { kind: "impl", trait: protocolType, target: implementationType,
-    generics: { parameters: [{ kind: "type", name: bridge.implementation.name, bounds: [] }, ...environmentParameters],
+    generics: { parameters: [...environmentParameters.filter(parameter => parameter.kind === "lifetime"),
+      { kind: "type", name: bridge.implementation.name, bounds: [] },
+      ...environmentParameters.filter(parameter => parameter.kind !== "lifetime")],
       wherePredicates: [{ kind: "type", type: implementationType, binder: lifetimes, bounds: [{ kind: "trait-type", reference: { trait: helperType } }] },
         ...planRustNativeProtocolObligations(protocol, context)] },
     members: [...channels.map(name => ({ kind: "type" as const, name, generics: methodGenerics,

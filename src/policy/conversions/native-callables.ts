@@ -1,12 +1,11 @@
 import { rustCallablePhysicalSignature, type RustCallablePhysicalSignature } from "../../target-model/conversions/callable-physical.js";
 import type { RustNativeCallablePhysicalSource } from "../../target-model/records/callable-conversions.js";
-import type { RustTargetGenericArgument, RustTargetGenericParameter, TargetTypeRef } from "../../target-model/types/model.js";
+import type { RustTargetGenericArgument, TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustNamedTypeCarrierValue, rustNamedTargetType } from "../../target-model/types/carriers/native.js";
-import { rustOnlyTypeGenericArguments, rustTargetGenericBindingsForArguments, rustTypeGenericArguments } from "../../target-model/types/generic-arguments.js";
+import { rustOnlyTypeGenericArguments, rustTypeGenericArguments } from "../../target-model/types/generic-arguments.js";
 import { substituteRustTargetGenerics } from "../../target-model/types/carriers/substitution.js";
-import { rustLifetimeKey } from "../../target-model/lifetimes/index.js";
 import { snapshotClosedMetadata } from "../../target-model/metadata/closed-data.js";
 
 import type { RustNativeCallableInput } from "../../target-model/records/native-protocols.js";
@@ -18,6 +17,7 @@ import { rustJsPromiseTargetType } from "../../target-model/types/carriers/promi
 import { rustInfallibleTargetId, rustJsPromiseTargetId } from "../../target-model/types/carriers/source-types.js";
 import { rustFrameCallableProtocol } from "../../target-model/types/carriers/frame-callables.js";
 import type { RustFrameCallablePlan } from "../../target-model/records/frame-callables.js";
+import { rustGenericCallablePhysicalBindings } from "../types/callables/generic-bindings.js";
 
 export function rustNativeCallableAbsenceWitness(
   input: RustNativeCallableInput, definitions: RustTypeDefinitions,
@@ -36,8 +36,9 @@ export function rustNativeCallableAbsenceWitness(
   if (result === undefined) return undefined;
   const witness = rustCallableSignatureAbsenceWitness(protocol.method.parameters,
     rustNamedTargetType("rust.core.Result", "Result", rustTypeGenericArguments([result, infallible])), protocol.method.binder);
-  return snapshotClosedMetadata(substituteRustTargetGenerics(witness, new Map(protocol.signature.environmentParameters.map((parameter, index) =>
-    [parameter.identity, input.environment[index]!])), new Map()));
+  const bindings = rustGenericCallablePhysicalBindings(protocol.environmentParameters, input.environment);
+  return bindings === undefined ? undefined : snapshotClosedMetadata(substituteRustTargetGenerics(witness,
+    bindings.types, bindings.lifetimes, bindings.consts));
 }
 
 export function rustNativeCallablePhysicalSource(
@@ -67,18 +68,15 @@ export function rustNativeCallableInputPhysicalSignature(
   methodArguments: readonly RustTargetGenericArgument[],
 ): RustCallablePhysicalSignature | undefined {
   const protocol = input.protocol;
-  const parameters: readonly RustTargetGenericParameter[] = [
-    ...protocol.method.binder.parameters.map(parameter => ({ kind: "lifetime" as const,
-      sourceName: parameter.lifetime.name, targetIdentity: rustLifetimeKey(parameter.lifetime) })),
-    ...protocol.signature.typeParameters.map(parameter => ({ kind: "type" as const,
-      sourceName: parameter.name, targetIdentity: parameter.identity })),
-    ...protocol.signature.environmentParameters.map(parameter => ({ kind: "type" as const,
-      sourceName: parameter.name, targetIdentity: parameter.identity })),
+  const parameters: readonly RustTargetGenericArgument[] = [
+    ...protocol.method.binder.parameters.map(parameter => ({ kind: "lifetime" as const, lifetime: parameter.lifetime })),
+    ...rustTypeGenericArguments(protocol.signature.typeParameters),
+    ...protocol.environmentParameters,
   ];
   if (methodArguments.length !== protocol.method.binder.parameters.length + protocol.signature.typeParameters.length ||
-    input.environment.length !== protocol.signature.environmentParameters.length || input.trait.id !== protocol.identity) return undefined;
-  const arguments_ = [...methodArguments, ...input.environment.map(type => ({ kind: "type" as const, type }))];
-  const bindings = rustTargetGenericBindingsForArguments(parameters, arguments_);
+    input.trait.id !== protocol.identity) return undefined;
+  const arguments_ = [...methodArguments, ...input.environment];
+  const bindings = rustGenericCallablePhysicalBindings(parameters, arguments_);
   if (bindings === undefined) return undefined;
   const selectedResult = protocol.result;
   const result = substituteRustTargetGenerics(selectedResult, bindings.types, bindings.lifetimes, bindings.consts, (carrier, original) => {

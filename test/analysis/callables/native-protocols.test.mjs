@@ -46,8 +46,8 @@ test("native future definitions alpha normalize source environments without merg
   assert.equal(selected.protocol === second.protocol, true);
   assert.equal(selected.protocol.signature.typeParameters.length, 0);
   assert.equal(selected.protocol.signature.environmentParameters.length, 1);
-  assert.equal(rustTargetTypeRefEquals(selected.environment[0], value), true);
-  assert.equal(rustTargetTypeRefEquals(second.environment[0], other), true);
+  assert.equal(selected.environment[0].kind === "type" && rustTargetTypeRefEquals(selected.environment[0].type, value), true);
+  assert.equal(second.environment[0].kind === "type" && rustTargetTypeRefEquals(second.environment[0].type, other), true);
   assert.equal(rustTargetTypeRefEquals(selected.trait, second.trait), false);
   const result = selected.protocol.result;
   assert.equal(result !== undefined, true);

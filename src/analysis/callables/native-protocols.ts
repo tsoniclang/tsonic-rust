@@ -3,8 +3,6 @@ import { createHash } from "node:crypto";
 import type { RustTargetTraitRef, TargetTypeRef } from "../../target-model/types/model.js";
 import { mapRustTargetTypes } from "../../target-model/types/carriers/substitution.js";
 
-import { rustTypeGenericArguments } from "../../target-model/types/generic-arguments.js";
-
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import { closedMetadataKey, snapshotClosedMetadata } from "../../target-model/metadata/closed-data.js";
 import { allocateRustGeneratedName } from "../../target-model/names/generated.js";
@@ -27,7 +25,7 @@ export function createRustNativeCallableProtocolRegistry(input: {
       const binding = selectRustNativeCallableProtocolSignature(source, input.definitions);
       if (binding === undefined) return undefined;
       const { method, completion } = binding;
-      const contract = { ownerFileName, signature: binding.signature, method,
+      const contract = { ownerFileName, signature: binding.signature, environmentParameters: binding.environmentParameters, method,
         ...(completion === undefined ? {} : { completion }) };
       const key = closedMetadataKey({ ...contract, method: binding.identityMethod });
       let protocol = protocols.get(key);
@@ -48,12 +46,12 @@ export function createRustNativeCallableProtocolRegistry(input: {
           }),
           trait: { kind: "trait-ref", id: identity, path: targetName,
             sourceItem: { fileName: ownerFileName, typeName: targetName },
-            genericArguments: rustTypeGenericArguments(binding.signature.environmentParameters), associatedConstraints: [] },
+            genericArguments: binding.environmentParameters, associatedConstraints: [] },
         });
         protocols.set(key, protocol);
       }
       return Object.freeze({ protocol, environment: snapshotClosedMetadata(binding.environment),
-        trait: snapshotClosedMetadata({ ...protocol.trait, genericArguments: rustTypeGenericArguments(binding.environment) }) });
+        trait: snapshotClosedMetadata({ ...protocol.trait, genericArguments: binding.environment }) });
     },
     definitions: () => Object.freeze([...protocols.values()]),
   });

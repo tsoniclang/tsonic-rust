@@ -6,6 +6,7 @@ import { inferRustTargetGenericBindings } from "../../../target-model/types/carr
 import { substituteRustTargetGenerics } from "../../../target-model/types/carriers/substitution.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { selectRustCallScopedLifetimeReconciliation } from "../../conversions/value-carrier-reconciliation.js";
+import { rustGenericCallablePhysicalBindings } from "./generic-bindings.js";
 
 export function rustNativeCallableInvocationArguments(
   binding: RustNativeCallableProtocolBinding,
@@ -18,15 +19,16 @@ export function rustNativeCallableInvocationArguments(
   const signature = protocol.signature;
   if (arguments_.length !== signature.typeParameters.length || arguments_.some(argument => argument.kind !== "type") ||
     operation.parameters.length !== protocol.method.parameters.length) return undefined;
-  const substitutions = new Map<string, TargetTypeRef>(signature.environmentParameters.map((parameter, index) =>
-    [parameter.identity, binding.environment[index]!]));
+  const environment = rustGenericCallablePhysicalBindings(protocol.environmentParameters, binding.environment);
+  if (environment === undefined) return undefined;
+  const substitutions = new Map(environment.types);
   for (const [index, parameter] of signature.typeParameters.entries()) {
     const argument = arguments_[index];
     if (argument?.kind !== "type") return undefined;
     substitutions.set(parameter.identity, argument.type);
   }
   const pattern: TargetTypeRef = { kind: "tuple", elements: [...protocol.method.parameters, protocol.method.result]
-    .map(carrier => substituteRustTargetGenerics(carrier, substitutions, new Map())) };
+    .map(carrier => substituteRustTargetGenerics(carrier, substitutions, environment.lifetimes, environment.consts)) };
   const actual: TargetTypeRef = { kind: "tuple", elements: [...operation.parameters.map(parameter => parameter.parameterCarrier),
     operation.resultCarrier] };
   const elisions = new Map(protocol.method.binder.parameters.map(parameter => {

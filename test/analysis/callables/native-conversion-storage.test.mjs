@@ -181,9 +181,9 @@ test("physical callable signatures substitute declaration-generic environments w
     assert.equal(input.environment.length, 1, "one actual outer type argument");
     const physical = current.stored(name);
     assert.equal(physical.input === input, true);
-    assert.equal(rustTargetTypeRefEquals(physical.signature.result, input.environment[0]), true);
+    assert.equal(input.environment[0].kind === "type" && rustTargetTypeRefEquals(physical.signature.result, input.environment[0].type), true);
     assert.equal(rustTargetTypeRefEquals(physical.signature.error.trait.genericArguments[0].type,
-      input.environment[0]), true, "associated error keeps the same selected environment");
+      input.environment[0].type), true, "associated error keeps the same selected environment");
   }
 });
 
