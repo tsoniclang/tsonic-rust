@@ -21,19 +21,35 @@ export function create(): () => int32 { return (): int32 => { return 3; }; }
     });
     assert.equal(producer !== undefined, true, name);
     const error = producers.errorFor(producer.declaration, 0);
+    const emission = current.program.records.typeEmission.get(error);
+    assert.equal(emission?.producerError !== undefined, true, name + ": the original deferred error is admitted before rendering");
+    assert.equal(Object.isFrozen(emission), true, name + ": the deferred native type selection is immutable");
     const rendered = rustTypeFromCarrierInContext(error, current.context);
     assert.equal(rendered !== undefined, true, name);
     assert.match(printRustType(rendered), /::AwaitError0/u);
     assert.doesNotMatch(printRustType(rendered), /TsonicError|ConsumerFailure|Infallible/u);
     const selected = rustProducerErrorReference(error);
-    assert.equal(rustTypeFromCarrierInContext(rustProducerErrorTargetType({ ...selected, channel: 4 }), current.context) === undefined,
-      true, "an absent completion ordinal never becomes a fabricated error");
-    assert.equal(rustTypeFromCarrierInContext(rustProducerErrorTargetType({ ...selected, genericArguments: [] }), current.context) === undefined,
-      true, "missing producer environment remains rejected");
+    for (const [label, invalid] of [
+      ["an absent completion ordinal never becomes a fabricated error", rustProducerErrorTargetType({ ...selected, channel: 4 })],
+      ["missing producer environment remains rejected", rustProducerErrorTargetType({ ...selected, genericArguments: [] })],
+    ]) {
+      assert.equal(current.program.records.typeEmission.get(invalid) === undefined, true, label);
+      let admitted;
+      assert.throws(() => { admitted = rustTypeFromCarrierInContext(invalid, current.context); },
+        failure => failure?.diagnostic?.code === "TSONIC_INTERNAL_PLANNER_INVARIANT" &&
+          failure.diagnostic.message === "An admitted producer error requires its exact sealed native error carrier.", label);
+      assert.equal(admitted === undefined, true, label + ": the required native consumer returns no type");
+    }
   }
   const invalidJoin = rustNativeErrorJoinTargetType("/not-owned.ts", [
     { kind: "source-primitive", name: "int32" }, { kind: "source-primitive", name: "int64" },
   ]);
-  assert.equal(rustTypeFromCarrierInContext(invalidJoin, current.context) === undefined, true,
+  assert.equal(current.program.records.typeEmission.get(invalidJoin) === undefined, true,
+    "the unregistered source file has no admitted native join type");
+  let admitted;
+  assert.throws(() => { admitted = rustTypeFromCarrierInContext(invalidJoin, current.context); },
+    failure => failure?.diagnostic?.code === "TSONIC_INTERNAL_PLANNER_INVARIANT" &&
+      failure.diagnostic.message === "An admitted native error join requires its exact sealed name and emitted source module.",
     "a join cannot invent a declaration in an unregistered source file");
+  assert.equal(admitted === undefined, true, "a foreign native join returns no fabricated type");
 });

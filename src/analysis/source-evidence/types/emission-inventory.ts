@@ -1,4 +1,5 @@
 import type { Node } from "@tsonic/tsts";
+import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { RustAnalysisProgram } from "../../program/model.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { isRustTargetTypeRef } from "../../../target-model/types/equality.js";
@@ -56,6 +57,15 @@ export function rustDeclarationEmissionCarriers(program: Omit<RustAnalysisProgra
   for (const selected of program.classValues.instanceViewImplementations)
     collect(program.records.structuralViewImplementations.get(selected.declaration, selected.ownerFileName));
   for (const node of nodes) {
+    const completion = program.records.deferredProducerEffects.get(node);
+    if (completion?.kind === "futures" && program.callableValues.nativeProducers.forDeclaration(node) !== undefined) {
+      for (const [ordinal] of completion.channels.entries()) {
+        const error = program.callableValues.nativeProducers.errorFor(node, ordinal);
+        if (error === undefined) failTargetAnalysisInvariant("tsonic-rust",
+          "An admitted deferred producer channel requires its published native error identity.", node);
+        collect(error);
+      }
+    }
     const operation = program.records.targetOperation.get(node);
     if (operation?.kind === "provider-record-literal" || operation?.kind === "source-conversion") collect(operation);
     collect(program.records.contextualValueConversion.get(node));
