@@ -162,6 +162,13 @@ export const producersCarrierRegistry = Object.freeze([
     frozen: false,
   },
   {
+    id: "src/analysis/source-evidence/types/resolution/indexed-access.ts#projectRustProviderIndexedStorageCarrier",
+    kinds: ["array", "associated-type", "closure", "function-pointer", "impl-trait", "opaque", "pointer", "reference", "slice", "source-primitive", "target-named", "target-specific", "trait-object", "trait-ref", "tuple", "type-parameter"],
+    declaration: { module: "src/analysis/source-evidence/types/resolution/indexed-access.ts", symbol: "projectRustProviderIndexedStorageCarrier" },
+    responsibility: "providers/projected-type",
+    frozen: false,
+  },
+  {
     id: "src/analysis/source-evidence/types/resolution/indexed-access.ts#resolveRustProviderIndexedAccess",
     kinds: ["array", "associated-type", "closure", "function-pointer", "impl-trait", "opaque", "pointer", "reference", "slice", "source-primitive", "target-named", "target-specific", "trait-object", "trait-ref", "tuple", "type-parameter"],
     declaration: { module: "src/analysis/source-evidence/types/resolution/indexed-access.ts", symbol: "resolveRustProviderIndexedAccess" },

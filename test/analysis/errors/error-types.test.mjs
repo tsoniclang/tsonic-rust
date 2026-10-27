@@ -71,7 +71,17 @@ for (const surfaces of [[], ["js"]]) {
       ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
     };
     context.sourceFiles.forEach(visit);
-    const disposer = nodes.find(node => ast.is.IsMethodDeclaration(node) && ast.text(ast.name(node)) === "[Symbol.dispose]");
+    const disposer = nodes.find(node => {
+      if (!ast.is.IsMethodDeclaration(node)) return false;
+      const name = ast.name(node);
+      const expression = name === undefined || !ast.is.IsComputedPropertyName(name)
+        ? undefined : ast.as.AsComputedPropertyName(name)?.Expression;
+      if (expression === undefined || !ast.is.IsPropertyAccessExpression(expression)) return false;
+      const owner = Node_Expression(ast, expression);
+      const member = ast.name(expression);
+      return owner !== undefined && ast.is.IsIdentifier(owner) && ast.text(owner) === "Symbol" &&
+        member !== undefined && ast.is.IsIdentifier(member) && ast.text(member) === "dispose";
+    });
     const resource = nodes.find(node => ast.is.IsVariableDeclaration(node) && ast.variableDeclarationKind(node) === "using");
     const ordinary = nodes.find(node => ast.is.IsFunctionDeclaration(node) && ast.text(ast.name(node)) === "ordinary");
     const getter = nodes.find(node => ast.is.IsGetAccessorDeclaration(node));

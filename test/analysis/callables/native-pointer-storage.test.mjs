@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { Node_Expression } from "@tsonic/target-api/source";
 import { compileRust } from "../../helpers/rust-session.mjs";
 import { analyzeRustAnalysisProgram } from "../../../dist/analysis/program/target-program.js";
 import { rustCallablePhysicalSignature } from "../../../dist/target-model/conversions/callable-physical.js";
@@ -30,12 +31,27 @@ export function read(): uint32 {
       JSON.stringify(result.diagnostics.map(({ code, message }) => ({ code, message }))));
     assert.equal(program !== undefined, true, "the complete pointer-callback program is admitted");
     const loads = [];
+    const factories = new Set();
     const visit = node => {
-      if (program.source.ast.is.IsCallExpression(node) && /^loadptr\((first|second)\(\)\)$/u.test(program.source.ast.text(node))) loads.push(node);
+      const ast = program.source.ast;
+      if (ast.is.IsCallExpression(node)) {
+        const callee = Node_Expression(ast, node);
+        const call = program.source.semantics.forNode(node).operations.call(node);
+        const argument = call?.sourceArguments.length === 1 ? call.sourceArguments[0].expression : undefined;
+        const factory = argument === undefined || !ast.is.IsCallExpression(argument) ? undefined : Node_Expression(ast, argument);
+        const nested = argument === undefined ? undefined : program.source.semantics.forNode(argument).operations.call(argument);
+        if (callee !== undefined && ast.is.IsIdentifier(callee) && ast.text(callee) === "loadptr" &&
+          factory !== undefined && ast.is.IsIdentifier(factory) && /^(first|second)$/u.test(ast.text(factory)) &&
+          nested?.sourceArguments.length === 0) {
+          loads.push(node);
+          factories.add(ast.text(factory));
+        }
+      }
       program.source.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
     };
     for (const file of program.sourceFiles) visit(file);
     assert.equal(loads.length, 2, "both independent allocations retain their exact loaded callable values");
+    assert.equal(factories.has("first") && factories.has("second"), true, "both distinct original allocation factories are selected");
     for (const load of loads) {
       const selected = program.callableValues.nativeStorage.valueFor(load);
       assert.equal(selected.kind !== "unresolved", true, selected.reason ?? "the checked load has physical callable storage");
