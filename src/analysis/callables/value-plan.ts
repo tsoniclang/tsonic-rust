@@ -327,7 +327,8 @@ function createRustCallableValueLifecycle(input: RustCallableValuePlanInput,
   const frameConstruction = createRustFrameCallablePlan({ ...input, usedNames });
   const retentionIssues: RustSourceCallableSpecializationIssue[] = [];
   const native = createRustNativeCallableInputPlan({ ast: input.ast, records: input.records, sourcePackages: input.sourcePackages,
-    storage: input.sourceStorage, nativeNodes: input.nativeNodes, definitions: input.typeDefinitions, projectTypes: input.projectTypes, usedNames,
+    storage: input.sourceStorage, nativeNodes: input.nativeNodes, definitions: input.typeDefinitions, projectTypes: input.projectTypes,
+    structuralShapes: input.structuralShapes, usedNames,
     declaresGenericInputs: owner => input.ast.is.IsFunctionDeclaration(owner) || input.ast.is.IsMethodDeclaration(owner) ||
       input.ast.is.IsConstructorDeclaration(owner) || input.ast.is.IsGetAccessorDeclaration(owner) ||
       input.ast.is.IsSetAccessorDeclaration(owner) || genericImplementations.has(owner) ||
@@ -379,7 +380,7 @@ function createRustCallableValueLifecycle(input: RustCallableValuePlanInput,
     },
   });
   const nativeDispatch = createRustNativeCallableDispatchPlan({ ...input, native });
-  const issues = Object.freeze([...generic.issues, ...nativeStorage.issues, ...retentionIssues]);
+  const issues = Object.freeze([...generic.issues, ...native.issues, ...nativeStorage.issues, ...retentionIssues]);
   const construction: RustCallableValueConstruction = Object.freeze({ generic, frames: frameConstruction,
     native, nativeStorage, nativeProducers, issues });
   let physicalLifecycle: RustPhysicalCallableLifecycle | undefined;
@@ -533,7 +534,7 @@ function createRustCallableValueLifecycle(input: RustCallableValuePlanInput,
       for (const carrier of emission.value.physicalOperands) physical.prepare(carrier);
       const finalPhysical = physical.closeKeys();
       genericRegistry.publishPhysical(finalPhysical);
-      const nativeInputs: RustCallableValuePlan["native"] = Object.freeze({ inputs: native.inputs,
+      const nativeInputs: RustCallableValuePlan["native"] = Object.freeze({ inputs: native.inputs, issues: native.issues,
         protocols: native.protocols, calls: native.calls, callFor: native.callFor, inputsFor: native.inputsFor,
         capturesFor: native.capturesFor, protocolForSourceItem: native.protocolForSourceItem,
         isConcreteCallableParameter: native.isConcreteCallableParameter,

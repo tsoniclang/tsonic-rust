@@ -7,7 +7,7 @@ import type { RustProgramRecords } from "../../target-model/records/program.js";
 
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustCallableInputProtocol, rustCallableProtocol } from "../../target-model/types/carriers/callables.js";
-import { rustCallableTargetId } from "../../target-model/types/carriers/source-types.js";
+import { rustCallableTargetId, rustStructuralObjectCarrierValue } from "../../target-model/types/carriers/source-types.js";
 import { rustGenericCallableProtocol, rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
 import { rustOptionElementCarrier } from "../../target-model/types/carriers/optional.js";
 import { rustCallableInvocationSignaturesMatch } from "../../policy/conversions/callable-input.js";
@@ -41,6 +41,10 @@ import { rustNodeInCatchingTryBody } from "../errors/catching-try.js";
 import { rustProgramErrorTargetType } from "../../target-model/types/carriers/js.js";
 import type { RustCallableEntryConstruction } from "./entry-parameters.js";
 import type { RustProjectTypePolicy } from "../../target-model/types/project-types.js";
+import type { RustStructuralShapeLayoutPlan } from "../objects/shapes/structural-shape-plan.js";
+import type { RustSourceCallableSpecializationIssue } from "../../target-model/records/callable-issues.js";
+import { rustNativeStorageProjectionDepth, rustNativeStorageProjectionSteps } from "./native-storage-generics.js";
+import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 
 export type RustNativeCallableOrigins =
   | { readonly kind: "resolved"; readonly inputs: readonly RustNativeCallableInput[];
@@ -48,6 +52,7 @@ export type RustNativeCallableOrigins =
   | { readonly kind: "unresolved"; readonly reason: string };
 
 export interface RustNativeCallableInputPlan {
+  readonly issues: readonly RustSourceCallableSpecializationIssue[];
   readonly inputs: readonly RustNativeCallableInput[];
   readonly protocols: readonly RustNativeCallableProtocol[];
   readonly calls: readonly RustNativeCallableCall[];
@@ -72,6 +77,7 @@ export function createRustNativeCallableInputPlan(input: {
   readonly records: RustProgramRecords;
   readonly definitions: RustTypeDefinitions;
   readonly projectTypes: RustProjectTypePolicy;
+  readonly structuralShapes: Pick<RustStructuralShapeLayoutPlan, "definitionForCarrier" | "field">;
   readonly sourcePackages: TargetSourcePackageGraph;
   readonly usedNames: Set<string>;
   /**
@@ -228,23 +234,106 @@ export function createRustNativeCallableInputPlan(input: {
     return Object.freeze({ kind: "resolved", inputs: Object.freeze([...parameters]),
       implementations: Object.freeze([...implementations]) });
   };
-  const collectInputComponents = (parameter: Node, carrier: TargetTypeRef,
-    projection: SourceStorageSubject["projection"] = []): void => {
+  const componentIssues: RustSourceCallableSpecializationIssue[] = [];
+  const hasCallableData = (carrier: TargetTypeRef, active: Set<TargetTypeRef>, step: (depth: number) => boolean,
+    depth: number): boolean | undefined => {
+    if (!step(depth)) return undefined;
     const selected = rustOptionElementCarrier(carrier) ?? carrier;
+    if (rustGenericCallableValue(selected) !== undefined || rustCallableProtocol(selected) !== undefined) return true;
+    if (active.has(selected)) return false;
+    active.add(selected);
+    try {
+      const structural = rustStructuralObjectCarrierValue(selected);
+      const element = selected.kind === "array" || selected.kind === "slice" ? selected.element
+        : rustJsArrayLikeElementTargetType(selected);
+      const children = selected.kind === "tuple" ? selected.elements : element !== undefined ? [element]
+        : structural?.fields.filter(field => field.method !== true && field.accessor === undefined && field.bound !== true)
+          .map(field => field.type) ?? [];
+      for (const child of children) {
+        const required = hasCallableData(child, active, step, depth + 1);
+        if (required !== false) return required;
+      }
+      return false;
+    } finally {
+      active.delete(selected);
+    }
+  };
+  const collectInputComponents = (parameter: Node, carrier: TargetTypeRef,
+    projection: SourceStorageSubject["projection"], active: Set<TargetTypeRef>, step: (depth: number) => boolean,
+    depth = 0): string | undefined => {
+    if (!step(depth)) return "Native callable input components exceed their bounded storage projection budget.";
+    const required = hasCallableData(carrier, new Set(), step, depth);
+    if (required === undefined) return "Native callable input components exceed their bounded storage projection budget.";
+    if (!required) return;
+    const selected = rustOptionElementCarrier(carrier) ?? carrier;
+    if (active.has(selected)) return "Native callable input components require a finite complete storage path.";
     if (rustGenericCallableValue(selected) !== undefined || rustCallableProtocol(selected) !== undefined) {
       const subject = input.storage.subject(parameter, "input", projection);
-      if (subject.kind === "resolved") selectInput(subject.subject, carrier);
+      if (subject.kind === "unresolved") return subject.reason;
+      const selectedInput = selectInput(subject.subject, carrier);
+      const concrete = concreteStorage.get(subject.subject);
+      if (concrete === undefined)
+        return "Native callable input components require their exact checked storage classification.";
+      if (!concrete && (selectedInput === undefined || selectedInput.subject !== subject.subject ||
+        !rustTargetTypeRefEquals(selectedInput.carrier, carrier)))
+        return "Native callable input components require their exact completed input protocol binding.";
       return;
     }
-    if (selected.kind === "tuple") {
-      for (const [index, element] of selected.elements.entries())
-        collectInputComponents(parameter, element, [...projection, { kind: "tuple-element", index }]);
-      return;
+    active.add(selected);
+    try {
+      if (selected.kind === "tuple") {
+        for (const [index, element] of selected.elements.entries()) {
+          const failure = collectInputComponents(parameter, element, [...projection, { kind: "tuple-element", index }], active, step, depth + 1);
+          if (failure !== undefined) return failure;
+        }
+        return;
+      }
+      const element = selected.kind === "array" || selected.kind === "slice" ? selected.element
+        : rustJsArrayLikeElementTargetType(selected);
+      if (element !== undefined)
+        return collectInputComponents(parameter, element, [...projection, { kind: "array-element" }], active, step, depth + 1);
+      const structural = rustStructuralObjectCarrierValue(selected);
+      if (structural === undefined) return;
+      const layout = input.structuralShapes.definitionForCarrier(selected);
+      if (layout === undefined || layout.fields.length !== structural.fields.length)
+        return "Native callable input components require their exact initialized structural layout.";
+      const subject = input.storage.subject(parameter, "input", projection);
+      if (subject.kind === "unresolved") return subject.reason;
+      const checked = input.storage.typeFor(subject.subject);
+      if (checked.kind === "unresolved") return checked.reason;
+      const semantics = input.storage.source.semantics.forFile(checked.sourceFile);
+      const present = semantics.types.nonNullableType(checked.type);
+      if (present === undefined) return "Native callable input components require their exact checked present source type.";
+      const properties = new Map(semantics.types.propertyInfos(present).map(property => [property.name, property]));
+      for (const [index, field] of structural.fields.entries()) {
+        if (field.method === true || field.accessor !== undefined || field.bound === true) continue;
+        const required = hasCallableData(field.type, new Set(), step, depth + 1);
+        if (required === undefined) return "Native callable input components exceed their bounded storage projection budget.";
+        if (!required) continue;
+        const physical = input.structuralShapes.field(selected, index);
+        if (physical === undefined || physical.sourceName !== field.sourceName || physical.presence !== field.presence ||
+          physical.readonly !== field.readonly || physical.method !== field.method)
+          return "Native callable input components require exact instantiated structural field correspondence.";
+        if (physical.storage !== "stored") continue;
+        if (!rustTargetTypeRefEquals(physical.carrier, field.type))
+          return "Native callable data components require their exact instantiated physical field carrier.";
+        const property = properties.get(field.sourceName);
+        const declarations = property === undefined ? [] : [...new Set([property.symbol, ...property.rootSymbols]
+          .flatMap(symbol => semantics.declarations.symbolDeclarations(symbol)))];
+        if (declarations.length === 0)
+          return "Native callable input components require their original checked data-member declarations.";
+        for (const declaration of declarations) {
+          if (input.ast.is.IsMethodDeclaration(declaration) || input.ast.is.IsMethodSignatureDeclaration(declaration) ||
+            input.ast.is.IsGetAccessorDeclaration(declaration) || input.ast.is.IsSetAccessorDeclaration(declaration))
+            return "Native callable data components cannot replace a checked method or accessor owner.";
+          const failure = collectInputComponents(parameter, field.type, [...projection, { kind: "member", declaration }], active, step, depth + 1);
+          if (failure !== undefined) return failure;
+        }
+      }
+    } finally {
+      active.delete(selected);
     }
-    const element = selected.kind === "array" || selected.kind === "slice" ? selected.element
-      : rustJsArrayLikeElementTargetType(selected);
-    if (element !== undefined)
-      collectInputComponents(parameter, element, [...projection, { kind: "array-element" }]);
+    return undefined;
   };
   for (const node of input.nativeNodes) {
     if (fields.has(node)) {
@@ -255,7 +344,10 @@ export function createRustNativeCallableInputPlan(input: {
     const carrier = input.records.sourceParameterAbi.get(node)?.valueCarrier ??
       input.records.runtimeCarrier.get(node)?.carrier;
     if (carrier === undefined) continue;
-    collectInputComponents(node, carrier);
+    let remaining = rustNativeStorageProjectionSteps;
+    const failure = collectInputComponents(node, carrier, [], new Set(),
+      depth => remaining-- > 0 && depth <= rustNativeStorageProjectionDepth);
+    if (failure !== undefined) componentIssues.push(Object.freeze({ subject: node, message: failure }));
   }
   for (const node of input.nativeNodes) {
     const carrier = input.records.runtimeCarrier.get(node)?.carrier;
@@ -300,7 +392,7 @@ export function createRustNativeCallableInputPlan(input: {
   const declarationCaptures = new Map([...captures].map(([owner, members]) => [owner, Object.freeze([...members])]));
   const emptyInputs: readonly RustNativeCallableInput[] = Object.freeze([]);
   const isConcreteCallableParameter = (parameter: Node): boolean => concreteParameters.has(parameter);
-  return Object.freeze({ bindingsFor, originsFor, isConcreteCallableParameter,
+  return Object.freeze({ bindingsFor, originsFor, isConcreteCallableParameter, issues: Object.freeze(componentIssues),
     isConcreteCallableStorage: (subject: SourceStorageSubject) => concreteStorage.get(subject),
     isNativeRetainedParameter: keepsConcreteCarrier, inputs: selectedInputs, protocols: definitions,
     calls: Object.freeze([...calls.values()]), callFor: (node: Node) => calls.get(node),
