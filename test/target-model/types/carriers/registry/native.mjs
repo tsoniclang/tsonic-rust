@@ -344,7 +344,7 @@ export const nativeCarrierRegistry = Object.freeze([
     frozen: false,
   },
   {
-    id: "src/target-model/records/operations.ts#rustTargetOperationResultCarrier",
+    id: "src/target-model/records/operations/operation-result-carriers.ts#rustTargetOperationResultCarrier",
     kinds: ["array", "associated-type", "closure", "function-pointer", "impl-trait", "opaque", "pointer", "reference", "slice", "source-primitive", "target-named", "target-specific", "trait-object", "trait-ref", "tuple", "type-parameter"],
     declaration: { module: "src/target-model/records/operations/operation-result-carriers.ts", symbol: "rustTargetOperationResultCarrier" },
     responsibility: "producers/expression-result",
