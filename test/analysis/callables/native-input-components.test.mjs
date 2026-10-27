@@ -36,6 +36,27 @@ function fixture(source, beforeInputConstruction) {
   return { context, declaration, input, native: context.callableValues.native };
 }
 
+test("nominal input materialization reads an already admitted native interface field contract", () => {
+  let observed = 0;
+  const current = fixture(`
+import type { int32 } from "@tsonic/core/types.js";
+export interface Entry { value: int32; }
+export function read(value: Entry): int32 { return value.value; }
+`, input => {
+    const declaration = input.nativeNodes.find(node => input.ast.is.IsInterfaceDeclaration(node));
+    assert.equal(declaration !== undefined, true, "the original native interface is retained");
+    const admitted = input.records.nativeDeclaration.get(declaration);
+    assert.equal(admitted?.kind === "interface" && admitted.fields.length === 1, true,
+      "native input materialization never probes an unadmitted interface layout");
+    const field = admitted.fields[0];
+    assert.equal(field.declaration === input.ast.members(declaration)[0] && field.carrier.kind === "source-primitive" &&
+      field.carrier.name === "int32", true, "the original field retains its exact native carrier before dependent storage work");
+    observed++;
+  });
+  assert.equal(observed, 1, "the native interface admits once before the single input materialization");
+  assert.equal(current.native.inputs.length, 0, "an integer record acquires no fictional callable input");
+});
+
 test("structural native input components retain exact instantiated widths and original member identities", () => {
   const current = fixture(`
 import type { int32, int64 } from "@tsonic/core/types.js";

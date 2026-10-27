@@ -35,6 +35,22 @@ export type RustNativeDeclarationAdmission =
   | { readonly kind: "erased" }
   | { readonly kind: "rejected"; readonly diagnostics: readonly TargetDiagnostic[] };
 
+export type RustNativeInterfaceDeclarationInput = Pick<RustNativeValueDeclarationInput,
+  "ast" | "semanticsFor" | "records" | "names" | "projectTypes" | "typeDefinitions" | "objectRepresentations">;
+
+export function admitRustNativeInterfaceDeclaration(
+  declaration: Node,
+  input: RustNativeInterfaceDeclarationInput,
+): RustNativeDeclarationAdmission {
+  if (input.records.typeOnlyDeclaration.get(declaration) !== undefined) return { kind: "erased" };
+  const definition = input.projectTypes.definitionForDeclaration(declaration);
+  if (definition !== undefined && input.projectTypes.isPolymorphic(definition)) return { kind: "erased" };
+  const name = input.names.nameForDeclaration(declaration);
+  if (name === undefined || !isValidRustIdentifier(name)) return reject(declaration, "RUST_DECLARATION_NAME_NOT_CLOSED",
+    "An emitted native declaration requires its exact preserved Rust identifier.");
+  return admitInterface(declaration, name, input);
+}
+
 export function admitRustNativeValueDeclaration(
   declaration: Node,
   input: RustNativeValueDeclarationInput,
@@ -47,25 +63,27 @@ export function admitRustNativeValueDeclaration(
       "An emitted source enum requires its completed early native type definition.", declaration);
     return { kind: "accepted", form };
   }
-  if (kind === "KindInterfaceDeclaration" && input.records.typeOnlyDeclaration.get(declaration) !== undefined) {
-    return { kind: "erased" };
+  if (kind === "KindInterfaceDeclaration") {
+    if (input.records.typeOnlyDeclaration.get(declaration) !== undefined) return { kind: "erased" };
+    const definition = input.projectTypes.definitionForDeclaration(declaration);
+    if (definition !== undefined && input.projectTypes.isPolymorphic(definition)) return { kind: "erased" };
+    const form = input.records.nativeDeclaration.get(declaration);
+    if (form?.kind !== "interface") failTargetAnalysisInvariant("tsonic-rust",
+      "An emitted native interface requires its original field admission before callable storage selection.", declaration);
+    return { kind: "accepted", form };
   }
-  const definition = kind === "KindInterfaceDeclaration"
-    ? input.projectTypes.definitionForDeclaration(declaration) : undefined;
-  if (definition !== undefined && input.projectTypes.isPolymorphic(definition)) return { kind: "erased" };
   const name = input.names.nameForDeclaration(declaration);
   if (name === undefined || !isValidRustIdentifier(name)) {
     return reject(declaration, "RUST_DECLARATION_NAME_NOT_CLOSED",
       "An emitted native declaration requires its exact preserved Rust identifier.");
   }
-  if (kind === "KindInterfaceDeclaration") return admitInterface(declaration, name, input);
   return admitAlias(declaration, name, input);
 }
 
 function admitInterface(
   declaration: Node,
   name: string,
-  input: RustNativeValueDeclarationInput,
+  input: RustNativeInterfaceDeclarationInput,
 ): RustNativeDeclarationAdmission {
   const { ast, records, projectTypes } = input;
   for (const member of ast.members(declaration)) {

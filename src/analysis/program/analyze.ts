@@ -1,4 +1,5 @@
 import { recordRustProgramClassEnvironments } from "../objects/class-environment-admission.js";
+import { admitRustNativeInterfaceForms } from "../declarations/native-forms.js";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import { analyzeRustModuleCycles } from "../module-initialization/cycles.js";
 import type { RustModuleCycleSelection } from "../../target-model/records/program/module-initialization.js";
@@ -611,6 +612,11 @@ export function analyzeRustProgram(context: RustAnalysisContext, outputType: "bi
     } else frameBindingCarriers.set(declaration, carrier);
   }
   if (context.diagnostics.length !== 0) return undefined;
+  const interfaceIssues = admitRustNativeInterfaceForms({ ast, sourceFiles: context.sourceFiles,
+    semanticsFor: context.semanticsFor, records: context.records, names: context.names, projectTypes: context.projectTypes,
+    typeDefinitions: context.typeDefinitions, objectRepresentations: context.objectRepresentations }, context.records.nativeDeclarations);
+  context.diagnostics.push(...interfaceIssues);
+  if (interfaceIssues.length !== 0) return undefined;
   const callableValues = context.callableValues.initialize({ ast, sourceFiles: context.sourceFiles, records: context.records,
     isRuntimeReference: context.runtimeValueUses.isRuntimeReference,
     operationAttempts: walk.operationAttempts,
