@@ -11,9 +11,14 @@ import type { RustTargetGenericBindings } from "../../target-model/types/carrier
 import type { RustProjectTypeDefinition } from "../../target-model/types/project-types.js";
 import type { RustClassImplementationContextConstruction } from "../objects/class-implementation-contexts.js";
 import type { prepareRustProjectGenericMembership } from "../project-types/generic-membership.js";
+import type { RustProgramRecords } from "../../target-model/records/program.js";
 
 export function createRustCallableEntryHeaderPlacements(input: {
-  readonly program: Omit<RustAnalysisProgram, "reachability">;
+  readonly program: Pick<RustAnalysisProgram, "promiseBodies" | "projectTypes"> & {
+    readonly source: Pick<RustAnalysisProgram["source"], "ast">;
+    readonly records: RustProgramRecords;
+    readonly callableValues: Pick<RustAnalysisProgram["callableValues"], "frames">;
+  };
   readonly entries: Pick<RustCallableEntryConstruction, "get" | "selectHeader">;
   readonly classContexts: Pick<RustClassImplementationContextConstruction, "forInstance">;
   readonly memberships: ReturnType<typeof prepareRustProjectGenericMembership>;

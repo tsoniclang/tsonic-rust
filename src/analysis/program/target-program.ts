@@ -16,6 +16,7 @@ import { analyzeRustGenericAdoption, analyzeRustPromiseResults } from "../callab
 import { publishRustNativeTaskUses } from "../callables/native-task-uses.js";
 import { analyzeRustLexicalFunctionEmission } from "../callables/lexical-emission.js";
 import { prepareRustCallableEntryParameters } from "../callables/entry-parameters.js";
+import { createRustCallableEntryHeaderPlacements } from "../callables/entry-header-placements.js";
 import { prepareRustClassImplementationContexts } from "../objects/class-implementation-contexts.js";
 import { prepareRustProjectGenericMembership } from "../project-types/generic-membership.js";
 import { createRustModuleInitializationPlan } from "../module-initialization/analyze.js";
@@ -403,6 +404,10 @@ export function analyzeRustAnalysisProgram(
     projectTypes: context.projectTypes, structuralShapes: context.structuralShapes.completed,
     producer: context.records.declarationEmission, required: context.requiredRecords });
   if (callableEntries.kind === "rejected") return callableEntries;
+  const headerPlacements = createRustCallableEntryHeaderPlacements({ program: { source: context.source,
+    records, promiseBodies: context.promiseBodies.plan, projectTypes: context.projectTypes,
+    callableValues: { frames: context.callableValues.frames } }, entries: callableEntries.value,
+    classContexts, memberships: projectGenericMemberships });
   analyzeRustBorrowedInitializers(context.ast, context.nativeNodes, records, ownership.ownership.reads, context.records.borrowedInitializers);
   const retentionIssues = context.callableValues.validateStructuralRetention(declarationGenericRequirements.index, context.typeFamilies, classValues, errorTypes);
   const promiseResults = promiseResultsFor(retentionIssues.length === 0);
@@ -519,7 +524,7 @@ export function analyzeRustAnalysisProgram(
     genericCallableErrors: genericCallableErrors.value,
   };
   const emission = finalizeRustNativeEmission(program, context, genericCallableErrors.value, ownershipFlow.flow,
-    sourceStage.operationAttempts, callableEntries.value, classContexts, projectGenericMemberships);
+    sourceStage.operationAttempts, callableEntries.value, classContexts, projectGenericMemberships, headerPlacements);
   if (emission.kind === "rejected") return emission;
   context.callableValues.publish();
   const finalFoundation = finalizeRustFoundation(program.foundation, context.records.minimumFoundation());
