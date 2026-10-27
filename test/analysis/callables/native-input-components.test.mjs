@@ -8,10 +8,19 @@ import { rustOptionElementCarrier } from "../../../dist/target-model/types/carri
 import { rustStructuralObjectCarrierValue } from "../../../dist/target-model/types/carriers/source-types.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 
-function fixture(source) {
+function fixture(source, beforeInputConstruction) {
   let context;
   compileRust({ surfaces: [], files: { "index.ts": source }, compileTarget(request) {
-    context = analyzeRustCheckedContext(request);
+    context = analyzeRustCheckedContext(request, original => {
+      if (beforeInputConstruction === undefined) return original;
+      const callableValues = Object.create(original.callableValues);
+      Object.defineProperty(callableValues, "initialize", { value(input) {
+        const construction = original.callableValues.initialize(input);
+        beforeInputConstruction(input, construction);
+        return construction;
+      } });
+      return { ...original, callableValues };
+    });
     assert.equal(context.diagnostics.length, 0, `the checked native input owner admits its source: ${JSON.stringify(
       context.diagnostics.map(({ code, message }) => ({ code, message })))}`);
     return { kind: "resolved", value: { artifacts: [] }, diagnostics: [] };
@@ -131,17 +140,37 @@ test("generic input classification cannot publish without its completed native p
     "the original owner reports the missing completed binding before publication");
 });
 
+test("native input component collection treats callable parameter signatures as type evidence not stored data", () => {
+  const current = fixture(`
+type Input = { readonly invoke: () => number };
+export function callback(value: (input: Input) => number): void {}
+`);
+  const inputs = current.native.inputsFor(current.declaration("callback"));
+  assert.equal(inputs.length, 1, "the original callable owns one complete native input protocol");
+  assert.equal(inputs[0].subject.projection.length, 0, "a nested signature parameter is not a stored data projection");
+  const signature = rustCallableProtocol(inputs[0].carrier);
+  assert.equal(signature?.parameters.length === 1 && rustStructuralObjectCarrierValue(signature.parameters[0])?.fields.length === 1, true,
+    "the original structured signature parameter remains intact without adding a component input");
+  assert.equal(current.native.isConcreteCallableStorage(inputs[0].subject), false,
+    "the actual callable input retains its completed generic classification");
+});
+
 test("native input component recursion is path-bounded and preserves genuine concrete inputs", () => {
+  let concrete;
   const current = fixture(`
 type Input = { readonly invoke: () => number };
 export function take(value: Input): void {}
-`);
+`, (input, construction) => {
+    concrete = createRustNativeCallableInputPlan({ ...input, storage: input.sourceStorage,
+      definitions: input.typeDefinitions, usedNames: new Set(), declaresGenericInputs: () => false,
+      ownedRetainedParameter: construction.native.isNativeRetainedParameter });
+  });
   const owner = current.declaration("take");
   const parameter = current.context.ast.parameters(owner)[0];
   const selected = current.context.records.sourceParameterAbi.get(parameter);
   const structural = rustStructuralObjectCarrierValue(selected.valueCarrier);
   assert.equal(structural?.fields.length, 1, "the original source has one admitted stored callable field");
-  const concrete = createRustNativeCallableInputPlan({ ...current.input, declaresGenericInputs: () => false });
+  assert.equal(concrete !== undefined, true, "the concrete control is built from the actual initialized input-owner boundary");
   const original = current.native.inputsFor(owner)[0].subject;
   assert.equal(concrete.isConcreteCallableStorage(original), true, "a legitimately concrete source keeps its native runtime callable");
   assert.equal(concrete.inputsFor(owner).length, 0, "concrete storage is not forced into a new generic input");
