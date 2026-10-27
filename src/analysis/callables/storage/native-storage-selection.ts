@@ -19,7 +19,9 @@ import { rustSourceOptionalTargetType } from "../../../target-model/types/projec
 import { isRustAbsenceCarrier } from "../../../target-model/types/carriers/native.js";
 import { isRustNativeFutureCarrier, rustFutureOutputCarrier } from "../../../target-model/types/carriers/primitives.js";
 import { rustUnionAlternatives } from "../../../target-model/types/union-relations.js";
-import { rustSourceUnionCarrierValue, rustStructuralObjectCarrierValue, rustStructuralObjectTargetType, rustStructuralObjectCarrierName } from "../../../target-model/types/carriers/source-types.js";
+import { rustSourceUnionCarrierValue, rustSourceTypeCarrierValue, rustStructuralObjectCarrierValue, rustStructuralObjectTargetType, rustStructuralObjectCarrierName } from "../../../target-model/types/carriers/source-types.js";
+import { inferRustTargetGenericBindings } from "../../../target-model/types/carriers/generic-inference.js";
+import { rustLifetimeKey } from "../../../target-model/lifetimes/index.js";
 import { instantiateRustRuntimeUnionPayloads } from "../../../target-model/types/carriers/runtime-unions.js";
 
 import { mapRustTargetTypes, substituteRustTargetGenerics } from "../../../target-model/types/carriers/substitution.js";
@@ -32,7 +34,7 @@ import { rustAbsentFutureWitness } from "../../../policy/conversions/native-call
 import { isRustNeverCarrier } from "../../../target-model/types/carriers/js.js";
 import { rustJsArrayLikeElementTargetType } from "../../../target-model/types/carriers/js.js";
 import { rustTypeGenericArguments } from "../../../target-model/types/generic-arguments.js";
-import { rustCallableTargetId } from "../../../target-model/types/carriers/source-types.js";
+import { rustCallableTargetId, rustLocationTargetId } from "../../../target-model/types/carriers/source-types.js";
 
 import { rustNativeCallableInvocationArguments } from "../../../policy/types/callables/native-invocations.js";
 import { createRustNativeStorageGenericSelection, rustNativeStorageProjectionSteps, rustNativeStorageProjectionDepth } from "./native-storage-generics.js";
@@ -259,6 +261,42 @@ export function createRustNativeStorageSelection(
       if (current.kind === "reference") {
         const referent = visit(current.referent, selectedSubject, bindings, depth + 1, permitsAbsence, position);
         return referent === undefined ? undefined : referent === current.referent ? current : Object.freeze({ ...current, referent });
+      }
+      const location = current.kind === "target-named" && current.id === rustLocationTargetId ? current : undefined;
+      const pointee = current.kind === "pointer" ? current.pointee : location?.genericArguments?.[0]?.kind === "type"
+        ? location.genericArguments[0].type : undefined;
+      if (pointee !== undefined) {
+        const needed = requiresPhysicalSelection(pointee, depth + 1);
+        if (needed === undefined) return undefined;
+        if (!needed) return current;
+        const origins = input.storage.storageProducersFor(selectedSubject, bindings);
+        if (origins.kind !== "complete") return fail(origins.kind === "unresolved" ? origins.reason
+          : "A native callable pointer requires the complete checked allocation provenance of its pointee.");
+        let selected: TargetTypeRef | undefined;
+        for (const origin of origins.producers) {
+          const subject = origin.subject;
+          const plan = subject.kind === "value" && subject.projection.length === 0
+            ? input.records.typedLocationPlan.get(subject.node) : undefined;
+          let candidate: TargetTypeRef | undefined;
+          if (plan?.operation === "allocate") {
+            const source = input.storage.subjectFor(plan.initialExpression);
+            if (source.kind === "unresolved") return fail(source.reason);
+            candidate = visit(pointee, source.subject, origin.bindings, depth + 1, false, position);
+          } else {
+            const physical = producerResult(subject, origin.bindings, current, depth + 1);
+            candidate = physical?.kind === "pointer" ? physical.pointee
+              : physical?.kind === "target-named" && physical.id === rustLocationTargetId && physical.genericArguments?.[0]?.kind === "type"
+                ? physical.genericArguments[0].type : undefined;
+          }
+          if (candidate === undefined) return fail("A native callable pointer requires its original finite allocation and exact physical pointee.");
+          if (selected !== undefined && !rustTargetTypeRefEquals(selected, candidate))
+            return fail("A native callable pointer cannot combine allocations with different physical pointee representations.");
+          selected = candidate;
+        }
+        if (selected === undefined) return fail("A native callable pointer has no original checked allocation.");
+        return current.kind === "pointer" ? Object.freeze({ ...current, pointee: selected })
+          : Object.freeze({ ...location!, genericArguments: Object.freeze(location!.genericArguments!.map((argument, index) =>
+            index === 0 ? Object.freeze({ kind: "type" as const, type: selected! }) : argument)) });
       }
       if (isRustNativeFutureCarrier(current)) {
         const origins = input.storage.boundValueFrontierFor(selectedSubject, bindings, [], position);
@@ -782,6 +820,49 @@ export function createRustNativeStorageSelection(
           ? { kind: "instance" } : { kind: "native-input", owner: inputFields[0]!.inputs[0]!.owner,
             subject: selectedSubject, fields: Object.freeze(inputFields) });
         return completion.kind === "resolved" ? completion.carrier : fail(completion.reason);
+      }
+      const nominal = rustSourceTypeCarrierValue(current);
+      const definition = nominal === undefined ? undefined : input.projectTypes.definitionForCarrier(current);
+      if (definition !== undefined) {
+        const demanded = requiresPhysicalSelection(current, depth + 1);
+        if (demanded === undefined) return undefined;
+        if (!demanded) return current;
+        const layout = input.projectTypes.objectLayoutForDefinition(definition);
+        if (layout === undefined) return fail("Native nominal data storage requires its exact original layout owner.");
+        const parameters = { typeIdentities: new Set(definition.genericParameters.flatMap(parameter =>
+          parameter.kind === "type" ? [parameter.identity] : [])),
+          lifetimeIdentities: new Set(definition.genericParameters.flatMap(parameter =>
+            parameter.kind === "lifetime" ? [rustLifetimeKey(parameter.lifetime)] : [])), constIdentities: new Set<string>() };
+        const original = input.projectTypes.openCarrier(definition);
+        const actual = inferRustTargetGenericBindings(original, current, parameters);
+        if (actual === undefined) return fail("Native nominal data storage requires its exact original generic application.");
+        const physicalTypes = new Map<string, TargetTypeRef>();
+        const physicalLifetimes = new Map(actual.lifetimes);
+        for (const field of layout.fields) {
+          const declared = input.records.runtimeCarrier.get(field.declaration)?.carrier;
+          const logical = declared === undefined ? undefined : input.projectTypes.instantiateMemberCarrier(field.declaration, current, declared);
+          if (logical === undefined || declared === undefined)
+            return fail("Native nominal data storage requires its checked instantiated field carrier.");
+          const needed = requiresPhysicalSelection(logical, depth + 1);
+          if (needed === undefined) return undefined;
+          if (!needed) continue;
+          const component = project(selectedSubject, { kind: "member", declaration: field.declaration });
+          const physical = component === undefined ? undefined : visit(logical, component, bindings, depth + 1, false, position);
+          if (physical === undefined) return undefined;
+          if (!rustTargetGenericReferences(declared).typeIdentities.some(identity => parameters.typeIdentities.has(identity))) continue;
+          const selected = inferRustTargetGenericBindings(declared, physical, parameters);
+          if (selected === undefined) return fail("Native nominal data storage requires its exact field-to-generic physical correspondence.");
+          for (const [identity, carrier] of selected.types) {
+            const previous = physicalTypes.get(identity);
+            if (previous !== undefined && !rustTargetTypeRefEquals(previous, carrier))
+              return fail("A native nominal generic slot requires one exact physical carrier across all of its fields.");
+            physicalTypes.set(identity, carrier);
+          }
+          for (const [identity, lifetime] of selected.lifetimes) physicalLifetimes.set(identity, lifetime);
+        }
+        const types = new Map(actual.types);
+        for (const [identity, carrier] of physicalTypes) types.set(identity, carrier);
+        return substituteRustTargetGenerics(original, types, physicalLifetimes, actual.consts);
       }
       const variants = rustUnionAlternatives(current, input.definitions);
       if (variants !== undefined) {

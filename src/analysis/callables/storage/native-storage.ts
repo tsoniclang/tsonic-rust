@@ -46,6 +46,7 @@ import type { RustFrameCallablePlan } from "../../../target-model/records/callab
 import { rustSourceStorageProjectedCarrier, type RustValueDomainCarrierHost } from "../../objects/value-domain-carriers.js";
 import { selectRustSourceCallableInvocationBindings } from "./native-storage-generics.js";
 import type { RustTargetGenericBindings } from "../../../target-model/types/carriers/generic-inference.js";
+import type { RustProjectTypePolicy } from "../../../target-model/types/project-types.js";
 
 import type { RustCallableJoinWrite } from "../../../target-model/records/native/native-storage.js";
 
@@ -85,6 +86,7 @@ export interface RustNativeStorageConstruction extends RustNativeStoragePlan {
 export type RustNativeStorageQueries = Omit<RustNativeStorageConstruction, "parameterFor">;
 
 export function createRustNativeStorageQueries(input: {
+  readonly projectTypes: RustProjectTypePolicy;
   readonly frames: Pick<RustFrameCallablePlan, "errorFor" | "bindingFor">;
   readonly ast: AstReader;
   readonly nativeNodes: readonly Node[];

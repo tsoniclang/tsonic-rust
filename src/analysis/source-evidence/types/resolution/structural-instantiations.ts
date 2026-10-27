@@ -114,7 +114,8 @@ function retainStructuralType(
   const templateImplementation = rustStructuralObjectCarrierValue(templateCarrier)?.implementation;
   const ownsBody = implementation !== undefined && (templateImplementation === undefined ||
     implementation.methods.some((method, index) => method.identity !== templateImplementation.methods[index]?.identity));
-  const selectedContext = bindRustSourceAliasArguments(sourceType, context, options, resolving, authoredTypeNode);
+  const selectedContext = bindRustSourceAliasArguments(sourceType, context, options, resolving, authoredTypeNode,
+    context.currentSemantics.types.aliasApplication(sourceType)?.declaration === template.sourceAlias ? templateCarrier : undefined);
   if (selectedContext === undefined) return false;
   context = selectedContext;
   const correspondence = context.currentSemantics.types.structuralMembers(sourceType, template.sourceType, "correspondence");

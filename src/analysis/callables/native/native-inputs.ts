@@ -125,9 +125,10 @@ export function createRustNativeCallableInputPlan(input: {
     if (owner === undefined || sourceCallableValueParameters(input.ast, owner,
       input.storage.source.semantics.forNode(owner))?.includes(parameter) !== true) continue;
     const abi = input.records.sourceParameterAbi.get(parameter);
+    const quantified = abi !== undefined && rustGenericCallableValue(rustOptionElementCarrier(abi.valueCarrier) ?? abi.valueCarrier) !== undefined;
     const borrowedCallable = abi !== undefined &&
       rustCallableInputProtocol(rustOptionElementCarrier(abi.parameterCarrier) ?? abi.parameterCarrier) !== undefined;
-    if (!nativeRetainedParameters.has(parameter) && !borrowedCallable && input.ownedRetainedParameter(parameter))
+    if (!quantified && !nativeRetainedParameters.has(parameter) && !borrowedCallable && input.ownedRetainedParameter(parameter))
       nativeRetainedParameters.add(parameter);
     if (!input.declaresGenericInputs(owner) || nativeRetainedParameters.has(parameter)) concreteParameters.add(parameter);
   }
@@ -180,11 +181,7 @@ export function createRustNativeCallableInputPlan(input: {
     const identity = sourceNodeIdentity(input.ast, subject.node);
     const file = input.ast.getSourceFile(subject.node);
     if (identity === undefined || file === undefined) return undefined;
-    const projection = subject.projection.map(component => component.kind === "array-element" ? "array"
-      : component.kind === "tuple-element" ? `tuple:${component.index}`
-      : sourceNodeIdentity(input.ast, component.declaration));
-    if (projection.some(component => component === undefined)) return undefined;
-    const nativeIdentity = `native-callable:${input.ast.getFileName(file)}:${identity}:${JSON.stringify(projection)}`;
+    const nativeIdentity = `native-callable:${input.ast.getFileName(file)}:${identity}:${subject.projectionKey}`;
     const component = componentByFile.get(input.ast.getFileName(file));
     const ownerFileName = component === undefined ? undefined : ownerByComponent.get(component);
     const protocol = ownerFileName === undefined ? undefined : registry.bind(ownerFileName, carrier);
@@ -235,6 +232,21 @@ export function createRustNativeCallableInputPlan(input: {
       implementations: Object.freeze([...implementations]) });
   };
   const componentIssues: RustSourceCallableSpecializationIssue[] = [];
+  const nominalFields = (carrier: TargetTypeRef): readonly { readonly declaration: Node; readonly carrier: TargetTypeRef }[] | undefined => {
+    const definition = input.projectTypes.definitionForCarrier(carrier);
+    if (definition === undefined) return [];
+    const layout = input.projectTypes.objectLayoutForDefinition(definition);
+    if (layout === undefined) return undefined;
+    const result: { readonly declaration: Node; readonly carrier: TargetTypeRef }[] = [];
+    for (const field of layout.fields) {
+      const declared = input.records.runtimeCarrier.get(field.declaration)?.carrier;
+      const selected = declared === undefined ? undefined
+        : input.projectTypes.instantiateMemberCarrier(field.declaration, carrier, declared);
+      if (selected === undefined) return undefined;
+      result.push({ declaration: field.declaration, carrier: selected });
+    }
+    return result;
+  };
   const hasCallableData = (carrier: TargetTypeRef, active: Set<TargetTypeRef>, step: (depth: number) => boolean,
     depth: number): boolean | undefined => {
     if (!step(depth)) return undefined;
@@ -246,9 +258,11 @@ export function createRustNativeCallableInputPlan(input: {
       const structural = rustStructuralObjectCarrierValue(selected);
       const element = selected.kind === "array" || selected.kind === "slice" ? selected.element
         : rustJsArrayLikeElementTargetType(selected);
+      const nominal = structural === undefined && selected.kind !== "tuple" && element === undefined ? nominalFields(selected) : [];
+      if (nominal === undefined) return undefined;
       const children = selected.kind === "tuple" ? selected.elements : element !== undefined ? [element]
         : structural?.fields.filter(field => field.method !== true && field.accessor === undefined && field.bound !== true)
-          .map(field => field.type) ?? [];
+          .map(field => field.type) ?? nominal.map(field => field.carrier);
       for (const child of children) {
         const required = hasCallableData(child, active, step, depth + 1);
         if (required !== false) return required;
@@ -293,7 +307,16 @@ export function createRustNativeCallableInputPlan(input: {
       if (element !== undefined)
         return collectInputComponents(parameter, element, [...projection, { kind: "array-element" }], active, step, depth + 1);
       const structural = rustStructuralObjectCarrierValue(selected);
-      if (structural === undefined) return;
+      if (structural === undefined) {
+        const fields = nominalFields(selected);
+        if (fields === undefined) return "Native callable input components require their original instantiated nominal data fields.";
+        for (const field of fields) {
+          const failure = collectInputComponents(parameter, field.carrier,
+            [...projection, { kind: "member", declaration: field.declaration }], active, step, depth + 1);
+          if (failure !== undefined) return failure;
+        }
+        return;
+      }
       const layout = input.structuralShapes.definitionForCarrier(selected);
       if (layout === undefined || layout.fields.length !== structural.fields.length)
         return "Native callable input components require their exact initialized structural layout.";
@@ -349,9 +372,6 @@ export function createRustNativeCallableInputPlan(input: {
       depth => remaining-- > 0 && depth <= rustNativeStorageProjectionDepth);
     if (failure !== undefined) componentIssues.push(Object.freeze({ subject: node, message: failure }));
   }
-  for (const subject of input.storage.subjects) {
-    if (subject.kind === "input" || subject.kind === "member") selectConcreteStorage(subject);
-  }
   for (const node of input.nativeNodes) {
     const carrier = input.records.runtimeCarrier.get(node)?.carrier;
     if (carrier === undefined) continue;
@@ -361,6 +381,9 @@ export function createRustNativeCallableInputPlan(input: {
     if (owner === undefined) continue;
     const subject = input.storage.subjectFor(node);
     if (subject.kind === "resolved") values.set(node, originsFor(owner, subject.subject, carrier));
+  }
+  for (const subject of input.storage.subjects) {
+    if (subject.kind === "input" || subject.kind === "member") selectConcreteStorage(subject);
   }
   collecting = false;
   const selectedInputs = Object.freeze([...inputs.values()].flatMap(members => [...members.values()]));

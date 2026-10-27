@@ -1,7 +1,8 @@
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { AstReader, Node } from "@tsonic/tsts";
 import type { SourceStorageBindings, SourceStorageProducer, SourceStorageQueries, SourceStorageSubject } from "@tsonic/target-api/analysis";
-import { sourceEnclosingCallable, asSourceNode, sourceCallableValueParameters } from "@tsonic/target-api/source";
+import { sourceEnclosingCallable, asSourceNode, sourceCallableValueParameters, Node_Initializer,
+  BinaryExpression_Left, BinaryExpression_Right, BinaryExpression_OperatorToken } from "@tsonic/target-api/source";
 import type { RustProgramRecords } from "../../../target-model/records/program.js";
 import type { RustTargetOperationFact } from "../../../target-model/records/operations/operations.js";
 import type { RustErrorRegionRecords } from "../../../target-model/records/errors/error-regions.js";
@@ -241,7 +242,7 @@ export function createRustStructuralMethodStorage(input: {
       const parent = new Map<Node, Node>();
       const errorByProducer = new Map<Node, TargetTypeRef>();
       const demands = new Map<Node, TargetTypeRef[]>();
-      const nativeDemands = new Map<Node, TargetTypeRef[]>();
+      const fixedDemands = new Map<Node, TargetTypeRef[]>();
       const slots = new Map<RustStructuralMethodShape, Map<number, Node>>();
       const rootFor = (declaration: Node): Node => {
         const previous = parent.get(declaration);
@@ -292,7 +293,7 @@ export function createRustStructuralMethodStorage(input: {
         for (const producer of admitted) {
           const subject = producer.subject;
           if (subject.kind !== "value" || subject.projection.length !== 0 ||
-            records.targetOperation.get(subject.node)?.kind !== "closure")
+            input.nativeProducers.forDeclaration(subject.node) === undefined)
             return reject(subject.node, "Retained constructor selection requires its admitted physical closure producer.");
           const declaration = subject.node;
           rootFor(declaration);
@@ -313,8 +314,64 @@ export function createRustStructuralMethodStorage(input: {
         }
       }
       for (let index = roots.length - 1; index >= 0; index -= 1) if (covered.has(roots[index]!)) roots.splice(index, 1);
+      const demandConstruction = (expression: Node, carrier: TargetTypeRef, site: Node): readonly RustSourceCallableSpecializationIssue[] | undefined => {
+        const protocol = rustCallableProtocol(rustOptionElementCarrier(carrier) ?? carrier);
+        if (protocol?.error === undefined) return undefined;
+        const subject = sourceStorage.subjectFor(expression);
+        if (subject.kind === "unresolved") return reject(expression, subject.reason);
+        const bindings = sourceStorage.bindingsForLexicalOwner(site);
+        if (bindings.kind === "unresolved") return reject(expression, bindings.reason);
+        const selected = sourceStorage.storageProducersFor(subject.subject, bindings.bindings);
+        if (selected.kind === "unresolved") return reject(expression, selected.reason);
+        const declared = normalizeRustErrorType(protocol.error, context, site);
+        if (declared === undefined) return reject(site, "A fixed callable storage requires its exact destination error owner.");
+        for (const producer of selected.producers) {
+          const origin = producer.subject;
+          if (origin.kind !== "value" || origin.projection.length !== 0 ||
+            input.nativeProducers.forDeclaration(origin.node) === undefined) continue;
+          const error = input.nativeProducers.errorFor(origin.node, "invoke");
+          const intrinsic = error === undefined ? undefined : normalizeRustErrorType(error, context, origin.node);
+          if (intrinsic === undefined) return reject(origin.node, "A retained callable construction requires its completed intrinsic error.");
+          rootFor(origin.node);
+          errorByProducer.set(origin.node, intrinsic);
+          const requirements = fixedDemands.get(origin.node) ?? [];
+          if (!requirements.some(requirement => rustTargetTypeRefEquals(requirement, declared))) requirements.push(declared);
+          fixedDemands.set(origin.node, requirements);
+        }
+        return undefined;
+      };
       for (const invocation of input.nativeNodes) {
         const operation = records.targetOperation.get(invocation);
+        if (operation?.kind === "record-literal") {
+          for (const contribution of operation.contributions) {
+            if (contribution.kind !== "property") continue;
+            const field = operation.fields.find(field => field.storageIndex === contribution.targetStorageIndex);
+            const expression = ast.is.IsShorthandPropertyAssignment(contribution.property) ? ast.name(contribution.property)
+              : Node_Initializer(ast, contribution.property);
+            if (field === undefined || field.method === true || expression === undefined) continue;
+            const failure = demandConstruction(expression, field.carrier, contribution.property);
+            if (failure !== undefined) return failure;
+          }
+        }
+        if (ast.is.IsBinaryExpression(invocation)) {
+          const operator = BinaryExpression_OperatorToken(ast, invocation);
+          const left = BinaryExpression_Left(ast, invocation);
+          const right = BinaryExpression_Right(ast, invocation);
+          const field = left === undefined ? undefined : records.targetOperation.get(left);
+          if (operator !== undefined && ast.kindName(operator) === "KindEqualsToken" && right !== undefined &&
+            field?.kind === "source-field") {
+            const failure = demandConstruction(right, field.resultCarrier, left!);
+            if (failure !== undefined) return failure;
+          }
+        }
+        if (ast.typeNode(invocation) !== undefined) {
+          const initial = Node_Initializer(ast, invocation);
+          const carrier = records.runtimeCarrier.get(invocation)?.carrier;
+          if (initial !== undefined && carrier !== undefined) {
+            const failure = demandConstruction(initial, carrier, invocation);
+            if (failure !== undefined) return failure;
+          }
+        }
         if (operation?.kind !== "provider-operation") continue;
         for (const argument of operation.abi.targetArguments) {
           if (argument.source.kind !== "argument" || !("parameterCarrier" in argument)) continue;
@@ -326,29 +383,8 @@ export function createRustStructuralMethodStorage(input: {
             !rustCallableInvocationSignaturesMatch(rustOptionElementCarrier(source.carrier) ?? source.carrier, carrier)) continue;
           const expression = ast.arguments(invocation)[sourceIndex];
           if (expression === undefined) continue;
-          const subject = sourceStorage.subjectFor(expression);
-          if (subject.kind === "unresolved") return reject(expression, subject.reason);
-          const bindings = sourceStorage.bindingsForLexicalOwner(invocation);
-          if (bindings.kind === "unresolved") return reject(expression, bindings.reason);
-          const selected = sourceStorage.storageProducersFor(subject.subject, bindings.bindings);
-          if (selected.kind === "unresolved") return reject(expression, selected.reason);
-          const declared = normalizeRustErrorType(protocol.error, context, invocation);
-          if (declared === undefined) return reject(invocation,
-            "A native callable input requires its selected invocation's exact physical error owner.");
-          for (const producer of selected.producers) {
-            const origin = producer.subject;
-            if (origin.kind !== "value" || origin.projection.length !== 0 ||
-              records.targetOperation.get(origin.node)?.kind !== "closure") continue;
-            const error = input.nativeProducers.errorFor(origin.node, "invoke");
-            const intrinsic = error === undefined ? undefined : normalizeRustErrorType(error, context, origin.node);
-            if (intrinsic === undefined) return reject(origin.node,
-              "A native callable input requires its original producer's completed intrinsic error.");
-            rootFor(origin.node);
-            errorByProducer.set(origin.node, intrinsic);
-            const requirements = nativeDemands.get(origin.node) ?? [];
-            if (!requirements.some(requirement => rustTargetTypeRefEquals(requirement, declared))) requirements.push(declared);
-            nativeDemands.set(origin.node, requirements);
-          }
+          const failure = demandConstruction(expression, carrier, invocation);
+          if (failure !== undefined) return failure;
         }
       }
       const groups = new Map<Node, Node[]>();
@@ -362,7 +398,7 @@ export function createRustStructuralMethodStorage(input: {
       const infallible = (carrier: TargetTypeRef): boolean => carrier.kind === "target-named" && carrier.id === rustInfallibleTargetId;
       for (const members of groups.values()) {
         const intrinsic = members.map(member => errorByProducer.get(member)!);
-        const required = members.flatMap(member => nativeDemands.get(member) ?? []);
+        const required = members.flatMap(member => fixedDemands.get(member) ?? []);
         let selected = intrinsic[0]!;
         if (required.length !== 0) {
           selected = required[0]!;

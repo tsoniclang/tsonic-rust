@@ -7,7 +7,8 @@ import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions }
 import { resolveRustTargetType } from "./target.js";
 import { resolveRustAuthoredTargetType } from "./tuples.js";
 import type { RustSourceGenericParameterContract } from "../../../../target-model/lifetimes/index.js";
-import { bindRustExactTypeParameters } from "../../../../target-model/types/carriers/generic-inference.js";
+import { bindRustExactTypeParameters, inferRustTargetTypeParameterBindings } from "../../../../target-model/types/carriers/generic-inference.js";
+import { rustCarrierWithTargetPlaceholderLifetimes } from "../../../../target-model/types/placeholder-lifetimes.js";
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
 import { rustTargetTypeParameterIdentities } from "../../../../target-model/types/carriers/generic-references.js";
 import { resolveRustEnclosingGenericParameters } from "../../../callables/generics/generic-environment.js";
@@ -107,6 +108,7 @@ export function bindRustSourceAliasArguments(
   options: RustTargetTypeResolutionOptions,
   resolving: Set<object>,
   authoredTypeNode?: Node,
+  nativeCarrier?: TargetTypeRef,
 ): RustTargetTypeResolutionContext | undefined {
   const application = context.currentSemantics.types.aliasApplication(type);
   if (application === undefined) return context;
@@ -114,6 +116,12 @@ export function bindRustSourceAliasArguments(
   const authoredApplication = authoredType === undefined ? undefined : context.currentSemantics.types.aliasApplication(authoredType);
   if (authoredApplication !== undefined && authoredApplication.declaration !== application.declaration) return undefined;
   const parameters = context.ast.typeParameters(application.declaration);
+  const nativeParameters = context.sourceLifetimes.contractFor(application.declaration)?.parameters;
+  const nativeTemplate = nativeCarrier === undefined ? undefined : options.sourceTypes.carrierForDeclaration(application.declaration);
+  const nativeArguments = nativeCarrier === undefined || nativeTemplate === undefined || nativeParameters === undefined ? undefined
+    : inferRustTargetTypeParameterBindings(rustCarrierWithTargetPlaceholderLifetimes(nativeTemplate, nativeCarrier), nativeCarrier,
+      new Set(nativeParameters.flatMap(parameter => parameter.kind === "type" ? [parameter.identity] : [])));
+  if (nativeCarrier !== undefined && nativeArguments === undefined) return undefined;
   const reference = authoredTypeNode === undefined || !context.ast.is.IsTypeReferenceNode(authoredTypeNode)
     ? undefined : context.source.navigation.sourceReferenceFor(TypeReferenceNode_TypeName(context.ast, authoredTypeNode));
   const argumentNodes = authoredTypeNode !== undefined && reference?.declaration === application.declaration
@@ -127,7 +135,10 @@ export function bindRustSourceAliasArguments(
     const existing = substitutions.get(binding.declaration);
     const argumentNode = argumentNodes[parameters.indexOf(binding.declaration)];
     const authoredBinding = authoredApplication?.bindings.find(candidate => candidate.declaration === binding.declaration);
-    const carrier = argumentNode !== undefined ? resolveRustAuthoredTargetType(argumentNode, context, options, resolving)
+    const native = nativeArguments?.get(parameter.identity);
+    const authored = argumentNode === undefined ? undefined : resolveRustAuthoredTargetType(argumentNode, context, options, resolving);
+    if (native !== undefined && authored !== undefined && !rustTargetTypeRefEquals(native, authored)) return undefined;
+    const carrier = native !== undefined ? native : argumentNode !== undefined ? authored
       : existing?.sourceType === binding.argument ? existing.carrier
       : authoredBinding !== undefined ? resolveRustTargetType(authoredBinding.argument, context, options, resolving)
       : resolveRustTargetType(binding.argument, context, options, resolving);
