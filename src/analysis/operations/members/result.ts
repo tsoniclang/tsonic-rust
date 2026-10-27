@@ -58,13 +58,7 @@ export function selectedMemberReceiverCarrier(
   }
   const source = memberReceiverSourceCarrier(request, receiver, context, options);
   const receiverKind = context.ast.kindName(receiver);
-  const containingThisDefinition = receiverKind === "KindThisExpression" ||
-      receiverKind === "KindThisKeyword"
-    ? options.projectTypes.definitionContainingDeclaration(receiver)
-    : undefined;
-  const sourceCarrier = containingThisDefinition === undefined
-    ? source.carrier
-    : options.projectTypes.openCarrier(containingThisDefinition);
+  const sourceCarrier = source.carrier;
   if (request.sourceReceiverType === undefined) {
     return undefined;
   }
@@ -136,14 +130,6 @@ export function selectedMemberReceiverCarrier(
   const selectedOwner = options.projectTypes.definitionContainingDeclaration(
     request.sourceSelectedDeclaration,
   );
-  if (
-    containingThisDefinition !== undefined &&
-    sourceCarrier !== undefined &&
-    selectedOwner === containingThisDefinition &&
-    !context.ast.hasModifierKind(request.sourceSelectedDeclaration, "static")
-  ) {
-    return sourceCarrier;
-  }
   if (sourceCarrier !== undefined && options.sourceTypes.structuralObjectForType(
     request.sourceReceiverType, sourceCarrier) !== undefined) {
     return request.optionalChain === true ? rustOptionValueCarrier(sourceCarrier) : sourceCarrier;
