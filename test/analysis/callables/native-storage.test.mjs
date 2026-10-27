@@ -3,7 +3,7 @@ import test from "node:test";
 import { selectRustObjectNativeLifetimeContract } from "../../../dist/policy/types/objects/representation.js";
 import { analyzeRust, compileRust, rustSourceText } from "../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
-import { createTargetSourceProgram, Node_Initializer, sourceNodesOutsideErasedSubtrees } from "@tsonic/target-api/source";
+import { createTargetSourceProgram, sourceNodeIdentity, Node_Initializer, sourceNodesOutsideErasedSubtrees } from "@tsonic/target-api/source";
 import { createSourceStorageQuery } from "@tsonic/target-api/analysis";
 import { createRustNativeCallableInputPlan } from "../../../dist/analysis/callables/native/native-inputs.js";
 import { createRustNativeStorageQueries } from "../../../dist/analysis/callables/storage/native-storage.js";
@@ -890,7 +890,7 @@ test("concrete quantified producers retain the existing sealed family through al
     "signature equality cannot substitute for a missing producer identity");
 });
 
-test("physical selection rejects ambiguous mutation alternatives and seals concrete producers", () => {
+test("physical selection rejects ambiguous mutation alternatives and seals concrete producers", context => {
   const ambiguous = `
     export function choose(left: () => number, right: () => number): () => number {
       left = right; const selected = left; return selected;
@@ -899,6 +899,19 @@ test("physical selection rejects ambiguous mutation alternatives and seals concr
     export function concrete(): () => number { const supplied = create(); return supplied; }
   `;
   const rejection = compileRust({ surfaces: [], files: { "index.ts": ambiguous } });
+  const observedAst = createTargetSourceProgram(rejection.source).ast;
+  context.diagnostic(JSON.stringify({ observation: "L12-C938-015", count: rejection.result.diagnostics.length }));
+  for (const [index, diagnostic] of rejection.result.diagnostics.slice(0, 16).entries()) {
+    const node = diagnostic.sourceNode;
+    const file = node === undefined ? undefined : observedAst.getSourceFile(node);
+    context.diagnostic(JSON.stringify({ observation: "L12-C938-015", index,
+      code: diagnostic.code, file: file === undefined ? null : observedAst.getFileName(file),
+      start: node === undefined ? null : observedAst.pos(node), end: node === undefined ? null : observedAst.end(node),
+      nodeIdentity: sourceNodeIdentity(observedAst, node) ?? null,
+      publishedSpan: diagnostic.sourceSpan === undefined ? null : {
+        file: diagnostic.sourceSpan.fileName, line: diagnostic.sourceSpan.line, column: diagnostic.sourceSpan.column,
+        endLine: diagnostic.sourceSpan.endLine, endColumn: diagnostic.sourceSpan.endColumn } }));
+  }
   assert.equal(rejection.result.artifacts.length, 0, "neither ambiguous return nor local storage can reach emission");
   assert.deepEqual(rejection.result.diagnostics.map(({ code, message }) => ({ code, message })), [
     { code: "RUST_SOURCE_CALLABLE_SPECIALIZATION_NOT_CLOSED",

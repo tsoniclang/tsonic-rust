@@ -1,7 +1,7 @@
 import { assertRustRecordRequirement } from "../../helpers/required-records.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
-import { Node_Expression, Node_Initializer } from "@tsonic/target-api/source";
+import { createTargetSourceProgram, sourceNodeIdentity, Node_Expression, Node_Initializer } from "@tsonic/target-api/source";
 import { analyzeRust, compileRust } from "../../helpers/rust-session.mjs";
 import { analyzeRustErrorEffects } from "../../helpers/rust-error-analysis.mjs";
 
@@ -187,7 +187,7 @@ test("physical callable signatures substitute declaration-generic environments w
   }
 });
 
-test("physical callable operand queries reject unrelated values, missing owners and ambiguous source alternatives", () => {
+test("physical callable operand queries reject unrelated values, missing owners and ambiguous source alternatives", context => {
   const ambiguous = `
     export function choose(left: () => number, right: () => number): () => number {
       left = right; const selected = left; return selected;
@@ -196,6 +196,19 @@ test("physical callable operand queries reject unrelated values, missing owners 
     export function create(): () => number { const callback = original; const other = 3; return callback; }
   `;
   const rejection = compileRust({ surfaces: [], files: { "index.ts": ambiguous } });
+  const observedAst = createTargetSourceProgram(rejection.source).ast;
+  context.diagnostic(JSON.stringify({ observation: "L12-C938-003", count: rejection.result.diagnostics.length }));
+  for (const [index, diagnostic] of rejection.result.diagnostics.slice(0, 16).entries()) {
+    const node = diagnostic.sourceNode;
+    const file = node === undefined ? undefined : observedAst.getSourceFile(node);
+    context.diagnostic(JSON.stringify({ observation: "L12-C938-003", index,
+      code: diagnostic.code, file: file === undefined ? null : observedAst.getFileName(file),
+      start: node === undefined ? null : observedAst.pos(node), end: node === undefined ? null : observedAst.end(node),
+      nodeIdentity: sourceNodeIdentity(observedAst, node) ?? null,
+      publishedSpan: diagnostic.sourceSpan === undefined ? null : {
+        file: diagnostic.sourceSpan.fileName, line: diagnostic.sourceSpan.line, column: diagnostic.sourceSpan.column,
+        endLine: diagnostic.sourceSpan.endLine, endColumn: diagnostic.sourceSpan.endColumn } }));
+  }
   assert.equal(rejection.result.artifacts.length, 0, "ambiguous formal implementations are rejected before emission");
   assert.deepEqual(rejection.result.diagnostics.map(({ code, message }) => ({ code, message })), [
     { code: "RUST_SOURCE_CALLABLE_SPECIALIZATION_NOT_CLOSED",
