@@ -953,9 +953,11 @@ test("physical storage validates token ownership, exact contracts and finite pro
   assert.equal(current.plan.subjectFor(subject, mismatched, owner).kind, "unresolved", "equal arity cannot substitute a different signature");
   const otherPlan = createRustNativeStorageQueries({ ...current.input, native: foreign.native });
   assert.equal(otherPlan.prepareReturn(owner).kind, "unresolved", "another native plan cannot mint this graph's input identity");
+  const ownedBindings = current.native.bindingsFor(owner);
+  assert.equal(ownedBindings !== undefined, true, "the finite budget control retains its actual callable activation");
   const limited = createRustNativeStorageQueries({ ...current.input, native: current.native, storage: {
     ...current.storage, boundValueFrontierFor() { return { kind: "resolved",
-      frontier: Array(4097).fill({ kind: "origin", subject: input.subject, bindings: current.storage.emptyBindings }) }; },
+      frontier: Array(4097).fill({ kind: "origin", subject: input.subject, bindings: ownedBindings }) }; },
   } });
   const rejected = limited.prepareReturn(owner);
   assert.equal(rejected.kind, "unresolved");

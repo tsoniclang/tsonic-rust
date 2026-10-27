@@ -579,16 +579,16 @@ export function createRustNativeStorageSelection(
           : fail("Native callable storage has distinct physical input alternatives requiring a sealed join.");
       }
       if (rustGenericCallableValue(current) !== undefined) {
-        const origins = input.storage.boundOriginsFor(selectedSubject, bindings);
+        const origins = input.storage.boundValueFrontierFor(selectedSubject, bindings, [], position);
         if (origins.kind === "unresolved") return fail(origins.reason);
         const materialized = (origin: SourceStorageSubject): boolean => origin.kind !== "return" || origin.projection.length !== 0 ||
           !isRustNeverCarrier(input.records.sourceCallableReturn.get(origin.node)?.returnCarrier);
-        const values = origins.subjects.filter(materialized);
+        const values = origins.frontier.filter(origin => materialized(origin.subject));
         const storedMethodValue = (origin: SourceStorageSubject): boolean =>
           origin.kind === "input" && origin.projection[origin.projection.length - 1]?.kind === "method-value";
         // Generic methods read from inputs are those inputs' stored generic callable family values.
-        if (values.length !== 0 && values.every(storedMethodValue)) return current;
-        if (values.every(origin => !inputs.has(origin))) {
+        if (values.length !== 0 && values.every(origin => storedMethodValue(origin.subject))) return current;
+        if (values.every(origin => !inputs.has(origin.subject))) {
           const producers = recordMembers.extend(input.storage.storageProducersFor(selectedSubject, bindings));
           if (producers.kind !== "complete") return fail(producers.kind === "unresolved" ? producers.reason
             : "A generic callable physical environment requires its exact closed source producers.");
@@ -603,7 +603,7 @@ export function createRustNativeStorageSelection(
           return physical.carrier;
         }
         let physical: TargetTypeRef | undefined;
-        for (const origin of values) {
+        for (const { subject: origin, bindings: originBindings } of values) {
           if (!step(depth)) return undefined;
           const candidate = inputs.get(origin);
           let candidatePhysical: TargetTypeRef | undefined;
@@ -620,7 +620,7 @@ export function createRustNativeStorageSelection(
             if (candidatePhysical === undefined)
               return fail("Native callable storage has a producer without a sealed physical implementation.");
           } else {
-            candidatePhysical = formalCarrier(candidate, current, bindings, depth);
+            candidatePhysical = formalCarrier(candidate, current, originBindings, depth);
             if (candidatePhysical === undefined) return undefined;
           }
           if (physical !== undefined && !rustTargetTypeRefEquals(physical, candidatePhysical))

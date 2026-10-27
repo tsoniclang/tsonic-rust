@@ -17,6 +17,11 @@ const cases = [
     export function retain(callback: Identity): Identity { return callback; }
     export function forward<Value>(callback: Identity, value: Value): Value { return retain(callback)<Value>(value); }
   `, ["retain", "forward"]],
+  ["quantified forwarded result", `
+    type Identity = <Value>(value: Value) => Value;
+    export function retain(callback: Identity): Identity { return callback; }
+    export function forward(callback: Identity): Identity { return retain(callback); }
+  `, ["retain", "forward"]],
 ];
 
 for (const [name, source, names] of cases) for (const surfaces of [[], ["js"]]) {
