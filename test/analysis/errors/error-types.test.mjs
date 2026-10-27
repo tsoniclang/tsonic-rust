@@ -85,6 +85,45 @@ test("concrete native Callable invocation errors normalize their bound producer 
     "a native implementation binder is never guessed to be infallible");
 });
 
+test("callable adapter emission uses the canonical exact physical error for every destination", () => {
+  const { program } = analyzeRust({ surfaces: ["js"], files: { "index.ts": `
+    export function pure(value: number): (ignored: number) => number {
+      const original = (): number => value;
+      return original;
+    }
+    export function failed(value: number): (ignored: number) => number {
+      const original = (): number => { if (value < 0) throw new Error("failure"); return value; };
+      return original;
+    }
+  ` } });
+  const input = { ast: program.source.ast, records: program.records, definitions: program.typeDefinitions,
+    producers: program.callableValues.nativeProducers, components: program.sourcePackageComponents };
+  let selectedCount = 0;
+  let pureCount = 0;
+  let failedCount = 0;
+  const visit = node => {
+    const conversion = program.records.contextualValueConversion.get(node)?.conversion;
+    if (conversion?.kind === "callable-adapter") {
+      const selected = program.records.callableContract.get(node, conversion);
+      assert.equal(selected !== undefined, true, "the adapter has one pre-seal physical conversion");
+      const error = normalizeRustErrorType(selected.source.signature.error, input, node);
+      assert.equal(error !== undefined, true, "the actual source error has exact native evidence");
+      assert.equal(rustTargetTypeRefEquals(selected.source.signature.error, error), true,
+        "emission retains the canonical error rather than a logical or producer placeholder");
+      assert.equal(rustTargetTypeRefEquals(selected.physical.source.error, error), true,
+        "the adapter and invoked source agree on their physical error identity");
+      if (rustUninhabitedError(error)) pureCount++;
+      else failedCount++;
+      selectedCount++;
+    }
+    program.source.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+  };
+  program.sourceFiles.forEach(visit);
+  assert.equal(selectedCount >= 2, true, "both original arity adaptations retain their owner contracts");
+  assert.equal(pureCount > 0, true, "the pure source retains its uninhabited error");
+  assert.equal(failedCount > 0, true, "the throwing source retains its inhabited error");
+});
+
 test("returned native callback calls publish the bound observer and resolver error before sealing", () => {
   const { program } = analyzeRust({ surfaces: ["js"], files: { "index.ts": `
     function make<Part>(done: (value: Part) => void, value: Part): () => void {

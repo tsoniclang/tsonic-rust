@@ -5,10 +5,9 @@ import type { RustCallableConversionProducer } from "../program/records/callable
 import type { RustCallableOperandEmission, RustCallableConversionEmission, RustNativeCallablePhysicalSource } from "../../target-model/records/callables/callable-conversions.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustCallableConversion } from "../../target-model/conversions/callable.js";
-import { type RustCallablePhysicalConversion, type RustCallablePhysicalSignature } from "../../target-model/conversions/callable-physical.js";
+import type { RustCallablePhysicalConversion } from "../../target-model/conversions/callable-physical.js";
 import { rustProducerErrorReference } from "../../target-model/types/carriers/producer-errors.js";
-import { rustProgramErrorOwner } from "../../target-model/types/carriers/program-errors.js";
-import { rustRuntimeErrorTargetType } from "../../target-model/types/carriers/runtime-carriers.js";
+import { normalizeRustErrorType } from "../errors/error-types.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustCallableWithError, rustUninhabitedError } from "../../policy/conversions/callable-physical.js";
 import { rustCallablePhysicalSignature } from "../../target-model/conversions/callable-physical.js";
@@ -49,10 +48,16 @@ export function analyzeRustCallableEmission(program: Omit<RustAnalysisProgram, "
     if (producer.records.callableContract.get(node, conversion) !== undefined) return;
     const file = program.source.ast.getSourceFile(node);
     const fileName = file === undefined ? undefined : program.source.ast.getFileName(file);
-    const physical = source === undefined || fileName === undefined ? undefined
-      : rustCallableConversionPhysical(conversion, providerCallbackSignature(conversion, source.signature), fileName, program.typeDefinitions,
-        source.erased === true);
-    if (source === undefined || fileName === undefined || physical === undefined)
+    const error = source === undefined ? undefined : normalizeRustErrorType(source.signature.error, {
+      ast: program.source.ast, records: program.records, definitions: program.typeDefinitions,
+      producers: program.callableValues.nativeProducers, components: program.sourcePackageComponents,
+    }, node);
+    const actual = source === undefined || error === undefined ? undefined : Object.freeze({ ...source,
+      signature: Object.freeze({ ...source.signature, error }) });
+    const physical = actual === undefined || fileName === undefined ? undefined
+      : rustCallableConversionPhysical(conversion, actual.signature, fileName, program.typeDefinitions,
+        actual.erased === true);
+    if (actual === undefined || fileName === undefined || physical === undefined)
       failTargetAnalysisInvariant("tsonic-rust", "An admitted callable adapter requires its exact physical source and closed native conversion.", node);
     const compile = (selected: RustCallablePhysicalConversion, actual: RustNativeCallablePhysicalSource): RustCallableConversionEmission => {
       const nested = new Map<RustCallablePhysicalConversion, RustCallableConversionEmission>();
@@ -67,19 +72,7 @@ export function analyzeRustCallableEmission(program: Omit<RustAnalysisProgram, "
       if (value.target !== "closure") types.push(Object.freeze({ kind: "tuple" as const, elements: selected.parameters }));
       return value;
     };
-    producer.contract(node, conversion, compile(physical, source));
-  };
-  // A provider callback (native closure target) is adapted from the invoked callable's resolved error: its producer
-  // error once the error regions sealed it. This component's program error and the runtime-domain program error are
-  // the runtime error type itself (both render as tsonic_rust_runtime::TsonicError).
-  const providerCallbackSignature = (conversion: RustCallableConversion, signature: RustCallablePhysicalSignature): RustCallablePhysicalSignature => {
-    if (conversion.target.kind !== "closure") return signature;
-    const reference = rustProducerErrorReference(signature.error);
-    const resolved = reference === undefined ? signature.error : program.errorRegions.producerError(reference);
-    if (resolved === undefined) return signature;
-    const owner = rustProgramErrorOwner(resolved);
-    const error = owner?.kind === "logical" || owner?.kind === "physical" && owner.domain === "runtime" ? rustRuntimeErrorTargetType() : resolved;
-    return rustTargetTypeRefEquals(error, signature.error) ? signature : Object.freeze({ ...signature, error });
+    producer.contract(node, conversion, compile(physical, actual));
   };
   // A producer-selected callable value whose error is uninhabited, wrapped into a union whose payload is the fixed
   // type-erased callable with an inhabited error, is written into that payload through the eliminating adapter.
