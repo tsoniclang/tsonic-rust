@@ -25,6 +25,24 @@ function createModel() {
   return createRustProgramRecordBuilder();
 }
 
+test("provider argument admission publishes only exact positive evidence", () => {
+  const model = createModel();
+  const owner = Object.freeze({});
+  const foreign = Object.freeze({});
+  const getter = model.providerArguments.get;
+  assert.equal(getter(owner) === undefined, true, "unadmitted identities have no evidence");
+  model.sourceCallArgumentPlans.provider(owner);
+  assert.equal(getter(owner) === true, true, "the exact admitted provider ABI has positive evidence");
+  assert.equal(getter(foreign) === undefined, true, "a foreign identity cannot borrow admission");
+  assert.equal(getter(undefined) === undefined, true, "absent source identity has no evidence");
+  const records = model.seal([]);
+  assert.equal(records.providerArguments.get === getter, true, "publication preserves the original lookup");
+  assert.equal(records.providerArguments.get(owner) === true, true, "the admitted identity survives sealing");
+  assert.equal(Object.isFrozen(records.providerArguments), true, "the published admission reader is frozen");
+  assert.equal("set" in records.providerArguments, false, "publication exposes no writer");
+  assert.throws(() => model.sourceCallArgumentPlans.provider(foreign), /after analysis is sealed/u);
+});
+
 test("location allocation evidence publishes once and seals the exact native owner", () => {
   const model = createModel();
   const subject = {};

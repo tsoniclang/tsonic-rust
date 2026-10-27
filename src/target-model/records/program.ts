@@ -128,7 +128,7 @@ export interface RustProgramRecords extends RustStatementExitRecords, RustStatem
   readonly expressionSyntax: import("./operations/expression-syntax.js").RustExpressionSyntaxRecords["expressionSyntax"];
   readonly sourceCallSpecialization: import("./calls/source-calls.js").RustSourceCallRecords["sourceCallSpecialization"];
   readonly sourceCallParameters: { readonly get: (fact: import("./calls/source-call-arguments.js").RustSourceCallFact) => readonly import("./calls/source-call-arguments.js").RustSourceParameterEmission[] | undefined };
-  readonly providerArguments: { readonly get: (abi: import("./operations/finalized-operation.js").RustFinalizedOperationAbi) => boolean };
+  readonly providerArguments: { readonly get: (abi: import("./operations/finalized-operation.js").RustFinalizedOperationAbi) => true | undefined };
   readonly binaryEmission: RustRecordFamily<import("./operations/expression-binary.js").RustBinaryEmission>;
   readonly assignmentEvaluation: RustRecordFamily<import("./storage/assignment-evaluation.js").RustAssignmentEvaluation>;
   readonly locationAllocation: import("./storage/location-storage.js").RustLocationStorageRecords["locationAllocation"];

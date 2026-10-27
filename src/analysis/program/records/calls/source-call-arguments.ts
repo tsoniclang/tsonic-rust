@@ -11,7 +11,7 @@ export function createRustSourceCallArgumentProducer(assertOpen: () => void) {
   const providers = new WeakSet<RustFinalizedOperationAbi>();
   return Object.freeze({ records: Object.freeze({ sourceCallArgument: family.reader, sourceCallEvaluation: evaluations.reader,
     sourceCallParameters: Object.freeze({ get: (fact: RustSourceCallFact) => parameters.get(fact) }),
-    providerArguments: Object.freeze({ get: (abi: RustFinalizedOperationAbi) => providers.has(abi) }),
+    providerArguments: Object.freeze({ get: (abi: RustFinalizedOperationAbi) => providers.has(abi) ? true : undefined }),
   }),
     provider(abi: RustFinalizedOperationAbi): void { assertOpen(); providers.add(abi); },
     call(node: Node, fact: RustSourceCallFact, value: RustSourceCallEvaluationEmission, selected: readonly RustSourceParameterEmission[]): void {
