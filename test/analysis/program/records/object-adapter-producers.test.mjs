@@ -39,9 +39,11 @@ test("object and adapter families have one frozen reader, no generic writer and 
   }
 });
 
-function copiedFixture(builder, { method = { kind: "KindMethodDeclaration", children: [] }, carrier = callable, receiver = false, fieldName = "value" } = {}) {
+function copiedFixture(builder, { method = { kind: "KindMethodDeclaration", children: [] }, carrier = callable, receiver = false, fieldName = "value", invoked = false, parenthesized = false, accessMode = "read" } = {}) {
   const literal = {};
   const read = {};
+  const wrapper = { kind: "KindParenthesizedExpression", Expression: read };
+  const invocation = { kind: "KindCallExpression", Expression: parenthesized ? wrapper : read };
   const root = { children: [literal, read] };
   const shape = rustStructuralObjectTargetType("/source.ts", [
     { sourceName: fieldName, type: callable, presence: "required", readonly: false, method: true },
@@ -50,7 +52,7 @@ function copiedFixture(builder, { method = { kind: "KindMethodDeclaration", chil
     fields: [{ storageIndex: 0, carrier }],
     contributions: [{ kind: "structural-method", targetStorageIndex: 0, expression: method }] };
   const records = createRustRecordFixture({ targetOperation: { get: node => node === literal ? operation : node === read
-    ? { kind: "source-field", storage: "structural-object", receiverCarrier: shape, storageIndex: 0, valueSemantics: { kind: "method" } }
+    ? { kind: "source-field", storage: "structural-object", receiverCarrier: shape, storageIndex: 0, accessMode, valueSemantics: { kind: "method" } }
     : node === method ? { kind: "closure", resultCarrier: carrier } : undefined },
     selectedOperation: { get: node => node === read ? { provenance: {
       sourceReceiver: literal, sourceSelectedDeclaration: method,
@@ -63,6 +65,9 @@ function copiedFixture(builder, { method = { kind: "KindMethodDeclaration", chil
     body: node => node.kind === "KindMethodDeclaration" ? { children: node.children } : undefined,
     kind: node => node.kind ?? "KindIdentifier",
     kindName: node => node.kind ?? "KindIdentifier",
+    parent: node => invoked ? node === read ? parenthesized ? wrapper : invocation : node === wrapper ? invocation : undefined : undefined,
+    is: new Proxy({}, { get: (_, property) => node => property === `Is${node.kind?.slice(4)}` }),
+    as: new Proxy({}, { get: () => node => node }),
   }, sourceStorage: {
     storageSubjectFor(node, projection) {
       const declaration = projection.length === 1 && projection[0].kind === "method-value"
@@ -75,6 +80,24 @@ function copiedFixture(builder, { method = { kind: "KindMethodDeclaration", chil
   } }, sourceTypes: { structuralInstantiations: () => [] }, rejectedExpressions: new WeakSet(), resolving: new Set() };
   return { walk, method, files: [root], finalize: () => builder.receiverIndependentMethods.finalize(walk, [root], () => "source") };
 }
+
+test("immediate structural method calls keep their receiver rather than demand an independent copied value", () => {
+  for (const parenthesized of [false, true]) {
+    const builder = createRustProgramRecordBuilder();
+    const selected = copiedFixture(builder, { receiver: true, invoked: true, parenthesized });
+    assert.equal(selected.finalize().size, 0, "a direct call does not copy the receiver-dependent method");
+    assert.equal(builder.receiverIndependentMethod.get(selected.method), undefined, "no independent method is fabricated");
+    assert.equal(selected.walk.context.diagnostics.length, 0, "receiver-dependent direct invocation remains valid");
+  }
+});
+
+test("a structural method write does not extract the previous receiver-dependent value", () => {
+  const builder = createRustProgramRecordBuilder();
+  const selected = copiedFixture(builder, { receiver: true, accessMode: "write" });
+  assert.equal(selected.finalize().size, 0, "writing a slot does not copy its previous method");
+  assert.equal(builder.receiverIndependentMethod.get(selected.method), undefined, "no independent method is fabricated");
+  assert.equal(selected.walk.context.diagnostics.length, 0, "write admission owns replacement rather than copied-read admission");
+});
 
 test("copied-method producer admits only proved implementations and preserves inherited source identity", () => {
   const parent = createRustProgramRecordBuilder();

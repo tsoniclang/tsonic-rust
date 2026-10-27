@@ -1,5 +1,5 @@
 import type { Node, SourceFile } from "@tsonic/tsts";
-import { asSourceNode, sourceCallableUsesLexicalThis } from "@tsonic/target-api/source";
+import { asSourceNode, Node_Expression, sourceCallableUsesLexicalThis, sourceTransparentExpressionOperand } from "@tsonic/target-api/source";
 import type { SourceStorageBindings, SourceStorageSubject } from "@tsonic/target-api/analysis";
 import type { RustFactWalk } from "../program/walk.js";
 
@@ -28,6 +28,15 @@ export function selectRustCopiedMethods(
   const requests = new Map<string, { readonly subject: SourceStorageSubject; readonly bindings: SourceStorageBindings }[]>();
   const { ast, sourceStorage: storage, records } = walk.context;
   const key = (carrier: TargetTypeRef, index: number): string => `${structuralStorageKey(carrier, componentForFile)}#${index}`;
+  const invokedDirectly = (node: Node): boolean => {
+    let use = node;
+    let parent = ast.parent(use);
+    while (parent !== undefined && sourceTransparentExpressionOperand(ast, parent) === use) {
+      use = parent;
+      parent = ast.parent(use);
+    }
+    return parent !== undefined && ast.is.IsCallExpression(parent) && Node_Expression(ast, parent) === use;
+  };
   const request = (identity: string, node: Node, subject: SourceStorageSubject): void => {
     demands.set(identity, node);
     const bindings = storage.bindingsForLexicalOwner(node);
@@ -69,7 +78,9 @@ export function selectRustCopiedMethods(
     if (binding !== undefined && "bindingCarrier" in binding && binding.projection.kind === "object-rest") {
       const shape = rustStructuralObjectCarrierValue(binding.sourceCarrier);
       for (const field of binding.projection.fields) {
-        if (shape?.fields[field.sourceStorageIndex]?.method === true) {
+        if (shape?.fields[field.sourceStorageIndex]?.method === true &&
+          !rustCopiedMethodReceiverIsPreserved(binding.sourceCarrier, field.sourceStorageIndex,
+            binding.bindingCarrier, field.targetStorageIndex)) {
           const target = key(binding.bindingCarrier, field.targetStorageIndex);
           requestMember(target, node, node, binding.bindingCarrier, field.targetStorageIndex);
         }
@@ -79,13 +90,16 @@ export function selectRustCopiedMethods(
     if (view?.kind === "structural") {
       const shape = rustStructuralObjectCarrierValue(view.targetCarrier);
       for (const field of view.fields) {
-        if (shape?.fields[field.destinationIndex]?.method !== true) continue;
+        if (shape?.fields[field.destinationIndex]?.method !== true ||
+          rustCopiedMethodReceiverIsPreserved(view.sourceCarrier, field.source.storageIndex,
+            view.targetCarrier, field.destinationIndex)) continue;
         const target = key(view.targetCarrier, field.destinationIndex);
         requestMember(target, node, node, view.sourceCarrier, field.source.storageIndex);
       }
     }
     const operation = records.targetOperation.get(node);
-    if (operation?.kind === "source-field" && operation.storage === "structural-object" && operation.valueSemantics.kind === "method") {
+    if (operation?.kind === "source-field" && operation.storage === "structural-object" &&
+      operation.valueSemantics.kind === "method" && operation.accessMode !== "write" && !invokedDirectly(node)) {
       const identity = key(operation.receiverCarrier, operation.storageIndex);
       demands.set(identity, node);
       const provenance = records.selectedOperation.get(node)?.provenance;
