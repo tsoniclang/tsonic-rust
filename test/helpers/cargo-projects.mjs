@@ -1,8 +1,8 @@
-import { spawnSync } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
-import { repositoryRoot } from "./rust-session.mjs";
+import { repositoryRoot } from "./rust-session-paths.mjs";
 import { createTestWorkspace } from "../../../tsonic/test/scripts/test-workspaces.mjs";
+import { finishGeneratedCargoProject, spawnGeneratedCargo } from "./cargo-target-pool.mjs";
 
 const generatedRoot = resolve(repositoryRoot, ".temp/generated");
 
@@ -16,14 +16,12 @@ export function writeGeneratedProject(name, artifacts) {
   return projectRoot;
 }
 
-export function runCargo(projectRoot, args) {
-  const environment = { ...process.env, CARGO_TERM_COLOR: "never" };
-  delete environment.CARGO_TARGET_DIR;
-  const result = spawnSync("cargo", args, {
+export function runCargo(projectRoot, args, options = {}) {
+  const result = spawnGeneratedCargo(projectRoot, args, {
     cwd: projectRoot,
     encoding: "utf8",
-    env: environment,
     timeout: 300_000,
+    ...options,
   });
   if (result.status !== 0) {
     throw new Error(`cargo ${args.join(" ")} failed in ${projectRoot}:\n${result.stdout}\n${result.stderr}`);
@@ -33,17 +31,29 @@ export function runCargo(projectRoot, args) {
 
 export function validateGeneratedProject(name, artifacts, { run = false } = {}) {
   const projectRoot = writeGeneratedProject(name, artifacts);
-  runCargo(projectRoot, ["generate-lockfile", "--offline"]);
-  for (const artifact of artifacts) {
-    if (artifact.path === "Cargo.toml" || artifact.path.endsWith("/Cargo.toml")) {
-      runCargo(dirname(join(projectRoot, artifact.path)), ["fmt", "--check"]);
+  let failure;
+  try {
+    runCargo(projectRoot, ["generate-lockfile", "--offline"]);
+    for (const artifact of artifacts) {
+      if (artifact.path === "Cargo.toml" || artifact.path.endsWith("/Cargo.toml")) {
+        runCargo(dirname(join(projectRoot, artifact.path)), ["fmt", "--check"]);
+      }
+    }
+    runCargo(projectRoot, ["clippy", "--all-targets", "--locked", "--offline", "--", "-D", "warnings"]);
+    runCargo(projectRoot, ["test", "--locked", "--offline"]);
+    if (run) {
+      return runCargo(projectRoot, ["run", "--locked", "--offline"]);
+    }
+    return undefined;
+  } catch (error) {
+    failure = error;
+    throw error;
+  } finally {
+    try {
+      finishGeneratedCargoProject(projectRoot);
+    } catch (cleanup) {
+      if (failure !== undefined) throw new AggregateError([failure, cleanup], `${failure.message}\n${cleanup.message}`);
+      throw cleanup;
     }
   }
-  runCargo(projectRoot, ["check", "--all-targets", "--locked", "--offline"]);
-  runCargo(projectRoot, ["clippy", "--all-targets", "--locked", "--offline", "--", "-D", "warnings"]);
-  runCargo(projectRoot, ["test", "--locked", "--offline"]);
-  if (run) {
-    return runCargo(projectRoot, ["run", "--locked", "--offline"]);
-  }
-  return undefined;
 }

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { spawnSync } from "node:child_process";
+import { spawnGeneratedCargo } from "../../helpers/cargo-target-pool.mjs";
 import { realpathSync, mkdirSync, writeFileSync } from "node:fs";
 import { dirname, resolve, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -270,9 +270,8 @@ unexpected_cfgs = { level = "deny", check-cfg = [${controls.map(control => JSON.
     ["wrong_error", "E0308"], ["borrow_escape", "E0515"], ["overlapping_implementation", "E0119"],
     ["environment_escape", "E0515"], ["javascript_borrow_escape", "E0515"],
   ]) {
-    const rejected = spawnSync("cargo", ["rustc", "--offline", "--locked", "--message-format=json", "--", "--emit=metadata", "--cfg", control], {
+    const rejected = spawnGeneratedCargo(project, ["rustc", "--offline", "--locked", "--message-format=json", "--", "--emit=metadata", "--cfg", control], {
       cwd: project, encoding: "utf8", timeout: 60_000, maxBuffer: 1_048_576,
-      env: { ...process.env, CARGO_TERM_COLOR: "never" },
     });
     assert.equal(rejected.error === undefined, true, `${control}: child completed`);
     assert.notEqual(rejected.status, 0, `${control}: must reject`);

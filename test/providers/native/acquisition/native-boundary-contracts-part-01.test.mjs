@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { spawnSync } from "node:child_process";
 import { appendFileSync, mkdirSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { artifactText, compileRustThroughTargetPack, repositoryRoot } from "../../../helpers/rust-session.mjs";
 import { runCargo, writeGeneratedProject } from "../../../helpers/cargo-projects.mjs";
+import { spawnGeneratedCargo } from "../../../helpers/cargo-target-pool.mjs";
 import { createTestWorkspace } from "../../../../../tsonic/test/scripts/test-workspaces.mjs";
 import {
   createBorrowedProject,
@@ -43,13 +43,13 @@ export function main(): Outcome<void> {
   runCargo(root, ["generate-lockfile", "--offline"]);
   runCargo(root, ["clippy", "--all-targets", "--locked", "--offline", "--", "-D", "warnings"]);
   runCargo(root, ["build", "--locked", "--offline"]);
-  const binary = join(root, "target/debug/native_boxed_errors");
-  const missing = spawnSync(binary, [], { cwd: root, encoding: "utf8", timeout: 10_000 });
+  const execution = { cwd: root, encoding: "utf8", timeout: 10_000, binary: "debug/native_boxed_errors" };
+  const missing = spawnGeneratedCargo(root, [], execution);
   assert.equal(missing.status, 1, missing.stderr);
   assert.match(missing.stderr, /Error:.*NotFound/u);
   assert.equal(missing.stdout, "");
   writeFileSync(join(root, "fixture.txt"), "native success");
-  const success = spawnSync(binary, [], { cwd: root, encoding: "utf8", timeout: 10_000 });
+  const success = spawnGeneratedCargo(root, [], execution);
   assert.equal(success.status, 0, success.stderr);
   assert.equal(success.stdout, "");
   assert.equal(success.stderr, "");

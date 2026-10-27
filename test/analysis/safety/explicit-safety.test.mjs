@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { spawnSync } from "node:child_process";
+import { spawnGeneratedCargo } from "../../helpers/cargo-target-pool.mjs";
 import { nativeFunction, nativeNodes } from "../../helpers/native-ast.mjs";
 
 import {
@@ -390,8 +390,10 @@ mod explicit_safety_closure_contract {
   assert.equal(valueRun.stdout.includes("explicit_safety_closure_contract::read_retains_native_values ... ok"), true,
     "the native value test runs and passes");
   runCargo(directory, ["rustc", "--lib", "--locked", "--offline", "--", "-D", "warnings"]);
-  const forbidden = spawnSync("cargo", ["rustc", "--lib", "--locked", "--offline", "--message-format=json", "--",
-    "--forbid=unsafe_code"], { cwd: directory, encoding: "utf8", timeout: 300_000 });
+  const forbidden = spawnGeneratedCargo(directory, ["rustc", "--lib", "--locked", "--offline", "--message-format=json", "--",
+    "--forbid=unsafe_code"], {
+      cwd: directory, encoding: "utf8", timeout: 300_000,
+    });
   assert.equal(forbidden.error === undefined, true, "native compiler starts normally");
   assert.equal(forbidden.status, 101, "the retained explicit region is forbidden only by the canary");
   const diagnostics = forbidden.stdout.trim().split("\n").map(line => JSON.parse(line))

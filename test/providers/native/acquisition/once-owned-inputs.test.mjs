@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { spawnSync } from "node:child_process";
+import { spawnGeneratedCargo } from "../../../helpers/cargo-target-pool.mjs";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { artifactText, compileRustThroughTargetPack } from "../../../helpers/rust-session.mjs";
@@ -229,10 +229,9 @@ fn escape() -> Borrowed<'static> {
 }
 fn main() { std::hint::black_box(escape().0); }
 `);
-  const rejected = spawnSync("cargo", ["check", "--bin", "escape", "--locked", "--offline"], {
+  const rejected = spawnGeneratedCargo(root, ["check", "--bin", "escape", "--locked", "--offline"], {
     cwd: root,
     encoding: "utf8",
-    env: { ...process.env, CARGO_TERM_COLOR: "never" },
     timeout: 300_000,
   });
   assert.equal(rejected.error, undefined);
