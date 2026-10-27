@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 import { nativeAllocationSupport, nativeOwnershipCostSupport } from "../helpers/native-ownership-cost.mjs";
 
 const canonicalPath = fileURLToPath(new URL("../../../rust-runtime/tests/helpers/allocation_counts.rs", import.meta.url));
-const generatedRoot = fileURLToPath(new URL("../../.temp/native-allocation-support", import.meta.url));
+const generatedRoot = fileURLToPath(new URL("../../.temp/native-allocation-support/", import.meta.url));
 
 function project() {
   mkdirSync(generatedRoot, { recursive: true });

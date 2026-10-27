@@ -5,7 +5,7 @@ import { resolve } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
-const root = fileURLToPath(new URL("../../../..", import.meta.url));
+const root = fileURLToPath(new URL("../../../../", import.meta.url));
 const directory = resolve(root, ".temp/declaration-callable-type-proof");
 const compiler = resolve(root, "../tsonic/node_modules/.bin/tsgo");
 
