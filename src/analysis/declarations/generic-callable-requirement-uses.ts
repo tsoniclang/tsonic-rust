@@ -511,6 +511,7 @@ export function createRustCallableRequirementVisitor(input: RustCallableRequirem
       const retainedAdapter = conversion?.kind === "callable-adapter" &&
         rustCallableProtocol(constructionCarrier)?.lifetime?.kind === "static";
       const required: readonly RustGenericRequirement[] =
+        captures.invocationOwner === "shared-state" ||
         rustClosureProtocol(operation.resultCarrier) === undefined && rustGenericCallableValue(operation.resultCarrier) === undefined &&
           rustFrameCallableValue(operation.resultCarrier) === undefined
           && rustCallableInputProtocol(operation.resultCarrier) === undefined &&
