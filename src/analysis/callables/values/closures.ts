@@ -150,7 +150,7 @@ export function resolveFunctionExpressionCarrier(
         selectedExpected.lifetimeBinder !== undefined
         ? resolveRustTargetTypeRef(
             expression,
-            rustResolutionContext(walk, expression),
+            { ...rustResolutionContext(walk, expression), callableRepresentation: "signature" },
             walk.operationOptions,
           )
         : undefined
