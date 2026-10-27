@@ -21,6 +21,7 @@ import { rustCallableProtocol } from "../../../dist/target-model/types/carriers/
 import { rustCallablePhysicalCarrier, rustUninhabitedError } from "../../../dist/policy/conversions/callable-physical.js";
 import { rustCallablePhysicalSignature } from "../../../dist/target-model/conversions/callable-physical.js";
 import { rustTargetGenericReferences } from "../../../dist/target-model/types/carriers/generic-references.js";
+import { nativeClosureProducerFailurePackage } from "../../helpers/native-closure-producers.mjs";
 
 
 function fixture(text = `
@@ -43,6 +44,102 @@ function fixture(text = `
     producers, components: classified.plan };
   const error = name => producers.errorFor(producer(name).declaration, name === "forwarded" ? 0 : "body");
   return { context, input, producer, error, native: context.callableValues.native };
+}
+
+for (const surfaces of [[], ["js"]]) {
+  test(`implicit disposal preserves closed native channels without inventing invocation bindings (${surfaces[0] ?? "native"})`, () => {
+    const failure = rustNamedTargetType("fixture:ProducerFailure", "ProducerFailure");
+    const context = analyzeRustErrorEffects(`
+      import { fail } from "test:producer";
+      class Resource {
+        [Symbol.dispose](): void { fail(); }
+        get value(): number { return fail(); }
+      }
+      function ordinary(): number { return fail(); }
+      function invoke(callback: () => number): number { return callback(); }
+      export function run(): void {
+        using resource = new Resource();
+        ordinary();
+        resource.value;
+        invoke(() => fail());
+      }
+    `, { surfaces, packages: [nativeClosureProducerFailurePackage(failure)] });
+    const { ast, records } = context;
+    const nodes = [];
+    const visit = node => {
+      nodes.push(node);
+      ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+    };
+    context.sourceFiles.forEach(visit);
+    const disposer = nodes.find(node => ast.is.IsMethodDeclaration(node) && ast.text(ast.name(node)) === "[Symbol.dispose]");
+    const resource = nodes.find(node => ast.is.IsVariableDeclaration(node) && ast.variableDeclarationKind(node) === "using");
+    const ordinary = nodes.find(node => ast.is.IsFunctionDeclaration(node) && ast.text(ast.name(node)) === "ordinary");
+    const getter = nodes.find(node => ast.is.IsGetAccessorDeclaration(node));
+    const ordinaryCall = nodes.find(node => ast.is.IsCallExpression(node) && ast.text(Node_Expression(ast, node)) === "ordinary");
+    const accessor = nodes.find(node => ast.is.IsPropertyAccessExpression(node) && ast.text(ast.name(node)) === "value");
+    assert.equal([disposer, resource, ordinary, getter, ordinaryCall, accessor].every(node => node !== undefined), true,
+      "actual checked cleanup, ordinary call and accessor subjects exist");
+    const effects = records.errorEffects.get(disposer);
+    assert.equal(effects?.localErrors, false, "the disposer does not rebrand the native failure as a local throw");
+    assert.equal(effects?.nativeErrors.length, 1, "the disposer retains its one original native channel");
+    const original = effects.nativeErrors[0];
+    assert.equal(rustTargetTypeRefEquals(original.errorType, failure), true, "the original native carrier is retained");
+    for (const [label, subject, declaration] of [["cleanup", resource, disposer],
+      ["ordinary", ordinaryCall, ordinary], ["accessor", accessor, getter]]) {
+      const edges = records.sourceErrorEffects.get(subject)?.edges.filter(edge => edge.declaration === declaration) ?? [];
+      assert.equal(edges.length, 1, label + ": the exact source executes through one selected error edge");
+      assert.equal(edges[0].effects.localErrors, false, label + ": no local error branding is invented");
+      assert.equal(edges[0].nativeErrors.length, 1, label + ": the original native channel is not erased or duplicated");
+      assert.equal(edges[0].nativeErrors[0].source.identity, original.identity, label + ": original source identity");
+      assert.equal(edges[0].nativeErrors[0].target.identity, original.identity, label + ": unchanged native destination identity");
+      assert.equal(rustTargetTypeRefEquals(edges[0].nativeErrors[0].target.errorType, failure), true,
+        label + ": no boxed or substituted native carrier");
+    }
+    const invoke = nodes.find(node => ast.is.IsFunctionDeclaration(node) && ast.text(ast.name(node)) === "invoke");
+    const invocation = nodes.find(node => ast.is.IsCallExpression(node) && ast.text(Node_Expression(ast, node)) === "invoke");
+    assert.equal(invoke !== undefined && invocation !== undefined, true, "the genuine callback input has its real invocation");
+    const dependent = records.errorEffects.get(invoke);
+    assert.equal(dependent?.nativeErrors.length, 1, "the actual input retains its associated invocation error");
+    const selection = createRustSourceErrorEffectSelection({ context });
+    assert.equal(selection.register(dependent.nativeErrors), true, "the original input-dependent channel is registered");
+    const carriers = selection.bindingCarriersFor(dependent.nativeErrors);
+    const references = rustTargetGenericReferences({ kind: "tuple", elements: carriers });
+    assert.equal(references.typeIdentities.length > 0, true, "the input error genuinely requires native substitutions");
+    assert.equal(selection.bindingsFor(invocation, invoke, carriers) !== undefined, true,
+      "the ordinary checked invocation still binds its actual callback input");
+    assert.equal(selection.bindingsFor(resource, invoke, carriers) === undefined, true,
+      "an implicit lifecycle subject cannot manufacture the needed callback invocation activation");
+    const deferred = { ...dependent.nativeErrors[0], identity: "implicit-disposal-deferred-input" };
+    assert.equal(selection.pending(deferred, () => dependent.nativeErrors[0], "completed"), true,
+      "completion retains authority over a temporarily hidden native-input channel");
+    const deferredCarriers = selection.bindingCarriersFor([deferred]);
+    assert.equal(deferredCarriers.length, 0, "no initially visible carrier is not proof of a closed completed error");
+    const pending = selection.bindingsFor(resource, invoke, deferredCarriers);
+    assert.equal(pending !== undefined, true, "empty initial evidence can reach its original completion owner");
+    assert.equal(pending.complete(dependent.nativeErrors[0].errorType, context.callableValues.nativeStorage) === undefined, true,
+      "completion still refuses missing real activation when the native-input dependency becomes visible");
+  });
+
+  test(`implicit cleanup retains the existing local-throw channel (${surfaces[0] ?? "native"})`, () => {
+    const context = analyzeRustErrorEffects(`
+      class Resource { [Symbol.dispose](): void { throw new Error("cleanup"); } }
+      export function run(): void { using resource = new Resource(); }
+    `, { surfaces });
+    const { ast, records } = context;
+    const nodes = [];
+    const visit = node => {
+      nodes.push(node);
+      ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+    };
+    context.sourceFiles.forEach(visit);
+    const resource = nodes.find(node => ast.is.IsVariableDeclaration(node) && ast.variableDeclarationKind(node) === "using");
+    assert.equal(resource !== undefined, true, "the original resource declaration exists");
+    const edges = records.sourceErrorEffects.get(resource)?.edges ?? [];
+    assert.equal(edges.length, 1, "local-throw cleanup keeps its single execution edge");
+    assert.equal(edges[0].effects.localErrors, true, "local throw remains in the original local error domain");
+    assert.equal(edges[0].effects.nativeErrors.length, 0, "no native channel is invented for a local throw");
+    assert.equal(edges[0].nativeErrors.length, 0, "no substitution is fabricated for the local error");
+  });
 }
 
 test("concrete native Callable invocation errors normalize their bound producer without inventing generic purity", () => {
