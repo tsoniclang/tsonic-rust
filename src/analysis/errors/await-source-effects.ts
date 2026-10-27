@@ -14,6 +14,7 @@ import type { RustSourceErrorEffectSelection } from "./source-error-effects.js";
 import type { RustEffectsWorkBudget } from "./effects-work-budget.js";
 import { selectRustGeneratorSourceErrors } from "./generator-source-effects.js";
 import { rustGeneratorSourceInvocationKind } from "../../policy/operations/source-profiles/generator-source-profile.js";
+import { rustFutureValueForOperation, rustFutureValueMatchesCarrier } from "../callables/async/future-values.js";
 
 export interface RustAwaitSourceErrorSelection extends RustAwaitSourceErrorBranch {
   readonly invocation: Node;
@@ -33,6 +34,17 @@ export function selectRustAwaitSourceErrors(
 ): RustAwaitSourceErrorResult {
   const reject = (reason: string): RustAwaitSourceErrorResult => Object.freeze({ kind: "rejected", reason });
   const { sourceStorage: storage, ast, records, callableValues, typeDefinitions: definitions } = walk.context;
+  const direct = records.targetOperation.get(operand);
+  if (direct?.kind === "provider-operation" && rustGeneratorSourceInvocationKind(direct.operationId) !== "async") {
+    const value = rustFutureValueForOperation(direct, records.sourceCallEffects.get(operand), definitions);
+    const topology = rustAwaitSelection(direct.resultCarrier, definitions);
+    const available = topology === undefined ? [] : rustAwaitSelectionLeaves(topology).filter(leaf => leaf.future !== undefined);
+    budget.step();
+    if (value !== undefined && branches.length !== 0 && branches.every(branch =>
+      available.some(leaf => rustTargetTypeRefEquals(leaf.carrier, branch)) &&
+      rustFutureValueMatchesCarrier(value, branch, definitions)))
+      return Object.freeze({ kind: "resolved", branches: Object.freeze([]) });
+  }
   const subject = storage.subjectFor(operand);
   const owner = sourceEnclosingCallable(operand, ast);
   const bindings = owner === undefined ? storage.emptyBindings : callableValues.native.bindingsFor(owner);

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { sourceEnclosingCallable, Node_Expression } from "@tsonic/target-api/source";
 import { analyzeRustErrorEffects } from "../../helpers/rust-error-analysis.mjs";
+import { acmeDbPackage } from "../../helpers/rust-session.mjs";
 
 
 
@@ -204,6 +205,53 @@ test("stored source awaits rebind the original activation without overwriting th
   assert.equal(originalEdges.some(candidate => candidate.nativeErrors.some(route =>
     route.target.errorType.owner?.identity === input.implementation.identity)), false,
   "the retained call's physical input cannot be replaced by its receiving consumer's unrelated input binder");
+});
+
+test("direct native provider awaits consume their exact ABI without inventing authored body producers", () => {
+  const current = fixture(`import { connect } from "@acme/db";
+import type { int32 } from "@tsonic/core/types.js";
+export async function run(path: string): Promise<int32> {
+  const db = await connect(path);
+  return await db.execute("native exact provider await");
+}`, { packages: [acmeDbPackage()] });
+  const awaits = current.nodes.filter(node => current.ast.is.IsAwaitExpression(node) &&
+    current.context.records.targetOperation.get(Node_Expression(current.ast, node))?.kind === "provider-operation");
+  assert.equal(awaits.length, 2, "both the original provider function and native receiver method are retained");
+  for (const awaited of awaits) {
+    const operand = Node_Expression(current.ast, awaited);
+    const carrier = current.context.records.runtimeCarrier.get(operand)?.carrier;
+    assert.equal(carrier !== undefined, true, "the original provider result has its exact native future carrier");
+    const original = current.context.records.awaitSourceErrorEffects.get(awaited);
+    assert.equal(original !== undefined && original.branches.length === 0, true,
+      "a native provider ABI does not acquire a source-authored function error edge");
+    let storageQueries = 0;
+    const sourceStorage = { ...current.context.sourceStorage,
+      subjectFor() {
+        storageQueries += 1;
+        return { kind: "unresolved", reason: "the inverse has no exact source producer" };
+      },
+    };
+    const walk = { context: { ...current.context, sourceStorage } };
+    const select = branch => {
+      const budget = createRustEffectsWorkBudget();
+      let selected;
+      const failure = budget.run(() => {
+        selected = selectRustAwaitSourceErrors(walk, operand, [branch],
+          declaration => current.context.records.errorEffects.get(declaration),
+          createRustSourceErrorEffectSelection(walk), budget);
+      });
+      assert.equal(failure === undefined, true, "the exact provider branch stays within the existing effects budget");
+      return selected;
+    };
+    const selected = select(carrier);
+    assert.equal(selected.kind === "resolved" && selected.branches.length === 0, true,
+      "the existing validated native future ABI supplies the complete non-source ownership decision");
+    assert.equal(storageQueries, 0, "no authored producer or caller activation is fabricated for an opaque native operation");
+    const unrelated = rustFutureTargetType(rustSourcePrimitiveTargetType("bool"));
+    assert.equal(rustTargetTypeRefEquals(unrelated, carrier), false, "the inverse changes the actual native future branch");
+    assert.equal(select(unrelated).kind, "rejected", "a matching output alone cannot admit a foreign native future");
+    assert.equal(storageQueries, 1, "only the unproved branch still requires its original source ownership evidence");
+  }
 });
 
 test("await-source selection rejects an unrelated exact Future branch", () => {
