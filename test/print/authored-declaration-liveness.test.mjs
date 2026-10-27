@@ -183,8 +183,31 @@ main();
   assert.equal(itemHasAttribute(source, "fn unusedDependency("), true);
   assert.equal(itemHasAttribute(source, "const unusedNativeConstant:"), true);
   assert.equal(itemHasAttribute(source, "fn publicEntry("), false);
-  assert.equal(itemHasAttribute(source, "fn unusedPublicEntry("), false);
+  assert.equal(itemHasAttribute(source, "fn unusedPublicEntry("), true,
+    "an unused root binary export has no public facade and remains crate-visible");
   validateGeneratedProject("authored-root-liveness", result.artifacts, { run: true });
+});
+
+test("unused exported library functions remain live public facade roots", {
+  timeout: 300_000,
+}, () => {
+  const { result } = compileRust({
+    target: { id: "rust", options: { outputType: "lib", crateName: "authored_public_facade_liveness" } },
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+
+export function unusedPublicEntry(): int32 { return 0; }
+`,
+    },
+  });
+
+  assertNoTargetDiagnostics(result.diagnostics);
+  const source = artifactText(result, "src/index.rs");
+  assert.match(source, /pub fn unusedPublicEntry\(/u);
+  assert.equal(itemHasAttribute(source, "fn unusedPublicEntry("), false,
+    "an unused library export stays live through its published native facade");
+  validateGeneratedProject("authored-public-facade-liveness", result.artifacts);
 });
 
 test("generated binary entry and public implementation ABI are exact liveness roots", {
