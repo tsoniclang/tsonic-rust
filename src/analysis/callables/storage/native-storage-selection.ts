@@ -21,7 +21,7 @@ import { isRustNativeFutureCarrier, rustFutureOutputCarrier } from "../../../tar
 import { rustUnionAlternatives } from "../../../target-model/types/union-relations.js";
 import { rustSourceUnionCarrierValue, rustSourceTypeCarrierValue, rustStructuralObjectCarrierValue, rustStructuralObjectTargetType, rustStructuralObjectCarrierName } from "../../../target-model/types/carriers/source-types.js";
 import { inferRustTargetGenericBindings } from "../../../target-model/types/carriers/generic-inference.js";
-import { rustLifetimeKey } from "../../../target-model/lifetimes/index.js";
+import { rustLifetimeKey, rustLifetimesEqual, type RustLifetimeRef } from "../../../target-model/lifetimes/index.js";
 import { instantiateRustRuntimeUnionPayloads } from "../../../target-model/types/carriers/runtime-unions.js";
 
 import { mapRustTargetTypes, substituteRustTargetGenerics } from "../../../target-model/types/carriers/substitution.js";
@@ -860,7 +860,7 @@ export function createRustNativeStorageSelection(
         const actual = inferRustTargetGenericBindings(original, current, parameters);
         if (actual === undefined) return fail("Native nominal data storage requires its exact original generic application.");
         const physicalTypes = new Map<string, TargetTypeRef>();
-        const physicalLifetimes = new Map(actual.lifetimes);
+        const physicalLifetimes = new Map<string, RustLifetimeRef>();
         for (const field of layout.fields) {
           const declared = input.records.runtimeCarrier.get(field.declaration)?.carrier;
           const logical = declared === undefined ? undefined : input.projectTypes.instantiateMemberCarrier(field.declaration, current, declared);
@@ -881,11 +881,18 @@ export function createRustNativeStorageSelection(
               return fail("A native nominal generic slot requires one exact physical carrier across all of its fields.");
             physicalTypes.set(identity, carrier);
           }
-          for (const [identity, lifetime] of selected.lifetimes) physicalLifetimes.set(identity, lifetime);
+          for (const [identity, lifetime] of selected.lifetimes) {
+            const previous = physicalLifetimes.get(identity);
+            if (previous !== undefined && !rustLifetimesEqual(previous, lifetime))
+              return fail("A native nominal lifetime slot requires one exact lifetime across all of its fields.");
+            physicalLifetimes.set(identity, lifetime);
+          }
         }
         const types = new Map(actual.types);
         for (const [identity, carrier] of physicalTypes) types.set(identity, carrier);
-        return substituteRustTargetGenerics(original, types, physicalLifetimes, actual.consts);
+        const lifetimes = new Map(actual.lifetimes);
+        for (const [identity, lifetime] of physicalLifetimes) lifetimes.set(identity, lifetime);
+        return substituteRustTargetGenerics(original, types, lifetimes, actual.consts);
       }
       const variants = rustUnionAlternatives(current, input.definitions);
       if (variants !== undefined) {

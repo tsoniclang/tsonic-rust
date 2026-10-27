@@ -510,9 +510,13 @@ export function createRustStructuralMethodStorage(input: {
         for (const producer of selected) {
           const subject = producer.subject;
           const operation = records.targetOperation.get(subject.node);
-          if (subject.kind !== "value" || subject.projection.length !== 0 || operation?.kind !== "closure")
-            failTargetAnalysisInvariant("tsonic-rust", "Structural method storage requires its exact admitted closure producer.");
-          const logical = records.receiverIndependentMethod.get(subject.node)?.carrier ?? operation.resultCarrier;
+          if (subject.kind !== "value" || subject.projection.length !== 0 ||
+            input.nativeProducers.forDeclaration(subject.node) === undefined)
+            failTargetAnalysisInvariant("tsonic-rust", "Structural method storage requires its exact admitted native producer.");
+          const logical = records.receiverIndependentMethod.get(subject.node)?.carrier ??
+            (operation?.kind === "closure" ? operation.resultCarrier : records.runtimeCarrier.get(subject.node)?.carrier);
+          if (logical === undefined)
+            return reject(subject.node, "Structural method storage requires its original checked callable producer carrier.");
           const physical = input.nativeProducers.physicalFor(subject.node, logical);
           const source = physical === undefined ? undefined : rustNativeCallablePhysicalSource(logical,
             { kind: "identity", carrier: physical }, input.frames);
