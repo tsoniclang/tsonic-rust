@@ -547,8 +547,8 @@ test("a computed signature refusal preserves its actual input predicate and does
 });
 
 for (const [name, path] of [
-  ["recordFunctionSignatureFacts", "signatures"], ["recordCallableSuspensionFacts", "signatures"],
-  ["recordCallableReturnFact", "signatures"], ["recordRustAsyncBodyFacts", "async-results"],
+  ["recordFunctionSignatureFacts", "calls/signatures"], ["recordCallableSuspensionFacts", "calls/signatures"],
+  ["recordCallableReturnFact", "calls/signatures"], ["recordRustAsyncBodyFacts", "async/async-results"],
 ]) test(`the superseded independent ${name} entrypoint is rejected`, async () => {
   const module = new URL(`../../../dist/analysis/callables/${path}.js`, import.meta.url).href;
   const source = `import { ${name} } from ${JSON.stringify(module)};`;
