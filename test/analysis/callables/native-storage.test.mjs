@@ -304,7 +304,10 @@ for (const surfaces of [[], ["js"]]) {
     program.sourceFiles.forEach(visit);
     assert.equal(literals.length, 2, "omitted and present optional state both retain their original source literals");
     for (const literal of literals) {
-      const selected = program.records.objectLiteralEmission.get(literal);
+      const emission = program.records.objectLiteralEmission.get(literal);
+      assert.equal(emission?.node === literal, true, "the physical literal record retains its original checked source identity");
+      assert.equal(Object.isFrozen(emission), true, "the complete literal record is immutable before consumption");
+      const selected = emission.implementation;
       assert.equal(selected?.kind, "project", "the nominal method record keeps its existing native interface representation");
       let callback;
       for (const field of selected.selection.fields) {
