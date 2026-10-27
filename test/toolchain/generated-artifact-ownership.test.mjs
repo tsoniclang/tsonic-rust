@@ -30,9 +30,9 @@ for (const marker of ["first-source", "second-source"]) {
     process.env.CARGO_TARGET_DIR = foreignTarget;
     process.env.Q109_CARGO_CHILD_PROVENANCE = childSentinel;
     try {
-      runCargo(project, ["generate-lockfile", "--offline"]);
+      runCargo(project, ["generate-lockfile", "--offline"], { isolated: true });
       const buildArguments = ["build", "--locked", "--offline", "--message-format=json"];
-      const build = runCargo(project, buildArguments);
+      const build = runCargo(project, buildArguments, { isolated: true });
       writeFileSync(join(project, "cargo-build.jsonl"), build.stdout);
       writeFileSync(join(project, "cargo-build.stderr"), build.stderr);
       const artifacts = build.stdout.split("\n").filter(line => line.trim() !== "").map(line => JSON.parse(line))
@@ -52,7 +52,7 @@ for (const marker of ["first-source", "second-source"]) {
         "Cargo reports an executable in this project's own target, never the inherited foreign target");
       assert.equal(observedExecutables.has(executable), false, "distinct project source roots never reuse one executable path");
       observedExecutables.add(executable);
-      const execution = runCargo(project, ["run", "--locked", "--offline", "--quiet"]);
+      const execution = runCargo(project, ["run", "--locked", "--offline", "--quiet"], { isolated: true });
       writeFileSync(join(project, "cargo-run.stdout"), execution.stdout);
       writeFileSync(join(project, "cargo-run.stderr"), execution.stderr);
       const expectedOutput = `${marker}:${childSentinel}\n`;
