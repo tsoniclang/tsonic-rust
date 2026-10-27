@@ -353,6 +353,7 @@ function createRustCallableValueLifecycle(input: RustCallableValuePlanInput,
   let physicalCarrierFor: RustGenericCallablePhysicalCarrierSelector | undefined;
   let producerErrors: Pick<RustErrorRegionRecords, "producerError"> | undefined;
   const nativeStorageQueries = createRustNativeStorageQueries({ ast: input.ast, records: input.records,
+    projectTypes: input.projectTypes,
     operationAttempts: input.operationAttempts,
     frames: frameConstruction,
     storage: input.sourceStorage, nativeNodes: input.nativeNodes, definitions: input.typeDefinitions, native, producers: nativeProducers, generic,

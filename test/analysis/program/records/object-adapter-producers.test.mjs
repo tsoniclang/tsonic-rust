@@ -39,9 +39,11 @@ test("object and adapter families have one frozen reader, no generic writer and 
   }
 });
 
-function copiedFixture(builder, { method = { kind: "KindMethodDeclaration", children: [] }, carrier = callable, receiver = false, fieldName = "value" } = {}) {
+function copiedFixture(builder, { method = { kind: "KindMethodDeclaration", children: [] }, carrier = callable, receiver = false, fieldName = "value", invoked = false, parenthesized = false, accessMode = "read" } = {}) {
   const literal = {};
   const read = {};
+  const wrapper = { kind: "KindParenthesizedExpression", Expression: read };
+  const invocation = { kind: "KindCallExpression", Expression: parenthesized ? wrapper : read };
   const root = { children: [literal, read] };
   const shape = rustStructuralObjectTargetType("/source.ts", [
     { sourceName: fieldName, type: callable, presence: "required", readonly: false, method: true },
@@ -50,15 +52,52 @@ function copiedFixture(builder, { method = { kind: "KindMethodDeclaration", chil
     fields: [{ storageIndex: 0, carrier }],
     contributions: [{ kind: "structural-method", targetStorageIndex: 0, expression: method }] };
   const records = createRustRecordFixture({ targetOperation: { get: node => node === literal ? operation : node === read
-    ? { kind: "source-field", storage: "structural-object", receiverCarrier: shape, storageIndex: 0, valueSemantics: { kind: "method" } }
-    : node === method ? { kind: "closure", resultCarrier: carrier } : undefined } }, builder);
-  if (receiver) method.children = [{ kind: "KindThisExpression" }];
+    ? { kind: "source-field", storage: "structural-object", receiverCarrier: shape, storageIndex: 0, accessMode, valueSemantics: { kind: "method" } }
+    : node === method ? { kind: "closure", resultCarrier: carrier } : undefined },
+    selectedOperation: { get: node => node === read ? { provenance: {
+      sourceReceiver: literal, sourceSelectedDeclaration: method,
+    } } : undefined },
+  }, builder);
+  if (receiver) method.children = [{ kind: "KindThisKeyword" }];
   const walk = { context: { requiredRecords: [], records, diagnostics: [], isNativeNode: () => true, ast: {
     forEachChild(node, visit) { for (const child of node.children ?? []) visit(child); },
+    children: node => node.children ?? [],
+    body: node => node.kind === "KindMethodDeclaration" ? { children: node.children } : undefined,
+    kind: node => node.kind ?? "KindIdentifier",
     kindName: node => node.kind ?? "KindIdentifier",
+    parent: node => invoked ? node === read ? parenthesized ? wrapper : invocation : node === wrapper ? invocation : undefined : undefined,
+    is: new Proxy({}, { get: (_target, property) => node => property === `Is${node.kind?.slice(4)}` }),
+    as: new Proxy({}, { get: () => node => node }),
+  }, sourceStorage: {
+    storageSubjectFor(node, projection) {
+      const declaration = projection.length === 1 && projection[0].kind === "method-value"
+        ? projection[0].declaration : undefined;
+      assert.equal(declaration !== undefined, true, "the selected method read supplies its exact declaration");
+      return { kind: "resolved", subject: { node: declaration, kind: "value", projection: [] } };
+    },
+    bindingsForLexicalOwner: () => ({ kind: "resolved", bindings: {} }),
+    storageProducersFor: subject => ({ kind: "complete", producers: [{ subject }] }),
   } }, sourceTypes: { structuralInstantiations: () => [] }, rejectedExpressions: new WeakSet(), resolving: new Set() };
   return { walk, method, files: [root], finalize: () => builder.receiverIndependentMethods.finalize(walk, [root], () => "source") };
 }
+
+test("immediate structural method calls keep their receiver rather than demand an independent copied value", () => {
+  for (const parenthesized of [false, true]) {
+    const builder = createRustProgramRecordBuilder();
+    const selected = copiedFixture(builder, { receiver: true, invoked: true, parenthesized });
+    assert.equal(selected.finalize().size, 0, "a direct call does not copy the receiver-dependent method");
+    assert.equal(builder.receiverIndependentMethod.get(selected.method), undefined, "no independent method is fabricated");
+    assert.equal(selected.walk.context.diagnostics.length, 0, "receiver-dependent direct invocation remains valid");
+  }
+});
+
+test("a structural method write does not extract the previous receiver-dependent value", () => {
+  const builder = createRustProgramRecordBuilder();
+  const selected = copiedFixture(builder, { receiver: true, accessMode: "write" });
+  assert.equal(selected.finalize().size, 0, "writing a slot does not copy its previous method");
+  assert.equal(builder.receiverIndependentMethod.get(selected.method), undefined, "no independent method is fabricated");
+  assert.equal(selected.walk.context.diagnostics.length, 0, "write admission owns replacement rather than copied-read admission");
+});
 
 test("copied-method producer admits only proved implementations and preserves inherited source identity", () => {
   const parent = createRustProgramRecordBuilder();
@@ -91,6 +130,28 @@ test("receiver-dependent methods retain their original precise diagnostic and pu
   assert.equal(selected.walk.context.diagnostics[0].code, "RUST_COPIED_METHOD_RECEIVER_NOT_PROVEN");
 });
 
+test("copied-method publication requires checked read provenance and a complete producer domain", () => {
+  for (const missing of ["selected-read", "producer-domain"]) {
+    const builder = createRustProgramRecordBuilder();
+    const selected = copiedFixture(builder);
+    if (missing === "selected-read") {
+      selected.walk.context.records = createRustRecordFixture({
+        targetOperation: selected.walk.context.records.targetOperation,
+        selectedOperation: { get: () => undefined },
+      }, builder);
+    } else {
+      selected.walk.context.sourceStorage.storageProducersFor = () => ({
+        kind: "open", boundaries: [{ kind: "external-write" }],
+      });
+    }
+    assert.equal(selected.finalize().size, 0, missing + ": no copied method is admitted");
+    assert.equal(builder.receiverIndependentMethod.get(selected.method) === undefined, true,
+      missing + ": no record is published");
+    assert.equal(selected.walk.context.diagnostics.length, 1, missing + ": one source rejection");
+    assert.equal(selected.walk.context.diagnostics[0].code, "RUST_COPIED_METHOD_RECEIVER_NOT_PROVEN", missing);
+  }
+});
+
 test("copied-method admission preserves publication order before later rejected-method diagnostics", () => {
   const parent = createRustProgramRecordBuilder();
   const original = copiedFixture(parent);
@@ -101,8 +162,11 @@ test("copied-method admission preserves publication order before later rejected-
   const rejected = copiedFixture(child, { fieldName: "other", receiver: true });
   const first = conflicting.walk.context.records.targetOperation;
   const second = rejected.walk.context.records.targetOperation;
+  const firstSelected = conflicting.walk.context.records.selectedOperation;
+  const secondSelected = rejected.walk.context.records.selectedOperation;
   conflicting.walk.context.records = createRustRecordFixture({
     targetOperation: { get: subject => first.get(subject) ?? second.get(subject) },
+    selectedOperation: { get: subject => firstSelected.get(subject) ?? secondSelected.get(subject) },
   }, child);
   assert.throws(() => child.receiverIndependentMethods.finalize(conflicting.walk,
     [...conflicting.files, ...rejected.files], () => "source"), /Conflicting Rust semantic plan/u);
@@ -125,8 +189,11 @@ test("copied-method batches preflight and admit one exact implementation shared 
     { method, carrier: { ...callable }, fieldName }));
   const walk = selected[0].walk;
   const sources = selected.map(candidate => candidate.walk.context.records.targetOperation);
+  const selections = selected.map(candidate => candidate.walk.context.records.selectedOperation);
   walk.context.records = createRustRecordFixture({ targetOperation: { get: subject => sources
-    .map(source => source.get(subject)).find(operation => operation !== undefined) } }, builder);
+    .map(source => source.get(subject)).find(operation => operation !== undefined) },
+    selectedOperation: { get: subject => selections.map(source => source.get(subject)).find(operation => operation !== undefined) },
+  }, builder);
   const proven = builder.receiverIndependentMethods.finalize(walk, selected.flatMap(candidate => candidate.files), () => "source");
   assert.equal(proven.size, 3, "every proven flow identity is retained");
   assert.equal(reads, 2, "one preflight and one actual admission, not one publication per demand");
@@ -138,8 +205,11 @@ test("contradictory copied-method candidates reject before publishing any new ba
   const first = copiedFixture(builder, { fieldName: "first" });
   const second = copiedFixture(builder, { fieldName: "second", method: first.method, carrier: wideCallable });
   const sourceRecords = [first.walk.context.records.targetOperation, second.walk.context.records.targetOperation];
+  const selections = [first.walk.context.records.selectedOperation, second.walk.context.records.selectedOperation];
   first.walk.context.records = createRustRecordFixture({ targetOperation: { get: subject => sourceRecords
-    .map(source => source.get(subject)).find(operation => operation !== undefined) } }, builder);
+    .map(source => source.get(subject)).find(operation => operation !== undefined) },
+    selectedOperation: { get: subject => selections.map(source => source.get(subject)).find(operation => operation !== undefined) },
+  }, builder);
   assert.throws(() => builder.receiverIndependentMethods.finalize(first.walk, [...first.files, ...second.files], () => "source"),
     /Conflicting Rust semantic plan 'tsonic\.rust\.receiverIndependentMethod'/u);
   assert.equal(builder.receiverIndependentMethod.get(first.method) === undefined, true,

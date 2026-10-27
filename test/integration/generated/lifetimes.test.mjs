@@ -2,6 +2,7 @@ import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagn
 import assert from "node:assert/strict";
 import { nativeFunction, nativeSource, nativeNodes, nativeCalls, nativeType, nativeBorrow } from "../../helpers/native-ast.mjs";
 import { spawnSync } from "node:child_process";
+import { isDeepStrictEqual } from "node:util";
 import { test } from "node:test";
 
 
@@ -34,6 +35,42 @@ export function identity(value: int32): int32 {
   assert.match(source, /pub fn identity\(value: i32\) -> i32/u);
   assert.doesNotMatch(source, /identity<'|&(?:'\w+ )?i32/u);
 });
+
+for (const surfaces of [[], ["js"]]) {
+  test(`project member selection retains its declared lifetime owner (${surfaces[0] ?? "native"})`, () => {
+    const { program } = analyzeRust({ surfaces, files: { "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+import type { Life, Ref } from "@tsonic/rust/types.js";
+export class Left<L extends Life> {
+  value: Ref<int32, L>;
+  constructor(value: Ref<int32, L>) { this.value = value; }
+  current(): Ref<int32, L> { return this.value; }
+}
+export class Right<L extends Life> {
+  value: Ref<int32, L>;
+  constructor(value: Ref<int32, L>) { this.value = value; }
+  current(): Ref<int32, L> { return this.value; }
+}
+` } });
+    const { ast } = program.source;
+    const reads = [];
+    const visit = node => {
+      const selected = program.records.targetOperation.get(node);
+      if (selected?.kind === "source-field" && selected.storage === "project-object") reads.push(selected);
+      ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+    };
+    program.sourceFiles.forEach(visit);
+    assert.equal(reads.length, 4, "both writes and reads retain their own exact project field");
+    for (const selected of reads) {
+      const receiverOwner = program.projectTypes.definitionForCarrier(selected.receiverCarrier);
+      const memberOwner = program.projectTypes.definitionContainingDeclaration(selected.declaration);
+      assert.equal(receiverOwner !== undefined && receiverOwner === memberOwner, true,
+        "same generic arity and structural field names cannot substitute a foreign owner");
+      assert.equal(selected.resultCarrier.kind, "reference", "the field remains a native reference");
+      assert.equal(selected.resultCarrier.lifetime?.kind, "parameter", "the authored lifetime is not replaced by static");
+    }
+  });
+}
 
 test("explicit Rust lifetime source types lower fields, aliases, bounds, nested references, and results exactly", () => {
   const { result } = compileRust({
@@ -243,6 +280,57 @@ main();
   );
   assert.equal(run.status, 0);
 });
+
+test("captured higher-ranked callbacks compare authored signatures without requiring retained storage", { timeout: 300_000 }, () => {
+  const { result } = compileRust({ files: { "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+import type { Life, Ref, Static } from "@tsonic/rust/types.js";
+import { load, ref } from "@tsonic/rust/lang.js";
+export type Reader = <L extends Life>(value: Ref<int32, L>) => int32;
+export function acceptReader(reader: Reader): int32 {
+  const value: int32 = 9;
+  return reader(ref(value));
+}
+export function invokeCaptured(value: Ref<int32, Static>): int32 {
+  return acceptReader(<L extends Life>(_ignored: Ref<int32, L>): int32 => load(value));
+}
+` } });
+  assertNoTargetDiagnostics(result.diagnostics);
+  const reader = nativeFunction(result, "acceptReader");
+  const bounds = nativeNodes(reader.params[0].type, node => node.kind === "callable" && node.trait === "Fn");
+  assert.equal(bounds.length, 1, "one native higher-ranked callback bound");
+  assert.deepEqual(bounds[0].binder.map(parameter => parameter.name), ["L"]);
+  assert.equal(isDeepStrictEqual(bounds[0].parameters,
+    [nativeBorrow(nativeType("i32"), { kind: "named", name: "L" })]), true, "exact native higher-ranked parameter");
+  assert.equal(isDeepStrictEqual(bounds[0].result, nativeType("i32")), true, "exact native higher-ranked result");
+  const source = artifactText(result, "src/index.rs");
+  assert.doesNotMatch(source, /(?:Box|Rc|Arc)::new/u, "signature comparison adds no retained allocation");
+  validateGeneratedProject("captured-higher-ranked-signature", result.artifacts);
+});
+
+for (const [label, parameterType, resultType, captureType] of [
+  ["non-alpha-equivalent input", "int16", "int32", "Static"],
+  ["borrowed capture cannot become static", "int32", "Ref<int32, Static>", "Outer"],
+]) {
+  test(`higher-ranked callback signature preserves ${label}`, () => {
+    const body = resultType === "int32" ? "load(value)" : "value";
+    const { result } = compileRust({ files: { "index.ts": `
+import type { int32, int16 } from "@tsonic/core/types.js";
+import type { Life, Ref, Static } from "@tsonic/rust/types.js";
+import { load } from "@tsonic/rust/lang.js";
+type Reader = <L extends Life>(input: Ref<int32, L>) => ${resultType};
+function accept(reader: Reader): void {}
+export function refuse<Outer extends Life>(value: Ref<int32, ${captureType}>): void {
+  accept(<L extends Life>(_ignored: Ref<${parameterType}, L>): ${resultType} => ${body});
+}
+` } });
+    assert.equal(result.artifacts.length, 0, label + ": no invalid native program is emitted");
+    assert.equal(result.diagnostics.length, 1, label + ": one precise native mismatch");
+    assert.equal(result.diagnostics[0].code, "RUST_SOURCE_CALL_ARGUMENT_CARRIER_MISSING", label);
+    assert.equal(result.diagnostics[0].message,
+      "Selected source argument 0 has no exact carrier matching its effective parameter bindings.", label);
+  });
+}
 
 test("borrowed contracts survive async, HRTB callback, closure, and generator lowering", { timeout: 300_000 }, () => {
   const { result } = compileRust({
