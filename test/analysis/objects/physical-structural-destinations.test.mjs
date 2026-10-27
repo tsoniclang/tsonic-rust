@@ -183,7 +183,8 @@ test("native structural input applications retain exact source owners and siblin
   const source = rustStructuralObjectTargetType("/root.ts", [field("invoke", inputs[0].carrier)]);
   const physical = input => rustStructuralObjectTargetType("/root.ts", [field("invoke", input.implementation)]);
   const evidence = input => ({ kind: "native-input", owner: input.owner,
-    subject: { ...input.subject, projection: input.subject.projection.slice(0, -1) },
+    subject: { ...input.subject, projection: input.subject.projection.slice(0, -1),
+      projectionKey: input.subject.projectionKey.slice(0, input.subject.projectionKey.lastIndexOf("/")) },
     fields: [{ sourceName: "invoke", subject: input.subject, carrier: input.implementation, inputs: [input] }] });
   for (const order of [inputs, [...inputs].reverse()]) {
     const builder = createRustStructuralShapePlanRegistry();
@@ -234,7 +235,7 @@ test("structural completion retains each native input's exact physical field ass
   const physical = order => rustStructuralObjectTargetType("/root.ts",
     ordered.map((input, index) => field(name(input), order[index].implementation)));
   const evidence = { kind: "native-input", owner: ordered[0].owner,
-    subject: { ...ordered[0].subject, projection: [] }, fields: ordered.map(input => ({
+    subject: { ...ordered[0].subject, projection: [], projectionKey: "" }, fields: ordered.map(input => ({
       sourceName: name(input), subject: input.subject, carrier: input.implementation, inputs: [input],
     })) };
   const builder = createRustStructuralShapePlanRegistry();

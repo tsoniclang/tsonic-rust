@@ -126,12 +126,17 @@ export function createRustNativeStorageSelection(
       const selected = input.storage.subject(subject.node, subject.kind, [...subject.projection, component]);
       return selected.kind === "resolved" ? selected.subject : fail(selected.reason);
     };
-    const formalCarrier = (candidate: RustNativeCallableInput, current: TargetTypeRef): TargetTypeRef | undefined => {
-      const candidateCarrier = callableValueCarrier(candidate.carrier);
+    const formalCarrier = (candidate: RustNativeCallableInput, current: TargetTypeRef,
+      bindings: SourceStorageBindings, depth: number): TargetTypeRef | undefined => {
+      const generic = genericsFor(candidate.owner, bindings, depth + 1);
+      if (generic.kind === "unresolved") return fail(generic.reason);
+      const candidateCarrier = callableValueCarrier(substituteRustTargetGenerics(candidate.carrier,
+        generic.bindings.types, generic.bindings.lifetimes, generic.bindings.consts));
       if (candidateCarrier === undefined || !rustCallableInvocationSignaturesMatch(current, candidateCarrier))
         return fail("Native callable storage conflicts with its exact input callable contract.");
       selectedInputs.add(candidate);
-      return candidate.implementation;
+      return substituteRustTargetGenerics(candidate.implementation, generic.bindings.types,
+        generic.bindings.lifetimes, generic.bindings.consts);
     };
     // The physical carrier of a value that reaches `current` through the finalized callable adapter recorded at `origin`.
     // `optional` reports a target that does not match `current` as absent instead of refusing the whole selection.
@@ -150,7 +155,7 @@ export function createRustNativeStorageSelection(
         return optional ? undefined : fail("Native callable conversion storage conflicts with its selected activation signature.");
       // An adapted reference to a native input reads that input directly; its storage frontier is the input itself,
       // bound in the activation that creates the adapter.
-      const inputImplementation = input_ === undefined ? undefined : formalCarrier(input_, conversion.source);
+      const inputImplementation = input_ === undefined ? undefined : formalCarrier(input_, conversion.source, bindings, depth);
       const operand = input_ !== undefined
         ? inputImplementation === undefined ? undefined : substituteRustTargetGenerics(inputImplementation, types, lifetimes, consts)
         : visit(conversion.source, origin, bindings, depth + 1, false, "input");
@@ -328,6 +333,24 @@ export function createRustNativeStorageSelection(
       }
       if (rustCallableProtocol(current) !== undefined) {
         if (boundaryFailure !== undefined) return fail(boundaryFailure);
+        const concreteInput = (origin: SourceStorageSubject, sourceBindings: SourceStorageBindings): TargetTypeRef | undefined => {
+          const logical = logicalCarrierFor(origin, sourceBindings);
+          const element = logical === undefined ? undefined : callableValueCarrier(logical);
+          const callback = selectRustNativeCallbackParameterStorage(input, origin, sourceBindings,
+            (source, carrier, bindings) => selectionFor(visit(carrier, source, bindings, depth + 1, false, "input"), carrier));
+          if (callback?.kind === "unresolved") return fail(callback.reason);
+          const contract = callback === undefined ? element : callableValueCarrier(callback.carrier);
+          const declared = contract === undefined ? undefined : rustCallablePhysicalCarrier(contract);
+          if (declared === undefined || element === undefined || !rustCallableInvocationSignaturesMatch(current, element))
+            return fail("Native callable storage conflicts with its exact concrete callable parameter.");
+          if (callback?.kind === "selected") for (const selected of callback.inputs) selectedInputs.add(selected);
+          for (const source of callback?.sources ?? []) if (!sources.includes(source)) sources.push(source);
+          if (callback?.kind === "selected" && callback.erased === true ||
+            contract?.kind === "target-named" && contract.id === rustCallableTargetId) erasedPhysicals.add(declared);
+          return declared;
+        };
+        if (selectedSubject.kind === "input" && input.native.isConcreteCallableStorage(selectedSubject) === true)
+          return concreteInput(selectedSubject, bindings);
         if (rustFrameCallableValue(current) !== undefined && selectedSubject.kind === "member" &&
           selectedSubject.projection.length === 0) {
           const stored = input.frames.bindingFor(selectedSubject.node)?.carrier;
@@ -372,6 +395,16 @@ export function createRustNativeStorageSelection(
         if (directRead.kind !== "not-read") return directRead.kind === "selected" ? directRead.carrier : undefined;
         const selected = input.storage.boundValueFrontierFor(selectedSubject, bindings, boundaries, position);
         if (selected.kind === "unresolved") return fail(selected.reason);
+        if (selected.frontier.length === 0) {
+          const producers = input.storage.storageProducersFor(selectedSubject, bindings);
+          if (producers.kind === "unresolved") return fail(producers.reason);
+          if (producers.kind === "complete" && producers.producers.length === 0) {
+            const physical = rustCallablePhysicalCarrier(current);
+            if (physical === undefined) return fail("Empty callable storage requires its exact declared physical contract.");
+            if (current.kind === "target-named" && current.id === rustCallableTargetId) erasedPhysicals.add(physical);
+            return physical;
+          }
+        }
         let physical: TargetTypeRef | undefined;
         let distinct = false;
         let joinable = true;
@@ -428,7 +461,7 @@ export function createRustNativeStorageSelection(
                 candidatePhysical = selectedPhysical;
               }
               if (candidatePhysical === undefined) return fail("Native callable storage conflicts with its exact input callable contract.");
-            } else if (candidate !== undefined) candidatePhysical = formalCarrier(candidate, current);
+            } else if (candidate !== undefined) candidatePhysical = formalCarrier(candidate, current, frontier.bindings, depth);
             else {
               const originCarrier = origin.kind === "input" ? logicalCarrierFor(origin, frontier.bindings) : origin.projection.length === 0
                 ? input.records.receiverIndependentMethod.get(origin.node)?.carrier ?? input.records.runtimeCarrier.get(origin.node)?.carrier
@@ -436,21 +469,11 @@ export function createRustNativeStorageSelection(
               // A callable parameter of an owner emitted as a closure value is a concrete runtime callable supplied by
               // the caller; its physical carrier is its declared parameter carrier, with no producer of its own.
               if (concreteParameter !== undefined) {
-                const callback = selectRustNativeCallbackParameterStorage(input, origin, frontier.bindings,
-                  (source, logical, bindings) => selectionFor(visit(logical, source, bindings, depth + 1, false, "input"), logical));
-                if (callback?.kind === "unresolved") return fail(callback.reason);
-                const element = callableValueCarrier(concreteParameter);
-                const contract = callback === undefined ? element : callableValueCarrier(callback.carrier);
-                const declared = contract === undefined ? undefined : rustCallablePhysicalCarrier(contract);
-                if (declared === undefined || element === undefined || !rustCallableInvocationSignaturesMatch(current, element))
-                  return fail("Native callable storage conflicts with its exact concrete callable parameter.");
-                if (callback?.kind === "selected") for (const selected of callback.inputs) selectedInputs.add(selected);
-                for (const source of callback?.sources ?? []) if (!sources.includes(source)) sources.push(source);
+                const declared = concreteInput(origin, frontier.bindings);
+                if (declared === undefined) return undefined;
                 joinable = false;
                 if (physical !== undefined && !rustTargetTypeRefEquals(physical, declared))
                   return fail("Native callable storage has distinct physical input alternatives requiring a sealed join.");
-                if (callback?.kind === "selected" && callback.erased === true ||
-                  contract?.kind === "target-named" && contract.id === rustCallableTargetId) erasedPhysicals.add(declared);
                 physical = declared;
                 alternatives.set(origin, declared);
                 continue;
@@ -582,7 +605,7 @@ export function createRustNativeStorageSelection(
             if (candidatePhysical === undefined)
               return fail("Native callable storage has a producer without a sealed physical implementation.");
           } else {
-            candidatePhysical = formalCarrier(candidate, current);
+            candidatePhysical = formalCarrier(candidate, current, bindings, depth);
             if (candidatePhysical === undefined) return undefined;
           }
           if (physical !== undefined && !rustTargetTypeRefEquals(physical, candidatePhysical))

@@ -468,12 +468,8 @@ export function createRustStructuralShapeConstruction(
         const shape = rustStructuralObjectCarrierValue(physical);
         const extendsSubject = (subject: SourceStorageSubject, prefix: SourceStorageSubject): boolean =>
           subject.kind === "input" && subject.node === prefix.node && subject.projection.length >= prefix.projection.length &&
-          prefix.projection.every((component, index) => {
-            const selected = subject.projection[index];
-            return component.kind === selected?.kind && ((component.kind !== "member" && component.kind !== "method-value") ||
-              selected.kind === component.kind && selected.declaration === component.declaration) &&
-              (component.kind !== "tuple-element" || selected.kind === "tuple-element" && selected.index === component.index);
-          });
+          (prefix.projectionKey.length === 0 || subject.projectionKey === prefix.projectionKey ||
+            subject.projectionKey.startsWith(`${prefix.projectionKey}/`));
         if (evidence.subject.kind !== "input" || shape === undefined || !evidence.fields?.length || evidence.fields.some(field => {
           const selected = shape.fields.find(selected => selected.sourceName === field.sourceName);
           if (selected === undefined || !rustTargetTypeRefEquals(selected.type, field.carrier) ||
