@@ -52,6 +52,7 @@ for (const receiverDependent of [false, true]) {
     const original = shape(parameter, false);
     const template = shape(parameter, true);
     const instance = shape(integer, true);
+    const originalType = {};
     const body = { kind: "KindBlock", children: receiverDependent ? [{ kind: "KindThisKeyword", children: [] }] : [] };
     const method = { kind: "KindMethodDeclaration", body, children: [body] };
     const originalNode = {};
@@ -70,6 +71,8 @@ for (const receiverDependent of [false, true]) {
         storageIndex: 1, valueSemantics: { kind: "method" } }],
     ]);
     const ast = {
+      parent: () => undefined,
+      is: { IsCallExpression: () => false, IsBindingElement: () => false },
       body: node => node.body,
       children: node => node.children ?? [],
       kindName: node => node.kind,
@@ -90,12 +93,27 @@ for (const receiverDependent of [false, true]) {
         type: methodCarrier, sourceFile, bindings }] }),
     };
     const missing = { get: () => undefined };
+    const semantics = { types: {
+      expressionType: node => node === originalNode ? originalType : undefined,
+      structuralMembers(sourceType, destinationType, purpose) {
+        assert.equal(sourceType === originalType && destinationType === originalType, true,
+          "the original copied source and registered storage shape own the checked correspondence");
+        assert.equal(purpose, "read");
+        return { kind: "available", members: [{ kind: "present",
+          source: { read: "method", declarations: [method] },
+          destination: { read: "method", declarations: [method] } }] };
+      },
+    } };
     const selected = selectRustCopiedMethods({ context: { ast, sourceStorage: storage, isNativeNode: () => true,
+      semanticsFor: node => {
+        assert.equal(node === originalNode, true, "only the actual copied receiver supplies checked member evidence");
+        return semantics;
+      },
       records: { targetOperation: { get: node => operations.get(node) }, bindingProjection: missing,
         selectedOperation: { get: node => node === readNode
           ? { provenance: { sourceReceiver: copyNode, sourceSelectedDeclaration: method } } : undefined },
         objectReferenceView: missing } },
-      sourceTypes: { structuralObjectForCarrier: carrier => ({ fields: carrier === original
+      sourceTypes: { structuralObjectForCarrier: carrier => ({ sourceType: originalType, fields: carrier === original
         ? [{ storageIndex: 0, method: true, declarations: [method] }]
         : [{ storageIndex: 0 }, { storageIndex: 1, method: true, declarations: [method] }] }) } }, [root], () => "app");
     for (const [carrier, index] of [[original, 0], [template, 1], [instance, 1]]) {

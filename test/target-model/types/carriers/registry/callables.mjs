@@ -312,14 +312,14 @@ export const callablesCarrierRegistry = Object.freeze([
     id: "src/analysis/callables/ownership/retained-environments.ts#selectRustNativePendingEnvironment",
     kinds: ["tuple"],
     declaration: { module: "src/analysis/callables/ownership/retained-environments.ts", symbol: "selectRustNativePendingEnvironment" },
-    responsibility: "callables/native-pending-environment",
+    responsibility: "callables/retained-call-result",
     frozen: false,
   },
   {
     id: "src/analysis/declarations/generic-carrier-requirements.ts#rustStructuralMethodStorageWithoutSelf",
     kinds: ["tuple"],
     declaration: { module: "src/analysis/declarations/generic-carrier-requirements.ts", symbol: "rustStructuralMethodStorageWithoutSelf" },
-    responsibility: "callables/structural-method-storage-without-self",
+    responsibility: "vocabulary/carrier-substitution",
     frozen: false,
   },
   {

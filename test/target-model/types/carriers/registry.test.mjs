@@ -30,6 +30,19 @@ test("every Rust structural or concrete carrier omission is rejected independent
     current.vocabulary.contracts.length);
 });
 
+test("native pending evidence and receiver exclusion retain their concrete existing responsibility owners", () => {
+  for (const [symbol, module, responsibility] of [
+    ["selectRustNativePendingEnvironment", "src/analysis/callables/ownership/retained-environments.ts", "callables/retained-call-result"],
+    ["rustStructuralMethodStorageWithoutSelf", "src/analysis/declarations/generic-carrier-requirements.ts", "vocabulary/carrier-substitution"],
+  ]) {
+    const row = current.rows.find(row => row.declaration.symbol === symbol);
+    assert.equal(row !== undefined, true, `${symbol}: its actual concrete declaration remains registered`);
+    assert.equal(row.declaration.module, module, `${symbol}: exact source owner`);
+    assert.equal(row.responsibility, responsibility, `${symbol}: existing semantic family, not a helper-name divergence`);
+    assert.equal(row.kinds.length === 1 && row.kinds[0] === "tuple", true, `${symbol}: actual tuple evidence constructor`);
+  }
+});
+
 test("Rust registry is metadata only and preserves exact native arguments, qualifiers and lifetimes", () => {
   const value = { kind: "source-primitive", name: "int64" };
   const lifetime = { kind: "parameter", identity: "checked:scope", name: "scope" };
