@@ -12,9 +12,8 @@ import { rustCallableProtocol } from "../../../target-model/types/carriers/calla
 import { rustFrameCallableValue } from "../../../target-model/types/carriers/frame-callables.js";
 import { rustGenericCallableValue } from "../../../target-model/types/carriers/generic-callables.js";
 import { rustCallableInvocationSignaturesMatch } from "../../../policy/conversions/callable-input.js";
-import { rustCallableConversionPhysical, rustCallablePhysicalCarrier } from "../../../policy/conversions/callable-physical.js";
+import { rustCallablePhysicalCarrier } from "../../../policy/conversions/callable-physical.js";
 
-import { substituteRustCallableConversion } from "../../../target-model/conversions/substitution.js";
 import { rustOptionElementCarrier } from "../../../target-model/types/carriers/optional.js";
 import { rustSourceOptionalTargetType } from "../../../target-model/types/projections.js";
 import { isRustAbsenceCarrier } from "../../../target-model/types/carriers/native.js";
@@ -28,8 +27,7 @@ import { instantiateRustRuntimeUnionPayloads } from "../../../target-model/types
 import { mapRustTargetTypes, substituteRustTargetGenerics } from "../../../target-model/types/carriers/substitution.js";
 import { rustPhysicalPayloadFor } from "../../../policy/conversions/physical-payloads.js";
 import { snapshotClosedMetadata } from "../../../target-model/metadata/closed-data.js";
-import { rustValueCarrierBeforeContextualConversion } from "../../conversions/value-carrier-queries.js";
-import { rustAbsentFutureWitness, rustNativeCallablePhysicalSource, rustNativeCallableInputPhysicalSignature } from "../../../policy/conversions/native-callables.js";
+import { rustAbsentFutureWitness, rustNativeCallableInputPhysicalSignature } from "../../../policy/conversions/native-callables.js";
 
 import { isRustNeverCarrier, rustJsArrayLikeElementTargetType } from "../../../target-model/types/carriers/js.js";
 import { rustTypeGenericArguments } from "../../../target-model/types/generic-arguments.js";
@@ -41,7 +39,6 @@ import { selectRustNativeConversionBoundaries } from "./native-storage-witnesses
 import { createRustRecordMemberProducers } from "./native-storage-members.js";
 
 import type { RustNativeCallableInput } from "../../../target-model/records/native/native-protocols.js";
-import type { RustNativeCallablePhysicalSource } from "../../../target-model/records/callables/callable-conversions.js";
 import type { RustStructuralPhysicalCompletionEvidence } from "../../objects/shapes/structural-shape-plan.js";
 
 import type { RustPhysicalCallableSourceSelection } from "../../../target-model/records/native/physical-emission-contexts.js";
@@ -59,7 +56,7 @@ import { selectRustNativeCallbackParameterStorage } from "../native/native-param
 import { selectRustTypedLocationSourceOperation } from "../../../source/extension/typed-locations.js";
 
 import type { RustNativeStorageRequest } from "./native-storage-request.js";
-import { rustCallableClosureErrorBoundary } from "../../conversions/callable-error-boundary.js";
+import { createRustNativeStorageAdaptation } from "./native-storage-adaptations.js";
 
 export function createRustNativeStorageSelection(
   input: Parameters<typeof createRustNativeStorageQueries>[0],
@@ -139,52 +136,9 @@ export function createRustNativeStorageSelection(
       return substituteRustTargetGenerics(candidate.implementation, generic.bindings.types,
         generic.bindings.lifetimes, generic.bindings.consts);
     };
-    // The physical carrier of a value that reaches `current` through the finalized callable adapter recorded at `origin`.
-    // `optional` reports a target that does not match `current` as absent instead of refusing the whole selection.
-    const adaptedPhysical = (origin: SourceStorageSubject, bindings: SourceStorageBindings, current: TargetTypeRef,
-      depth: number, optional = false, input_?: RustNativeCallableInput): TargetTypeRef | undefined => {
-      const fact = input.records.contextualValueConversion.get(origin.node);
-      if (origin.projection.length !== 0 || fact?.conversion.kind !== "callable-adapter" ||
-        !rustTargetTypeRefEquals(fact.sourceCarrier, rustValueCarrierBeforeContextualConversion(input.records, origin.node)))
-        return fail("Native callable conversion storage requires its exact finalized source and destination contract.");
-      const generics = genericsFor(valueOwnerFor(origin.node), bindings, depth + 1);
-      if (generics.kind === "unresolved") return fail(generics.reason);
-      const { types, lifetimes, consts } = generics.bindings;
-      const conversion = substituteRustCallableConversion(fact.conversion, types, lifetimes, consts);
-      const target = callableValueCarrier(conversion.target);
-      if (target === undefined || !rustCallableInvocationSignaturesMatch(current, target))
-        return optional ? undefined : fail("Native callable conversion storage conflicts with its selected activation signature.");
-      // An adapted reference to a native input reads that input directly; its storage frontier is the input itself,
-      // bound in the activation that creates the adapter.
-      const inputImplementation = input_ === undefined ? undefined : formalCarrier(input_, conversion.source, bindings, depth);
-      const operand = input_ !== undefined
-        ? inputImplementation === undefined ? undefined : substituteRustTargetGenerics(inputImplementation, types, lifetimes, consts)
-        : visit(conversion.source, origin, bindings, depth + 1, false, "input");
-      const physicalInputs = operand === undefined ? [] : [...selectedInputs].filter(candidate =>
-        rustTargetTypeRefEquals(candidate.implementation, operand));
-      const selectedInput = physicalInputs.length === 1 ? physicalInputs[0] : undefined;
-      const selectedCarrier = selectedInput === undefined ? undefined : substituteRustTargetGenerics(selectedInput.carrier,
-        types, lifetimes, consts);
-      const originalSignature = selectedInput === undefined || selectedCarrier === undefined ||
-        !rustCallableInvocationSignaturesMatch(conversion.source, selectedCarrier) ? undefined
-        : rustNativeCallableInputPhysicalSignature(selectedInput, []);
-      const source: RustNativeCallablePhysicalSource | undefined = operand === undefined ? undefined : physicalInputs.length === 0
-        ? rustNativeCallablePhysicalSource(conversion.source,
-          { kind: "selected", carrier: operand, inputs: [...selectedInputs], ...(erasedPhysicals.has(operand) ? { erased: true as const } : {}) },
-          input.frames)
-        : originalSignature === undefined || selectedInput === undefined ? undefined : Object.freeze({ carrier: operand, input: selectedInput,
-          signature: Object.freeze({
-            parameters: Object.freeze(originalSignature.parameters.map(parameter => substituteRustTargetGenerics(parameter, types, lifetimes, consts))),
-            result: substituteRustTargetGenerics(originalSignature.result, types, lifetimes, consts),
-            error: substituteRustTargetGenerics(originalSignature.error, types, lifetimes, consts),
-          }) });
-      const file = input.ast.getSourceFile(origin.node);
-      const physical = source === undefined || file === undefined ? undefined
-        : rustCallableConversionPhysical(conversion, source.signature, input.ast.getFileName(file),
-          conversion.target.kind === "closure" ? rustCallableClosureErrorBoundary(origin.node, input.ast, input.operationAttempts) : undefined,
-          input.definitions, source.erased === true)?.carrier;
-      return physical ?? fail("Native callable conversion storage has no exact physical adaptation contract.");
-    };
+    const adaptedPhysical = createRustNativeStorageAdaptation({ context: input, genericsFor, valueOwnerFor,
+      selectedInputs, erasedPhysicals, formalCarrier, fail,
+      operandFor: (carrier, subject, bindings, depth) => visit(carrier, subject, bindings, depth, false, "input") });
     const boundInvocation = (declaration: Node, invocation: Node, callerBindings: SourceStorageBindings,
       depth: number): Extract<RustNativeInvocationBindingsSelection, { readonly kind: "resolved" }> | undefined => {
       if (!step(depth)) return undefined;
