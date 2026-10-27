@@ -192,7 +192,7 @@ test("sealed records publish only frozen typed family readers without a native k
   };
   assert.equal(Object.keys(producerAdmissions).length, 69, "every producer has a seal refusal witness");
   assert.equal(Object.isFrozen(records), true);
-  assert.equal(Object.keys(records).length, 347, "every native key has one family");
+  assert.equal(Object.keys(records).length, 348, "every native key has one family");
   for (const [name, family] of Object.entries(records)) {
     assert.deepEqual(Object.keys(family), ["get"], name + ": getter-only publication");
     assert.equal(Object.isFrozen(family), true, name + ": immutable family port");
@@ -226,8 +226,8 @@ test("the backend projection removes exactly five applicability families and pre
   const analysis = builder.seal([]);
   const records = createRustProgramRecords(analysis);
   const removed = new Set(["memoryBindingPlan", "rawLocationPlan", "rawAddressPlan", "memoryLayoutObservation", "typedLocationPlan"]);
-  assert.equal(Object.keys(analysis).length, 347);
-  assert.equal(Object.keys(records).length, 342);
+  assert.equal(Object.keys(analysis).length, 348);
+  assert.equal(Object.keys(records).length, 343);
   assert.equal(Object.isFrozen(records), true);
   for (const [family, reader] of Object.entries(analysis)) {
     if (removed.has(family)) {
