@@ -137,6 +137,8 @@ main();
   assert.match(source, /string_replace_regexp_with/u);
   assert.match(source, /regexp_named_groups_get_native/u);
   assert.match(source, /\.len\(\)/u);
+  assert.doesNotMatch(source, /\.map_err::<[^>]+>\(\|replacement_argument_error\w*\|\s*\{\s*replacement_argument_error\w*\s*\}\)/u,
+    "an exact native projection error is propagated without an identity conversion closure");
   assert.equal(validateGeneratedProject("regexp-result-consumption", result.artifacts, { run: true }).status, 0);
 });
 
@@ -228,7 +230,9 @@ export function main(): void {
 main();
 ` },
   });
-  assert.equal(result.diagnostics.length === 0, true, "pure typed exact-string helpers retain their admitted body and callback contracts");
+  assert.equal(result.diagnostics.length === 0, true,
+    `pure typed exact-string helpers retain their admitted body and callback contracts: ${JSON.stringify(result.diagnostics.slice(0, 8)
+      .map(({ code, message, evidence }) => ({ code, message: message.slice(0, 512), evidence: evidence?.slice(0, 8) })))}`);
   const output = artifactText(result, "src/index.rs");
   assert.match(output, /js_exact_string::replace_with/u);
   assert.match(output, /js_exact_string::replace_all_with/u);
@@ -262,5 +266,7 @@ main();
   assert.doesNotMatch(source, /Ok::<_, NativeErrors/u);
   assert.match(source, /string_try_replace_all_regexp_native_with/u);
   assert.match(source, /string_replace_regexp_with/u);
+  assert.doesNotMatch(source, /\.map_err::<[^>]+>\(\|replacement_argument_error\w*\|\s*\{\s*replacement_argument_error\w*\s*\}\)/u,
+    "the helper's exact native error identity adds no adapter");
   assert.equal(validateGeneratedProject("regexp-callback-physical-error", result.artifacts, { run: true }).status, 0);
 });

@@ -38,14 +38,14 @@ export function read(): uint32 {
       if (ast.is.IsCallExpression(node)) {
         const callee = Node_Expression(ast, node);
         if (callee !== undefined && ast.is.IsIdentifier(callee) && ast.text(callee) === "allocateptr") allocations.push(node);
-        const call = program.source.semantics.forNode(node).operations.call(node);
-        const argument = call?.sourceArguments.length === 1 ? call.sourceArguments[0].expression : undefined;
+        const arguments_ = ast.arguments(node);
+        const argument = arguments_.length === 1 ? arguments_[0] : undefined;
         const factory = argument === undefined || !ast.is.IsCallExpression(argument) ? undefined : Node_Expression(ast, argument);
-        const nested = argument === undefined || !ast.is.IsCallExpression(argument)
-          ? undefined : program.source.semantics.forNode(argument).operations.call(argument);
+        const nestedArguments = argument === undefined || !ast.is.IsCallExpression(argument)
+          ? undefined : ast.arguments(argument);
         if (callee !== undefined && ast.is.IsIdentifier(callee) && ast.text(callee) === "loadptr" &&
           factory !== undefined && ast.is.IsIdentifier(factory) && /^(first|second)$/u.test(ast.text(factory)) &&
-          nested?.sourceArguments.length === 0) {
+          nestedArguments?.length === 0) {
           loads.push(node);
           factories.add(ast.text(factory));
         }

@@ -197,10 +197,16 @@ export function lowerRustValueConversion(
         }
         const projectionError = selected.projection;
         const errorType = projectionError === undefined ? undefined : rustTypeFromCarrierInContext(projectionError.target, callbackContext);
+        if (region.boundary === undefined || errorType === undefined || projectionError === undefined) return undefined;
+        if (projectionError.kind === "identity") {
+          callbackArguments.push({ kind: "try", operandErrorType: errorType, resultErrorType: region.boundary.errorType,
+            expr: projected });
+          continue;
+        }
         const errorName = allocateRustSyntheticName(names, "replacement_argument_error");
-        const converted = projectionError === undefined ? undefined : lowerRustValueConversion(projectionError,
+        const converted = lowerRustValueConversion(projectionError,
           { kind: "path", path: errorName }, callbackContext, node);
-        if (region.boundary === undefined || errorType === undefined || converted === undefined) return undefined;
+        if (converted === undefined) return undefined;
         callbackArguments.push({ kind: "try", operandErrorType: errorType, resultErrorType: region.boundary.errorType,
           expr: { kind: "method-call", receiver: projected, method: "map_err",
             genericArguments: [{ kind: "type", type: errorType }, { kind: "type", type: { kind: "infer" } }],
