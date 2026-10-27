@@ -16,6 +16,38 @@ import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equali
 import { rustCallablePhysicalSignature } from "../../../dist/target-model/conversions/callable-physical.js";
 import { rustProducerErrorReference } from "../../../dist/target-model/types/carriers/producer-errors.js";
 
+for (const surfaces of [[], ["js"]]) for (const fallible of [false, true]) {
+  test(`named callable construction keeps its one selected physical invocation error (${surfaces[0] ?? "native"}, ${fallible ? "fallible" : "infallible"})`, () => {
+    const { program } = analyzeRust({ surfaces, files: { "index.ts": `
+export function create(seed: number) {
+  function choose(left: number, right: number): number {
+    ${fallible ? 'if (seed < 0) throw "negative seed";' : ""}
+    return seed > 0 ? left : right;
+  }
+  const first = choose;
+  const second = choose;
+  return { first, second };
+}
+export function run(): number { return create(1).first(3, 4); }
+` } });
+    let checked = 0;
+    const visit = node => {
+      const value = program.records.sourceCallableValue.get(node);
+      if (value !== undefined && value.name === "choose") {
+        const selected = program.records.sourceCallableEmission.get(value.sourceDeclaration, value.carrier)?.construction;
+        assert.equal(selected?.kind === "callable", true, "the named captured source value has a concrete native construction");
+        const physical = rustCallablePhysicalSignature(selected.physical);
+        assert.equal(physical !== undefined && rustTargetTypeRefEquals(selected.error, physical.error), true,
+          "the constructor's success annotation uses the physical callable ABI, not a second intrinsic error choice");
+        checked++;
+      }
+      program.source.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+    };
+    program.sourceFiles.forEach(visit);
+    assert.equal(checked >= 2, true, "both authored references retain the same original activation-owned native value");
+  });
+}
+
 function methodInvocationError(program, field) {
   if (field.methodPlan?.kind === "fixed") {
     const reference = rustProducerErrorReference(program.callableValues.nativeProducers.errorFor(field.methodPlan.declaration, "invoke"));

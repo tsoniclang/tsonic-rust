@@ -10,6 +10,7 @@ import { rustGenericCallableValue } from "../../../target-model/types/carriers/g
 import { closedMetadataKey } from "../../../target-model/metadata/closed-data.js";
 import { isValidRustIdentifier } from "../../../target-model/names/identifiers.js";
 import { rustNodeIsOutsideNativeCode } from "../../control-flow/compile-time-statements.js";
+import { rustCallablePhysicalSignature } from "../../../target-model/conversions/callable-physical.js";
 
 export function analyzeRustSourceCallableEmission(program: Omit<RustAnalysisProgram, "reachability">,
   nodes: readonly Node[], producer: RustSourceCallableEmissionProducer) {
@@ -72,7 +73,7 @@ export function analyzeRustSourceCallableEmission(program: Omit<RustAnalysisProg
       continue;
     }
     const physical = program.callableValues.nativeProducers.physicalFor(value.sourceDeclaration, value.carrier);
-    const error = program.callableValues.nativeProducers.errorFor(value.sourceDeclaration, "invoke");
+    const error = physical === undefined ? undefined : rustCallablePhysicalSignature(physical)?.error;
     const captures = lexical === undefined ? [] : program.records.closureCapture.get(value.sourceDeclaration)?.captures;
     if (physical === undefined || error === undefined || captures === undefined) {
       refuse(value, "rust.backend.callable-value-error-boundary", "Project-source callable value has no exact error boundary.");
