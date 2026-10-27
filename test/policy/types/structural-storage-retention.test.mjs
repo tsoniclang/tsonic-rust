@@ -2,9 +2,44 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { retainRustStructuralInstantiation } from "../../../dist/analysis/source-evidence/types/resolution/structural-instantiations.js";
 import { retainRustSourceUnionInstantiation } from "../../../dist/analysis/source-evidence/types/resolution/source-unions.js";
-import { rustSourceUnionTargetType, rustSourcePrimitiveTargetType, rustStructuralObjectTargetType,
+import { rustSourceUnionTargetType, rustSourcePrimitiveTargetType, rustStructuralObjectTargetType, rustStructuralObjectCarrierValue,
   rustCallableTargetType, rustVecTargetType, rustOptionTargetType } from "../../../dist/target-model/types/index.js";
 import { createRustTypeDefinitionRegistry } from "../../../dist/analysis/project-types/type-definitions.js";
+import { analyzeRust } from "../../helpers/rust-session.mjs";
+
+for (const surfaces of [[], ["js"]]) {
+  test(`structural alias retention binds selected native instances instead of their open template in ${surfaces[0] ?? "native"}`, () => {
+    const { program } = analyzeRust({ surfaces, files: { "index.ts": `
+      import type { int32, int64 } from "@tsonic/core/types.js";
+      type View<Value> = { readonly value: Value };
+      type Pair<First, Second> = { readonly left: First; readonly right: Second };
+      export function narrow(value: View<int32>): View<int32> { return value; }
+      export function wide(value: View<int64>): View<int64> { return value; }
+      export function swap(value: Pair<int32, int64>): Pair<int64, int32> {
+        return { left: value.right, right: value.left };
+      }
+    ` } });
+    const { ast } = program.source;
+    const file = program.source.sourceFiles.find(file => ast.getFileName(file) === "/src/index.ts");
+    assert.equal(file !== undefined, true, "the original checked alias declarations are retained");
+    for (const [name, expected] of [
+      ["narrow", [["value", "int32"]]],
+      ["wide", [["value", "int64"]]],
+      ["swap", [["left", "int64"], ["right", "int32"]]],
+    ]) {
+      const owner = ast.statements(file).find(node => ast.is.IsFunctionDeclaration(node) && ast.text(ast.name(node)) === name);
+      assert.equal(owner !== undefined, true, `${name}: original declaration identity`);
+      const returned = program.records.sourceCallableReturn.get(owner);
+      const shape = rustStructuralObjectCarrierValue(returned?.returnCarrier);
+      assert.equal(shape !== undefined, true, `${name}: complete selected structural return`);
+      for (const [fieldName, nativeKind] of expected) {
+        const field = shape.fields.find(field => field.sourceName === fieldName);
+        assert.equal(field !== undefined && field.type.kind === "source-primitive" && field.type.name === nativeKind,
+          true, `${name}.${fieldName}: exact concrete native binding, not its open alias parameter`);
+      }
+    }
+  });
+}
 
 test("structural retention proves type correspondence without querying physical components", () => {
   const sourceType = {};
