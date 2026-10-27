@@ -6,7 +6,7 @@ import { rustGenericCallableValue } from "../../target-model/types/carriers/gene
 import { rustFrameCallableValue } from "../../target-model/types/carriers/frame-callables.js";
 import { rustOptionElementCarrier } from "../../target-model/types/carriers/optional.js";
 
-import { rustCallableInputProtocol, rustCallableProtocol, rustLocationTargetType } from "../../target-model/types/carriers/callables.js";
+import { rustCallableInputProtocol, rustCallableProtocol, rustLocationPointeeCarrier, rustLocationTargetType } from "../../target-model/types/carriers/callables.js";
 
 import type { Node } from "@tsonic/tsts";
 
@@ -285,7 +285,14 @@ export function createRustCallableRequirementVisitor(input: RustCallableRequirem
       if (error !== undefined) return error;
     }
     const typedLocation = records.typedLocationPlan.get(node);
-    if (typedLocation?.operation === "allocate" || typedLocation?.operation === "address-of") {
+    if (typedLocation?.operation === "allocate" && records.nativeBacking.get(node) === undefined) {
+      const allocation = input.nativeStorage.operandFor(node);
+      if (allocation.kind === "unresolved") return allocation.reason;
+      const pointee = rustLocationPointeeCarrier(allocation.carrier);
+      if (pointee === undefined) return "A native allocation requires its exact physical location pointee.";
+      const error = addUse(node, pointee, ["clone", "static"]);
+      if (error !== undefined) return error;
+    } else if (typedLocation?.operation === "allocate" || typedLocation?.operation === "address-of") {
       const error = addUse(node, typedLocation.pointeeCarrier, ["clone", "static"]);
       if (error !== undefined) return error;
     }

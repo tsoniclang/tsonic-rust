@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { Node_Expression } from "@tsonic/target-api/source";
+import { Node_Expression, sourceEnclosingCallable } from "@tsonic/target-api/source";
 import { compileRust } from "../../helpers/rust-session.mjs";
 import { analyzeRustAnalysisProgram } from "../../../dist/analysis/program/target-program.js";
 import { rustCallablePhysicalSignature } from "../../../dist/target-model/conversions/callable-physical.js";
@@ -104,6 +104,10 @@ export function read(): uint32 {
       assert.equal(emitted.carrier === selected.carrier, true, "the emitted owner is exactly the selected allocation carrier");
       assert.equal(emitted.pointeeCarrier === selected.carrier.genericArguments[0].type, true,
         "the allocation cannot recover the old logical callback error from its source operation");
+      const owner = sourceEnclosingCallable(allocation, program.source.ast);
+      assert.equal(owner !== undefined, true, "the allocation retains its original callable requirement owner");
+      assert.equal(program.records.genericRequirementUse.get(owner, allocation, emitted.pointeeCarrier, ["clone", "static"]), true,
+        "the physical pointee has its exact required native Clone and static use before planner publication");
       const signature = rustCallablePhysicalSignature(emitted.pointeeCarrier);
       assert.equal(signature !== undefined && signature.parameters.length === 0, true, "the allocation retains the original callback ABI");
       const reference = rustProducerErrorReference(signature.error);
