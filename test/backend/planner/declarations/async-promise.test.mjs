@@ -79,6 +79,40 @@ test("body-local exits and captured computations keep their native boundary", ()
   }
 });
 
+test("settled tail errors preserve the exact native payload without a redundant closure", () => {
+  const error = { kind: "call", path: "actual_error", args: [] };
+  const tail = { kind: "throw", error, tail: true };
+  const wrapped = wrapRustJsPromiseBody({ statements: [tail] }, true,
+    { kind: "settled", settledAwaits: [] }, integerCompletion).statements[0].expr;
+  assert.equal(wrapped.path, "js_abi::JsPromise::from_result", "the existing native rejection transport is retained");
+  assert.equal(wrapped.args[0].kind, "call", "a completed Err value introduces no callable boundary");
+  assert.equal(wrapped.args[0].path, "Err", "the native payload is not relabelled");
+  assert.equal(wrapped.args[0].args[0] === error, true, "the identical original payload evaluates once");
+  assert.equal(printRustExpr(wrapped), "js_abi::JsPromise::from_result(Err(actual_error()))");
+  const body = { statements: [
+    { kind: "let", name: "first", mutable: false, init: { kind: "call", path: "before", args: [] } }, tail,
+  ] };
+  const scoped = wrapRustJsPromiseBody(body, true, { kind: "settled", settledAwaits: [] }, integerCompletion).statements[0].expr;
+  assert.equal(scoped.args[0].kind, "block", "earlier effects retain their lexical evaluation order");
+  assert.equal(scoped.args[0].body === body, true, "no statement or payload is copied, lost or reordered");
+  const attributed = { statements: [{ ...tail, attrs: [{ kind: "list", path: "cfg", arguments: [{ kind: "list", path: "all", arguments: [] }] }] }] };
+  const preserved = wrapRustJsPromiseBody(attributed, true, { kind: "settled", settledAwaits: [] }, integerCompletion).statements[0].expr;
+  assert.equal(preserved.args[0].kind, "block", "attributes prevent direct tail extraction");
+  assert.equal(preserved.args[0].body === attributed, true, "the complete attributed syntax survives");
+});
+
+test("tail error payloads with real propagation and non-tail throws keep their boundary", () => {
+  for (const statement of [
+    { kind: "throw", error: { kind: "try", expr: { kind: "call", path: "actual_error", args: [] } }, tail: true },
+    { kind: "throw", error: { kind: "path", path: "error" } },
+  ]) {
+    const body = { statements: [statement] };
+    const wrapped = wrapRustJsPromiseBody(body, true, { kind: "settled", settledAwaits: [] }, integerCompletion).statements[0].expr;
+    assert.equal(wrapped.args[0].kind, "invoke", "real return or question-mark still targets the original body");
+    assert.equal(wrapped.args[0].callee.body === body, true, "the original completion body is retained unchanged");
+  }
+});
+
 test("settled native calls and scoped computations introduce no redundant closure", () => {
   for (const expression of [
     { kind: "method-call", receiver: { kind: "path", path: "value" }, method: "read", args: [] },

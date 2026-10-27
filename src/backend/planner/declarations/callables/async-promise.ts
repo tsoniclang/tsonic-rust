@@ -20,6 +20,8 @@ export function wrapRustJsPromiseBody(
     const completion: RustExpr = rustPromiseBodyLeavesEarly(body)
       ? { kind: "invoke", callee: { kind: "closure-block", params: [], move: true, async: false, body }, args: [] }
       : !attributed && tail?.kind === "tail" && (tail.attrs?.length ?? 0) === 0 ? tail.expr
+        : !attributed && tail?.kind === "throw" && tail.tail === true && (tail.attrs?.length ?? 0) === 0
+          ? { kind: "call", path: "Err", args: [tail.error] }
         : !attributed && body.statements.length === 0 ? { kind: "tuple-literal", elements: [] }
           : { kind: "block", body };
     return wrapRustJsPromiseCompletion(completion, fallible, nativeCompletion);
@@ -57,7 +59,9 @@ function rustPromiseBodyLeavesEarly(body: RustBlock): boolean {
   const visit = (value: unknown): boolean => {
     if (Array.isArray(value)) return value.some(visit);
     if (value === null || typeof value !== "object") return false;
-    const kind = (value as { readonly kind?: unknown }).kind;
+    const syntax = value as { readonly kind?: unknown; readonly tail?: unknown; readonly error?: unknown };
+    const kind = syntax.kind;
+    if (kind === "throw" && syntax.tail === true) return visit(syntax.error);
     if (typeof kind === "string" && earlyExitKinds.has(kind)) return true;
     if (typeof kind === "string" && callableBoundaryKinds.has(kind)) return false;
     return Object.values(value).some(visit);

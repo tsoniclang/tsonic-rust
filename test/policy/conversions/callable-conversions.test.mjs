@@ -8,7 +8,7 @@ import { rustCallableProtocol } from "../../../dist/target-model/types/carriers/
 import { selectRustSourceValueConversion } from "../../../dist/policy/conversions/selection.js";
 import { rustAbsenceTargetType, rustCallableTargetType, rustClosureTargetType, rustJsValueTargetType, rustOptionTargetType, rustStringTargetType, rustUnitTargetType } from "../../../dist/target-model/types/index.js";
 import { rustCallableConversionPhysical, rustCallablePhysicalCarrier } from "../../../dist/policy/conversions/callable-physical.js";
-import { rustNamedTargetType, rustNativeTraitRef } from "../../../dist/target-model/types/carriers/native.js";
+import { rustNamedTargetType, rustNamedTypeCarrierValue, rustNativeTraitRef } from "../../../dist/target-model/types/carriers/native.js";
 import { rustProgramErrorTargetType } from "../../../dist/target-model/types/carriers/js.js";
 import { rustRuntimeErrorTargetType } from "../../../dist/target-model/types/carriers/runtime-carriers.js";
 import { rustInfallibleTargetId } from "../../../dist/target-model/types/carriers/source-types.js";
@@ -114,7 +114,9 @@ test("generic native closure adapters retain every actual invocation error witho
     assert.equal(rustTargetTypeRefEquals(selected.error, error), true, `${label}: the native result retains E`);
     assert.equal(selected.carrier.kind, "closure", `${label}: the result is an ordinary native closure`);
     assert.equal(selected.carrier.fallible, false, `${label}: Result is represented exactly once`);
-    const result = rustOnlyTypeGenericArguments(selected.carrier.result.genericArguments);
+    const completion = rustNamedTypeCarrierValue(selected.carrier.result);
+    assert.equal(completion?.id, "rust.core.Result", `${label}: the native completion uses the exact Result owner`);
+    const result = rustOnlyTypeGenericArguments(completion.genericArguments);
     assert.equal(result?.length, 2, `${label}: the native completion is Result<Value, E>`);
     assert.equal(rustTargetTypeRefEquals(result[0], number), true, `${label}: the native result is unchanged`);
     assert.equal(rustTargetTypeRefEquals(result[1], error), true, `${label}: the emitted completion has exactly E`);
