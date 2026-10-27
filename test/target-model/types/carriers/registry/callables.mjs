@@ -1,6 +1,20 @@
 // Carrier registry rows (callables): test and audit data for this compiler only; product code never reads it.
 export const callablesCarrierRegistry = Object.freeze([
   {
+    id: "src/analysis/callables/storage/native-storage-collections.ts#selectRustNativeArrayStorage",
+    kinds: ["target-named"],
+    declaration: { module: "src/analysis/callables/storage/native-storage-collections.ts", symbol: "selectRustNativeArrayStorage" },
+    responsibility: "callables/resolve-callable-storage-carrier",
+    frozen: true,
+  },
+  {
+    id: "src/analysis/callables/storage/native-storage-collections.ts#selectRustNativeCollectionStorage",
+    kinds: ["target-named"],
+    declaration: { module: "src/analysis/callables/storage/native-storage-collections.ts", symbol: "selectRustNativeCollectionStorage" },
+    responsibility: "callables/resolve-callable-storage-carrier",
+    frozen: true,
+  },
+  {
     id: "src/policy/ownership/source-parameter-contracts.ts#selectRustSourceParameterBorrowCarrier",
     kinds: ["reference"],
     declaration: { module: "src/policy/ownership/source-parameter-contracts.ts", symbol: "selectRustSourceParameterBorrowCarrier" },

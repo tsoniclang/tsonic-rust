@@ -19,7 +19,7 @@ import { rustSourceOptionalTargetType } from "../../../target-model/types/projec
 import { isRustAbsenceCarrier } from "../../../target-model/types/carriers/native.js";
 import { isRustNativeFutureCarrier, rustFutureOutputCarrier } from "../../../target-model/types/carriers/primitives.js";
 import { rustUnionAlternatives } from "../../../target-model/types/union-relations.js";
-import { rustSourceUnionCarrierValue, rustSourceTypeCarrierValue, rustStructuralObjectCarrierValue, rustStructuralObjectTargetType, rustStructuralObjectCarrierName } from "../../../target-model/types/carriers/source-types.js";
+import { rustCallableTargetId, rustLocationTargetId, rustSourceUnionCarrierValue, rustSourceTypeCarrierValue, rustStructuralObjectCarrierValue, rustStructuralObjectTargetType, rustStructuralObjectCarrierName } from "../../../target-model/types/carriers/source-types.js";
 import { inferRustTargetGenericBindings } from "../../../target-model/types/carriers/generic-inference.js";
 import { rustLifetimeKey, rustLifetimesEqual, type RustLifetimeRef } from "../../../target-model/lifetimes/index.js";
 import { instantiateRustRuntimeUnionPayloads } from "../../../target-model/types/carriers/runtime-unions.js";
@@ -28,13 +28,10 @@ import { mapRustTargetTypes, substituteRustTargetGenerics } from "../../../targe
 import { rustPhysicalPayloadFor } from "../../../policy/conversions/physical-payloads.js";
 import { snapshotClosedMetadata } from "../../../target-model/metadata/closed-data.js";
 import { rustValueCarrierBeforeContextualConversion } from "../../conversions/value-carrier-queries.js";
-import { rustNativeCallablePhysicalSource, rustNativeCallableInputPhysicalSignature } from "../../../policy/conversions/native-callables.js";
-import { rustAbsentFutureWitness } from "../../../policy/conversions/native-callables.js";
+import { rustAbsentFutureWitness, rustNativeCallablePhysicalSource, rustNativeCallableInputPhysicalSignature } from "../../../policy/conversions/native-callables.js";
 
-import { isRustNeverCarrier } from "../../../target-model/types/carriers/js.js";
-import { rustJsArrayLikeElementTargetType } from "../../../target-model/types/carriers/js.js";
+import { isRustNeverCarrier, rustJsArrayLikeElementTargetType } from "../../../target-model/types/carriers/js.js";
 import { rustTypeGenericArguments } from "../../../target-model/types/generic-arguments.js";
-import { rustCallableTargetId, rustLocationTargetId } from "../../../target-model/types/carriers/source-types.js";
 
 import { rustNativeCallableInvocationArguments } from "../../../policy/types/callables/native-invocations.js";
 import { createRustNativeStorageGenericSelection, rustNativeStorageProjectionSteps, rustNativeStorageProjectionDepth } from "./native-storage-generics.js";
@@ -48,7 +45,7 @@ import type { RustStructuralPhysicalCompletionEvidence } from "../../objects/sha
 
 import type { RustPhysicalCallableSourceSelection } from "../../../target-model/records/native/physical-emission-contexts.js";
 import type { RustCallableJoinWrite } from "../../../target-model/records/native/native-storage.js";
-import { selectRustJsConstructorStoredInputs } from "../../../policy/operations/source-profiles/js/constructors.js";
+import { selectRustNativeArrayStorage, selectRustNativeCollectionStorage } from "./native-storage-collections.js";
 import { selectRustJsStoredTypeArgumentSlots } from "../../../policy/operations/source-profiles/js/stored-slots.js";
 import type { RustNativeStorageSelection } from "../../../target-model/records/native/native-storage.js";
 import { callableValueCarrier } from "./native-storage-values.js";
@@ -58,7 +55,7 @@ import type { createRustNativeStorageQueries, RustNativeInvocationBindingsSelect
 import { snapshotRustCallableBindings } from "../../../policy/types/callables/generic-bindings.js";
 import type { RustSourceErrorEffectSelection } from "../../errors/source-error-effects.js";
 import { selectRustNativeCallbackParameterStorage } from "../native/native-parameters.js";
-import { pointerOperationFactKey } from "@tsonic/tsts";
+import { selectRustTypedLocationSourceOperation } from "../../../source/extension/typed-locations.js";
 
 type RustNativeStorageRequest = {
   readonly subject: SourceStorageSubject;
@@ -294,8 +291,10 @@ export function createRustNativeStorageSelection(
           const subject = origin.subject;
           const operation = subject.kind === "value" && subject.projection.length === 0
             ? input.records.targetOperation.get(subject.node) : undefined;
-          const plan = operation?.kind === "typed-location" && operation.operation === "allocate"
-            ? input.storage.source.sourceFacts.getFact(subject.node, pointerOperationFactKey) : undefined;
+          const sourceOperation = operation?.kind === "typed-location" && operation.operation === "allocate"
+            ? selectRustTypedLocationSourceOperation(subject.node, "allocate",
+              (subject, key) => input.storage.source.sourceFacts.getFact(subject, key)) : undefined;
+          const plan = sourceOperation?.kind === "selected" ? sourceOperation.sourceOperation : undefined;
           let candidate: TargetTypeRef | undefined;
           if (operation?.kind === "typed-location" && operation.operation === "allocate") {
             if (plan?.operation !== "allocate" || plan.call !== subject.node)
@@ -640,71 +639,15 @@ export function createRustNativeStorageSelection(
       }
       const jsElement = rustJsArrayLikeElementTargetType(current);
       if (jsElement !== undefined && current.kind === "target-named") {
-        const demand = requiresPhysicalSelection(jsElement, depth + 1);
-        if (demand === undefined) return undefined;
-        if (!demand) return current;
-        const component = project(selectedSubject, { kind: "array-element" });
-        const element = component === undefined ? undefined : visit(jsElement, component, bindings, depth + 1, false, position);
-        return element === undefined ? undefined : element === jsElement ? current
-          : Object.freeze({ ...current, genericArguments: Object.freeze(rustTypeGenericArguments([element])) });
+        return selectRustNativeArrayStorage(current, jsElement, selectedSubject, bindings, depth,
+          { project, requiresPhysicalSelection,
+            visit: (carrier, subject, bindings, depth) => visit(carrier, subject, bindings, depth, false, position) });
       }
       const storedSlots = selectRustJsStoredTypeArgumentSlots(current);
       if (storedSlots !== undefined && current.kind === "target-named") {
-        const arguments_ = current.genericArguments;
-        if (arguments_ === undefined) return fail("Opaque collection storage requires its selected native type arguments.");
-        const demands = storedSlots.map(slot => requiresPhysicalSelection(slot.carrier, depth + 1));
-        if (demands.some(demand => demand === undefined)) return undefined;
-        const callableSlots = storedSlots.filter((_slot, index) => demands[index] === true);
-        if (callableSlots.length === 0) return current;
-        const producers = input.storage.storageProducersFor(selectedSubject, bindings);
-        if (producers.kind === "unresolved") return fail(producers.reason);
-        const constructors: {
-          readonly producer: (typeof producers.producers)[number];
-          readonly storedInputs: ReturnType<typeof selectRustJsConstructorStoredInputs>;
-        }[] = [];
-        for (const producer of producers.producers) {
-          if (!step(depth)) return undefined;
-          const subject = producer.subject;
-          const operation = subject.kind !== "value" || subject.projection.length !== 0 ||
-            !input.ast.is.IsNewExpression(subject.node) ? undefined : input.records.targetOperation.get(subject.node);
-          const storedInputs = operation?.kind !== "provider-operation" || operation.resultCarrier.kind !== "target-named" ||
-            operation.resultCarrier.id !== current.id ? undefined : selectRustJsConstructorStoredInputs(operation.operationId, current);
-          constructors.push({ producer, storedInputs });
-        }
-        if (producers.kind === "open" && producers.boundaries.some(boundary =>
-          boundary.kind !== "opaque-result" || !constructors.some(({ producer, storedInputs }) => {
-            if (!step(depth)) return false;
-            return storedInputs !== undefined && boundary.subject === producer.subject &&
-              boundary.exposure === producer.subject.node && boundary.bindings === producer.bindings;
-          }))) return fail("Opaque collection callable storage requires its actual closed native constructor inputs.");
-        const elements = new Map<number, TargetTypeRef>();
-        for (const { producer, storedInputs } of constructors) {
-          if (!step(depth) || producer.subject.kind !== "value" || producer.subject.projection.length !== 0 ||
-            !input.ast.is.IsNewExpression(producer.subject.node))
-            return fail("Opaque collection callable storage requires one exact checked native constructor occurrence.");
-          if (storedInputs === undefined) return fail("Opaque collection callable storage has no selected native constructor payload correspondence.");
-          for (const slot of callableSlots) {
-            const selectedInput = storedInputs.find(candidate => candidate.nativeArgumentIndex === slot.nativeArgumentIndex);
-            const argument = selectedInput === undefined ? undefined : input.ast.arguments(producer.subject.node)[selectedInput.sourceIndex];
-            const projected = argument === undefined || selectedInput === undefined ? undefined
-              : input.storage.subject(argument, "value", selectedInput.projections);
-            if (projected?.kind !== "resolved") return fail(projected?.reason
-              ?? "Opaque collection callable storage requires the actual authored constructor payload.");
-            const element = visit(slot.carrier, projected.subject, producer.bindings, depth + 1, false, position);
-            if (element === undefined) return undefined;
-            const previous = elements.get(slot.nativeArgumentIndex);
-            if (previous !== undefined && !rustTargetTypeRefEquals(previous, element))
-              return fail("Opaque collection constructors require one exact shared physical callable payload and invocation error.");
-            elements.set(slot.nativeArgumentIndex, element);
-          }
-        }
-        if (callableSlots.some(slot => !elements.has(slot.nativeArgumentIndex)))
-          return fail("Opaque collection callable storage has no actual native payload producer.");
-        const genericArguments = arguments_.map((argument, index) => {
-          const element = elements.get(index);
-          return element === undefined ? argument : Object.freeze({ kind: "type" as const, type: element });
-        });
-        return Object.freeze({ ...current, genericArguments: Object.freeze(genericArguments) });
+        return selectRustNativeCollectionStorage(input, current, storedSlots, selectedSubject, bindings, depth,
+          { step, fail, requiresPhysicalSelection,
+            visit: (carrier, subject, bindings, depth) => visit(carrier, subject, bindings, depth, false, position) });
       }
       if (current.kind === "tuple") {
         const demands = current.elements.map(element => requiresPhysicalSelection(element, depth + 1));
