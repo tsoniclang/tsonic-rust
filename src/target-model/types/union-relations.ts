@@ -5,6 +5,7 @@ import { rustRuntimeUnionContract, type RustRuntimeUnionVariant } from "./carrie
 import { hasExactObjectKeys, isClosedMetadata, isDenseDataArray } from "../metadata/closed-data.js";
 
 import { rustSourceUnionCarrierValue } from "./carriers/source-types.js";
+import { rustNativeErrorJoinReference } from "./native-error-joins.js";
 
 export interface RustUnionPathStep {
   readonly union: TargetTypeRef;
@@ -45,6 +46,10 @@ function isVariant(value: unknown): value is RustRuntimeUnionVariant {
 }
 
 export function rustUnionAlternatives(carrier: TargetTypeRef, definitions: RustTypeDefinitions) {
+  const errors = rustNativeErrorJoinReference(carrier);
+  if (errors !== undefined) return errors.errors.map((error, index) => ({
+    carrier: error, variant: { kind: "payload" as const, name: `Error${index}` },
+  }));
   return definitions.sourceUnionVariants(carrier)?.map(variant => ({
     carrier: variant.carrier, variant: { kind: "payload" as const, name: variant.name },
   })) ?? rustRuntimeUnionContract(carrier)?.alternatives;

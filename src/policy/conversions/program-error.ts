@@ -38,6 +38,8 @@ export function selectRustProgramErrorConversion(
   if (!isErrorDestination(target)) return undefined;
   const sourceError = isRustSourceErrorCarrier(target) || isRustRetainedErrorCarrier(target);
   const selectRoute = (carrier: TargetTypeRef): RustProgramErrorRoute | undefined => {
+    if (isRustProgramErrorCarrier(target) && rustTargetTypeRefEquals(carrier, target))
+      return Object.freeze({ kind: "identity" });
     const intrinsic = selectRustIntrinsicErrorRoute(carrier, target);
     if (intrinsic !== undefined) return intrinsic;
     const origin = definitions.programErrorOrigin(carrier);
@@ -110,14 +112,16 @@ export function rustProgramErrorConversionMatches(
     (!isRustSourceErrorCarrier(target) || !isRustSourceErrorCarrier(source) ||
       !isRustWritableSourceErrorCarrier(target) && isRustWritableSourceErrorCarrier(source)) &&
     (!isWritableDestination(target) || writableRouteMatches(conversion.route, source)) &&
-    rustProgramErrorRouteMatches(conversion.route, source, definitions) &&
+    rustProgramErrorRouteMatches(conversion.route, source, target, definitions) &&
     closedMetadataEquals(conversion.route, selectRustProgramErrorConversion(source, target, definitions)?.route);
 }
 
 function rustProgramErrorRouteMatches(
-  route: RustProgramErrorRoute, source: TargetTypeRef, definitions: RustTypeDefinitions,
+  route: RustProgramErrorRoute, source: TargetTypeRef, target: TargetTypeRef, definitions: RustTypeDefinitions,
 ): boolean {
   if (typeof route !== "object" || route === null) return false;
+  if (route.kind === "identity") return hasExactObjectKeys(route, ["kind"]) &&
+    isRustProgramErrorCarrier(target) && rustTargetTypeRefEquals(source, target);
   if (route.kind === "closed") return hasExactObjectKeys(route, ["kind"]) && isRustClosedValueCarrier(source);
   if (route.kind === "closed-admission") return hasExactObjectKeys(route, ["kind", "admission"]) &&
     isRustClosedValueCarrier(definitions.closedValueCarrier) &&
@@ -135,7 +139,7 @@ function rustProgramErrorRouteMatches(
       const arm = route.arms[index];
       return arm !== undefined && hasExactObjectKeys(arm, ["carrier", "path", "route"]) &&
         closedMetadataEquals(leaf, { carrier: arm.carrier, path: arm.path }) &&
-        rustProgramErrorRouteMatches(arm.route, leaf.carrier, definitions);
+        rustProgramErrorRouteMatches(arm.route, leaf.carrier, target, definitions);
     });
   }
   if (route.kind === "runtime") {

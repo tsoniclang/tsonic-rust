@@ -20,6 +20,7 @@ export function planRustProgramErrorConstruction(conversion: RustProgramErrorCon
   const path = storage?.path ?? boundary.errorTypePath;
   registerAliasFromPath(context, path);
   const route = conversion.route;
+  if (route.kind === "identity") return value;
   if (route.kind === "closed" || route.kind === "closed-admission") {
     if (boundary.errorDomain !== "project" || boundary.componentId !== context.sourcePackageComponentId)
       failRustPlannerInvariant("An admitted closed thrown value requires its own source-package payload transport.", node);

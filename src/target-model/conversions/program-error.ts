@@ -5,6 +5,7 @@ import { type RustUnionLeaf } from "../types/union-relations.js";
 import { type RustClosedValueAdmissionConversion } from "./closed-admission.js";
 
 export type RustProgramErrorRoute =
+  | { readonly kind: "identity" }
   | { readonly kind: "closed" }
   | { readonly kind: "closed-admission"; readonly admission: RustClosedValueAdmissionConversion }
   | { readonly kind: "source-error" }

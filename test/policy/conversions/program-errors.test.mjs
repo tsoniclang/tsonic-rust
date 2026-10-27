@@ -8,6 +8,7 @@ import { rustSourceErrorTargetType } from "../../../dist/target-model/types/carr
 import { rustUnionLeaves } from "../../../dist/target-model/types/union-relations.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 import { rustProgramErrorConversionMatches } from "../../../dist/policy/conversions/program-error.js";
+import { rustNativeErrorJoinTargetType } from "../../../dist/target-model/types/native-error-joins.js";
 
 const builtin = rustJsErrorTargetType();
 const native = { kind: "target-named", id: "native.Failure" };
@@ -26,6 +27,43 @@ function definitionsFor(reordered = false) {
   assert.equal(registry.registerSourceUnion({ carrier: outer, variants: reordered ? variants.toReversed() : variants }, true), true);
   return registry.seal();
 }
+
+test("fixed program error destinations preserve exact native join arms and identity owners", () => {
+  const definitions = definitionsFor();
+  const destination = rustProgramErrorTargetType({ kind: "physical", domain: "runtime" });
+  const joined = rustNativeErrorJoinTargetType("/src/index.ts", [destination, native]);
+  const nested = rustNativeErrorJoinTargetType("/src/index.ts", [joined, builtin]);
+  for (const source of [joined, nested]) {
+    const conversion = selectRustProgramErrorConversion(source, destination, definitions);
+    assert.equal(conversion?.route.kind, "union", "a fixed error slot converts the original native sum, not a replacement carrier");
+    const leaves = rustUnionLeaves(source, definitions);
+    assert.equal(conversion.route.arms.length, leaves.length, "every actual native error leaf has one route");
+    for (const [index, arm] of conversion.route.arms.entries()) {
+      assert.equal(rustTargetTypeRefEquals(arm.carrier, leaves[index].carrier), true, "the original native payload is unchanged");
+      assert.equal(JSON.stringify(arm.path) === JSON.stringify(leaves[index].path), true, "all native ErrorN path components retain their exact order");
+      if (rustTargetTypeRefEquals(arm.carrier, destination)) {
+        assert.equal(arm.route.kind, "identity", "the identical physical owner is moved unchanged without an adapter");
+      }
+    }
+    assert.equal(rustProgramErrorConversionMatches(conversion, source, destination, definitions), true,
+      "the complete selected native sum validates against its one destination");
+    const changed = { ...conversion, route: { ...conversion.route, arms: conversion.route.arms.toReversed() } };
+    assert.equal(rustProgramErrorConversionMatches(changed, source, destination, definitions), false,
+      "reordered native error alternatives are not the same conversion");
+    const forged = { ...conversion, route: { ...conversion.route,
+      arms: conversion.route.arms.map(arm => ({ ...arm, route: { kind: "identity" } })) } };
+    assert.equal(rustProgramErrorConversionMatches(forged, source, destination, definitions), false,
+      "a registered but different native error cannot masquerade as the destination owner");
+  }
+  const foreign = rustProgramErrorTargetType({ kind: "physical", domain: "project", componentId: "foreign" });
+  const identity = selectRustProgramErrorConversion(destination, destination, definitions);
+  assert.equal(identity?.route.kind, "identity", "an identical owner needs no conversion");
+  assert.equal(rustProgramErrorConversionMatches(identity, destination, foreign, definitions), false,
+    "matching program-error spellings never substitute for exact physical ownership");
+  const unknown = rustNativeErrorJoinTargetType("/src/index.ts", [destination, { kind: "target-named", id: "foreign.Error" }]);
+  assert.equal(selectRustProgramErrorConversion(unknown, destination, definitions), undefined,
+    "every joined native provider error still requires its real registration");
+});
 
 test("closed native error routes retain every exact nested carrier and immutable path", () => {
   for (const reordered of [false, true]) {
