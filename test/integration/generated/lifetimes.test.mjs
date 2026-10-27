@@ -2,6 +2,7 @@ import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagn
 import assert from "node:assert/strict";
 import { nativeFunction, nativeSource, nativeNodes, nativeCalls, nativeType, nativeBorrow } from "../../helpers/native-ast.mjs";
 import { spawnSync } from "node:child_process";
+import { isDeepStrictEqual } from "node:util";
 import { test } from "node:test";
 
 
@@ -299,8 +300,9 @@ export function invokeCaptured(value: Ref<int32, Static>): int32 {
   const bounds = nativeNodes(reader.params[0].type, node => node.kind === "callable" && node.trait === "Fn");
   assert.equal(bounds.length, 1, "one native higher-ranked callback bound");
   assert.deepEqual(bounds[0].binder.map(parameter => parameter.name), ["L"]);
-  assert.deepEqual(bounds[0].parameters, [nativeBorrow(nativeType("i32"), { kind: "named", name: "L" })]);
-  assert.deepEqual(bounds[0].result, nativeType("i32"));
+  assert.equal(isDeepStrictEqual(bounds[0].parameters,
+    [nativeBorrow(nativeType("i32"), { kind: "named", name: "L" })]), true, "exact native higher-ranked parameter");
+  assert.equal(isDeepStrictEqual(bounds[0].result, nativeType("i32")), true, "exact native higher-ranked result");
   const source = artifactText(result, "src/index.rs");
   assert.doesNotMatch(source, /(?:Box|Rc|Arc)::new/u, "signature comparison adds no retained allocation");
   validateGeneratedProject("captured-higher-ranked-signature", result.artifacts);
