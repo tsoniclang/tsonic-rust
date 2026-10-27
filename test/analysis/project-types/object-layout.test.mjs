@@ -93,12 +93,16 @@ test("checked project definitions publish one immutable exact layout without pos
       });
       const context = analyzeRustCheckedContext({ ...request, input: { ...request.input,
         source: { ...request.input.source, ast } } });
-      if (context.diagnostics.length !== 0) return { kind: "rejected", diagnostics: context.diagnostics };
       policy = context.projectTypes.seal();
+      if (context.diagnostics.length !== 0) return { kind: "rejected", diagnostics: context.diagnostics };
       return { kind: "resolved", value: { artifacts: [] }, diagnostics: [] };
     },
   });
-    assert.deepEqual(compilation.result.diagnostics.map(({ code, message }) => ({ code, message })), []);
+    assert.equal(compilation.result.diagnostics.length, 1, "the existing mixed native layout refusal has one owner");
+    assert.deepEqual(compilation.result.diagnostics.map(({ code, message }) => ({ code, message })), [{
+      code: "RUST_INTERFACE_INDEX_LAYOUT_NOT_SUPPORTED",
+      message: "Rust index-backed interfaces require exactly one index signature and no separately stored property signatures.",
+    }]);
     assert.equal(policy !== undefined, true, "the exact checked layout owner seals before native declaration admission");
     return policy;
   };
