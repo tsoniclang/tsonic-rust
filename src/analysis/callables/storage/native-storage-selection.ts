@@ -43,6 +43,7 @@ import { selectRustNativeConversionBoundaries } from "./native-storage-witnesses
 import { createRustRecordMemberProducers } from "./native-storage-members.js";
 
 import type { RustNativeCallableInput } from "../../../target-model/records/native/native-protocols.js";
+import type { RustNativeCallablePhysicalSource } from "../../../target-model/records/callables/callable-conversions.js";
 import type { RustStructuralPhysicalCompletionEvidence } from "../../objects/shapes/structural-shape-plan.js";
 
 import type { RustPhysicalCallableSourceSelection } from "../../../target-model/records/native/physical-emission-contexts.js";
@@ -161,12 +162,22 @@ export function createRustNativeStorageSelection(
         : visit(conversion.source, origin, bindings, depth + 1, false, "input");
       const physicalInputs = operand === undefined ? [] : [...selectedInputs].filter(candidate =>
         rustTargetTypeRefEquals(candidate.implementation, operand));
-      const sourceCarrier = physicalInputs.length === 0 ? conversion.source : physicalInputs.length === 1 &&
-        rustCallableInvocationSignaturesMatch(conversion.source, physicalInputs[0]!.carrier)
-        ? physicalInputs[0]!.carrier : undefined;
-      const source = operand === undefined || sourceCarrier === undefined ? undefined : rustNativeCallablePhysicalSource(sourceCarrier,
-        { kind: "selected", carrier: operand, inputs: [...selectedInputs], ...(erasedPhysicals.has(operand) ? { erased: true as const } : {}) },
-        input.frames);
+      const selectedInput = physicalInputs.length === 1 ? physicalInputs[0] : undefined;
+      const selectedCarrier = selectedInput === undefined ? undefined : substituteRustTargetGenerics(selectedInput.carrier,
+        types, lifetimes, consts);
+      const originalSignature = selectedInput === undefined || selectedCarrier === undefined ||
+        !rustCallableInvocationSignaturesMatch(conversion.source, selectedCarrier) ? undefined
+        : rustNativeCallableInputPhysicalSignature(selectedInput, []);
+      const source: RustNativeCallablePhysicalSource | undefined = operand === undefined ? undefined : physicalInputs.length === 0
+        ? rustNativeCallablePhysicalSource(conversion.source,
+          { kind: "selected", carrier: operand, inputs: [...selectedInputs], ...(erasedPhysicals.has(operand) ? { erased: true as const } : {}) },
+          input.frames)
+        : originalSignature === undefined || selectedInput === undefined ? undefined : Object.freeze({ carrier: operand, input: selectedInput,
+          signature: Object.freeze({
+            parameters: Object.freeze(originalSignature.parameters.map(parameter => substituteRustTargetGenerics(parameter, types, lifetimes, consts))),
+            result: substituteRustTargetGenerics(originalSignature.result, types, lifetimes, consts),
+            error: substituteRustTargetGenerics(originalSignature.error, types, lifetimes, consts),
+          }) });
       const file = input.ast.getSourceFile(origin.node);
       const physical = source === undefined || file === undefined ? undefined
         : rustCallableConversionPhysical(conversion, source.signature, input.ast.getFileName(file), input.definitions,
