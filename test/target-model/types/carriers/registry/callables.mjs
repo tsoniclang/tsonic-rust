@@ -469,4 +469,18 @@ export const callablesCarrierRegistry = Object.freeze([
     responsibility: "callables/physical-callable-carrier",
     frozen: false,
   },
+  {
+    id: "src/analysis/callables/storage/native-storage-carriers.ts#rustNativeStorageErasedUnionCallablePayload",
+    kinds: ["target-named"],
+    declaration: { module: "src/analysis/callables/storage/native-storage-carriers.ts", symbol: "rustNativeStorageErasedUnionCallablePayload" },
+    responsibility: "callables/physical-callable-carrier",
+    frozen: false,
+  },
+  {
+    id: "src/analysis/callables/storage/native-storage-carriers.ts#rustNativeStorageErasedFieldCallable",
+    kinds: ["target-named"],
+    declaration: { module: "src/analysis/callables/storage/native-storage-carriers.ts", symbol: "rustNativeStorageErasedFieldCallable" },
+    responsibility: "callables/physical-callable-carrier",
+    frozen: false,
+  },
 ]);

@@ -6,7 +6,8 @@ import type { RustNativeObjectField } from "../../../target-model/operations/nat
 import type { RustStructuralMethodExposure, RustStructuralMethodStorageSelection } from "../../../target-model/records/objects/structural-shapes.js";
 import { createRustGeneratedUnionPlan, type RustGeneratedUnionPlan } from "./generated-union-plan.js";
 import { createRustStructuralShapeConstruction, type RustStructuralShapeLayout, type RustStructuralShapeLayoutPlan,
-  type RustStructuralShapePlan, type RustStructuralPhysicalCarrierSelection } from "./structural-shape-plan.js";
+  type RustStructuralShapePlan, type RustStructuralPhysicalCarrierSelection,
+  type RustStructuralPhysicalCompletionEvidence } from "./structural-shape-plan.js";
 
 export interface RustStructuralShapePlanRegistry extends RustStructuralShapeLayoutPlan {
   initialize(
@@ -19,7 +20,8 @@ export interface RustStructuralShapePlanRegistry extends RustStructuralShapeLayo
     receiverIndependentMethods?: ReadonlySet<string>,
   ): RustStructuralShapeLayoutPlan;
   initializeUnions(unions: readonly RustSourceUnionDefinition[]): void;
-  completePhysicalCarrier(source: TargetTypeRef, physical: TargetTypeRef): RustStructuralPhysicalCarrierSelection;
+  completePhysicalCarrier(source: TargetTypeRef, physical: TargetTypeRef,
+    evidence: RustStructuralPhysicalCompletionEvidence): RustStructuralPhysicalCarrierSelection;
   instantiateSourceCarrier(source: TargetTypeRef, instance: TargetTypeRef): RustStructuralPhysicalCarrierSelection;
   finalizeMethodStorage(selections: ReadonlyMap<RustStructuralShapeLayout,
     ReadonlyMap<number, RustStructuralMethodStorageSelection>>, errorForFile: (fileName: string) => TargetTypeRef | undefined): void;
@@ -85,9 +87,9 @@ export function createRustStructuralShapePlanRegistry(): RustStructuralShapePlan
       if (sealed || construction === undefined) failTargetAnalysisInvariant("tsonic-rust", "Native source instances require their open initialized structural builder.");
       return construction.instantiateSourceCarrier(source, instance);
     },
-    completePhysicalCarrier(source: TargetTypeRef, physical: TargetTypeRef) {
+    completePhysicalCarrier(source: TargetTypeRef, physical: TargetTypeRef, evidence: RustStructuralPhysicalCompletionEvidence) {
       if (sealed || construction === undefined) failTargetAnalysisInvariant("tsonic-rust", "Structural physical carriers require their open initialized builder.");
-      return construction.completePhysicalCarrier(source, physical);
+      return construction.completePhysicalCarrier(source, physical, evidence);
     },
     finalizeMethodStorage(selections: ReadonlyMap<RustStructuralShapeLayout,
       ReadonlyMap<number, RustStructuralMethodStorageSelection>>, errorForFile: (fileName: string) => TargetTypeRef | undefined) {

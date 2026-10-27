@@ -100,7 +100,7 @@ export function prepareRustProjectCallableFieldStorage(input: {
         if (!demanded || unavailable) continue;
         const physical = changed ? rustStructuralObjectTargetType(shape.ownerFileName, Object.freeze(completed), shape.representation,
           shape.construction, shape.bases, shape.implementation) : view.targetCarrier;
-        const selected = shapes.completePhysicalCarrier(view.targetCarrier, physical);
+        const selected = shapes.completePhysicalCarrier(view.targetCarrier, physical, { kind: "instance" });
         if (selected.kind === "unresolved") issues.push({ subject: view.declaration, message: selected.reason });
       }
       return Object.freeze(issues);

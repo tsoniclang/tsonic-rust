@@ -3,6 +3,8 @@ import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import { preferredShapeName, allocateSnakeName, allocatePascalName } from "../../names/structural-storage.js";
 import type { RustStructuralShapeField, RustStructuralShapeDefinition, RustStructuralMethodStorageSelection, RustStructuralMethodExposure, RustStructuralMethodPlan } from "../../../target-model/records/objects/structural-shapes.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
+import type { SourceStorageSubject } from "@tsonic/target-api/analysis";
+import type { RustNativeCallableInput } from "../../../target-model/records/native/native-protocols.js";
 
 import { rustPropertyStorageNames } from "../../../target-model/names/property-storage.js";
 import type { RustStructuralInstantiation } from "../../../target-model/records/types/source-types.js";
@@ -33,6 +35,15 @@ export type RustStructuralShapeLayout = RustStructuralShapeDefinition<RustStruct
 export type RustStructuralPhysicalCarrierSelection =
   | { readonly kind: "resolved"; readonly carrier: TargetTypeRef }
   | { readonly kind: "unresolved"; readonly reason: string };
+export type RustStructuralPhysicalCompletionEvidence =
+  | { readonly kind: "instance" }
+  | { readonly kind: "native-input"; readonly owner: RustNativeCallableInput["owner"];
+      readonly subject: SourceStorageSubject; readonly inputs: readonly RustNativeCallableInput[] };
+
+interface RustStructuralCarrierRegistration {
+  readonly definition: RustStructuralShapeLayout;
+  readonly completion: { readonly kind: "source" } | { readonly kind: "physical"; readonly carrier: TargetTypeRef };
+}
 
 export interface RustStructuralShapePlan<MethodPlan = RustStructuralMethodPlan> extends RustGeneratedUnionPlan {
   readonly definitions: readonly RustStructuralShapeDefinition<MethodPlan>[];
@@ -74,7 +85,8 @@ export function createRustStructuralShapeConstruction(
   completed(): RustStructuralShapePlan;
   methodStorageFinalized(): boolean;
   close(): RustStructuralShapePlan;
-  completePhysicalCarrier(source: TargetTypeRef, physical: TargetTypeRef): RustStructuralPhysicalCarrierSelection;
+  completePhysicalCarrier(source: TargetTypeRef, physical: TargetTypeRef,
+    evidence: RustStructuralPhysicalCompletionEvidence): RustStructuralPhysicalCarrierSelection;
   instantiateSourceCarrier(source: TargetTypeRef, instance: TargetTypeRef): RustStructuralPhysicalCarrierSelection;
   finalizeMethodStorage(selections: ReadonlyMap<RustStructuralShapeLayout,
     ReadonlyMap<number, RustStructuralMethodStorageSelection>>, errorForFile: (fileName: string) => TargetTypeRef | undefined): void;
@@ -298,19 +310,21 @@ export function createRustStructuralShapeConstruction(
         }) }),
       });
     }));
-  const byKey = new Map<string, RustStructuralShapeLayout>();
+  const byKey = new Map<string, RustStructuralCarrierRegistration>();
   const byStorageKey = new Map<string, RustStructuralShapeLayout>();
   const originsByKey = new Map<string, RustStructuralShapeLayout>();
-  const registerCarrier = (definition: RustStructuralShapeLayout, carrier: TargetTypeRef, origin: RustStructuralShapeLayout): void => {
+  const registerCarrier = (definition: RustStructuralShapeLayout, carrier: TargetTypeRef,
+    origin: RustStructuralShapeLayout): RustStructuralShapeLayout => {
     const key = closedMetadataKey(carrier);
     const existing = byKey.get(key);
-    if (existing !== undefined && (existing.targetName !== definition.targetName ||
-      existing.componentId !== definition.componentId)) {
+    if (existing !== undefined && (existing.definition.targetName !== definition.targetName ||
+      existing.definition.componentId !== definition.componentId)) {
       throw new Error("Rust structural storage has conflicting canonical template identities.");
     }
+    if (existing !== undefined) return existing.definition;
     const selected = instantiateStructuralDefinition(definition, carrier);
     if (selected === undefined) throw new Error("Rust structural storage requires an exact generic-parameter correspondence.");
-    byKey.set(key, selected);
+    byKey.set(key, Object.freeze({ definition: selected, completion: Object.freeze({ kind: "source" }) }));
     const storageKey = structuralStorageKey(carrier, componentForFile);
     const storage = byStorageKey.get(storageKey);
     if (storage !== undefined && (storage.targetName !== definition.targetName || storage.componentId !== definition.componentId)) {
@@ -318,6 +332,7 @@ export function createRustStructuralShapeConstruction(
     }
     byStorageKey.set(storageKey, origin);
     originsByKey.set(key, origin);
+    return selected;
   };
   for (const definition of definitions) {
     for (const carrier of definition.sourceCarriers) registerCarrier(definition, carrier, definition);
@@ -330,25 +345,27 @@ export function createRustStructuralShapeConstruction(
     }
     registerCarrier(definition, nested.carrier, definition);
   }
-  let publishedInstances = Object.freeze([...byKey.values()]);
+  let publishedInstances = Object.freeze([...byKey.values()].map(value => value.definition));
   let closed = false;
   let methodStorageFinalized = false;
   const completedCarriers = new Map<RustStructuralShapeLayout, Map<string,
-    { readonly source: TargetTypeRef; readonly carrier: TargetTypeRef; readonly template: RustStructuralShapeLayout }>>();
+    { readonly source: TargetTypeRef; readonly carrier: TargetTypeRef; readonly template: RustStructuralShapeLayout;
+      readonly inputs: readonly RustNativeCallableInput[] }>>();
   const physicalTemplateFor = (definition: RustStructuralShapeLayout): RustStructuralShapeLayout | undefined => {
     const completed = completedCarriers.get(definition);
     const values = [...(completed?.values() ?? [])];
-    return values.map(value => value.template).find(template => values.every(value =>
+    return [definition, ...values.map(value => value.template)].find(template => values.length !== 0 && values.every(value =>
       instantiateStructuralDefinition(template, value.carrier) !== undefined));
   };
   let completedPlan: RustStructuralShapePlan | undefined;
-  let completeFinalPhysical: ((source: TargetTypeRef, physical: TargetTypeRef) => RustStructuralPhysicalCarrierSelection) | undefined;
+  let completeFinalPhysical: ((source: TargetTypeRef, physical: TargetTypeRef,
+    evidence: RustStructuralPhysicalCompletionEvidence) => RustStructuralPhysicalCarrierSelection) | undefined;
   const definitionFor = (carrier: TargetTypeRef | undefined): RustStructuralShapeLayout | undefined => {
     if (completedPlan !== undefined) return completedPlan.definitionForCarrier(carrier);
     if (carrier === undefined || rustStructuralObjectCarrierValue(carrier) === undefined) return undefined;
     const key = closedMetadataKey(carrier);
     const registered = byKey.get(key);
-    if (registered !== undefined) return registered;
+    if (registered !== undefined) return registered.definition;
     if (closed) return undefined;
     // A generic callable family instantiates a shape over its own environment parameters (the receiver of a generic
     // structural method implementation) after the shapes are planned. Storage keys identify type parameters only by
@@ -370,11 +387,9 @@ export function createRustStructuralShapeConstruction(
       return instance === undefined ? [] : [{ template, instance, origin }];
     });
     if (matches.length > 1) return undefined;
-    const instance = matches[0]?.instance;
-    if (instance !== undefined) {
-      registerCarrier(matches[0]!.template, carrier, matches[0]!.origin);
-      publishedInstances = Object.freeze([...publishedInstances, instance]);
-    }
+    if (matches[0] === undefined) return undefined;
+    const instance = registerCarrier(matches[0].instance, carrier, matches[0].origin);
+    publishedInstances = Object.freeze([...byKey.values()].map(value => value.definition));
     return instance;
   };
   const plan: RustStructuralShapeLayoutPlan = Object.freeze({
@@ -432,15 +447,29 @@ export function createRustStructuralShapeConstruction(
       if (owner !== undefined && owner !== original)
         return unresolved("A native source instance cannot replace a different canonical structural owner.");
       registerCarrier(original, instance, original);
-      publishedInstances = Object.freeze([...byKey.values()]);
+      publishedInstances = Object.freeze([...byKey.values()].map(value => value.definition));
       return Object.freeze({ kind: "resolved", carrier: instance });
     },
-    completePhysicalCarrier(source: TargetTypeRef, physical: TargetTypeRef) {
+    completePhysicalCarrier(source: TargetTypeRef, physical: TargetTypeRef, evidence: RustStructuralPhysicalCompletionEvidence) {
       const unresolved = (reason: string): RustStructuralPhysicalCarrierSelection => Object.freeze({ kind: "unresolved", reason });
+      if (evidence?.kind !== "instance" && evidence?.kind !== "native-input")
+        return unresolved("Structural physical completion requires its exact instance or native-input evidence.");
+      if (evidence.kind === "native-input") {
+        const identities = new Set(rustTargetGenericReferences(physical).typeIdentities);
+        if (evidence.subject.kind !== "input" || evidence.inputs.length === 0 || evidence.inputs.some(input =>
+          input.owner !== evidence.owner || input.subject.kind !== "input" || input.subject.node !== evidence.subject.node ||
+          input.subject.projection.length <= evidence.subject.projection.length ||
+          !identities.has(input.implementation.identity) || evidence.subject.projection.some((component, index) => {
+            const selected = input.subject.projection[index];
+            return component.kind !== selected?.kind || (component.kind === "member" || component.kind === "method-value") &&
+              (selected.kind !== component.kind || selected.declaration !== component.declaration) ||
+              component.kind === "tuple-element" && (selected.kind !== "tuple-element" || selected.index !== component.index);
+          }))) return unresolved("Native structural input completion requires its original projected implementation bindings.");
+      }
       if (methodStorageFinalized) {
         if (completeFinalPhysical === undefined)
           failTargetAnalysisInvariant("tsonic-rust", "Completed structural storage requires its canonical physical registration owner.");
-        return completeFinalPhysical(source, physical);
+        return completeFinalPhysical(source, physical, evidence);
       }
       const sourceKey = closedMetadataKey(source);
       const selected = definitionFor(source);
@@ -453,11 +482,10 @@ export function createRustStructuralShapeConstruction(
       completedCarriers.set(original, values);
       const completionKey = closedMetadataKey({ source, carrier: physical });
       const previous = values.get(completionKey);
-      const data = value.implementation === undefined && value.fields.every(field => field.method !== true);
-      if (!data && [...values.values()].some(previous => rustTargetTypeRefEquals(previous.source, source) &&
-        !rustTargetTypeRefEquals(previous.carrier, physical)))
+      const registration = byKey.get(sourceKey);
+      if (evidence.kind === "instance" && registration?.completion.kind === "physical" &&
+        !rustTargetTypeRefEquals(registration.completion.carrier, physical))
         return unresolved("A structural source instance requires one exact native implementation and capture environment.");
-      if (previous !== undefined) return Object.freeze({ kind: "resolved", carrier: previous.carrier });
       const sameLayoutInstance = instantiateStructuralDefinition(original, physical) !== undefined;
       const carrier = sameLayoutInstance ? original.carrier : rustStructuralGenericCarrier(physical, "fields").carrier;
       const references = rustTargetGenericReferences(carrier);
@@ -476,9 +504,16 @@ export function createRustStructuralShapeConstruction(
           ...references.typeParameters.map(type => ({ kind: "type" as const, type })),
         ]),
       });
-      values.set(completionKey, Object.freeze({ source, carrier: physical, template }));
+      const inputs = Object.freeze([...new Set([...(previous?.inputs ?? []),
+        ...(evidence.kind === "native-input" ? evidence.inputs : [])])]);
+      values.set(completionKey, Object.freeze({ source, carrier: physical, template, inputs }));
       if (physicalOwner === undefined || physicalOwner === original) registerCarrier(template, physical, original);
-      publishedInstances = Object.freeze([...byKey.values()]);
+      for (const key of evidence.kind === "instance" ? [sourceKey, closedMetadataKey(physical)] : [closedMetadataKey(physical)]) {
+        const registered = byKey.get(key);
+        if (registered !== undefined) byKey.set(key, Object.freeze({ ...registered,
+          completion: Object.freeze({ kind: "physical", carrier: physical }) }));
+      }
+      publishedInstances = Object.freeze([...byKey.values()].map(value => value.definition));
       return Object.freeze({ kind: "resolved", carrier: physical });
     },
     finalizeMethodStorage(selections, errorForFile) {
@@ -672,50 +707,47 @@ export function createRustStructuralShapeConstruction(
       const instantiatePhysical = (definition: RustStructuralShapeDefinition, carrier: TargetTypeRef): RustStructuralShapeDefinition | undefined => {
         const owner = canonicalFor(definition);
         const key = closedMetadataKey(carrier);
-        const previous = physicalInstances.get(key);
+        const selected = instantiateStructuralDefinition(owner, carrier);
+        if (selected === undefined) return undefined;
+        const identity = closedMetadataKey({ componentId: owner.componentId, targetName: owner.targetName,
+          genericArguments: selected.genericArguments, stateGenericArguments: selected.stateGenericArguments });
+        const previous = physicalInstances.get(identity);
         if (previous !== undefined) {
           if (previous.componentId !== owner.componentId || previous.targetName !== owner.targetName)
             failTargetAnalysisInvariant("tsonic-rust", "An exact physical structural carrier requires its one canonical native implementation owner.");
+          instances.set(key, previous);
+          instanceOwners.set(key, owner);
           return previous;
         }
-        const selected = instantiateStructuralDefinition(owner, carrier);
-        if (selected !== undefined) {
-          physicalInstances.set(key, selected);
-          instances.set(key, selected);
-          instanceOwners.set(key, owner);
-        }
+        physicalInstances.set(identity, selected);
+        instances.set(key, selected);
+        instanceOwners.set(key, owner);
         return selected;
       };
-      const dataCompletions = new Set([...completedCarriers].flatMap(([definition, completed]) =>
-        [...completed.values()].some(value => {
-          const shape = rustStructuralObjectCarrierValue(value.carrier);
-          return shape !== undefined && shape.implementation === undefined && shape.fields.every(field => field.method !== true);
-        })
+      const nativeInputDefinitions = new Set([...completedCarriers].flatMap(([definition, completed]) =>
+        [...completed.values()].some(value => value.inputs.length !== 0)
           ? [definition] : []));
-      for (const [key, selected] of byKey) {
+      for (const [key, registration] of byKey) {
+        const selected = registration.definition;
         const origin = originsByKey.get(key);
         const replacement = origin === undefined ? undefined : replacements.get(origin);
-        const completed = origin === undefined ? undefined : [...(completedCarriers.get(origin)?.values() ?? [])]
-          .find(value => closedMetadataKey(value.source) === key || closedMetadataKey(value.carrier) === key);
         const sourceReferences = origin === undefined ? undefined : rustTargetGenericReferences(origin.carrier);
         const sourceBindings = origin === undefined || sourceReferences === undefined ? undefined
           : inferRustTargetGenericBindings(origin.carrier, selected.carrier, {
             typeIdentities: new Set(sourceReferences.typeIdentities), lifetimeIdentities: new Set(sourceReferences.lifetimeIdentities),
             constIdentities: new Set(sourceReferences.constIdentities),
           });
-        const sourceData = origin !== undefined && dataCompletions.has(origin) &&
-          instantiateStructuralDefinition(origin, selected.carrier) !== undefined;
-        const instanceCarrier = sourceData ? selectPhysicalCarrier(selected.carrier)
-          : completed !== undefined ? selectPhysicalCarrier(completed.carrier) : replacement === undefined || sourceBindings === undefined
-          ? undefined : substituteRustTargetGenerics(replacement.carrier, sourceBindings.types, sourceBindings.lifetimes, sourceBindings.consts);
+        const instanceCarrier = registration.completion.kind === "physical" ? selectPhysicalCarrier(registration.completion.carrier)
+          : origin !== undefined && nativeInputDefinitions.has(origin) ? selectPhysicalCarrier(selected.carrier)
+            : replacement === undefined || sourceBindings === undefined ? undefined
+              : substituteRustTargetGenerics(replacement.carrier, sourceBindings.types, sourceBindings.lifetimes, sourceBindings.consts);
         const instance = replacement === undefined || instanceCarrier === undefined ? undefined : instantiatePhysical(replacement, instanceCarrier);
         if (instance === undefined) throw new Error("Structural physical storage lost its exact template-to-instance correspondence.");
         instances.set(key, instance);
       }
       const storageOwners = new Map([...byStorageKey].map(([key, definition]) => [key, canonicalFor(replacements.get(definition)!)]));
-      for (const [key, instance] of physicalInstances) {
-        const owner = instanceOwners.get(key);
-        if (owner === undefined) failTargetAnalysisInvariant("tsonic-rust", "An admitted physical instance requires its canonical native owner.");
+      for (const instance of physicalInstances.values()) {
+        const owner = canonicalFor(instance);
         storageOwners.set(structuralStorageKey(instance.carrier, componentForFile), owner);
       }
       let finalInstances = Object.freeze([...physicalInstances.values()]);
@@ -731,12 +763,17 @@ export function createRustStructuralShapeConstruction(
         publishedInstances = finalInstances;
         return selected;
       };
-      completeFinalPhysical = (source, physical) => {
+      completeFinalPhysical = (source, physical, evidence) => {
         const owner = instanceOwners.get(closedMetadataKey(source));
         const selected = owner === undefined ? undefined : registerFinal(owner, physical);
-        return selected === undefined
-          ? Object.freeze({ kind: "unresolved", reason: "A structural physical carrier requires its exact source owner and native generic correspondence." })
-          : Object.freeze({ kind: "resolved", carrier: physical });
+        if (selected === undefined) return Object.freeze({ kind: "unresolved",
+          reason: "A structural physical carrier requires its exact source owner and native generic correspondence." });
+        if (evidence.kind === "instance") {
+          const key = closedMetadataKey(source);
+          instances.set(key, selected);
+          instanceOwners.set(key, canonicalFor(selected));
+        }
+        return Object.freeze({ kind: "resolved", carrier: selected.carrier });
       };
       for (const [original, completed] of completedCarriers) for (const selected of completed.values()) {
         const replacement = canonicalFor(replacements.get(original)!);
@@ -764,7 +801,7 @@ export function createRustStructuralShapeConstruction(
             else if (parameter.kind === "lifetime" && argument?.kind === "lifetime") lifetimes.set(rustLifetimeKey(parameter.lifetime), argument.lifetime);
             else return undefined;
           }
-          const selected = registerFinal(canonicalFor(replacement), dataCompletions.has(sourceDefinition)
+          const selected = registerFinal(canonicalFor(replacement), nativeInputDefinitions.has(sourceDefinition)
             ? selectPhysicalCarrier(source.carrier) : substituteRustTargetGenerics(replacement.carrier, types, lifetimes));
           if (selected !== undefined) {
             const key = closedMetadataKey(carrier);

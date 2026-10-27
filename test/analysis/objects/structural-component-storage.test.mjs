@@ -249,7 +249,7 @@ test("completed source aliases publish one exact physical structural instance pe
   const builder = createRustStructuralShapePlanRegistry();
   builder.initialize([original, alias, wide].map(carrier => ({ carrier })), [], () => "source", [], [], new Map());
   for (const source of [original, alias]) {
-    const selected = builder.completePhysicalCarrier(source, original);
+    const selected = builder.completePhysicalCarrier(source, original, { kind: "instance" });
     assert.equal(selected.kind, "resolved", "the existing component owner admits the actual complete physical layout");
     assert.equal(selected.carrier === original, true, "source lookup identity is distinct from the single selected native carrier");
   }

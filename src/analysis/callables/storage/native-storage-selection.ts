@@ -766,7 +766,16 @@ export function createRustNativeStorageSelection(
           structural.representation, structural.construction, structural.bases,
           methods.length === 0 ? undefined : { kind: "physical", methods: Object.freeze(methods) });
         if (rustTargetTypeRefEquals(current, physical)) return current;
-        const completion = input.structuralShapes.completePhysicalCarrier(current, physical);
+        const physicalInputs = new Set(rustTargetGenericReferences(physical).typeIdentities);
+        const nativeInputs = [...selectedInputs].filter(candidate => {
+          if (selectedSubject.kind !== "input" || candidate.subject.kind !== "input" ||
+            candidate.subject.node !== selectedSubject.node || !physicalInputs.has(candidate.implementation.identity)) return false;
+          const prefix = input.storage.subject(candidate.subject.node, "input",
+            candidate.subject.projection.slice(0, selectedSubject.projection.length));
+          return prefix.kind === "resolved" && prefix.subject === selectedSubject;
+        });
+        const completion = input.structuralShapes.completePhysicalCarrier(current, physical, nativeInputs.length === 0
+          ? { kind: "instance" } : { kind: "native-input", owner: nativeInputs[0]!.owner, subject: selectedSubject, inputs: nativeInputs });
         return completion.kind === "resolved" ? completion.carrier : fail(completion.reason);
       }
       const variants = rustUnionAlternatives(current, input.definitions);

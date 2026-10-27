@@ -425,7 +425,7 @@ export function createRustStructuralMethodStorage(input: {
           const physical = bindRustStructuralImplementationContract(matches[0]!.carrier, source);
           if (physical === undefined) return reject(first.declaration,
             "A structural contract requires its exact checked native implementation arguments.");
-          const completed = structuralShapes.completePhysicalCarrier(source, physical);
+          const completed = structuralShapes.completePhysicalCarrier(source, physical, { kind: "instance" });
           if (completed.kind === "unresolved") return reject(first.declaration, completed.reason);
         }
       }

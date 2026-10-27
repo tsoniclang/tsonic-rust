@@ -37,7 +37,7 @@ test("same-layout physical instances retain independent canonical lifetimes and 
   builder.initializeUnions([]);
   const original = builder.templateForCarrier(instance);
   assert.equal(original !== undefined, true, "the checked source edge owns the canonical generic template");
-  assert.equal(builder.completePhysicalCarrier(instance, instance).kind, "resolved",
+  assert.equal(builder.completePhysicalCarrier(instance, instance, { kind: "instance" }).kind, "resolved",
     "the actual concrete member instance completes without specializing its owner");
   builder.finalizeMethodStorage(new Map(), physicalError);
   const canonical = builder.templateForCarrier(instance);
@@ -112,7 +112,7 @@ test("one physical structural finalization preserves logical keys completed inst
   builder.initialize([{ carrier: template }, { carrier: instance }], [], file => file === "/dependency.ts" ? "dependency" : "root", [],
     [{ template, instance }], new Map());
   builder.initializeUnions([]);
-  const completed = builder.completePhysicalCarrier(instance, instance);
+  const completed = builder.completePhysicalCarrier(instance, instance, { kind: "instance" });
   assert.equal(completed.kind, "resolved", "the existing instance is completed before physical finalization");
   assert.throws(() => builder.finalizeMethodStorage(new Map()),
     error => String(error.message).includes("complete declared-component error selection"),
@@ -157,6 +157,129 @@ test("one physical structural finalization preserves logical keys completed inst
   assert.equal(plan.definitions.length, 1, "there is one canonical physical definition, not old/new variants");
   assert.throws(() => builder.finalizeMethodStorage(new Map(), physicalError), /exactly once/u,
     "destination error selection cannot be recomputed after publication");
+});
+
+test("physical structural completion rejects the removed evidence-free API before publication", () => {
+  const source = rustStructuralObjectTargetType("/root.ts", [field("count", integer)]);
+  const builder = createRustStructuralShapePlanRegistry();
+  builder.initialize([{ carrier: source }], [], () => "root", [], [], new Map());
+  const original = builder.definitionForCarrier(source);
+  const selected = builder.completePhysicalCarrier(source, source);
+  assert.equal(selected.kind, "unresolved", "the old two-argument completion no longer admits a carrier");
+  assert.match(selected.reason, /exact instance or native-input evidence/u,
+    "the publishing boundary identifies the missing original completion authority");
+  assert.equal(builder.definitionForCarrier(source) === original, true,
+    "rejection publishes no replacement instance or alias");
+});
+
+test("native structural input applications retain exact source owners and sibling projections in either order", () => {
+  const { program } = analyzeRust({ surfaces: [], files: { "index.ts": `
+    type Leaf = { readonly invoke: (value: number) => number };
+    type Input = { readonly left: Leaf; readonly right: Leaf };
+    export function take(value: Input): void {}
+  ` } });
+  const inputs = program.callableValues.native.inputs;
+  assert.equal(inputs.length, 2, "the original input producer supplies two independently owned data projections");
+  const source = rustStructuralObjectTargetType("/root.ts", [field("invoke", inputs[0].carrier)]);
+  const physical = input => rustStructuralObjectTargetType("/root.ts", [field("invoke", input.implementation)]);
+  const evidence = input => ({ kind: "native-input", owner: input.owner,
+    subject: { ...input.subject, projection: input.subject.projection.slice(0, -1) }, inputs: [input] });
+  for (const order of [inputs, [...inputs].reverse()]) {
+    const builder = createRustStructuralShapePlanRegistry();
+    builder.initialize([{ carrier: source }], [], () => "root", [], [], new Map());
+    const invalid = [
+      ["missing inputs", { ...evidence(inputs[0]), inputs: [] }, physical(inputs[0])],
+      ["foreign owner", { ...evidence(inputs[0]), owner: {} }, physical(inputs[0])],
+      ["foreign parameter", { ...evidence(inputs[0]), subject: { ...evidence(inputs[0]).subject, node: {} } }, physical(inputs[0])],
+      ["sibling projection", { ...evidence(inputs[0]), inputs: [inputs[1]] }, physical(inputs[1])],
+      ["foreign implementation", evidence(inputs[0]), physical(inputs[1])],
+    ];
+    for (const [label, selected, carrier] of invalid) {
+      const result = builder.completePhysicalCarrier(source, carrier, selected);
+      assert.equal(result.kind, "unresolved", `${label}: an unrelated fact cannot authorize the physical field`);
+      assert.match(result.reason, /original projected implementation bindings/u,
+        `${label}: rejection remains at the one physical completion owner`);
+    }
+    for (const input of order) assert.equal(builder.completePhysicalCarrier(source, physical(input), evidence(input)).kind,
+      "resolved", "each actual projected input registers its own physical application");
+    builder.initializeUnions([]);
+    builder.finalizeMethodStorage(new Map(), physicalError);
+    const plan = builder.seal();
+    const applications = inputs.map(input => plan.definitionForCarrier(physical(input)));
+    assert.equal(applications.every(instance => instance !== undefined), true,
+      "both exact physical input keys are indexed before sealing");
+    assert.equal(applications[0] !== applications[1], true,
+      "the same Leaf source never conflates two actual implementation binders");
+    assert.equal(applications[0].targetName, applications[1].targetName,
+      "different scoped arguments instantiate one canonical generic native owner");
+    assert.equal(plan.definitions.length, 1, "completion order never creates a competing physical family");
+    assert.equal(rustCallableProtocol(plan.definitionForCarrier(source)?.fields[0]?.carrier)?.parameters[0]?.name,
+      "float64", "the original source alias retains its declared invocation contract, not the first input binder");
+  }
+});
+
+test("finalized open structural aliases share one native instance without losing independent widths", () => {
+  const carrier = (file, width) => rustStructuralObjectTargetType(file,
+    [field("count", { kind: "source-primitive", name: width })]);
+  const original = carrier("/original.ts", "int32");
+  const alias = carrier("/alias.ts", "int32");
+  const wide = carrier("/wide.ts", "int64");
+  for (const sources of [[original, alias], [alias, original]]) {
+    const builder = createRustStructuralShapePlanRegistry();
+    builder.initialize([original, alias, wide].map(carrier => ({ carrier })), [], () => "root", [], [], new Map());
+    builder.initializeUnions([]);
+    builder.finalizeMethodStorage(new Map(), physicalError);
+    for (const source of sources) {
+      const selected = builder.completePhysicalCarrier(source, original, { kind: "instance" });
+      assert.equal(selected.kind, "resolved", "an already interned physical instance still records each original source alias");
+      assert.equal(selected.carrier === builder.definitionForCarrier(original).carrier, true,
+        "completion returns the canonical selected native carrier, not a second alias carrier");
+    }
+    const plan = builder.seal();
+    assert.equal(plan.definitionForCarrier(alias) === plan.definitionForCarrier(original), true,
+      "finalized open and pre-finalization completion have identical source-alias semantics");
+    assert.equal(plan.instances.length, 2, "source aliases enumerate no duplicate physical native instance");
+    assert.equal(plan.definitionForCarrier(wide) !== plan.definitionForCarrier(original), true,
+      "canonical interning preserves the genuinely different native field width");
+  }
+});
+
+test("canonical physical interning preserves every native width lifetime and error argument", () => {
+  const value = { kind: "type-parameter", identity: "source:Value", name: "Value" };
+  const error = { kind: "type-parameter", identity: "source:Error", name: "Error" };
+  const infallible = { kind: "target-named", id: "rust.core.Infallible" };
+  const nativeError = { kind: "target-named", id: "source.NativeError" };
+  const borrowed = { kind: "parameter", identity: "scope:borrowed", name: "borrowed" };
+  const carrier = (file, value, environment, error) => rustStructuralObjectTargetType(file,
+    [field("invoke", rustCallableTargetType([value], value, environment, error))]);
+  const template = carrier("/root.ts", value, lifetime, error);
+  const rows = [
+    [integer, { kind: "static" }, infallible],
+    [{ kind: "source-primitive", name: "int64" }, { kind: "static" }, infallible],
+    [integer, borrowed, infallible],
+    [integer, { kind: "static" }, nativeError],
+  ].map(([value, environment, error]) => ({
+    original: carrier("/root.ts", value, environment, error),
+    alias: carrier("/alias.ts", value, environment, error),
+  }));
+  for (const order of [rows, [...rows].reverse()]) {
+    const builder = createRustStructuralShapePlanRegistry();
+    const carriers = [template, ...rows.flatMap(row => [row.original, row.alias])];
+    builder.initialize(carriers.map(carrier => ({ carrier })), [], () => "root", [],
+      carriers.slice(1).map(instance => ({ template, instance })), new Map());
+    for (const row of order) for (const source of [row.alias, row.original])
+      assert.equal(builder.completePhysicalCarrier(source, row.original, { kind: "instance" }).kind, "resolved",
+        "the full exact native instance is admitted before publication");
+    builder.initializeUnions([]);
+    builder.finalizeMethodStorage(new Map(), physicalError);
+    const plan = builder.seal();
+    const instances = rows.map(row => plan.definitionForCarrier(row.original));
+    assert.equal(new Set(instances).size, rows.length,
+      "different widths, quantified lifetimes and native errors never intern as the same physical type");
+    for (const [index, row] of rows.entries()) assert.equal(plan.definitionForCarrier(row.alias) === instances[index], true,
+      "only the proved cross-file alias shares its identical fully instantiated native object");
+    assert.equal(plan.definitions.length, 1, "all exact applications retain the declared canonical generic owner");
+  }
 });
 
 test("checked generic source retention publishes the exact int64 callable-field application before physical sealing", () => {
