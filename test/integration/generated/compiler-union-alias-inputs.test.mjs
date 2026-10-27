@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { acmeTestingPackage, analyzeRust, compileRust } from "../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
-import { rustTargetOperationResultCarrier } from "../../../dist/target-model/records/operations/operations.js";
+import { rustTargetOperationResultCarrier } from "../../../dist/target-model/records/operations/operation-result-carriers.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 import { rustOptionNestingDepth, rustOptionTargetType, rustStringTargetType } from "../../../dist/target-model/types/index.js";
 import { createRustProviderPackage } from "../../../dist/public/provider.js";

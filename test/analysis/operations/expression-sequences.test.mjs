@@ -4,7 +4,7 @@ import test from "node:test";
 import { analyzeRust, artifactText, compileRust } from "../../helpers/rust-session.mjs";
 
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
-import { rustTargetOperationResultCarrier } from "../../../dist/target-model/records/operations/operations.js";
+import { rustTargetOperationResultCarrier } from "../../../dist/target-model/records/operations/operation-result-carriers.js";
 import { rustEffectiveValueCarrier } from "../../../dist/analysis/conversions/value-carrier-queries.js";
 import { rustSourcePrimitiveTargetType } from "../../../dist/target-model/types/index.js";
 import { analyzeRustBinaryEmission } from "../../../dist/analysis/operations/binary-emission.js";
