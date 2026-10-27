@@ -57,6 +57,25 @@ for (const [name, text] of [["reordered", reorderedPointerInputSource], ["int64"
   test(`native contextual callback inference retains ${name} source metadata`, { timeout: 300_000 }, () => {
     const { result } = compileRust({ target: { id: "rust", options: { outputType: "bin" } }, files: { "index.ts": text + "\nmain();\n" } });
     assert.equal(result.diagnostics.length, 0, diagnosticSummary(result.diagnostics));
+    const program = result.program;
+    assert.equal(program !== undefined, true, "the contextual callback has a complete native analysis program");
+    const inputs = [];
+    const visit = node => {
+      const ast = program.source.ast;
+      if (ast.is.IsParameterDeclaration(node) && ast.is.IsArrowFunction(ast.parent(node))) {
+        const identifier = ast.name(node);
+        if (identifier !== undefined && ast.is.IsIdentifier(identifier) && ast.text(identifier) === "next") inputs.push(node);
+      }
+      program.source.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+    };
+    program.sourceFiles.forEach(visit);
+    assert.equal(inputs.length, 1, "the actual unannotated setter has one original checked parameter");
+    const input = program.records.sourceParameterAbi.get(inputs[0]);
+    const expected = name === "int64" ? "int64" : "int32";
+    assert.equal(input?.valueCarrier.kind === "source-primitive" && input.valueCarrier.name === expected, true,
+      "the input keeps the exact selected native width before publication");
+    assert.equal(input?.parameterCarrier.kind === "source-primitive" && input.parameterCarrier.name === expected, true,
+      "the native entry does not reconstruct a number or unknown parameter");
     const code = artifactText(result, "src/index.rs");
     if (name === "int64") {
       assert.match(code, /Location<i64,/u);

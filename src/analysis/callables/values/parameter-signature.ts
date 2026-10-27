@@ -39,15 +39,16 @@ export function recordCallableParameterInputFacts(
       if (selection?.kind === "rejected") refuseRustParameterCarrier(walk, parameters[index]!, selection.reason);
     }
     const declared = selections.map(selection => selection?.kind === "resolved" ? selection.abi : undefined);
-    if (declared.some(parameter => parameter === undefined)) return undefined;
+    if (selections.some(selection => selection?.kind === "rejected")) return undefined;
     const logical = (rustCallableProtocol(selectedSignature) ?? rustClosureProtocol(selectedSignature))?.parameters ??
-      declared.map(abi => abi!.form === "default" ? abi!.parameterCarrier : abi!.valueCarrier);
+      declared.map(abi => abi?.form === "default" ? abi.parameterCarrier : abi?.valueCarrier);
     const selected = selectedSignature !== undefined || ast.is.IsArrowFunction(declaration) || ast.is.IsFunctionExpression(declaration)
       ? selectRustClosedCallableInputs(walk, declaration, logical) : logical;
+    if (selected === undefined || selected.some(carrier => carrier === undefined)) return undefined;
     const abis = parameters.map((parameter, index) => {
       const input = selected[index]!;
       const parameterContext = rustResolutionContext(walk, parameter);
-      if (rustTargetTypeRefEquals(input, logical[index])) return declared[index];
+      if (declared[index] !== undefined && rustTargetTypeRefEquals(input, logical[index])) return declared[index];
       const contextual = resolveRustContextualParameterAbi(parameter,
         Node_Initializer(ast, parameter) === undefined ? input : rustSourceOptionalTargetType(input),
         parameterContext, walk.operationOptions);

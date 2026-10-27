@@ -65,15 +65,16 @@ export function selectRustClosedCallableContext(
 export function selectRustClosedCallableInputs(
   walk: RustFactWalk,
   expression: Node,
-  parameters: readonly TargetTypeRef[],
-): readonly TargetTypeRef[] {
-  return selectClosedCallableInputs(walk, expression, parameters, checkedCallableInputs(walk, expression)) ?? parameters;
+  parameters: readonly (TargetTypeRef | undefined)[],
+): readonly TargetTypeRef[] | undefined {
+  const selected = selectClosedCallableInputs(walk, expression, parameters, checkedCallableInputs(walk, expression)) ?? parameters;
+  return selected.every((carrier): carrier is TargetTypeRef => carrier !== undefined) ? selected : undefined;
 }
 
 function selectClosedCallableInputs(
   walk: RustFactWalk,
   expression: Node,
-  logical: readonly TargetTypeRef[],
+  logical: readonly (TargetTypeRef | undefined)[],
   contexts: ReturnType<typeof checkedCallableInputs>,
 ): readonly TargetTypeRef[] | undefined {
   const { ast } = walk.context;
@@ -98,6 +99,7 @@ function selectClosedCallableInputs(
     const input = inputs[index];
     if (input === undefined || rustTargetTypeRefEquals(input, type)) return type;
     if (broad[index]) return input;
+    if (type === undefined) return undefined;
     return selectRustParameterEntryConversion(input, type, walk.context.typeDefinitions) === undefined ? undefined : input;
   });
   return selected.some(type => type === undefined) ? undefined : selected as readonly TargetTypeRef[];
