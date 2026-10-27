@@ -1,5 +1,5 @@
 import type { Node, SourceFile } from "@tsonic/tsts";
-import type { SourceStorageBindings, SourceStorageProducer, SourceStorageQueries } from "@tsonic/target-api/analysis";
+import type { SourceStorageBindings, SourceStorageProducer, SourceStorageQueries, SourceStorageProjection } from "@tsonic/target-api/analysis";
 import type { SourceFileSemantics } from "@tsonic/target-api/source";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
@@ -11,6 +11,8 @@ export interface RustValueDomainCarrierHost {
   readonly sourceStorage?: SourceStorageQueries;
   readonly sourceTypes: Pick<RustTargetTypeResolutionOptions["sourceTypes"], "structuralFieldProjectionForDeclaration">;
   readonly projectFieldProjection: RustTargetTypeResolutionOptions["projectFieldProjection"];
+  readonly projectIndexedCarrier: (component: Extract<SourceStorageProjection, { readonly kind: "indexed-value" }>,
+    owner: TargetTypeRef, node: Node) => TargetTypeRef | undefined;
   readonly types: {
     resolveNode(node: Node, sourceFile: SourceFile): TargetTypeRef | undefined;
   };
@@ -68,6 +70,7 @@ export function rustSourceStorageProjectedCarrier(
         : rustFixedArrayCarrierValue(carrier)?.element ?? rustJsArrayLikeElementTargetType(carrier)
       : component.kind === "tuple-element"
         ? carrier?.kind === "tuple" ? carrier.elements[component.index] : undefined
+        : component.kind === "indexed-value" ? carrier === undefined ? undefined : host.projectIndexedCarrier(component, carrier, subject.node)
         : carrier === undefined ? undefined
           : projectedMemberCarrier(host, storage, source, index, component.declaration, carrier);
   }

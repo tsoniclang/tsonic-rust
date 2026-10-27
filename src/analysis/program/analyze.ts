@@ -5,6 +5,7 @@ import type { RustModuleCycleSelection } from "../../target-model/records/progra
 import { requireRustRecord } from "./records/objects/required-records.js";
 import { appendMalformedSourceAstDiagnostic, recordClassBodyFacts, recordClassSignatureFacts, recordInterfaceFacts, recordMethodSelfModeFacts } from "../declarations/project-types.js";
 import { appendRustDiagnostic, rustResolutionContext, rustOperationContext } from "./walk.js";
+import { projectRustProviderIndexedStorageCarrier } from "../source-evidence/types/resolution/indexed-access.js";
 import { resolveRustProjectField } from "../operations/members/project-fields.js";
 import { createRustModuleBindingAnalysis } from "./module-bindings.js";
 import { recordRustModuleCallableStorage } from "../callables/values/module-values.js";
@@ -628,6 +629,8 @@ export function analyzeRustProgram(context: RustAnalysisContext, outputType: "bi
     normalizeTypeFamily: rustTypeFamilyNormalizer(context.typeFamilies),
     carrierHost: { sourceStorage: context.sourceStorage, sourceTypes: walk.sourceTypes,
       projectFieldProjection: walk.operationOptions.projectFieldProjection, semantics: context.semantics,
+      projectIndexedCarrier: (component, owner, node) => projectRustProviderIndexedStorageCarrier(component, owner,
+        rustResolutionContext(walk, node), operationOptions),
       types: { resolveNode: node => context.records.runtimeCarrier.get(node)?.carrier } } });
   const callableIssue = (issue: RustSourceCallableSpecializationIssue): void => appendRustDiagnostic(walk,
     "RUST_CALLABLE_VALUE_NOT_CLOSED", issue.message, issue.subject, ["target.capability=rust.callable-value.exact-implementation"]);

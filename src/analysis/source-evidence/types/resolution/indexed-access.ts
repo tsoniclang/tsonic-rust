@@ -1,5 +1,6 @@
-import { providerVirtualDeclarationFactKey, type Node } from "@tsonic/tsts";
+import { providerVirtualDeclarationFactKey, type Node, type ExtensionFactSubject, type TypeIndexedAccessMember } from "@tsonic/tsts";
 import { sourceIndexedTypeEvidence } from "@tsonic/target-api/source";
+import type { SourceStorageProjection } from "@tsonic/target-api/analysis";
 import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "./model.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import { providerCarrierFromRelations, instantiateProviderTargetType } from "../../../../policy/types/project/provider-instantiation.js";
@@ -11,16 +12,41 @@ import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality
 import { inferRustTargetGenericBindings } from "../../../../target-model/types/carriers/generic-inference.js";
 import type { RustTargetGenericArgument } from "../../../../target-model/types/model.js";
 
+type RustIndexedCarrierSelection = Pick<Extract<TypeIndexedAccessMember, { readonly kind: "index" }>, "kind" | "index"> |
+  Pick<Extract<TypeIndexedAccessMember, { readonly kind: "property" }>, "kind" | "property">;
+
 export function resolveRustProviderIndexedAccess(
   node: Node, context: RustTargetTypeResolutionContext, options: RustTargetTypeResolutionOptions,
 ): TargetTypeRef | undefined {
   const evidence = sourceIndexedTypeEvidence(context.ast, context.currentSemantics, node);
   if (evidence === undefined) return undefined;
-  if (!evidence.members.some(member => member.subjects.some(subject =>
+  const owner = resolveRustTargetTypeRef(evidence.owner, context, options);
+  return projectRustProviderIndexedMembers(owner, evidence.members, context, options);
+}
+
+export function projectRustProviderIndexedStorageCarrier(
+  component: Extract<SourceStorageProjection, { readonly kind: "indexed-value" }>,
+  owner: TargetTypeRef,
+  context: RustTargetTypeResolutionContext,
+  options: RustTargetTypeResolutionOptions,
+): TargetTypeRef | undefined {
+  const index = component.index;
+  const subjects = [...new Set([index.declaration, ...index.components,
+    ...context.currentSemantics.facts.selectedSubjects(index.symbol, index.declaration)]
+    .filter((subject): subject is ExtensionFactSubject => subject !== undefined))];
+  return projectRustProviderIndexedMembers(owner, [{ selection: { kind: "index", index }, subjects }], context, options);
+}
+
+function projectRustProviderIndexedMembers(
+  resolvedOwner: TargetTypeRef | undefined,
+  members: readonly { readonly selection: RustIndexedCarrierSelection; readonly subjects: readonly ExtensionFactSubject[] }[],
+  context: RustTargetTypeResolutionContext,
+  options: RustTargetTypeResolutionOptions,
+): TargetTypeRef | undefined {
+  if (!members.some(member => member.subjects.some(subject =>
     context.source.sourceFacts.getFact(subject, providerVirtualDeclarationFactKey) !== undefined))) return undefined;
-  const identities = evidence.members.map(member => resolveProviderTypeIdentity(member.subjects, context));
+  const identities = members.map(member => resolveProviderTypeIdentity(member.subjects, context));
   const rejected: TargetTypeRef = { kind: "opaque", id: "provider-indexed-type-evidence-unavailable" };
-  const resolvedOwner = resolveRustTargetTypeRef(evidence.owner, context, options);
   const owner = resolvedOwner?.kind === "reference" ? resolvedOwner.referent : resolvedOwner;
   const named = rustNamedTypeCarrierValue(owner);
   if (owner === undefined || named === undefined) return rejected;
@@ -28,7 +54,7 @@ export function resolveRustProviderIndexedAccess(
   for (const [index, identity] of identities.entries()) {
     if (identity === undefined) return rejected;
     const typeRow = providerCarrierFromRelations(identity, options);
-    const member = evidence.members[index]!.selection;
+    const member = members[index]!.selection;
     const operation = selectRustProviderOperation(options.providerRows, identity, member.kind === "index" ? "indexer" : "property");
     if (typeRow === undefined || operation.kind !== "selected") return rejected;
     const parameters = typeRow.genericParameters ?? [];
