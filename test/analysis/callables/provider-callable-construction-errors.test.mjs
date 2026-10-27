@@ -49,7 +49,10 @@ export function run(): void {
       program.source.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
     };
     program.sourceFiles.forEach(visit);
-    const calls = nodes.filter(node => program.records.targetOperation.get(node)?.target?.path === "fixture::consume");
+    const calls = nodes.filter(node => {
+      const operation = program.records.targetOperation.get(node);
+      return operation?.kind === "provider-operation" && operation.abi.target.form === "call" && operation.abi.target.path === "fixture::consume";
+    });
     assert.equal(calls.length, 1, "the real provider invocation retains its exact native ABI");
     const operation = program.records.targetOperation.get(calls[0]);
     const argument = operation.abi.targetArguments[0];

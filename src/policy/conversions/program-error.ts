@@ -9,6 +9,7 @@ import { isRustClosedValueCarrier } from "../../target-model/types/carriers/clos
 import { rustTsValueAdmission } from "../operations/js-values/carrier-protocols.js";
 
 import { rustClosedValueAdmissionConversion } from "./closed-admission.js";
+import { rustProgramErrorOwner } from "../../target-model/types/carriers/program-errors.js";
 
 import type { RustProgramErrorRoute, RustProgramErrorConversion } from "../../target-model/conversions/program-error.js";
 function selectRustIntrinsicErrorRoute(
@@ -38,7 +39,7 @@ export function selectRustProgramErrorConversion(
   if (!isErrorDestination(target)) return undefined;
   const sourceError = isRustSourceErrorCarrier(target) || isRustRetainedErrorCarrier(target);
   const selectRoute = (carrier: TargetTypeRef): RustProgramErrorRoute | undefined => {
-    if (isRustProgramErrorCarrier(target) && rustTargetTypeRefEquals(carrier, target))
+    if (rustProgramErrorOwner(target)?.kind === "physical" && rustTargetTypeRefEquals(carrier, target))
       return Object.freeze({ kind: "identity" });
     const intrinsic = selectRustIntrinsicErrorRoute(carrier, target);
     if (intrinsic !== undefined) return intrinsic;
@@ -121,7 +122,7 @@ function rustProgramErrorRouteMatches(
 ): boolean {
   if (typeof route !== "object" || route === null) return false;
   if (route.kind === "identity") return hasExactObjectKeys(route, ["kind"]) &&
-    isRustProgramErrorCarrier(target) && rustTargetTypeRefEquals(source, target);
+    rustProgramErrorOwner(target)?.kind === "physical" && rustTargetTypeRefEquals(source, target);
   if (route.kind === "closed") return hasExactObjectKeys(route, ["kind"]) && isRustClosedValueCarrier(source);
   if (route.kind === "closed-admission") return hasExactObjectKeys(route, ["kind", "admission"]) &&
     isRustClosedValueCarrier(definitions.closedValueCarrier) &&

@@ -58,6 +58,8 @@ test("fixed program error destinations preserve exact native join arms and ident
   const foreign = rustProgramErrorTargetType({ kind: "physical", domain: "project", componentId: "foreign" });
   const identity = selectRustProgramErrorConversion(destination, destination, definitions);
   assert.equal(identity?.route.kind, "identity", "an identical owner needs no conversion");
+  assert.equal(selectRustProgramErrorConversion(rustProgramErrorTargetType(), rustProgramErrorTargetType(), definitions) === undefined, true,
+    "an unowned logical marker is not an admitted physical error identity");
   assert.equal(rustProgramErrorConversionMatches(identity, destination, foreign, definitions), false,
     "matching program-error spellings never substitute for exact physical ownership");
   const unknown = rustNativeErrorJoinTargetType("/src/index.ts", [destination, { kind: "target-named", id: "foreign.Error" }]);

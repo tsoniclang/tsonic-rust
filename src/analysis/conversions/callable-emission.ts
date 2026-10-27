@@ -23,18 +23,33 @@ import type { RustCallableValueAdapter } from "../../target-model/records/callab
 import { rustNativeCallablePhysicalSource } from "../../policy/conversions/native-callables.js";
 import type { RustOperationAttempt } from "../program/operation-attempts.js";
 import { rustCallableClosureErrorBoundary } from "./callable-error-boundary.js";
+import { normalizeRustErrorType } from "../errors/error-types.js";
+import { mapRustTargetTypes } from "../../target-model/types/carriers/substitution.js";
+import { snapshotClosedMetadata } from "../../target-model/metadata/closed-data.js";
 
 export function analyzeRustCallableEmission(program: Omit<RustAnalysisProgram, "reachability">,
   nodes: readonly Node[], producer: RustCallableConversionProducer,
   attempts: Pick<WeakMap<Node, RustOperationAttempt>, "get">): readonly TargetTypeRef[] {
   const types: TargetTypeRef[] = [];
+  const completeSource = (node: Node, physical: RustNativeCallablePhysicalSource): RustNativeCallablePhysicalSource => {
+    const error = normalizeRustErrorType(physical.signature.error, { ast: program.source.ast, records: program.records,
+      producers: program.callableValues.nativeProducers, definitions: program.typeDefinitions, components: program.sourcePackageComponents }, node);
+    if (error === undefined)
+      failTargetAnalysisInvariant("tsonic-rust", "An admitted callable operand requires its completed physical invocation error.", node);
+    if (rustTargetTypeRefEquals(error, physical.signature.error)) return physical;
+    return Object.freeze({ ...physical,
+      carrier: snapshotClosedMetadata(mapRustTargetTypes(physical.carrier, carrier =>
+        rustTargetTypeRefEquals(carrier, physical.signature.error) ? error : carrier)),
+      signature: Object.freeze({ ...physical.signature, error }) });
+  };
   const operand = (node: Node, source: TargetTypeRef | undefined): RustCallableOperandEmission | undefined => {
     if (source === undefined) return undefined;
     const previous = producer.records.callableOperand.get(node, source);
     if (previous !== undefined) return previous;
-    const physical = rustNativeCallableOperand(source, node, { records: program.records,
+    const selected = rustNativeCallableOperand(source, node, { records: program.records,
       storage: program.callableValues.nativeStorage, producers: program.callableValues.nativeProducers, frames: program.callableValues.frames });
-    if (physical === undefined) return undefined;
+    if (selected === undefined) return undefined;
+    const physical = completeSource(node, selected);
     const reference = program.records.directCallableReference.get(node);
     const named = reference === undefined ? undefined : program.records.sourceCallableEmission.get(reference.sourceDeclaration, reference.carrier);
     const lambda = program.records.lambdaBody.get(node);
@@ -118,10 +133,11 @@ export function analyzeRustCallableEmission(program: Omit<RustAnalysisProgram, "
   const structuralAdapter = (node: Node, adapter: RustCallableValueAdapter): void => {
     if (adapter.kind === "option-some" || adapter.kind === "option-map") structuralAdapter(node, adapter.element);
     else if (adapter.kind === "conversion" && adapter.conversion.kind === "callable-adapter") {
-      const physical = rustNativeCallablePhysicalSource(adapter.sourceCarrier,
+      const selected = rustNativeCallablePhysicalSource(adapter.sourceCarrier,
         { kind: "selected", carrier: adapter.sourceCarrier, inputs: [], erased: true }, program.callableValues.frames);
-      if (physical === undefined)
+      if (selected === undefined)
         failTargetAnalysisInvariant("tsonic-rust", "An admitted structural callable adapter requires its exact physical source.", node);
+      const physical = completeSource(node, selected);
       if (producer.records.callableOperand.get(node, adapter.conversion.source) === undefined)
         producer.operand(node, adapter.conversion.source, Object.freeze({ physical, inline: undefined }));
       contract(node, adapter.conversion, physical);
