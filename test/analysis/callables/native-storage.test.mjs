@@ -3,7 +3,7 @@ import test from "node:test";
 import { selectRustObjectNativeLifetimeContract } from "../../../dist/policy/types/objects/representation.js";
 import { analyzeRust, compileRust, rustSourceText } from "../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
-import { createTargetSourceProgram, sourceNodeIdentity, Node_Initializer, sourceNodesOutsideErasedSubtrees } from "@tsonic/target-api/source";
+import { createTargetSourceProgram, Node_Initializer, sourceNodesOutsideErasedSubtrees } from "@tsonic/target-api/source";
 import { createSourceStorageQuery } from "@tsonic/target-api/analysis";
 import { createRustNativeCallableInputPlan } from "../../../dist/analysis/callables/native/native-inputs.js";
 import { createRustNativeStorageQueries } from "../../../dist/analysis/callables/storage/native-storage.js";
@@ -890,7 +890,7 @@ test("concrete quantified producers retain the existing sealed family through al
     "signature equality cannot substitute for a missing producer identity");
 });
 
-test("physical selection rejects ambiguous mutation alternatives and seals concrete producers", context => {
+test("physical selection rejects ambiguous mutation alternatives and seals concrete producers", () => {
   const ambiguous = `
     export function choose(left: () => number, right: () => number): () => number {
       left = right; const selected = left; return selected;
@@ -900,18 +900,6 @@ test("physical selection rejects ambiguous mutation alternatives and seals concr
   `;
   const rejection = compileRust({ surfaces: [], files: { "index.ts": ambiguous } });
   const observedAst = createTargetSourceProgram(rejection.source).ast;
-  context.diagnostic(JSON.stringify({ observation: "L12-C938-015", count: rejection.result.diagnostics.length }));
-  for (const [index, diagnostic] of rejection.result.diagnostics.slice(0, 16).entries()) {
-    const node = diagnostic.sourceNode;
-    const file = node === undefined ? undefined : observedAst.getSourceFile(node);
-    context.diagnostic(JSON.stringify({ observation: "L12-C938-015", index,
-      code: diagnostic.code, file: file === undefined ? null : observedAst.getFileName(file),
-      start: node === undefined ? null : observedAst.pos(node), end: node === undefined ? null : observedAst.end(node),
-      nodeIdentity: sourceNodeIdentity(observedAst, node) ?? null,
-      publishedSpan: diagnostic.sourceSpan === undefined ? null : {
-        file: diagnostic.sourceSpan.fileName, line: diagnostic.sourceSpan.line, column: diagnostic.sourceSpan.column,
-        endLine: diagnostic.sourceSpan.endLine, endColumn: diagnostic.sourceSpan.endColumn } }));
-  }
   assert.equal(rejection.result.artifacts.length, 0, "neither ambiguous return nor local storage can reach emission");
   assert.deepEqual(rejection.result.diagnostics.map(({ code, message }) => ({ code, message })), [
     { code: "RUST_SOURCE_CALLABLE_SPECIALIZATION_NOT_CLOSED",
@@ -919,8 +907,24 @@ test("physical selection rejects ambiguous mutation alternatives and seals concr
     { code: "RUST_SOURCE_CALLABLE_SPECIALIZATION_NOT_CLOSED",
       message: "Native callable storage has distinct physical input alternatives requiring a sealed join." },
   ], "no signature-based choice, closed error guess, or silent fallback");
-  for (const diagnostic of rejection.result.diagnostics)
-    assert.equal(diagnostic.sourceNode !== undefined, true, "each refusal belongs to its original ambiguous source node");
+  const originalFile = rejection.source.getSourceFile("/src/index.ts");
+  const expectedNodes = [];
+  const visit = node => {
+    const name = observedAst.name(node);
+    if (name !== undefined && observedAst.is.IsIdentifier(name) &&
+      (observedAst.is.IsFunctionDeclaration(node) && observedAst.text(name) === "choose" ||
+        observedAst.is.IsVariableDeclaration(node) && observedAst.text(name) === "selected")) expectedNodes.push(node);
+    observedAst.forEachChild(node, child => { if (child !== undefined) visit(child); });
+  };
+  assert.equal(originalFile !== undefined, true, "the original ambiguous source file is present");
+  visit(originalFile);
+  assert.equal(expectedNodes.length, 2, "the choose return and selected binding own the two source obligations");
+  for (const [index, diagnostic] of rejection.result.diagnostics.entries()) {
+    assert.equal(diagnostic.sourceNode === expectedNodes[index], true,
+      `source refusal ${index} points to its exact original declaration, not another nonempty node`);
+    assert.equal(observedAst.getSourceFile(diagnostic.sourceNode) === originalFile, true,
+      `source refusal ${index} retains the original file and declaration span`);
+  }
   const current = fixture(`
     export function create(): () => number { return () => 7; }
     export function concrete(): () => number { const supplied = create(); return supplied; }

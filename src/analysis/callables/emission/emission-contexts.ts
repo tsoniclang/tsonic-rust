@@ -159,7 +159,7 @@ export function prepareRustCallableEmissionContexts(
     const selected = returned === undefined || physicalReturn !== undefined || generator !== undefined || bodiless
       ? undefined : input.nativeStorage.returnFor(declaration);
     if (selected?.kind === "unresolved") {
-      diagnostics.push(emissionDiagnostic(declaration, selected.reason));
+      diagnostics.push(selected.diagnostic ?? emissionDiagnostic(declaration, selected.reason));
       return;
     }
     const region = input.errorRegions.get(declaration);
@@ -416,7 +416,7 @@ export function prepareRustEmissionContextRequests(
         : demand.kind === "return" ? input.nativeStorage.returnFor(node)
         : input.nativeStorage.invocationCallableFor(node);
       if (selected.kind === "unresolved") {
-        diagnostics.push(emissionDiagnostic(node, selected.reason));
+        diagnostics.push(selected.diagnostic ?? emissionDiagnostic(node, selected.reason));
         continue;
       }
       if (demand.kind === "return" || demand.kind === "invocation") {

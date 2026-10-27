@@ -1,4 +1,5 @@
 import type { Node } from "@tsonic/tsts";
+import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { SourceStorageBindings, SourceStorageSubject } from "@tsonic/target-api/analysis";
 import { sourceEnclosingCallable, sourceNodeIdentity } from "@tsonic/target-api/source";
 
@@ -57,14 +58,7 @@ import type { RustSourceErrorEffectSelection } from "../../errors/source-error-e
 import { selectRustNativeCallbackParameterStorage } from "../native/native-parameters.js";
 import { selectRustTypedLocationSourceOperation } from "../../../source/extension/typed-locations.js";
 
-type RustNativeStorageRequest = {
-  readonly subject: SourceStorageSubject;
-  readonly bindings: SourceStorageBindings | undefined;
-  readonly scope: Node | undefined;
-} & (
-  | { readonly kind: "value"; readonly carrier: TargetTypeRef; readonly position: "value" | "input" }
-  | { readonly kind: "invocation"; readonly declaration: Node }
-);
+import type { RustNativeStorageRequest } from "./native-storage-request.js";
 
 export function createRustNativeStorageSelection(
   input: Parameters<typeof createRustNativeStorageQueries>[0],
@@ -84,8 +78,8 @@ export function createRustNativeStorageSelection(
 ) {
   const { inputs, futures, recordMembers, genericInvocationBindingsFor, joinWrites, ownerFor, valueOwnerFor, logicalCarrierFor } = prepared;
   const { boundaries, adaptedReferences, failure: boundaryFailure } = prepared.conversions;
-  const unresolved = (reason: string): Extract<RustNativeStorageSelection, { readonly kind: "unresolved" }> =>
-    Object.freeze({ kind: "unresolved", reason });
+  const unresolved = (reason: string, diagnostic?: TargetDiagnostic): Extract<RustNativeStorageSelection, { readonly kind: "unresolved" }> =>
+    Object.freeze({ kind: "unresolved", reason, ...(diagnostic === undefined ? {} : { diagnostic }) });
   function evaluate(request: Extract<RustNativeStorageRequest, { readonly kind: "value" }>): RustNativeStorageSelection;
   function evaluate(request: Extract<RustNativeStorageRequest, { readonly kind: "invocation" }>): RustNativeInvocationBindingsSelection;
   function evaluate(request: RustNativeStorageRequest): RustNativeStorageSelection | RustNativeInvocationBindingsSelection {
@@ -102,13 +96,20 @@ export function createRustNativeStorageSelection(
       return unresolved("Native callable storage requires a valid selected carrier.");
     let remaining = rustNativeStorageProjectionSteps;
     let reason: string | undefined;
+    let sourceDiagnostic: TargetDiagnostic | undefined;
     const selectedInputs = new Set<RustNativeCallableInput>();
     const erasedPhysicals = new Set<TargetTypeRef>();
     const sources: RustPhysicalCallableSourceSelection[] = [];
     const fail = (message: string): undefined => { reason ??= message; return undefined; };
+    const rejectJoin = (message: string): undefined => {
+      if (reason === undefined) sourceDiagnostic = Object.freeze({ code: "RUST_SOURCE_CALLABLE_SPECIALIZATION_NOT_CLOSED",
+        category: "error", source: "tsonic-rust", sourceNode: subject.node, message,
+        evidence: Object.freeze(["target.capability=rust.source-callable.finite-specialization"]) });
+      return fail(message);
+    };
     const selectionFor = (physical: TargetTypeRef | undefined, logical: TargetTypeRef): RustNativeStorageSelection => {
       const selectedSources = Object.freeze([...sources]);
-      return physical === undefined ? unresolved(reason ?? "Native callable storage has no exact physical selection.")
+      return physical === undefined ? unresolved(reason ?? "Native callable storage has no exact physical selection.", sourceDiagnostic)
         : rustTargetTypeRefEquals(physical, logical) ? Object.freeze({ kind: "identity", carrier: physical, sources: selectedSources })
           : Object.freeze({ kind: "selected", carrier: physical, inputs: Object.freeze([...selectedInputs]), sources: selectedSources,
             ...(erasedPhysicals.has(physical) ? { erased: true as const } : {}) });
@@ -451,7 +452,7 @@ export function createRustNativeStorageSelection(
                 return fail("Native callable member storage requires its exact declared physical contract.");
               joinable = false;
               if (physical !== undefined && !rustTargetTypeRefEquals(physical, member))
-                return fail("Native callable storage has distinct physical input alternatives requiring a sealed join.");
+                return rejectJoin("Native callable storage has distinct physical input alternatives requiring a sealed join.");
               if (contract.kind === "target-named" && contract.id === rustCallableTargetId) erasedPhysicals.add(member);
               physical = member;
               alternatives.set(origin, member);
@@ -488,7 +489,7 @@ export function createRustNativeStorageSelection(
                 if (declared === undefined) return undefined;
                 joinable = false;
                 if (physical !== undefined && !rustTargetTypeRefEquals(physical, declared))
-                  return fail("Native callable storage has distinct physical input alternatives requiring a sealed join.");
+                  return rejectJoin("Native callable storage has distinct physical input alternatives requiring a sealed join.");
                 physical = declared;
                 alternatives.set(origin, declared);
                 continue;
@@ -510,7 +511,7 @@ export function createRustNativeStorageSelection(
                 joinable = false;
                 candidatePhysical = unionPayload;
                 if (physical !== undefined && !rustTargetTypeRefEquals(physical, candidatePhysical))
-                  return fail("Native callable storage has distinct physical input alternatives requiring a sealed join.");
+                  return rejectJoin("Native callable storage has distinct physical input alternatives requiring a sealed join.");
                 physical = candidatePhysical;
                 continue;
               }
@@ -553,7 +554,7 @@ export function createRustNativeStorageSelection(
                   if (selected === undefined)
                     return fail("A returned native callable requires its completed physical input and native error correspondence.");
                   if (completed !== undefined && !rustTargetTypeRefEquals(completed, selected))
-                    return fail("Native callable storage has distinct physical input alternatives requiring a sealed join.");
+                    return rejectJoin("Native callable storage has distinct physical input alternatives requiring a sealed join.");
                   completed = selected;
                 }
                 if (completed === undefined)
@@ -576,7 +577,7 @@ export function createRustNativeStorageSelection(
             ? joinProducers(selectedSubject, bindings, position, alternatives, absent) : physical;
         // Inputs and conversion boundaries keep one physical implementation: no signature-based choice among them.
         return joinable ? joinProducers(selectedSubject, bindings, position, alternatives, absent)
-          : fail("Native callable storage has distinct physical input alternatives requiring a sealed join.");
+          : rejectJoin("Native callable storage has distinct physical input alternatives requiring a sealed join.");
       }
       if (rustGenericCallableValue(current) !== undefined) {
         const origins = input.storage.boundValueFrontierFor(selectedSubject, bindings, [], position);
@@ -624,7 +625,7 @@ export function createRustNativeStorageSelection(
             if (candidatePhysical === undefined) return undefined;
           }
           if (physical !== undefined && !rustTargetTypeRefEquals(physical, candidatePhysical))
-            return fail("Native callable storage has distinct physical input alternatives requiring a sealed join.");
+            return rejectJoin("Native callable storage has distinct physical input alternatives requiring a sealed join.");
           physical = candidatePhysical;
         }
         return physical ?? fail("Native callable storage has no selected physical input implementation.");

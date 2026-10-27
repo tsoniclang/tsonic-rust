@@ -1,7 +1,7 @@
 import { assertRustRecordRequirement } from "../../helpers/required-records.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createTargetSourceProgram, sourceNodeIdentity, Node_Expression, Node_Initializer } from "@tsonic/target-api/source";
+import { createTargetSourceProgram, Node_Expression, Node_Initializer } from "@tsonic/target-api/source";
 import { analyzeRust, compileRust } from "../../helpers/rust-session.mjs";
 import { analyzeRustErrorEffects } from "../../helpers/rust-error-analysis.mjs";
 
@@ -187,7 +187,7 @@ test("physical callable signatures substitute declaration-generic environments w
   }
 });
 
-test("physical callable operand queries reject unrelated values, missing owners and ambiguous source alternatives", context => {
+test("physical callable operand queries reject unrelated values, missing owners and ambiguous source alternatives", () => {
   const ambiguous = `
     export function choose(left: () => number, right: () => number): () => number {
       left = right; const selected = left; return selected;
@@ -197,18 +197,6 @@ test("physical callable operand queries reject unrelated values, missing owners 
   `;
   const rejection = compileRust({ surfaces: [], files: { "index.ts": ambiguous } });
   const observedAst = createTargetSourceProgram(rejection.source).ast;
-  context.diagnostic(JSON.stringify({ observation: "L12-C938-003", count: rejection.result.diagnostics.length }));
-  for (const [index, diagnostic] of rejection.result.diagnostics.slice(0, 16).entries()) {
-    const node = diagnostic.sourceNode;
-    const file = node === undefined ? undefined : observedAst.getSourceFile(node);
-    context.diagnostic(JSON.stringify({ observation: "L12-C938-003", index,
-      code: diagnostic.code, file: file === undefined ? null : observedAst.getFileName(file),
-      start: node === undefined ? null : observedAst.pos(node), end: node === undefined ? null : observedAst.end(node),
-      nodeIdentity: sourceNodeIdentity(observedAst, node) ?? null,
-      publishedSpan: diagnostic.sourceSpan === undefined ? null : {
-        file: diagnostic.sourceSpan.fileName, line: diagnostic.sourceSpan.line, column: diagnostic.sourceSpan.column,
-        endLine: diagnostic.sourceSpan.endLine, endColumn: diagnostic.sourceSpan.endColumn } }));
-  }
   assert.equal(rejection.result.artifacts.length, 0, "ambiguous formal implementations are rejected before emission");
   assert.deepEqual(rejection.result.diagnostics.map(({ code, message }) => ({ code, message })), [
     { code: "RUST_SOURCE_CALLABLE_SPECIALIZATION_NOT_CLOSED",
@@ -216,8 +204,24 @@ test("physical callable operand queries reject unrelated values, missing owners 
     { code: "RUST_SOURCE_CALLABLE_SPECIALIZATION_NOT_CLOSED",
       message: "Native callable storage has distinct physical input alternatives requiring a sealed join." },
   ], "both original ambiguous storage obligations remain precise source refusals");
-  for (const diagnostic of rejection.result.diagnostics)
-    assert.equal(diagnostic.sourceNode !== undefined, true, "the admission refusal retains its exact original source location");
+  const originalFile = rejection.source.getSourceFile("/src/index.ts");
+  const expectedNodes = [];
+  const visit = node => {
+    const name = observedAst.name(node);
+    if (name !== undefined && observedAst.is.IsIdentifier(name) &&
+      (observedAst.is.IsFunctionDeclaration(node) && observedAst.text(name) === "choose" ||
+        observedAst.is.IsVariableDeclaration(node) && observedAst.text(name) === "selected")) expectedNodes.push(node);
+    observedAst.forEachChild(node, child => { if (child !== undefined) visit(child); });
+  };
+  assert.equal(originalFile !== undefined, true, "the original ambiguous source file is present");
+  visit(originalFile);
+  assert.equal(expectedNodes.length, 2, "the choose return and selected binding own the two source obligations");
+  for (const [index, diagnostic] of rejection.result.diagnostics.entries()) {
+    assert.equal(diagnostic.sourceNode === expectedNodes[index], true,
+      `source refusal ${index} points to its exact original declaration, not another nonempty node`);
+    assert.equal(observedAst.getSourceFile(diagnostic.sourceNode) === originalFile, true,
+      `source refusal ${index} retains the original file and declaration span`);
+  }
   const current = fixture(`
     export function original(): number { return 3; }
     export function create(): () => number { const callback = original; const other = 3; return callback; }

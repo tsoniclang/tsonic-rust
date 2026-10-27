@@ -1,4 +1,5 @@
 import type { Node } from "@tsonic/tsts";
+import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustSourceCallableSpecializationIssue } from "../callables/callable-issues.js";
 import type { RustNativeFutureEnvironmentSelection } from "./native-future-inputs.js";
 import type { TargetTypeRef } from "../../types/model.js";
@@ -12,7 +13,7 @@ export type RustNativeStorageSelection =
       readonly sources: readonly RustPhysicalCallableSourceSelection[];
       /** The physical is a closure's type-erased runtime callable parameter, whose error is carried, never converted. */
       readonly erased?: true }
-  | { readonly kind: "unresolved"; readonly reason: string };
+  | { readonly kind: "unresolved"; readonly reason: string; readonly diagnostic?: TargetDiagnostic };
 
 // A callable with an uninhabited error written into storage whose distinct producers share one boxed callable: the
 // written value's own physical callable and the shared storage callable, into which the write eliminates the error.
