@@ -168,6 +168,27 @@ export function* source<Region extends Life>(value: Ref<int32, Region>): Generat
   assert.equal(result.storage.lifetime.identity, parameter.lifetime.identity);
 });
 
+test("suspension storage selects its original body construction rather than future value writes", () => {
+  const input = fixture("export async function source(callback:()=>Promise<number>) { return await callback(); }");
+  const storage = input.current.context.sourceStorage;
+  let futureReads = 0;
+  const current = { ...input.current, context: { ...input.current.context, sourceStorage: {
+    ...storage,
+    storageProducersFor(subject, ...arguments_) {
+      if (subject.kind === "value" && subject.node === input.declaration && subject.projection.length === 0) {
+        futureReads++;
+        throw new Error("the original suspended body is not selected from its future writable value slot");
+      }
+      return storage.storageProducersFor(subject, ...arguments_);
+    },
+  } } };
+  const result = resolveRustSuspendedCallableStorage(current, input.declaration, [input.asynchronous.outputCarrier]);
+  assert.equal(result.kind, "resolved", "the actual original declaration owns its suspended physical construction");
+  assert.equal(futureReads, 0, "future slot writes never select this already known body activation");
+  assertCapturedInput(input, result);
+  assertUnpublished(input);
+});
+
 test("suspension storage refuses a sealed request before accessing caller source metadata", () => {
   const records = createRustProgramRecordBuilder();
   records.seal([]);

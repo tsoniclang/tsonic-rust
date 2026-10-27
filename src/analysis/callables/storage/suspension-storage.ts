@@ -16,7 +16,6 @@ import { rustCallableInputLifetimeParameters } from "../ownership/source-input-l
 import { resolveExpressionCarrier } from "../../source-evidence/types/resolution/expression-carriers.js";
 import { rustRetainedEnvironment, rustSuspendedCapturedParameters } from "../ownership/retained-values.js";
 import { selectRustCallableOwnership } from "../ownership/ownership-plan.js";
-import { rustSourceStorageScope } from "../../source-evidence/types/resolution/source-storage-projection.js";
 
 export type RustSuspendedCallableStorageResolution =
   | {
@@ -105,10 +104,8 @@ export function resolveRustSuspendedCallableStorage(
   if (lexical.kind === "unresolved") return { kind: "rejected", reason: lexical.reason };
   const subject = walk.context.sourceStorage.subject(declaration, "value");
   if (subject.kind === "unresolved") return { kind: "rejected", reason: subject.reason };
-  const scope = rustSourceStorageScope(walk.context, declaration, walk.currentCallableDeclaration);
-  if (scope.kind === "unresolved") return { kind: "rejected", reason: scope.reason };
-  const producers = walk.context.sourceStorage.storageProducersFor(subject.subject, scope.bindings);
-  const ownership = selectRustCallableOwnership(walk.context.callableOwnership, subject.subject, { kind: "storage", producers }, []);
+  const ownership = selectRustCallableOwnership(walk.context.callableOwnership, subject.subject,
+    { kind: "construction", declaration }, []);
   if (ownership.kind === "unresolved") return { kind: "rejected", reason: ownership.reason };
   if (ownership.kind === "frame" && ownership.activation.kind === "class") {
     const definition = walk.context.projectTypes.definitionForDeclaration(ownership.activation.ownerDeclaration);
