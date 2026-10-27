@@ -110,8 +110,9 @@ for (const surfaces of [[], ["js"]]) for (const mode of ["value", "ref"]) for (c
     const declaration = declarations[0];
     const emission = program.records.lambdaBody.get(declaration);
     assert.equal(emission?.construction, "native", "the selected producer is an ordinary native callable");
-    const contract = emission.bodyErrorConversion;
-    assert.equal(contract !== undefined, true, "the body-to-construction boundary is decided before publication");
+    const selected = emission.bodyErrorConversion;
+    assert.equal(selected?.kind, "conversion", "the inhabited body-to-construction boundary is decided before publication");
+    const contract = selected.conversion;
     assert.equal(contract.lowering, "program-error", "the existing exact native error conversion owns transport");
     assert.equal(contract.fallible, false, "transport cannot introduce another failure");
     assert.equal(contract.category, "exact", "the conversion preserves the exact native error");
@@ -124,5 +125,48 @@ for (const surfaces of [[], ["js"]]) for (const mode of ["value", "ref"]) for (c
     assert.equal(rustTargetTypeRefEquals(errors.at(-1), failure), true, "the original native error is not relabelled before the boundary");
     assert.equal(program.records.errorEffects.get(declaration)?.localErrors, local, "local throw effects remain independently exact");
     assert.equal(program.records.errorEffects.get(declaration)?.nativeErrors.length, 1, "the original provider failure remains one native channel");
+  });
+}
+
+for (const surfaces of [[], ["js"]]) for (const mode of ["value", "ref"]) {
+  test(`fixed provider callbacks eliminate impossible native input errors (${surfaces[0] ?? "native"}, ${mode})`, () => {
+    const { result } = compileRust({ surfaces, packages: [fixedCallbackConsumer(mode)], files: { "index.ts": `
+      import { consume } from "test:callable-errors";
+      import type { uint8 } from "@tsonic/core/types.js";
+      function apply(action: (value: uint8) => number): number { return action(3); }
+      export function run(): void {
+        consume((): void => {
+          const fractional = apply((value: number): number => value / 2);
+          const integral = apply(value => value / 2);
+          void fractional;
+          void integral;
+        });
+      }
+    ` } });
+    assert.equal(result.diagnostics.length, 0,
+      result.diagnostics.map(issue => `${issue.code}: ${issue.message}`).join("; "));
+    assert.equal(result.program !== undefined && result.plan !== undefined, true, "the real native Result body reaches planning");
+    const program = result.program;
+    const declarations = [];
+    const visit = node => {
+      if (program.source.ast.is.IsArrowFunction(node)) declarations.push(node);
+      program.source.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+    };
+    program.sourceFiles.forEach(visit);
+    const selected = declarations.filter(node => program.records.lambdaBody.get(node)?.bodyErrorConversion?.kind === "uninhabited");
+    assert.equal(selected.length, 1, "only the fixed boundary eliminates the actual impossible native channels");
+    const declaration = selected[0];
+    const region = program.records.nativeErrorRegion.get(declaration);
+    const emission = program.records.lambdaBody.get(declaration);
+    const conversion = emission.bodyErrorConversion;
+    assert.equal(region.kind, "native", "the intrinsic body keeps its native Result ABI");
+    assert.equal(region.sources.length, 0, "neither completed native invocation can produce an inhabited error");
+    assert.equal(program.records.errorEffects.get(declaration).nativeErrors.length, 2, "both original source channel identities remain");
+    assert.equal(program.records.errorEffects.get(declaration).localErrors, false, "elimination invents no local error");
+    assert.equal(conversion.source.id, "rust.core.Infallible", "only the actual impossible intrinsic error is eliminated");
+    assert.equal(rustTargetTypeRefEquals(conversion.source, rustErrorRegionCarrier(region)), true, "the original body carrier is retained");
+    assert.equal(rustTargetTypeRefEquals(conversion.target, rustCallablePhysicalSignature(emission.physicalCarrier).error), true,
+      "the fixed physical construction error is unchanged");
+    assert.equal(Object.isFrozen(conversion), true, "the renderer receives an immutable preselected elimination");
   });
 }

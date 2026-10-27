@@ -4,7 +4,7 @@ import { rustProgramNodeIsOutsideNativeCode } from "../../control-flow/compile-t
 import { failTargetAnalysisInvariant, type TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustAnalysisProgram } from "../../program/model.js";
 import type { RustLambdaEmissionProducer } from "../../program/records/callables/lambda-emission.js";
-import type { RustLambdaParameterEmission } from "../../../target-model/records/callables/lambda-emission.js";
+import type { RustLambdaParameterEmission, RustLambdaBodyErrorConversion } from "../../../target-model/records/callables/lambda-emission.js";
 import { rustCallableProtocol, rustClosureProtocol, isRustUnitCarrier } from "../../../target-model/types/index.js";
 import { rustCallableInputProtocol } from "../../../target-model/types/carriers/callables.js";
 import { rustGenericCallableValue } from "../../../target-model/types/carriers/generic-callables.js";
@@ -27,7 +27,6 @@ import { rustErrorRegionCarrier } from "../../errors/regions.js";
 import { selectRustSourceValueConversion } from "../../../policy/conversions/selection.js";
 import { admitRustConversionEmission } from "../../conversions/emission.js";
 import type { RustConversionEmissionProducer } from "../../program/records/operations/conversion-emission.js";
-import type { RustValueConversionContract } from "../../../target-model/conversions/contracts.js";
 
 export function analyzeRustLambdaEmission(program: Omit<RustAnalysisProgram, "reachability">,
   nodes: readonly Node[], producer: RustLambdaEmissionProducer,
@@ -139,19 +138,24 @@ export function analyzeRustLambdaEmission(program: Omit<RustAnalysisProgram, "re
     const producedError = producedReference === undefined ? invocationError : program.errorRegions.producerError(producedReference);
     if (nativeClosure !== undefined && resultFallible && producedError === undefined)
       failTargetAnalysisInvariant("tsonic-rust", "An admitted native closure requires its completed physical invocation error.", node);
-    let bodyErrorConversion: RustValueConversionContract | undefined;
+    let bodyErrorConversion: RustLambdaBodyErrorConversion | undefined;
     if (!suspended && fallible) {
       const bodyError = rustErrorRegionCarrier(region);
       if (bodyError === undefined || producedError === undefined)
         failTargetAnalysisInvariant("tsonic-rust", "An admitted callable body requires its exact intrinsic and outward error carriers.", node);
       if (!rustTargetTypeRefEquals(bodyError, producedError)) {
-        const conversion = selectRustSourceValueConversion(bodyError, producedError, program.typeDefinitions);
-        if (conversion === undefined)
-          failTargetAnalysisInvariant("tsonic-rust", "An admitted callable construction requires its exact intrinsic-body error conversion.", node);
-        bodyErrorConversion = admitRustConversionEmission(conversions, conversion, program.typeDefinitions);
-        if (bodyErrorConversion.fallible || bodyErrorConversion.category !== "exact" || bodyErrorConversion.sourceMode !== "value" ||
-          !rustTargetTypeRefEquals(bodyErrorConversion.source, bodyError) || !rustTargetTypeRefEquals(bodyErrorConversion.target, producedError))
-          failTargetAnalysisInvariant("tsonic-rust", "An admitted callable construction requires an exact infallible body error conversion.", node);
+        if (rustUninhabitedError(bodyError)) {
+          bodyErrorConversion = Object.freeze({ kind: "uninhabited", source: bodyError, target: producedError });
+        } else {
+          const conversion = selectRustSourceValueConversion(bodyError, producedError, program.typeDefinitions);
+          if (conversion === undefined)
+            failTargetAnalysisInvariant("tsonic-rust", "An admitted callable construction requires its exact intrinsic-body error conversion.", node);
+          const admitted = admitRustConversionEmission(conversions, conversion, program.typeDefinitions);
+          if (admitted.fallible || admitted.category !== "exact" || admitted.sourceMode !== "value" ||
+            !rustTargetTypeRefEquals(admitted.source, bodyError) || !rustTargetTypeRefEquals(admitted.target, producedError))
+            failTargetAnalysisInvariant("tsonic-rust", "An admitted callable construction requires an exact infallible body error conversion.", node);
+          bodyErrorConversion = Object.freeze({ kind: "conversion", conversion: admitted });
+        }
       }
     }
     const nativeInvocationError = producedError === undefined ? undefined : mapRustTargetTypes(producedError, carrier => {

@@ -433,7 +433,9 @@ export function planRustCallableExpressionBody(
   let finalizedBlock: RustBlock = loweredBody;
   if (emission.bodyErrorConversion !== undefined) {
     const errorName = allocateRustSyntheticName(context.syntheticNames!, "callable_body_error");
-    const converted = lowerRustValueConversion(emission.bodyErrorConversion, { kind: "path", path: errorName }, callableClosureContext, node);
+    const converted = emission.bodyErrorConversion.kind === "uninhabited"
+      ? { kind: "match" as const, expression: { kind: "path" as const, path: errorName }, arms: [] }
+      : lowerRustValueConversion(emission.bodyErrorConversion.conversion, { kind: "path", path: errorName }, callableClosureContext, node);
     if (converted === undefined || invocationErrorType === undefined) return undefined;
     finalizedBlock = { statements: [{ kind: "tail", expr: {
       kind: "method-call", receiver: { kind: "invoke", callee: {

@@ -58,3 +58,28 @@ test("native Promise then and catch retain named and stored infallible callback 
   assert.doesNotMatch(source, /JsValue|TsValue|dyn Future|Box::pin/u, "fixed native errors introduce no dynamic carrier or boxed future");
   validateGeneratedProject("native-promise-infallible-callbacks", result.artifacts, { run: true });
 });
+
+test("fixed native Promise callbacks eliminate impossible generic invocation errors", { timeout: 300_000 }, () => {
+  const { result } = compileRust({ surfaces: [], target: { id: "rust", options: { outputType: "bin" } }, files: {
+    "index.ts": `
+      import type { uint8 } from "@tsonic/core/types.js";
+      async function seed(): Promise<number> { return 1; }
+      function apply(action: (value: uint8) => number): number { return action(3); }
+      export async function main(): Promise<void> {
+        const result = await seed().then((value: number): number => {
+          const fractional = apply((part: number): number => part / 2);
+          const integral = apply(part => part / 2);
+          return value + fractional + integral;
+        });
+        if (result !== 3.5) throw new Error("native impossible callback error");
+      }
+      await main();
+    `,
+  } });
+  assertNoTargetDiagnostics(result.diagnostics);
+  const source = artifactText(result, "src/index.rs");
+  assert.match(source, /async fn native_promise_then/u, "the real fixed native continuation owns the callback");
+  assert.match(source, /match callable_body_error\w*\s*\{\s*\}/u, "the actual impossible body error is eliminated without a fabricated value");
+  assert.doesNotMatch(source, /JsValue|TsValue|dyn Future|Box::pin/u, "empty error elimination adds no dynamic value or boxed future");
+  validateGeneratedProject("native-promise-impossible-body-error", result.artifacts, { run: true });
+});

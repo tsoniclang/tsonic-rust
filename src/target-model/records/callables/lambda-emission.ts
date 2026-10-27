@@ -15,6 +15,15 @@ export interface RustLambdaParameterEmission {
   readonly mutable: boolean;
 }
 
+export type RustLambdaBodyErrorConversion = {
+  readonly kind: "uninhabited";
+  readonly source: TargetTypeRef;
+  readonly target: TargetTypeRef;
+} | {
+  readonly kind: "conversion";
+  readonly conversion: RustValueConversionContract;
+};
+
 export interface RustNativeLambdaEmission {
   readonly construction: "native";
   readonly constructionCarrier: TargetTypeRef;
@@ -27,7 +36,7 @@ export interface RustNativeLambdaEmission {
   readonly unitBody: boolean;
   readonly physicalCarrier: TargetTypeRef | undefined;
   readonly invocationError: TargetTypeRef | undefined;
-  readonly bodyErrorConversion: RustValueConversionContract | undefined;
+  readonly bodyErrorConversion: RustLambdaBodyErrorConversion | undefined;
   readonly resultFallible: boolean;
   readonly bodyFallible: boolean;
   readonly staticStorage: boolean;
