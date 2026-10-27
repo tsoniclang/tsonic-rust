@@ -31,11 +31,13 @@ export function read(): uint32 {
       JSON.stringify(result.diagnostics.map(({ code, message }) => ({ code, message }))));
     assert.equal(program !== undefined, true, "the complete pointer-callback program is admitted");
     const loads = [];
+    const allocations = [];
     const factories = new Set();
     const visit = node => {
       const ast = program.source.ast;
       if (ast.is.IsCallExpression(node)) {
         const callee = Node_Expression(ast, node);
+        if (callee !== undefined && ast.is.IsIdentifier(callee) && ast.text(callee) === "allocateptr") allocations.push(node);
         const call = program.source.semantics.forNode(node).operations.call(node);
         const argument = call?.sourceArguments.length === 1 ? call.sourceArguments[0].expression : undefined;
         const factory = argument === undefined || !ast.is.IsCallExpression(argument) ? undefined : Node_Expression(ast, argument);
@@ -53,6 +55,22 @@ export function read(): uint32 {
     for (const file of program.sourceFiles) visit(file);
     assert.equal(loads.length, 2, "both independent allocations retain their exact loaded callable values");
     assert.equal(factories.has("first") && factories.has("second"), true, "both distinct original allocation factories are selected");
+    assert.equal(allocations.length, 2, "both original factory allocations have their own emission owners");
+    for (const allocation of allocations) {
+      const selected = program.callableValues.nativeStorage.valueFor(allocation);
+      assert.equal(selected.kind !== "unresolved", true, "the original allocation has completed physical storage");
+      const emitted = program.records.locationAllocation.get(allocation);
+      assert.equal(emitted !== undefined && Object.isFrozen(emitted), true, "allocation syntax consumes immutable physical evidence");
+      assert.equal(emitted.carrier === selected.carrier, true, "the emitted owner is exactly the selected allocation carrier");
+      assert.equal(emitted.pointeeCarrier === selected.carrier.genericArguments[0].type, true,
+        "the allocation cannot recover the old logical callback error from its source operation");
+      const signature = rustCallablePhysicalSignature(emitted.pointeeCarrier);
+      assert.equal(signature !== undefined && signature.parameters.length === 0, true, "the allocation retains the original callback ABI");
+      const reference = rustProducerErrorReference(signature.error);
+      const error = reference === undefined ? signature.error : program.errorRegions.producerError(reference);
+      assert.equal(error?.kind === "target-named" && error.id === rustInfallibleTargetId, true,
+        "the allocation owner retains the same infallible error as its stored callback and returned pointer");
+    }
     for (const load of loads) {
       const selected = program.callableValues.nativeStorage.valueFor(load);
       assert.equal(selected.kind !== "unresolved", true, selected.reason ?? "the checked load has physical callable storage");

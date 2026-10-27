@@ -10,6 +10,7 @@ import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { planRustLocationCallback } from "./location-callbacks.js";
 import { optionReference } from "./location-expressions.js";
 import { planRustNativeAllocation } from "./native-memory.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 import {
   fallibleLocationAccess,
   planRustSourceLocationStorage,
@@ -80,9 +81,11 @@ export function planRustTypedLocationCall(
       if (context.input.program.records.nativeBacking.get(node) !== undefined) {
         return initial === undefined ? undefined : planRustNativeAllocation(node, initial, context, rustProgramErrorTargetType());
       }
-      const owner = rustTypeFromCarrierInContext(fact.locationCarrier, context);
+      const allocation = context.input.program.records.locationAllocation.get(node)
+        ?? failRustPlannerInvariant("An admitted location allocation requires its sealed physical owner and pointee.", node);
+      const owner = rustTypeFromCarrierInContext(allocation.carrier, context);
       return initial === undefined || owner === undefined || !requireRustLocationValueCarrier(
-        fact.pointeeCarrier,
+        allocation.pointeeCarrier,
         node,
         context,
       )

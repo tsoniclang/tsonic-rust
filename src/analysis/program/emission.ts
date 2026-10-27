@@ -336,7 +336,8 @@ export function finalizeRustNativeEmission(
   if (assignmentEvaluationIssues.length !== 0) return rejectedTargetStage(assignmentEvaluationIssues);
   const unaryIssues = analyzeRustUnaryEmission(program, context.nativeNodes, context.records.unaryEmissionPlans);
   if (unaryIssues.length !== 0) return rejectedTargetStage(unaryIssues);
-  const locationStorageIssues = analyzeRustLocationStorage(program, context.nativeNodes, context.records.locationStoragePlans, context.records);
+  const locationStorageIssues = analyzeRustLocationStorage(program, context.nativeNodes, context.records.locationStoragePlans,
+    context.records, context.requiredRecords);
   if (locationStorageIssues.length !== 0) return rejectedTargetStage(locationStorageIssues);
   const computedMemberIssues = admitRustComputedMembers(program, context.nativeNodes);
   if (computedMemberIssues.length !== 0) return rejectedTargetStage(computedMemberIssues);

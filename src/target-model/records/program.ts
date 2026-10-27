@@ -131,6 +131,7 @@ export interface RustProgramRecords extends RustStatementExitRecords, RustStatem
   readonly providerArguments: { readonly get: (abi: import("./operations/finalized-operation.js").RustFinalizedOperationAbi) => boolean };
   readonly binaryEmission: RustRecordFamily<import("./operations/expression-binary.js").RustBinaryEmission>;
   readonly assignmentEvaluation: RustRecordFamily<import("./storage/assignment-evaluation.js").RustAssignmentEvaluation>;
+  readonly locationAllocation: import("./storage/location-storage.js").RustLocationStorageRecords["locationAllocation"];
   readonly locationProjection: import("./storage/location-storage.js").RustLocationStorageRecords["locationProjection"];
   readonly sourceReferenceDeclaration: import("./storage/location-storage.js").RustLocationStorageRecords["sourceReferenceDeclaration"];
   readonly updateProjection: { readonly get: (operand: import("@tsonic/tsts").Node) => import("./storage/direct-storage.js").RustUpdateProjectionPlan | undefined };

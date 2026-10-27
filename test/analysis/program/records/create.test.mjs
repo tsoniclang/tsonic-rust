@@ -24,6 +24,30 @@ function createModel() {
   return createRustProgramRecordBuilder();
 }
 
+test("location allocation evidence publishes once and seals the exact native owner", () => {
+  const model = createModel();
+  const subject = {};
+  const pointeeCarrier = { kind: "source-primitive", name: "uint32" };
+  const carrier = rustSourceLocationTargetType(pointeeCarrier);
+  model.locationStoragePlans.allocation(subject, { carrier, pointeeCarrier });
+  const evidence = model.locationAllocation.get(subject);
+  assert.equal(evidence.carrier === carrier && evidence.pointeeCarrier === pointeeCarrier, true,
+    "the selecting owner's exact physical carriers are retained");
+  assert.equal(Object.isFrozen(evidence), true, "native allocation evidence is immutable");
+  assert.throws(() => model.locationStoragePlans.allocation(subject, { carrier, pointeeCarrier }), /Duplicate Rust semantic plan/u);
+  const records = model.seal([{ subject, construct: "allocate", family: "locationAllocation", producer: "analyzeRustLocationStorage" }]);
+  assert.equal(records.locationAllocation.get(subject) === evidence, true, "sealing preserves the identical published value");
+  assert.equal(records.locationAllocation.get({}) === undefined, true, "a foreign allocation cannot borrow that owner's evidence");
+  assert.equal("set" in records.locationAllocation, false, "the renderer receives no allocation writer");
+  assert.throws(() => model.locationStoragePlans.allocation({}, { carrier, pointeeCarrier }), /after analysis is sealed/u);
+});
+
+test("required native allocation evidence cannot disappear at the seal", () => {
+  const model = createModel();
+  assert.throws(() => model.seal([{ subject: {}, construct: "allocate", family: "locationAllocation",
+    producer: "analyzeRustLocationStorage" }]), /locationAllocation/u);
+});
+
 function admitFamily(model, family, subject, fact) {
   if (family === "conversion") { model.conversions.converted(subject, fact.convertedType); return model.conversion.get(subject); }
   if (family === "optionProjection") {

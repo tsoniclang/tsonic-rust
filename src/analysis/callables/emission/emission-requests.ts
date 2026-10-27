@@ -232,7 +232,10 @@ export function prepareRustPhysicalCallableEmissionRequests(
       const plan = handler.selection.plan;
       switch (plan.operation) {
         case "address-of": visitUse(plan.storageExpression, owner, "location:storage", node); break;
-        case "allocate": visitUse(plan.initialExpression, owner, "location:initial", node); break;
+        case "allocate":
+          runtime(owner, node, "location:allocation", node);
+          visitUse(plan.initialExpression, owner, "location:initial", node);
+          break;
         case "load": case "hash-pointer": visitUse(plan.pointerExpression, owner, "location:pointer", node); break;
         case "store":
           visitUse(plan.pointerExpression, owner, "location:pointer", node);

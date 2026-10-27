@@ -13,6 +13,12 @@ export type RustLocationProjection =
   | { readonly kind: "index"; readonly receiver: Node; readonly index: Node; readonly input: RustFinalizedSourceInput };
 
 export interface RustLocationStorageRecords {
+  readonly locationAllocation: { readonly get: (node: Node) => RustLocationAllocation | undefined };
   readonly locationProjection: { readonly get: (node: Node) => RustLocationProjection | undefined };
   readonly sourceReferenceDeclaration: { readonly get: (node: Node) => Node | undefined };
+}
+
+export interface RustLocationAllocation {
+  readonly carrier: TargetTypeRef;
+  readonly pointeeCarrier: TargetTypeRef;
 }

@@ -1,16 +1,19 @@
 import type { Node } from "@tsonic/tsts";
 import { rustProgramNodeIsOutsideNativeCode } from "../control-flow/compile-time-statements.js";
-import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
+import { failTargetAnalysisInvariant, type TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import { BinaryExpression_Left, ElementAccessExpression_ArgumentExpression, Node_Expression, Node_Operand, sourceEnclosingCallable } from "@tsonic/target-api/source";
 import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustLocationStorageProducer } from "../program/records/storage/location-storage.js";
 import type { RustLocationProjection } from "../../target-model/records/storage/location-storage.js";
 import { rustIndexedLocationContract } from "../../policy/operations/members/abi/indexed-location.js";
 import { isRustFinalizedSourceInput } from "../../target-model/operations/finalized-inputs.js";
+import { rustLocationTargetId } from "../../target-model/types/carriers/source-types.js";
+import { requireRustRecord, type RustRequiredRecord } from "../program/records/objects/required-records.js";
 
 export function analyzeRustLocationStorage(program: Omit<RustAnalysisProgram, "reachability">,
   nodes: readonly Node[], producer: RustLocationStorageProducer,
-  analysisRecords: Pick<import("../../target-model/records/analysis.js").RustAnalysisRecords, "typedLocationPlan">): readonly TargetDiagnostic[] {
+  analysisRecords: Pick<import("../../target-model/records/analysis.js").RustAnalysisRecords, "typedLocationPlan">,
+  requirements: RustRequiredRecord[]): readonly TargetDiagnostic[] {
   const { ast } = program.source;
   const issues: TargetDiagnostic[] = [];
   const selected = new Map<Node, RustLocationProjection>();
@@ -104,6 +107,21 @@ export function analyzeRustLocationStorage(program: Omit<RustAnalysisProgram, "r
     if (rustProgramNodeIsOutsideNativeCode(program, node)) continue;
     const location = analysisRecords.typedLocationPlan.get(node);
     if (location?.operation === "address-of") admit(location.storageExpression);
+    if (location?.operation === "allocate" && program.records.nativeBacking.get(node) === undefined) {
+      const selection = program.callableValues.nativeStorage.valueFor(node);
+      if (selection.kind === "unresolved") {
+        if (selection.diagnostic !== undefined) issues.push(selection.diagnostic);
+        else failTargetAnalysisInvariant("tsonic-rust", selection.reason, node);
+      } else {
+        const carrier = selection.carrier;
+        const pointee = carrier.kind === "target-named" && carrier.id === rustLocationTargetId
+          ? carrier.genericArguments?.[0] : undefined;
+        if (pointee?.kind !== "type") failTargetAnalysisInvariant("tsonic-rust",
+          "An admitted native location allocation requires its selected physical pointee and owner.", node);
+        producer.allocation(node, { carrier, pointeeCarrier: pointee.type });
+        requireRustRecord(requirements, "locationAllocation", node, "allocate", "analyzeRustLocationStorage");
+      }
+    }
     const operation = program.records.targetOperation.get(node);
     const left = ast.is.IsBinaryExpression(node) ? BinaryExpression_Left(ast, node) : undefined;
     if (left !== undefined && (program.records.assignmentCompletion.get(node) !== undefined || operation?.kind === "nullish-assignment")) admitPromoted(left);
