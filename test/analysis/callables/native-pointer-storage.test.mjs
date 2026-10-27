@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { Node_Expression, sourceEnclosingCallable } from "@tsonic/target-api/source";
+import { Node_Expression, Node_Initializer, sourceEnclosingCallable } from "@tsonic/target-api/source";
 import { compileRust } from "../../helpers/rust-session.mjs";
 import { analyzeRustAnalysisProgram } from "../../../dist/analysis/program/target-program.js";
 import { rustCallablePhysicalSignature } from "../../../dist/target-model/conversions/callable-physical.js";
@@ -116,7 +116,11 @@ export function read(): uint32 {
         "the allocation owner retains the same infallible error as its stored callback and returned pointer");
     }
     for (const load of loads) {
-      const selected = program.callableValues.nativeStorage.valueFor(load);
+      const binding = program.source.ast.parent(load);
+      assert.equal(binding !== undefined && program.source.ast.is.IsVariableDeclaration(binding) &&
+        Node_Initializer(program.source.ast, binding) === load, true,
+      "each original load initializes its own actual emitted local binding");
+      const selected = program.callableValues.nativeStorage.valueFor(binding);
       assert.equal(selected.kind !== "unresolved", true, selected.reason ?? "the checked load has physical callable storage");
       const signature = rustCallablePhysicalSignature(selected.carrier);
       assert.equal(signature?.parameters.length, 0, "the callable's native input ABI is unchanged");
