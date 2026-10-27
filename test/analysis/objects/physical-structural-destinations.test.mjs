@@ -20,6 +20,23 @@ const field = (sourceName, type, rest = {}) => ({ sourceName, type, presence: "r
 const physicalError = file => rustProgramErrorTargetType({ kind: "physical", domain: "project",
   componentId: file === "/dependency.ts" ? "dependency" : "root" });
 
+function checkedInputMember(program, input) {
+  const semantics = program.source.semantics.forFile(program.source.ast.getSourceFile(input.subject.node));
+  let type = semantics.types.expressionType(input.subject.node);
+  let selected;
+  for (const component of input.subject.projection) {
+    assert.equal(component.kind, "member", "the control retains its original checked member projections");
+    const present = type === undefined ? undefined : semantics.types.nonNullableType(type);
+    assert.equal(present !== undefined, true, "the original native input has an exact checked present owner");
+    const pair = semantics.types.structuralMember(present, present, component.declaration, "correspondence");
+    assert.equal(pair?.kind, "present", "the source owner supplies its actual checked member correspondence");
+    selected = pair.source;
+    type = selected.property.type;
+  }
+  assert.equal(selected !== undefined, true, "the input's original field correspondence is retained");
+  return selected;
+}
+
 test("same-layout physical instances retain independent canonical lifetimes and authored type binders", () => {
   const parameter = Object.freeze({ kind: "type-parameter", identity: "canonical:Value", name: "Value" });
   const left = Object.freeze({ kind: "parameter", identity: "canonical:left", name: "left" });
@@ -185,7 +202,8 @@ test("native structural input applications retain exact source owners and siblin
   const evidence = input => ({ kind: "native-input", owner: input.owner,
     subject: { ...input.subject, projection: input.subject.projection.slice(0, -1),
       projectionKey: input.subject.projectionKey.slice(0, input.subject.projectionKey.lastIndexOf("/")) },
-    fields: [{ sourceName: "invoke", subject: input.subject, carrier: input.implementation, inputs: [input] }] });
+    fields: [{ sourceName: "invoke", member: checkedInputMember(program, input),
+      subject: input.subject, carrier: input.implementation, inputs: [input] }] });
   for (const order of [inputs, [...inputs].reverse()]) {
     const builder = createRustStructuralShapePlanRegistry();
     builder.initialize([{ carrier: source }], [], () => "root", [], [], new Map());
@@ -236,7 +254,8 @@ test("structural completion retains each native input's exact physical field ass
     ordered.map((input, index) => field(name(input), order[index].implementation)));
   const evidence = { kind: "native-input", owner: ordered[0].owner,
     subject: { ...ordered[0].subject, projection: [], projectionKey: "" }, fields: ordered.map(input => ({
-      sourceName: name(input), subject: input.subject, carrier: input.implementation, inputs: [input],
+      sourceName: name(input), member: checkedInputMember(program, input),
+      subject: input.subject, carrier: input.implementation, inputs: [input],
     })) };
   const builder = createRustStructuralShapePlanRegistry();
   builder.initialize([{ carrier: source }], [], () => "root", [], [], new Map());
@@ -248,6 +267,8 @@ test("structural completion retains each native input's exact physical field ass
       fields: evidence.fields.map((entry, index) => ({ ...entry, carrier: ordered[1 - index].implementation })) }],
     ["swapped original rows", physical(ordered), { ...evidence,
       fields: evidence.fields.map((entry, index) => ({ ...entry, inputs: [ordered[1 - index]] })) }],
+    ["fully swapped field associations", physical([...ordered].reverse()), { ...evidence,
+      fields: evidence.fields.map((entry, index) => ({ ...evidence.fields[1 - index], sourceName: entry.sourceName })) }],
   ]) {
     const rejected = builder.completePhysicalCarrier(source, selected, application);
     assert.equal(rejected.kind, "unresolved", `${label}: aggregate identity membership never proves a field binding`);

@@ -2,6 +2,8 @@ import type { Node } from "@tsonic/tsts";
 import type { SourceOwnershipUnresolved, SourceStorageBindings, SourceStorageQueries, SourceStorageSubject } from "@tsonic/target-api/analysis";
 import { sourceEnclosingCallable, sourceNodeIdentity, sourceCallableValueParameters, type TargetSourceProgram } from "@tsonic/target-api/source";
 import type { RustFactWalk } from "../../program/walk.js";
+import { rustResolutionContext } from "../../program/walk.js";
+import { projectRustProviderIndexedStorageCarrier } from "../../source-evidence/types/resolution/indexed-access.js";
 
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustRetainedEnvironment } from "./retained-values.js";
@@ -192,6 +194,8 @@ export function rustRetainedCallLifetimes(
     const carrier = rustSourceStorageProjectedCarrier({ sourceStorage: storage, sourceTypes: walk.sourceTypes,
       projectFieldProjection: walk.operationOptions.projectFieldProjection, semantics: walk.context.semantics,
       types: { resolveNode: node => records.runtimeCarrier.get(node)?.carrier },
+      projectIndexedCarrier: (component, owner, node) => projectRustProviderIndexedStorageCarrier(component, owner,
+        rustResolutionContext(walk, node), walk.operationOptions),
     }, { subject, bindings }, root);
     const entries = previous ?? new Map<SourceStorageBindings, TargetTypeRef | undefined>();
     entries.set(bindings, carrier);
