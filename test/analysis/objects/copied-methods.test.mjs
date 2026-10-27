@@ -18,7 +18,12 @@ export function choose(flag: boolean): { value(): number } {
   return flag ? { value(): number { return 1; } } : { value(): number { return 2; } };
 }
 ` } });
-    const methods = program.sourceStorage.nodes.filter(node => program.source.ast.is.IsMethodDeclaration(node));
+    const methods = [];
+    const visit = node => {
+      if (program.source.ast.is.IsMethodDeclaration(node)) methods.push(node);
+      program.source.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+    };
+    program.source.sourceFiles.forEach(visit);
     assert.equal(methods.length, 3, "all original literal method constructions remain represented");
     for (const method of methods)
       assert.equal(program.records.receiverIndependentMethod.get(method) !== undefined, true,

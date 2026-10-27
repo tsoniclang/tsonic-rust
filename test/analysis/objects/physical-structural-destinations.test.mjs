@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { createTargetSourceProgram } from "@tsonic/target-api/source";
 import { selectRustStructuralPhysicalDestinations } from "../../../dist/analysis/objects/shapes/physical-destinations.js";
 import { createRustStructuralShapePlanRegistry } from "../../../dist/analysis/objects/shapes/structural-shape-registry.js";
 import { rustStructuralObjectTargetType, rustStructuralObjectCarrierValue } from "../../../dist/target-model/types/carriers/source-types.js";
@@ -20,8 +21,8 @@ const field = (sourceName, type, rest = {}) => ({ sourceName, type, presence: "r
 const physicalError = file => rustProgramErrorTargetType({ kind: "physical", domain: "project",
   componentId: file === "/dependency.ts" ? "dependency" : "root" });
 
-function checkedInputMember(program, input) {
-  const semantics = program.source.semantics.forFile(program.source.ast.getSourceFile(input.subject.node));
+function checkedInputMember(source, input) {
+  const semantics = source.semantics.forFile(source.ast.getSourceFile(input.subject.node));
   let type = semantics.types.expressionType(input.subject.node);
   let selected;
   for (const component of input.subject.projection) {
@@ -190,11 +191,12 @@ test("physical structural completion rejects the removed evidence-free API befor
 });
 
 test("native structural input applications retain exact source owners and sibling projections in either order", () => {
-  const { program } = analyzeRust({ surfaces: [], files: { "index.ts": `
+  const { source: checkedSource, program } = analyzeRust({ surfaces: [], files: { "index.ts": `
     type Leaf = { readonly invoke: (value: number) => number };
     type Input = { readonly left: Leaf; readonly right: Leaf };
     export function take(value: Input): void {}
   ` } });
+  const analysisSource = createTargetSourceProgram(checkedSource);
   const inputs = program.callableValues.native.inputs;
   assert.equal(inputs.length, 2, "the original input producer supplies two independently owned data projections");
   const source = rustStructuralObjectTargetType("/root.ts", [field("invoke", inputs[0].carrier)]);
@@ -202,7 +204,7 @@ test("native structural input applications retain exact source owners and siblin
   const evidence = input => ({ kind: "native-input", owner: input.owner,
     subject: { ...input.subject, projection: input.subject.projection.slice(0, -1),
       projectionKey: input.subject.projectionKey.slice(0, input.subject.projectionKey.lastIndexOf("/")) },
-    fields: [{ sourceName: "invoke", member: checkedInputMember(program, input),
+    fields: [{ sourceName: "invoke", member: checkedInputMember(analysisSource, input),
       subject: input.subject, carrier: input.implementation, inputs: [input] }] });
   for (const order of [inputs, [...inputs].reverse()]) {
     const builder = createRustStructuralShapePlanRegistry();
@@ -239,11 +241,12 @@ test("native structural input applications retain exact source owners and siblin
 });
 
 test("structural completion retains each native input's exact physical field association", () => {
-  const { program } = analyzeRust({ surfaces: [], files: { "index.ts": `
+  const { source: checkedSource, program } = analyzeRust({ surfaces: [], files: { "index.ts": `
     import type { int32, int64 } from "@tsonic/core/types.js";
     type Input = { readonly left: (value: int32) => int32; readonly right: (value: int64) => int64 };
     export function take(value: Input): void {}
   ` } });
+  const analysisSource = createTargetSourceProgram(checkedSource);
   const inputs = program.callableValues.native.inputs;
   assert.equal(inputs.length, 2, "the checked producer supplies both original sibling input rows");
   const name = input => program.source.ast.text(program.source.ast.name(input.subject.projection[0].declaration));
@@ -254,7 +257,7 @@ test("structural completion retains each native input's exact physical field ass
     ordered.map((input, index) => field(name(input), order[index].implementation)));
   const evidence = { kind: "native-input", owner: ordered[0].owner,
     subject: { ...ordered[0].subject, projection: [], projectionKey: "" }, fields: ordered.map(input => ({
-      sourceName: name(input), member: checkedInputMember(program, input),
+      sourceName: name(input), member: checkedInputMember(analysisSource, input),
       subject: input.subject, carrier: input.implementation, inputs: [input],
     })) };
   const builder = createRustStructuralShapePlanRegistry();
