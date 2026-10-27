@@ -96,6 +96,49 @@ test("storage purpose retains the physical ownership guard", () => {
   assert.equal(selected.queries(), 1);
 });
 
+test("physical callable admission retains missing unresolved foreign and unreadable component refusals", () => {
+  const text = `
+interface Slot { read: () => number; }
+interface Foreign { read: () => number; }
+class WriteOnly { set read(value: () => number) {} }
+export function consume(slot: Slot, writeOnly: WriteOnly): void {}
+`;
+  const checked = createCompilerSessionFromFiles({ currentDirectory: "/physical", files: { "/physical/index.ts": text },
+    compilerOptions: { strict: true, target: "es2022", module: "esnext" } }).checkSource();
+  assert.equal(checked.diagnostics.length, 0, "the physical inverses are actual checked source, not fabricated native carriers");
+  const source = createTargetSourceProgram(checked);
+  const file = checked.getSourceFile("/physical/index.ts");
+  const storage = createSourceStorageQuery(source, [file]);
+  const named = name => storage.nodes.find(node => source.ast.is.IsParameterDeclaration(node) &&
+    source.ast.text(source.ast.name(node)) === name);
+  const slot = named("slot");
+  const writeOnly = named("writeOnly");
+  const foreign = storage.nodes.find(node => source.ast.kindName(node) === "KindPropertySignature" &&
+    source.ast.text(source.ast.name(source.ast.parent(node))) === "Foreign");
+  const setter = storage.nodes.find(node => source.ast.is.IsSetAccessorDeclaration(node));
+  assert.equal(slot !== undefined && writeOnly !== undefined && foreign !== undefined && setter !== undefined, true,
+    "both actual parameter owners and original foreign/setter declarations are present");
+  const scope = storage.bindingsForLexicalOwner(slot);
+  assert.equal(scope.kind, "resolved", "the original callable supplies its exact physical input scope");
+  const logical = rustCallableTargetType([], { kind: "source-primitive", name: "float64" });
+  const context = { ast: source.ast, sourceStorage: storage, callableRepresentation: "storage",
+    sourceStorageResolution: { kind: "resolved", subject: undefined, bindings: scope.bindings } };
+  assert.equal(resolveRustCallableStorageCarrier(logical, context, {}, new Set()) === undefined, true,
+    "a missing physical subject is not converted into logical signature permission");
+  const selections = [
+    ["unresolved storage scope", { kind: "unresolved", reason: "physical scope unavailable" }],
+    ["foreign exact member declaration", storage.subject(slot, "input", [{ kind: "member", declaration: foreign }])],
+    ["unreadable setter-only component", storage.subject(writeOnly, "input", [{ kind: "member", declaration: setter }])],
+    ["invalid projected callable input", storage.subject(slot, "input", [{ kind: "array-element" }])],
+  ];
+  for (const [label, selection] of selections) {
+    assert.equal(selection.kind, "unresolved", `${label}: actual physical component admission refuses the request`);
+    assert.equal(resolveRustCallableStorageCarrier(logical,
+      { ...context, sourceStorageResolution: selection }, {}, new Set()) === undefined, true,
+    `${label}: native callable ownership preserves the exact failed physical premise`);
+  }
+});
+
 function originalConstruction() {
   const current = analyzeRustOperations(`
 export function make(value: number) { return { async read(): Promise<number> { return value; } }; }
