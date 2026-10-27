@@ -8,7 +8,6 @@ import type { RustCallableConversion } from "../../target-model/conversions/call
 import type { RustCallablePhysicalConversion } from "../../target-model/conversions/callable-physical.js";
 import { rustProducerErrorReference } from "../../target-model/types/carriers/producer-errors.js";
 import { normalizeRustErrorType } from "../errors/error-types.js";
-import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustCallableWithError, rustUninhabitedError } from "../../policy/conversions/callable-physical.js";
 import { rustCallablePhysicalSignature } from "../../target-model/conversions/callable-physical.js";
 import { rustCallableProtocol } from "../../target-model/types/index.js";
