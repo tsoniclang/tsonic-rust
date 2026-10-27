@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createRustProviderPackage, rustCallableTargetType } from "../../../dist/public/provider.js";
 import { rustCallablePhysicalSignature } from "../../../dist/target-model/conversions/callable-physical.js";
-import { rustRuntimeErrorTargetType } from "../../../dist/target-model/types/carriers/runtime-carriers.js";
+import { rustProgramErrorTargetType } from "../../../dist/target-model/types/carriers/js.js";
+import { selectRustPhysicalProgramErrorOwner } from "../../../dist/analysis/errors/error-types.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 import { compileRust } from "../../helpers/rust-session.mjs";
 
@@ -57,7 +58,10 @@ export function run(): void {
     const physical = program.callableValues.nativeProducers.physicalFor(declaration, closure.resultCarrier);
     const signature = rustCallablePhysicalSignature(physical);
     assert.equal(signature !== undefined, true, "the selected native construction is complete");
-    assert.equal(rustTargetTypeRefEquals(signature.error, rustRuntimeErrorTargetType()), true,
+    const owner = selectRustPhysicalProgramErrorOwner(declaration,
+      { ast: program.source.ast, components: program.sourcePackageComponents });
+    assert.equal(owner !== undefined, true, "the original declaration retains its exact physical program-error owner");
+    assert.equal(rustTargetTypeRefEquals(signature.error, rustProgramErrorTargetType(owner)), true,
       "the construction uses the fixed provider error ABI, not its independently inferred body error");
     assert.equal(program.records.errorEffects.get(declaration)?.localErrors, fallible,
       "selection preserves the body's independent intrinsic effects");
