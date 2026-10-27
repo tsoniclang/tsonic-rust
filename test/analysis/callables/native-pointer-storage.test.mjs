@@ -39,7 +39,8 @@ export function read(): uint32 {
         const call = program.source.semantics.forNode(node).operations.call(node);
         const argument = call?.sourceArguments.length === 1 ? call.sourceArguments[0].expression : undefined;
         const factory = argument === undefined || !ast.is.IsCallExpression(argument) ? undefined : Node_Expression(ast, argument);
-        const nested = argument === undefined ? undefined : program.source.semantics.forNode(argument).operations.call(argument);
+        const nested = argument === undefined || !ast.is.IsCallExpression(argument)
+          ? undefined : program.source.semantics.forNode(argument).operations.call(argument);
         if (callee !== undefined && ast.is.IsIdentifier(callee) && ast.text(callee) === "loadptr" &&
           factory !== undefined && ast.is.IsIdentifier(factory) && /^(first|second)$/u.test(ast.text(factory)) &&
           nested?.sourceArguments.length === 0) {
