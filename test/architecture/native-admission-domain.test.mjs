@@ -36,6 +36,8 @@ const walkerContracts = new Map([
   ["analysis/callables/signatures.ts", [1, "native-domain"]],
   ["analysis/callables/emission-requests.ts", [1, "native-domain"]],
   ["analysis/callables/native-inputs.ts", [1, "admitted-callable-subtrees"]],
+  ["analysis/callables/entry-parameters.ts", [1, "admitted-leading-receiver-subtrees"]],
+  ["analysis/callables/entry-header-placements.ts", [2, "admitted-emitted-header-placement-subtrees"]],
   ["analysis/callables/native-storage-values.ts", [1, "admitted-callable-subtrees"]],
   ["analysis/control-flow/binding-liveness.ts", [1, "admitted-callable-subtrees"]],
   ["analysis/operations/optional-chains.ts", [1, "admitted-operation-subtrees"]],
