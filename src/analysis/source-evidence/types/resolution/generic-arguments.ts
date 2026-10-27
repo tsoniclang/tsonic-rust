@@ -118,10 +118,10 @@ export function bindRustSourceAliasArguments(
   const parameters = context.ast.typeParameters(application.declaration);
   const nativeParameters = context.sourceLifetimes.contractFor(application.declaration)?.parameters;
   const nativeTemplate = nativeCarrier === undefined ? undefined : options.sourceTypes.carrierForDeclaration(application.declaration);
-  const nativeArguments = nativeCarrier === undefined || nativeTemplate === undefined || nativeParameters === undefined ? undefined
+  const nativeArguments = nativeCarrier === undefined || parameters.length === 0 || nativeTemplate === undefined || nativeParameters === undefined ? undefined
     : inferRustTargetTypeParameterBindings(rustCarrierWithTargetPlaceholderLifetimes(nativeTemplate, nativeCarrier), nativeCarrier,
       new Set(nativeParameters.flatMap(parameter => parameter.kind === "type" ? [parameter.identity] : [])));
-  if (nativeCarrier !== undefined && nativeArguments === undefined) return undefined;
+  if (nativeCarrier !== undefined && parameters.length !== 0 && nativeArguments === undefined) return undefined;
   const reference = authoredTypeNode === undefined || !context.ast.is.IsTypeReferenceNode(authoredTypeNode)
     ? undefined : context.source.navigation.sourceReferenceFor(TypeReferenceNode_TypeName(context.ast, authoredTypeNode));
   const argumentNodes = authoredTypeNode !== undefined && reference?.declaration === application.declaration

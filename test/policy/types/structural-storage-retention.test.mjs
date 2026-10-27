@@ -8,6 +8,35 @@ import { createRustTypeDefinitionRegistry } from "../../../dist/analysis/project
 import { analyzeRust } from "../../helpers/rust-session.mjs";
 
 for (const surfaces of [[], ["js"]]) {
+  test(`nongeneric structural aliases retain callable storage without synthetic type arguments in ${surfaces[0] ?? "native"}`, () => {
+    const { program } = analyzeRust({ surfaces, files: { "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+type View = { read(): int32; readonly identity: (value: int32) => int32 };
+class Box<Value> {
+  value: Value;
+  constructor(value: Value) { this.value = value; }
+  read(): int32 { return 7; }
+  identity = (value: int32): int32 => value;
+}
+function closed(): View { return new Box<string>("closed"); }
+function open<Value>(owner: Box<Value>): View { return owner; }
+export function run(): int32 { return closed().read() + open(new Box<int32>(3)).identity(5); }
+` } });
+    const declarations = program.sourceFiles.flatMap(file => program.source.ast.statements(file));
+    for (const name of ["closed", "open"]) {
+      const declaration = declarations.find(node => program.source.ast.is.IsFunctionDeclaration(node) &&
+        program.source.ast.text(program.source.ast.name(node)) === name);
+      assert.equal(declaration !== undefined, true, `${name}: the original callable declaration is present`);
+      const returned = program.records.sourceCallableReturn.get(declaration);
+      assert.equal(returned !== undefined && rustStructuralObjectCarrierValue(returned.returnCarrier) !== undefined, true,
+        `${name}: the nongeneric alias has its exact admitted structural return carrier`);
+      assert.equal(program.records.callableDeclaration.get(declaration) !== undefined, true,
+        `${name}: native declaration emission consumes the complete return admission`);
+    }
+  });
+}
+
+for (const surfaces of [[], ["js"]]) {
   test(`structural alias retention binds selected native instances instead of their open template in ${surfaces[0] ?? "native"}`, () => {
     const { program } = analyzeRust({ surfaces, files: { "index.ts": `
       import type { int32, int64 } from "@tsonic/core/types.js";
