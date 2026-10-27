@@ -1,7 +1,8 @@
 import type { RustReadUse } from "../../target-model/records/storage/ownership.js";
 import type { ArgumentPassingMode, AstReader, Node } from "@tsonic/tsts";
 import { BinaryExpression_Left, BinaryExpression_Right, ElementAccessExpression_ArgumentExpression, Node_Expression, Node_Operand } from "@tsonic/target-api/source";
-import type { RustTargetOperationFact, RustTypedLocationPlan } from "../../target-model/records/operations/operations.js";
+import type { RustTargetOperationFact } from "../../target-model/records/operations/operations.js";
+import type { RustTypedLocationPlan } from "../../target-model/records/operations/typed-location-plans.js";
 import type { RustRawAddressPlan } from "../../target-model/records/storage/raw-addresses.js";
 import type { RustFinalizedSourceInput } from "../../target-model/records/operations/finalized-operation.js";
 import type { RustComputedMemberFact } from "../../target-model/records/operations/operation-selections.js";

@@ -1,5 +1,5 @@
 import type { Node } from "@tsonic/tsts";
-import type { RustTypedLocationPlan } from "../../../../target-model/records/operations/operations.js";
+import type { RustTypedLocationPlan } from "../../../../target-model/records/operations/typed-location-plans.js";
 import type { RustRecordFamily } from "../../../../target-model/records/program.js";
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";

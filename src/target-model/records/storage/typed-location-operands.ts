@@ -1,4 +1,4 @@
-import type { RustTypedLocationPlan } from "../operations/operations.js";
+import type { RustTypedLocationPlan } from "../operations/typed-location-plans.js";
 
 type RustTypedLocationOperandsFor<Plan> = Plan extends RustTypedLocationPlan
   ? Omit<Plan, "call" | "pointeeCarrier" | "locationCarrier"> : never;

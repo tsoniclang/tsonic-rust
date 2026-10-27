@@ -9,7 +9,7 @@ import { rustLocationTargetType, rustOptionTargetType, rustStructuralPropertyVal
 import { isRustCopyCarrier, rustCarrierSupportsClone } from "../../policy/constraints/native-traits.js";
 import { rustStructuralPropertyGetterStorageCarrier, rustStructuralPropertySetterStorageCarrier } from "../../policy/types/objects/member-storage.js";
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
-import { rustTargetOperationResultCarrier } from "../../target-model/records/operations/operations.js";
+import { rustTargetOperationResultCarrier } from "../../target-model/records/operations/operation-result-carriers.js";
 
 export function analyzeRustCarrierReads(program: Omit<RustAnalysisProgram, "reachability">, nodes: readonly Node[], producer: RustCarrierReadProducer): void {
   const pending: TargetTypeRef[] = [];

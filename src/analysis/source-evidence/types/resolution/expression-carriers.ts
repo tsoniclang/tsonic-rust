@@ -5,7 +5,7 @@ import { rustUnionAlternatives } from "../../../../target-model/types/union-rela
 import { rustSourceValueWrapperContains } from "../../../../policy/ownership/source-value-wrappers.js";
 
 import { rustPostCheckOperationKind } from "../../../../target-model/operations/model.js";
-import { rustTargetOperationResultCarrier } from "../../../../target-model/records/operations/operations.js";
+import { rustTargetOperationResultCarrier } from "../../../../target-model/records/operations/operation-result-carriers.js";
 import { appendRustDiagnostic, rustResolutionContext, selectExpressionOperation } from "../../../program/walk.js";
 import { resolveRustTargetTypeRef } from "./source.js";
 import { selectedSourceLiteralIsRepresentable } from "../../../../policy/conversions/literals.js";

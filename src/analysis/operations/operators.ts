@@ -15,7 +15,7 @@ import { isRustBigIntCarrier, isRustAbsenceCarrier, isRustOptionCarrier, isRustS
 import { rustOptionalStorageValue, rustOptionalStorageNestingDepth } from "../../target-model/types/projections.js";
 
 import { rustPostCheckUnaryMinusOperationId, rustPostCheckUnaryPlusOperationId } from "../../target-model/operations/model.js";
-import { rustTargetOperationResultCarrier } from "../../target-model/records/operations/operations.js";
+import { rustTargetOperationResultCarrier } from "../../target-model/records/operations/operation-result-carriers.js";
 import { appendRustDiagnostic } from "../program/walk.js";
 import { parseSourceBigIntLiteral } from "../../source/extension/literals.js";
 

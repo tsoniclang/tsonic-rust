@@ -1,5 +1,6 @@
 import { type Node } from "@tsonic/tsts";
-import { rustTargetOperationResultCarrier, type RustTargetOperationFact } from "../../../../target-model/records/operations/operations.js";
+import { type RustTargetOperationFact } from "../../../../target-model/records/operations/operations.js";
+import { rustTargetOperationResultCarrier } from "../../../../target-model/records/operations/operation-result-carriers.js";
 import { type TargetTypeRef } from "../../../../target-model/types/model.js";
 import { type RustSelectedTargetOperation } from "../../../../target-model/records/operations/member-selections.js";
 import { rustTargetOperationText } from "../../../../target-model/operations/text.js";

@@ -1,5 +1,6 @@
 import type { Node } from "@tsonic/tsts";
-import type { RustTargetOperationFact, RustTypedLocationPlan } from "../../../target-model/records/operations/operations.js";
+import type { RustTargetOperationFact } from "../../../target-model/records/operations/operations.js";
+import type { RustTypedLocationPlan } from "../../../target-model/records/operations/typed-location-plans.js";
 
 import { rustProgramErrorTargetType } from "../../../target-model/types/index.js";
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";

@@ -8,7 +8,7 @@ import { appendRustDiagnostic, rustResolutionContext, rustOperationContext } fro
 import { resolveRustProjectField } from "../operations/members/project-fields.js";
 import { createRustModuleBindingAnalysis } from "./module-bindings.js";
 import { recordRustModuleCallableStorage } from "../callables/values/module-values.js";
-import { analyzeRustStructuralMethodExposures } from "../callables/storage/structural-method-storage.js";
+import { analyzeRustStructuralMethodExposures } from "../callables/storage/structural-method-exposures.js";
 import { analyzeRustNativeHandlers } from "../operations/native-handlers.js";
 import { recordRustModuleValueDeclarations } from "./module-declarations.js";
 

@@ -3,7 +3,7 @@ import { sourceCallableValueParameters } from "@tsonic/target-api/source";
 import { requireRustRecord } from "../../program/records/objects/required-records.js";
 import type { RustOperationAnalysisContext } from "../../program/operation-context.js";
 import { isRustAbsenceCarrier, isRustProgramErrorCarrier, isRustNumericCarrier, rustOptionElementCarrier, rustOptionNestingDepth, rustOptionValueCarrier, isRustJsArrayCarrier, isRustVecCarrier } from "../../../target-model/types/index.js";
-import { rustTargetOperationResultCarrier } from "../../../target-model/records/operations/operations.js";
+import { rustTargetOperationResultCarrier } from "../../../target-model/records/operations/operation-result-carriers.js";
 
 import { rejectRustPolicy } from "../../../policy/model/contracts.js";
 import { asNode, resolveSelectedSourceProfilePropertyMembers } from "../../../policy/identities/selected-source.js";

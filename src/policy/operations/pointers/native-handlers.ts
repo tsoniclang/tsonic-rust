@@ -4,7 +4,8 @@ import type { RustMemoryBindingPlan } from "../../../target-model/records/storag
 import type { RustNativeHandler } from "../../../target-model/records/native/native-handlers.js";
 import type { RustNativePointerOperationSelection } from "../../../target-model/records/native/native-pointers.js";
 import type { RustSafetyOperation } from "../../../target-model/records/storage/safety.js";
-import type { RustTargetOperationFact, RustTypedLocationPlan } from "../../../target-model/records/operations/operations.js";
+import type { RustTargetOperationFact } from "../../../target-model/records/operations/operations.js";
+import type { RustTypedLocationPlan } from "../../../target-model/records/operations/typed-location-plans.js";
 
 export function selectRustNativeHandler(
   memoryBinding: RustMemoryBindingPlan | undefined,
