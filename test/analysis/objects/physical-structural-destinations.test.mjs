@@ -183,15 +183,16 @@ test("native structural input applications retain exact source owners and siblin
   const source = rustStructuralObjectTargetType("/root.ts", [field("invoke", inputs[0].carrier)]);
   const physical = input => rustStructuralObjectTargetType("/root.ts", [field("invoke", input.implementation)]);
   const evidence = input => ({ kind: "native-input", owner: input.owner,
-    subject: { ...input.subject, projection: input.subject.projection.slice(0, -1) }, inputs: [input] });
+    subject: { ...input.subject, projection: input.subject.projection.slice(0, -1) },
+    fields: [{ sourceName: "invoke", subject: input.subject, carrier: input.implementation, inputs: [input] }] });
   for (const order of [inputs, [...inputs].reverse()]) {
     const builder = createRustStructuralShapePlanRegistry();
     builder.initialize([{ carrier: source }], [], () => "root", [], [], new Map());
     const invalid = [
-      ["missing inputs", { ...evidence(inputs[0]), inputs: [] }, physical(inputs[0])],
+      ["missing inputs", { ...evidence(inputs[0]), fields: [] }, physical(inputs[0])],
       ["foreign owner", { ...evidence(inputs[0]), owner: {} }, physical(inputs[0])],
       ["foreign parameter", { ...evidence(inputs[0]), subject: { ...evidence(inputs[0]).subject, node: {} } }, physical(inputs[0])],
-      ["sibling projection", { ...evidence(inputs[0]), inputs: [inputs[1]] }, physical(inputs[1])],
+      ["sibling projection", { ...evidence(inputs[0]), fields: evidence(inputs[1]).fields }, physical(inputs[1])],
       ["foreign implementation", evidence(inputs[0]), physical(inputs[1])],
     ];
     for (const [label, selected, carrier] of invalid) {
@@ -215,6 +216,77 @@ test("native structural input applications retain exact source owners and siblin
     assert.equal(plan.definitions.length, 1, "completion order never creates a competing physical family");
     assert.equal(rustCallableProtocol(plan.definitionForCarrier(source)?.fields[0]?.carrier)?.parameters[0]?.name,
       "float64", "the original source alias retains its declared invocation contract, not the first input binder");
+  }
+});
+
+test("structural completion retains each native input's exact physical field association", () => {
+  const { program } = analyzeRust({ surfaces: [], files: { "index.ts": `
+    import type { int32, int64 } from "@tsonic/core/types.js";
+    type Input = { readonly left: (value: int32) => int32; readonly right: (value: int64) => int64 };
+    export function take(value: Input): void {}
+  ` } });
+  const inputs = program.callableValues.native.inputs;
+  assert.equal(inputs.length, 2, "the checked producer supplies both original sibling input rows");
+  const name = input => program.source.ast.text(program.source.ast.name(input.subject.projection[0].declaration));
+  const ordered = ["left", "right"].map(sourceName => inputs.find(input => name(input) === sourceName));
+  assert.equal(ordered.every(input => input !== undefined), true, "each physical field has its own original checked member");
+  const source = rustStructuralObjectTargetType("/root.ts", ordered.map(input => field(name(input), input.carrier)));
+  const physical = order => rustStructuralObjectTargetType("/root.ts",
+    ordered.map((input, index) => field(name(input), order[index].implementation)));
+  const evidence = { kind: "native-input", owner: ordered[0].owner,
+    subject: { ...ordered[0].subject, projection: [] }, fields: ordered.map(input => ({
+      sourceName: name(input), subject: input.subject, carrier: input.implementation, inputs: [input],
+    })) };
+  const builder = createRustStructuralShapePlanRegistry();
+  builder.initialize([{ carrier: source }], [], () => "root", [], [], new Map());
+  const original = builder.definitionForCarrier(source);
+  const inventory = builder.instances.length;
+  for (const [label, selected, application] of [
+    ["swapped physical fields", physical([...ordered].reverse()), evidence],
+    ["swapped evidence carriers", physical(ordered), { ...evidence,
+      fields: evidence.fields.map((entry, index) => ({ ...entry, carrier: ordered[1 - index].implementation })) }],
+    ["swapped original rows", physical(ordered), { ...evidence,
+      fields: evidence.fields.map((entry, index) => ({ ...entry, inputs: [ordered[1 - index]] })) }],
+  ]) {
+    const rejected = builder.completePhysicalCarrier(source, selected, application);
+    assert.equal(rejected.kind, "unresolved", `${label}: aggregate identity membership never proves a field binding`);
+    assert.equal(builder.definitionForCarrier(source) === original, true, `${label}: the original source index is unchanged`);
+    assert.equal(builder.instances.length, inventory, `${label}: rejected associations publish no native instance`);
+  }
+  assert.equal(builder.completePhysicalCarrier(source, physical(ordered), evidence).kind, "resolved",
+    "the exact original field-to-subject-to-implementation associations are admitted");
+  builder.initializeUnions([]);
+  builder.finalizeMethodStorage(new Map(), physicalError);
+  assert.equal(builder.seal().definitionForCarrier(physical(ordered)) !== undefined, true,
+    "the proved physical application survives finalization and sealing");
+});
+
+test("structural source completion is monotonic before and after physical finalization", () => {
+  const value = { kind: "type-parameter", identity: "canonical:Value", name: "Value" };
+  const carrier = type => rustStructuralObjectTargetType("/root.ts", [field("count", type)]);
+  const template = carrier(value);
+  const narrow = carrier(integer);
+  const wide = carrier({ kind: "source-primitive", name: "int64" });
+  for (const phase of ["open", "finalized"]) {
+    const builder = createRustStructuralShapePlanRegistry();
+    builder.initialize([template, narrow, wide].map(carrier => ({ carrier })), [], () => "root", [],
+      [narrow, wide].map(instance => ({ template, instance })), new Map());
+    builder.initializeUnions([]);
+    assert.equal(builder.completePhysicalCarrier(narrow, narrow, { kind: "instance" }).kind, "resolved",
+      `${phase}: the original exact native completion is admitted`);
+    if (phase === "finalized") builder.finalizeMethodStorage(new Map(), physicalError);
+    const original = builder.definitionForCarrier(narrow);
+    const wider = builder.definitionForCarrier(wide);
+    const inventory = builder.instances.length;
+    const rejected = builder.completePhysicalCarrier(narrow, wide, { kind: "instance" });
+    assert.equal(rejected.kind, "unresolved", `${phase}: one source key cannot change its native generic arguments`);
+    assert.match(rejected.reason, /one exact native implementation/u,
+      `${phase}: both phases use the same correspondence admission rule`);
+    assert.equal(builder.definitionForCarrier(narrow) === original, true, `${phase}: rejection preserves the source identity`);
+    assert.equal(builder.definitionForCarrier(wide) === wider, true, `${phase}: rejection preserves other native applications`);
+    assert.equal(builder.instances.length, inventory, `${phase}: rejection leaves the native inventory unchanged`);
+    assert.equal(builder.completePhysicalCarrier(narrow, narrow, { kind: "instance" }).kind, "resolved",
+      `${phase}: repeating the identical admitted completion stays valid`);
   }
 });
 

@@ -41,6 +41,7 @@ import { selectRustNativeConversionBoundaries } from "./native-storage-witnesses
 import { createRustRecordMemberProducers } from "./native-storage-members.js";
 
 import type { RustNativeCallableInput } from "../../../target-model/records/native/native-protocols.js";
+import type { RustStructuralPhysicalCompletionEvidence } from "../../objects/shapes/structural-shape-plan.js";
 
 import type { RustPhysicalCallableSourceSelection } from "../../../target-model/records/native/physical-emission-contexts.js";
 import type { RustCallableJoinWrite } from "../../../target-model/records/native/native-storage.js";
@@ -740,6 +741,7 @@ export function createRustNativeStorageSelection(
         const presentType = fieldSemantics.types.nonNullableType(selectedType.type);
         if (presentType === undefined) return fail("Structural physical fields require their exact checked present source type.");
         const checkedProperties = fieldSemantics.types.propertyInfos(presentType);
+        const inputFields: Extract<RustStructuralPhysicalCompletionEvidence, { readonly kind: "native-input" }>["fields"][number][] = [];
         const fields = structural.fields.map(field => {
           if (field.method === true || field.accessor !== undefined) return field;
           const requiresImplementation = requiresPhysicalSelection(field.type, depth + 1);
@@ -752,12 +754,22 @@ export function createRustNativeStorageSelection(
           for (const declaration of declarations) {
             const component = project(selectedSubject, { kind: "member", declaration });
             const type = component === undefined ? undefined : visit(field.type, component, bindings, depth + 1, false, position);
-            if (type === undefined) return undefined;
+            if (component === undefined || type === undefined) return undefined;
             if (physical !== undefined && !rustTargetTypeRefEquals(physical, type)) {
               fail("A structural field requires one exact physical storage across its checked declarations.");
               return undefined;
             }
             physical = type;
+            const physicalInputs = new Set(rustTargetGenericReferences(type).typeIdentities);
+            const nativeInputs = [...selectedInputs].filter(candidate => {
+              if (component.kind !== "input" || candidate.subject.kind !== "input" ||
+                candidate.subject.node !== component.node || !physicalInputs.has(candidate.implementation.identity)) return false;
+              const prefix = input.storage.subject(candidate.subject.node, "input",
+                candidate.subject.projection.slice(0, component.projection.length));
+              return prefix.kind === "resolved" && prefix.subject === component;
+            });
+            if (nativeInputs.length !== 0) inputFields.push(Object.freeze({ sourceName: field.sourceName,
+              subject: component, carrier: type, inputs: Object.freeze(nativeInputs) }));
           }
           return physical === undefined ? undefined : Object.freeze({ ...field, type: physical });
         });
@@ -766,16 +778,9 @@ export function createRustNativeStorageSelection(
           structural.representation, structural.construction, structural.bases,
           methods.length === 0 ? undefined : { kind: "physical", methods: Object.freeze(methods) });
         if (rustTargetTypeRefEquals(current, physical)) return current;
-        const physicalInputs = new Set(rustTargetGenericReferences(physical).typeIdentities);
-        const nativeInputs = [...selectedInputs].filter(candidate => {
-          if (selectedSubject.kind !== "input" || candidate.subject.kind !== "input" ||
-            candidate.subject.node !== selectedSubject.node || !physicalInputs.has(candidate.implementation.identity)) return false;
-          const prefix = input.storage.subject(candidate.subject.node, "input",
-            candidate.subject.projection.slice(0, selectedSubject.projection.length));
-          return prefix.kind === "resolved" && prefix.subject === selectedSubject;
-        });
-        const completion = input.structuralShapes.completePhysicalCarrier(current, physical, nativeInputs.length === 0
-          ? { kind: "instance" } : { kind: "native-input", owner: nativeInputs[0]!.owner, subject: selectedSubject, inputs: nativeInputs });
+        const completion = input.structuralShapes.completePhysicalCarrier(current, physical, inputFields.length === 0
+          ? { kind: "instance" } : { kind: "native-input", owner: inputFields[0]!.inputs[0]!.owner,
+            subject: selectedSubject, fields: Object.freeze(inputFields) });
         return completion.kind === "resolved" ? completion.carrier : fail(completion.reason);
       }
       const variants = rustUnionAlternatives(current, input.definitions);
