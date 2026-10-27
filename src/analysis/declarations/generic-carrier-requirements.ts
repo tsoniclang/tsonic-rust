@@ -372,7 +372,7 @@ function classifyStaticCarrier(
                 ? selected : evidence.errorType(selected, declaration);
               return physical === undefined
                 ? unresolved("A structural method requires its completed physical storage, not its logical call signature.")
-                : visit(structuralMethodWithoutSelf(physical, value), bound);
+                : visit(rustStructuralMethodStorageWithoutSelf(physical, value), bound);
             });
             return every([...structural.bases.map(base => visit(base, bound)), ...fields]);
           }
@@ -447,7 +447,7 @@ const logicalProgramErrorKey = (type: TargetTypeRef): string => closedMetadataKe
 
 // A method slot receives the object that owns it; that receiver is the carrier under classification, so its own
 // requirement holds exactly when the rest of the slot's storage holds.
-function structuralMethodWithoutSelf(storage: TargetTypeRef, owner: TargetTypeRef): TargetTypeRef {
+export function rustStructuralMethodStorageWithoutSelf(storage: TargetTypeRef, owner: TargetTypeRef): TargetTypeRef {
   const key = logicalProgramErrorKey(owner);
   return mapRustTargetTypes(storage, (current, source) =>
     logicalProgramErrorKey(source) === key ? { kind: "tuple", elements: [] } : current);

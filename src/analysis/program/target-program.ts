@@ -374,11 +374,14 @@ export function analyzeRustAnalysisProgram(
   const taskUses = publishRustNativeTaskUses({ context, graph: sourceStage.nativeTasks, completions: sourceStage.nativeTaskCompletions,
     regions: errorRegions.value, initialization: initializationErrors.value });
   if (taskUses.kind === "rejected") return taskUses;
-  const promiseResultsFor = (nativeStorageValidated: boolean) => analyzeRustPromiseResults({ ast: context.ast, source: context.source, genericAdoption,
+  const promiseResultsFor = (nativeStorageValidated: boolean,
+    nativeHeaders: Parameters<typeof analyzeRustPromiseResults>[0]["nativeHeaders"]) => analyzeRustPromiseResults({ ast: context.ast, source: context.source, genericAdoption,
     storage: context.sourceStorage,
     nodes: context.nativeNodes, records, readFor: node => preparedOwnership.readFor(node, declarationGenericRequirements),
     uses: context.promiseResultUses, definitions: context.typeDefinitions,
     nativeStorage: context.callableValues.nativeStorage, native: context.callableValues.native,
+    nativeProducers: context.callableValues.nativeProducers, nativeHeaders,
+    sourceSpecializations: context.sourceCallableSpecializations,
     promiseBodies: context.promiseBodies.plan,
     nativeCaptures: context.callableValues.selected.nativeCaptures, errorTypes,
     sourceTypes: sourceStage.sourceTypes,
@@ -387,7 +390,8 @@ export function analyzeRustAnalysisProgram(
       classValues, objectRepresentations, structuralShapes: context.structuralShapes.completed, projectTypes: context.projectTypes, records,
       projectFieldStorage: context.callableValues.selected.projectFieldStorage } });
   if (declarationGenericRequirements.kind === "rejected") {
-    const promiseResults = promiseResultsFor(false);
+    const promiseResults = promiseResultsFor(false, { kind: "unresolved", at: context.sourceFiles[0]!,
+      reason: "Native pending storage requires its completed original generic entry contracts." });
     return rejectedTargetStage([...declarationGenericRequirements.diagnostics, ...promiseResults.diagnostics]);
   }
   const ownership = preparedOwnership.complete(declarationGenericRequirements.index);
@@ -411,7 +415,7 @@ export function analyzeRustAnalysisProgram(
     classContexts, memberships: projectGenericMemberships });
   analyzeRustBorrowedInitializers(context.ast, context.nativeNodes, records, ownership.ownership.reads, context.records.borrowedInitializers);
   const retentionIssues = context.callableValues.validateStructuralRetention(declarationGenericRequirements.index, context.typeFamilies, classValues, errorTypes);
-  const promiseResults = promiseResultsFor(retentionIssues.length === 0);
+  const promiseResults = promiseResultsFor(retentionIssues.length === 0, headerPlacements);
   if (retentionIssues.length !== 0 || promiseResults.diagnostics.length > 0) {
     return rejectedTargetStage([...retentionIssues.map(issue => ({ code: "RUST_CALLABLE_VALUE_NOT_CLOSED", category: "error" as const,
       source: "tsonic-rust", message: issue.message, sourceNode: issue.subject,

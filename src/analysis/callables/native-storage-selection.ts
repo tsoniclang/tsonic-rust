@@ -225,14 +225,13 @@ export function createRustNativeStorageSelection(
         const result = substituteRustTargetGenerics(signature.result, types, caller.bindings.lifetimes, caller.bindings.consts);
         return rustPhysicalPayloadFor(logical, result, current, input.definitions);
       }
-      // A call of a native Promise body produces that body's own anonymous native Future, not the Promise facade's result.
-      if (operation.asyncBody !== undefined) return isRustNativeFutureCarrier(logical) && rustTargetTypeRefEquals(logical, current) ? logical : undefined;
       const implementations = input.storage.invocationImplementationsFor(origin.node, bindings);
       if (implementations.kind !== "resolved" || !implementations.exact || implementations.nodes.length !== 1) return undefined;
       const declaration = implementations.nodes[0]!;
       const bound = boundInvocation(declaration, origin.node, bindings, depth);
       if (bound === undefined) return undefined;
-      const produced = input.producers.invocationResultFor(declaration);
+      const produced = operation.asyncBody === undefined ? input.producers.invocationResultFor(declaration)
+        : input.producers.bodyResultFor(declaration);
       if (produced === undefined) return undefined;
       const physical = substituteRustTargetGenerics(produced, bound.targetBindings.types,
         bound.targetBindings.lifetimes, bound.targetBindings.consts);

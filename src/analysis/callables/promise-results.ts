@@ -18,7 +18,7 @@ import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustLifetimesEqual, type RustLifetimeIndex } from "../../target-model/lifetimes/index.js";
 import type { RustSourceTypeFamilyRegistry } from "../../target-model/types/type-families.js";
 import { classifyCarrierRequirements, rustFinalContractSupportsStatic,
-  type RustStaticRequirementEvidence } from "../declarations/generic-carrier-requirements.js";
+  rustStructuralMethodStorageWithoutSelf, type RustStaticRequirementEvidence } from "../declarations/generic-carrier-requirements.js";
 import type { AnalyzeRustDeclarationGenericRequirementsResult } from "../declarations/generic-requirements.js";
 import type { RustGenericRequirement } from "../../target-model/records/generic-requirements.js";
 import { rustEnclosingStorageContract } from "./storage-contracts.js";
@@ -41,6 +41,10 @@ import { rustFixedArrayCarrierValue } from "../../target-model/types/carriers/na
 import { rustJsArrayLikeElementTargetType } from "../../target-model/types/carriers/js.js";
 import { rustCallableProtocol } from "../../target-model/types/carriers/callables.js";
 import { rustFutureTargetId } from "../../target-model/types/carriers/primitives.js";
+import { selectRustNativePendingEnvironment } from "./retained-environments.js";
+import type { createRustCallableEntryHeaderPlacements } from "./entry-header-placements.js";
+import type { RustNativeCallableProducerPlan } from "../../target-model/records/native-producers.js";
+import type { RustSourceCallableSpecializationPlan } from "./specializations.js";
 
 export function analyzeRustPromiseResultUses(ast: AstReader, nodes: readonly Node[]): RustPromiseResultUses {
   return new Map(nodes.filter(node => ast.is.IsCallExpression(node) || ast.is.IsNewExpression(node))
@@ -74,6 +78,9 @@ export function analyzeRustPromiseResults(input: {
   readonly uses: RustPromiseResultUses;
   readonly definitions: RustTypeDefinitions;
   readonly nativeStorage: RustNativeStoragePlan;
+  readonly nativeProducers: RustNativeCallableProducerPlan;
+  readonly nativeHeaders: Pick<ReturnType<typeof createRustCallableEntryHeaderPlacements>, "nativeBody"> | SourceOwnershipUnresolved;
+  readonly sourceSpecializations: RustSourceCallableSpecializationPlan;
   readonly promiseBodies: RustPromiseBodies;
   readonly nativeCaptures: RustNativeCapturePlan;
   readonly errorTypes: RustErrorTypeContext;
@@ -182,12 +189,17 @@ export function analyzeRustPromiseResults(input: {
     }
     return Object.freeze({ kind: "tuple", elements: Object.freeze(captures) });
   };
-  const containsMethods = (carrier: TargetTypeRef, at: Node,
+  const requiresRetainedSource = (carrier: TargetTypeRef, at: Node,
     visited = new Set<TargetTypeRef>()): boolean | SourceOwnershipUnresolved => {
     if (!budget.step()) return unresolved(at, budget.failure()!);
     if (visited.has(carrier)) return false;
     visited.add(carrier);
     if (carrier.kind === "function-pointer" || carrier.kind === "closure" || rustCallableProtocol(carrier) !== undefined) return false;
+    if (carrier.kind === "target-named" && carrier.id === rustFutureTargetId) return true;
+    if (carrier.kind === "impl-trait" && carrier.bounds.some(bound => bound.id === rustFutureTargetId)) {
+      const owner = sourceEnclosingCallable(at, input.ast);
+      return classify(carrier, owner, at, "read-value").kind !== "supported";
+    }
     const structural = rustStructuralObjectCarrierValue(carrier);
     if (structural !== undefined) for (const [index, field] of structural.fields.entries()) {
       const physical = input.evidence.structuralShapes?.field(carrier, index);
@@ -197,20 +209,33 @@ export function analyzeRustPromiseResults(input: {
     for (const child of [...rustTargetTypeChildren(carrier, (_parent, _child, role) =>
       role.kind !== "structural-construction" && (role.kind !== "structural-field" || role.structural.fields[role.index]?.method !== true)),
       ...(input.definitions.sourceUnionVariants(carrier)?.map(variant => variant.carrier) ?? [])]) {
-      const selected = containsMethods(child, at, visited);
+      const selected = requiresRetainedSource(child, at, visited);
       if (selected !== false) return selected;
     }
     return false;
   };
-  const captureQueries: { readonly subject: SourceStorageSubject; readonly bindings: SourceStorageBindings }[] = [];
+  const captureQueries: { readonly subject: SourceStorageSubject; readonly bindings: SourceStorageBindings;
+    readonly carrier: TargetTypeRef }[] = [];
   const captureStorageFor = (subject: SourceStorageSubject, bindings: SourceStorageBindings,
     carrier: TargetTypeRef): TargetTypeRef | SourceOwnershipUnresolved => {
-    const needed = containsMethods(carrier, subject.node);
-    if (needed !== true) return needed === false ? Object.freeze({ kind: "tuple", elements: Object.freeze([]) }) : needed;
-    if (captureQueries.some(current => current.subject === subject && current.bindings === bindings)) return unresolved(subject.node,
+    const needed = requiresRetainedSource(carrier, subject.node);
+    if (needed !== true) return needed === false ? carrier : needed;
+    if (captureQueries.some(current => current.subject === subject && current.bindings === bindings &&
+      rustTargetTypeRefEquals(current.carrier, carrier))) return unresolved(subject.node,
       "Native retained storage requires its completed correlated captured-value construction, not a cyclic signature assumption.");
-    captureQueries.push({ subject, bindings });
+    captureQueries.push({ subject, bindings, carrier });
     try {
+      const pending = selectRustNativePendingEnvironment({ source: input.source, storage: input.storage,
+        records: input.records, nativeStorage: input.nativeStorage, producers: input.nativeProducers,
+        specializations: input.sourceSpecializations, headers: input.nativeHeaders, step: () => budget.step(),
+        retainDataFor: captureStorageFor }, subject, bindings, carrier);
+      if (pending !== undefined) return pending;
+      const optional = rustOptionElementCarrier(carrier);
+      if (optional !== undefined) {
+        const present = captureStorageFor(subject, bindings, optional);
+        return present.kind === "unresolved" || carrier.kind !== "type-parameter" ? present
+          : Object.freeze({ kind: "tuple", elements: Object.freeze([carrier, present]) });
+      }
       const selected = input.storage.storageProducersFor(subject, bindings);
       if (selected.kind !== "complete") return unresolved(subject.node, selected.kind === "unresolved" ? selected.reason
         : "Native aggregate retention requires its complete same-activation construction domain.");
@@ -231,13 +256,26 @@ export function analyzeRustPromiseResults(input: {
         if (!budget.step()) return unresolved(subject.node, budget.failure()!);
         const actual = carrierFor(producer.subject, producer.bindings);
         if (actual.kind === "unresolved") return actual;
-        const needsActual = containsMethods(actual, producer.subject.node);
+        const needsActual = requiresRetainedSource(actual, producer.subject.node);
         if (needsActual !== true) {
           if (needsActual !== false) return needsActual;
+          captures.push(actual);
           continue;
         }
+        const pending = selectRustNativePendingEnvironment({ source: input.source, storage: input.storage,
+          records: input.records, nativeStorage: input.nativeStorage, producers: input.nativeProducers,
+          specializations: input.sourceSpecializations, headers: input.nativeHeaders, step: () => budget.step(),
+          retainDataFor: captureStorageFor }, producer.subject, producer.bindings, actual);
+        if (pending !== undefined) {
+          if (pending.kind === "unresolved") return pending;
+          captures.push(pending);
+          continue;
+        }
+        const fixed = rustFixedArrayCarrierValue(actual);
+        if (fixed?.length.kind === "infer") return unresolved(subject.node,
+          "A native fixed array requires its exact const extent.");
         const element = actual.kind === "array" || actual.kind === "slice" ? actual.element
-          : rustFixedArrayCarrierValue(actual)?.element ?? rustJsArrayLikeElementTargetType(actual);
+          : fixed?.element ?? rustJsArrayLikeElementTargetType(actual);
         if (element !== undefined) {
           const failure = project(producer.subject, producer.bindings, { kind: "array-element" }, element);
           if (failure !== undefined) return failure;
@@ -270,6 +308,7 @@ export function analyzeRustPromiseResults(input: {
           template.storage !== "structural-object" || template.fields.length !== structural.fields.length ||
           layout.fields.length !== structural.fields.length) return unresolved(subject.node,
           "Native structural retention lost its exact bound canonical template and physical field layout.");
+        captures.push(...structural.bases);
         const indexes = new Set<number>();
         for (const sourceField of template.fields) {
           if (!budget.step()) return unresolved(subject.node, budget.failure()!);
@@ -308,9 +347,18 @@ export function analyzeRustPromiseResults(input: {
                 const failure = project(producer.subject, producer.bindings, component, actualField.type);
                 if (failure !== undefined) return failure;
               } else if (sourceField.method !== true) {
-                const nested = containsMethods(actualField.type, producer.subject.node);
+                const nested = requiresRetainedSource(actualField.type, producer.subject.node);
                 if (nested !== false) return nested === true ? unresolved(subject.node,
                   "A retained computed structural field requires its completed physical captured-storage correspondence.") : nested;
+                captures.push(actualField.type);
+              } else {
+                const method = physical.methodPlan;
+                const selected = method?.carrier;
+                const converted = selected === undefined ? undefined : normalizeRustErrorType(selected,
+                  input.errorTypes, producer.subject.node);
+                if (converted === undefined) return unresolved(subject.node,
+                  "A retained native dispatch method requires its completed physical storage.");
+                captures.push(rustStructuralMethodStorageWithoutSelf(converted, actual));
               }
             }
           }
@@ -322,11 +370,7 @@ export function analyzeRustPromiseResults(input: {
     }
   };
   const retainedCarrierFor = (subject: SourceStorageSubject, bindings: SourceStorageBindings,
-    carrier: TargetTypeRef): TargetTypeRef | SourceOwnershipUnresolved => {
-    const captures = captureStorageFor(subject, bindings, carrier);
-    return captures.kind === "unresolved" ? captures
-      : Object.freeze({ kind: "tuple", elements: Object.freeze([carrier, captures]) });
-  };
+    carrier: TargetTypeRef): TargetTypeRef | SourceOwnershipUnresolved => captureStorageFor(subject, bindings, carrier);
   const classify = (carrier: TargetTypeRef, owner: Node | undefined, at: Node,
     kind: "origin" | "read-value"): ReturnType<typeof classifyCarrierRequirements> => {
     if (kind === "origin" && owner !== undefined && input.promiseBodies.declarations.has(owner) &&

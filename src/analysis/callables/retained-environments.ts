@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
-import type { SourceStorageBindings, SourceStorageSubject } from "@tsonic/target-api/analysis";
-import { sourceEnclosingCallable, sourceNodeIdentity, sourceCallableValueParameters } from "@tsonic/target-api/source";
+import type { SourceOwnershipUnresolved, SourceStorageBindings, SourceStorageQueries, SourceStorageSubject } from "@tsonic/target-api/analysis";
+import { sourceEnclosingCallable, sourceNodeIdentity, sourceCallableValueParameters, type TargetSourceProgram } from "@tsonic/target-api/source";
 import type { RustFactWalk } from "../program/walk.js";
 
 import type { TargetTypeRef } from "../../target-model/types/model.js";
@@ -9,11 +9,105 @@ import { rustHasOpenOwnedStorage } from "../../policy/ownership/retained-storage
 import { selectRustSuspendedStorageLifetime } from "../../policy/ownership/suspended-storage.js";
 import { rustEnclosingStorageContract } from "./storage-contracts.js";
 import { rustCallScopedElisionLifetime, rustLifetimeKey, rustStaticLifetime, type RustLifetimeRef } from "../../target-model/lifetimes/index.js";
-import { substituteRustTargetGenerics } from "../../target-model/types/carriers/substitution.js";
+import { substituteRustTargetGenerics, substituteRustTargetGenericArgument } from "../../target-model/types/carriers/substitution.js";
 import { rustTargetGenericReferences } from "../../target-model/types/carriers/generic-references.js";
 import { rustSourceStorageProjectedCarrier } from "../objects/value-domain-carriers.js";
 import { rustCallableProtocol } from "../../target-model/types/carriers/callables.js";
 import { rustRetainedCallSubstitutions } from "./retained-call-lifetimes.js";
+import type { RustNativeStoragePlan } from "./native-storage.js";
+import type { RustNativeCallableProducerPlan } from "../../target-model/records/native-producers.js";
+import type { RustProgramRecords } from "../../target-model/records/program.js";
+import type { RustSourceCallableSpecializationPlan } from "./specializations.js";
+import type { createRustCallableEntryHeaderPlacements } from "./entry-header-placements.js";
+import { rustTargetGenericTypeArguments } from "../../target-model/types/generic-arguments.js";
+import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
+
+export function selectRustNativePendingEnvironment(input: {
+  readonly source: TargetSourceProgram;
+  readonly storage: Pick<SourceStorageQueries, "subject" | "subjectFor">;
+  readonly records: RustProgramRecords;
+  readonly nativeStorage: Pick<RustNativeStoragePlan, "boundInvocationFor" | "genericBindingsFor">;
+  readonly producers: Pick<RustNativeCallableProducerPlan, "bodyResultFor">;
+  readonly specializations: RustSourceCallableSpecializationPlan;
+  readonly headers: Pick<ReturnType<typeof createRustCallableEntryHeaderPlacements>, "nativeBody"> | SourceOwnershipUnresolved;
+  readonly step: () => boolean;
+  readonly retainDataFor: (subject: SourceStorageSubject, bindings: SourceStorageBindings,
+    carrier: TargetTypeRef) => TargetTypeRef | SourceOwnershipUnresolved;
+}, subject: SourceStorageSubject, bindings: SourceStorageBindings,
+carrier: TargetTypeRef): TargetTypeRef | SourceOwnershipUnresolved | undefined {
+  if (subject.kind !== "value" || subject.projection.length !== 0) return undefined;
+  const operation = input.records.targetOperation.get(subject.node);
+  if (operation?.kind !== "source-call" || operation.asyncBody === undefined) return undefined;
+  const unresolved = (reason: string): SourceOwnershipUnresolved => Object.freeze({ kind: "unresolved", at: subject.node, reason });
+  if (!input.step()) return unresolved("Native pending storage exceeds its shared retained-data work budget.");
+  if ("kind" in input.headers) return input.headers;
+  const declaration = operation.asyncBody.declaration;
+  const bound = input.nativeStorage.boundInvocationFor(declaration, subject.node, bindings);
+  if (bound.kind === "unresolved") return unresolved(bound.reason);
+  const produced = input.producers.bodyResultFor(declaration);
+  if (produced === undefined) return unresolved("Native pending storage requires its original completed body result.");
+  const actual = substituteRustTargetGenerics(produced, bound.targetBindings.types,
+    bound.targetBindings.lifetimes, bound.targetBindings.consts);
+  if (!rustTargetTypeRefEquals(actual, carrier))
+    return unresolved("Native pending storage requires its identical bound physical body result.");
+  const caller = sourceEnclosingCallable(subject.node, input.source.ast);
+  const callerBindings = caller === undefined ? { kind: "resolved" as const,
+    bindings: { types: new Map(), lifetimes: new Map(), consts: new Map() } }
+    : input.nativeStorage.genericBindingsFor(caller, bindings);
+  if (callerBindings.kind === "unresolved") return unresolved(callerBindings.reason);
+  const arguments_ = rustTargetGenericTypeArguments(operation.targetGenericArguments ?? []).map(argument =>
+    substituteRustTargetGenerics(argument, callerBindings.bindings.types, callerBindings.bindings.lifetimes, callerBindings.bindings.consts));
+  const variant = input.specializations.requiresSpecialization(declaration)
+    ? input.specializations.variantForCall(declaration, arguments_) : undefined;
+  const selected = input.headers.nativeBody(declaration, variant, input.step);
+  if (selected.kind === "unresolved") return selected;
+  const selectedCarrier = (carrier: TargetTypeRef): TargetTypeRef => substituteRustTargetGenerics(
+    substituteRustTargetGenerics(carrier, selected.header.bindings.types,
+      selected.header.bindings.lifetimes, selected.header.bindings.consts), bound.targetBindings.types,
+    bound.targetBindings.lifetimes, bound.targetBindings.consts);
+  const obligations: TargetTypeRef[] = [];
+  const retain = (subject: SourceStorageSubject, carrier: TargetTypeRef): SourceOwnershipUnresolved | undefined => {
+    const value = input.retainDataFor(subject, bound.storageBindings, carrier);
+    if (value.kind === "unresolved") return value;
+    obligations.push(value);
+    return undefined;
+  };
+  for (const slot of selected.entry.slots) {
+    if (!input.step()) return unresolved("Native pending storage exceeds its shared retained-data work budget.");
+    const physical = selectedCarrier(slot.carrier);
+    if (slot.kind === "method-receiver" || slot.kind === "structural-receiver" && slot.passing === "shared" ||
+      slot.kind === "class-environment")
+      return unresolved("Native pending receiver storage requires its exact selected source borrow-duration proof.");
+    if (slot.kind === "task") { obligations.push(physical); continue; }
+    const storage = input.storage;
+    if (slot.kind === "source" || slot.kind === "structural-receiver") {
+      const source = storage.subject(slot.kind === "source" ? slot.declaration : declaration,
+        slot.kind === "source" ? "input" : "receiver");
+      if (source.kind === "unresolved") return unresolved(source.reason);
+      const failure = retain(source.subject, physical);
+      if (failure !== undefined) return failure;
+    } else {
+      const reads = slot.kind === "lexical" ? [slot.capture.reference] : slot.parameter.reads;
+      if (reads.length === 0) return unresolved("Native pending storage requires its original checked incoming source references.");
+      for (const read of reads) {
+        const source = storage.subjectFor(read);
+        if (source.kind === "unresolved") return unresolved(source.reason);
+        const failure = retain(source.subject, physical);
+        if (failure !== undefined) return failure;
+      }
+    }
+  }
+  for (const capture of selected.header.captureArguments) {
+    if (!input.step()) return unresolved("Native pending storage exceeds its shared retained-data work budget.");
+    const selectedCapture = substituteRustTargetGenericArgument(substituteRustTargetGenericArgument(capture,
+      selected.header.bindings.types, selected.header.bindings.lifetimes, selected.header.bindings.consts),
+    bound.targetBindings.types, bound.targetBindings.lifetimes, bound.targetBindings.consts);
+    if (selectedCapture.kind === "type") obligations.push(selectedCapture.type);
+    else if (selectedCapture.kind === "lifetime") obligations.push(Object.freeze({ kind: "reference", mutable: false,
+      referent: Object.freeze({ kind: "tuple", elements: Object.freeze([]) }), lifetime: selectedCapture.lifetime }));
+  }
+  return Object.freeze({ kind: "tuple", elements: Object.freeze(obligations) });
+}
 
 export function rustRetainedCallLifetimes(
   walk: RustFactWalk, invocation: Node, declaration: Node, parameters: readonly TargetTypeRef[], result: TargetTypeRef,
