@@ -198,7 +198,7 @@ export function lowerRustValueConversion(
         const projectionError = selected.projection;
         const errorType = projectionError === undefined ? undefined : rustTypeFromCarrierInContext(projectionError.target, callbackContext);
         if (region.boundary === undefined || errorType === undefined || projectionError === undefined) return undefined;
-        if (projectionError.kind === "identity") {
+        if (projectionError.lowering === "identity") {
           callbackArguments.push({ kind: "try", operandErrorType: errorType, resultErrorType: region.boundary.errorType,
             expr: projected });
           continue;
