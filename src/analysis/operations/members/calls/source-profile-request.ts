@@ -13,6 +13,7 @@ import type { RustCheckedCallSelectionInput } from "../../../../policy/model/con
 import type { RustOperationsProviderOptions } from "../model.js";
 import type { JsOperationRequest } from "../../../../policy/operations/source-profiles/js/model.js";
 import { createRustPropertyProjectionSelector } from "../../../conversions/property-projections.js";
+import { projectRustProviderIndexedStorageCarrier } from "../../../source-evidence/types/resolution/indexed-access.js";
 
 export function createRustJsCallRequest(
   request: RustCheckedCallSelectionInput,
@@ -86,6 +87,12 @@ export function createRustJsCallRequest(
         sourceStorage: context.sourceStorage,
         sourceTypes: options.sourceTypes,
         projectFieldProjection: options.projectFieldProjection,
+        projectIndexedCarrier: (component, owner, node) => {
+          const semantics = context.semanticsFor(node);
+          return projectRustProviderIndexedStorageCarrier(component, owner, {
+            ...context, currentSourceFile: semantics.sourceFile, currentSemantics: semantics,
+          }, options);
+        },
         semantics: sourceFile => context.semantics(sourceFile),
         types: { resolveNode: (node, sourceFile) => resolveRustTargetTypeRef(node, {
           ...context, currentSourceFile: sourceFile, currentSemantics: context.semantics(sourceFile),
