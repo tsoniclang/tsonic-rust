@@ -75,7 +75,13 @@ for (const reaction of ["catch(reason => reason)", "then(value => value, reason 
 const pending = new Promise<number>((resolve, reject) => { reject(original); });
 export const recovered = pending.${reaction};`);
     assert.equal(result.diagnostics.length, 0,
-      JSON.stringify(result.diagnostics.map(({ code, message }) => ({ code, message }))));
+      JSON.stringify(result.diagnostics.map(({ code, message, sourceNode }) => ({ code, message,
+        source: sourceNode === undefined ? undefined : {
+          kind: context.ast.kindName(sourceNode), start: context.ast.pos(sourceNode), end: context.ast.end(sourceNode),
+          text: Buffer.from(context.ast.getSourceText(context.ast.getSourceFile(sourceNode)))
+            .subarray(context.ast.pos(sourceNode), context.ast.end(sourceNode)).toString("utf8").trim().slice(0, 160),
+        },
+      }))));
     const parameter = context.sourceStorage.nodes.find(node => context.ast.is.IsParameterDeclaration(node) &&
       context.ast.text(context.ast.name(node)) === "reason");
     assert.equal(parameter !== undefined, true, "the exact checked rejection callback parameter is present");
