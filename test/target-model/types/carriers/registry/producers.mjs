@@ -64,6 +64,13 @@ export const producersCarrierRegistry = Object.freeze([
     frozen: false,
   },
   {
+    id: "src/analysis/objects/shapes/method-destinations.ts#createRustStructuralMethodDestinationReader",
+    kinds: ["target-named"],
+    declaration: { module: "src/analysis/objects/shapes/method-destinations.ts", symbol: "createRustStructuralMethodDestinationReader" },
+    responsibility: "producers/resolve-structural-object-type",
+    frozen: false,
+  },
+  {
     id: "src/analysis/source-evidence/types/resolution/project.ts#resolveProjectSourceCarrier",
     kinds: ["array", "associated-type", "closure", "function-pointer", "impl-trait", "opaque", "pointer", "reference", "slice", "source-primitive", "target-named", "target-specific", "trait-object", "trait-ref", "tuple", "type-parameter"],
     declaration: { module: "src/analysis/source-evidence/types/resolution/project.ts", symbol: "resolveProjectSourceCarrier" },

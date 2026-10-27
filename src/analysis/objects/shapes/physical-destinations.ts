@@ -10,6 +10,7 @@ import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js
 export function selectRustStructuralPhysicalDestinations(
   carrier: TargetTypeRef,
   errorForFile: (fileName: string) => TargetTypeRef | undefined,
+  methodFor: (carrier: TargetTypeRef, index: number) => TargetTypeRef | undefined,
 ): TargetTypeRef {
   const children = new Map<TargetTypeRef, TargetTypeRef>();
   const selected = mapRustTargetTypes(carrier, (current, source) => {
@@ -27,8 +28,15 @@ export function selectRustStructuralPhysicalDestinations(
       return current;
     }
     let changed = false;
-    const fields = shape.fields.map(field => {
-      if (field.method === true) return field;
+    const fields = shape.fields.map((field, index) => {
+      if (field.method === true) {
+        const method = methodFor(source, index);
+        if (method === undefined) return field;
+        const type = selectRustStructuralPhysicalDestinations(method, errorForFile, methodFor);
+        if (rustTargetTypeRefEquals(type, field.type)) return field;
+        changed = true;
+        return Object.freeze({ ...field, type });
+      }
       const element = rustOptionElementCarrier(field.type);
       const value = element ?? field.type;
       if (value.kind !== "target-named" || value.id !== rustCallableTargetId) return field;

@@ -27,6 +27,7 @@ import { substituteRustTargetGenerics } from "../../../target-model/types/carrie
 import type { RustSourceObjectShape, RustStructuralFieldImplementation } from "../../../target-model/records/types/source-types.js";
 import { selectRustStructuralMethodContextCarrier } from "../../../policy/types/objects/structural-emission.js";
 import { selectRustStructuralPhysicalDestinations } from "./physical-destinations.js";
+import { createRustStructuralMethodDestinationReader } from "./method-destinations.js";
 import { rustProgramErrorOwner } from "../../../target-model/types/carriers/program-errors.js";
 
 
@@ -534,7 +535,10 @@ export function createRustStructuralShapeConstruction(
       if (methodStorageFinalized) throw new Error("Structural method physical storage finalizes exactly once.");
       if (typeof errorForFile !== "function") failTargetAnalysisInvariant("tsonic-rust",
         "Structural physical finalization requires its complete declared-component error selection.");
-      const selectPhysicalCarrier = (carrier: TargetTypeRef): TargetTypeRef => selectRustStructuralPhysicalDestinations(carrier, errorForFile);
+      const methodFor = createRustStructuralMethodDestinationReader(selections,
+        carrier => originsByKey.get(closedMetadataKey(carrier)), physicalTemplateFor);
+      const selectPhysicalCarrier = (carrier: TargetTypeRef): TargetTypeRef =>
+        selectRustStructuralPhysicalDestinations(carrier, errorForFile, methodFor);
       normalizeCompletionCarrier = selectPhysicalCarrier;
       const replacements = new Map<RustStructuralShapeLayout, RustStructuralShapeDefinition>();
       for (const definition of definitions) {

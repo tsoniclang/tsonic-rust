@@ -86,7 +86,7 @@ test("physical structural destinations preserve source errors and nested compone
     field("body", callable(logical), { method: true }), field("pure", callable(infallible)),
     field("associated", callable(associated)), field("js", callable(rustJsValueTargetType())), field("nested", nested),
   ]);
-  const selected = rustStructuralObjectCarrierValue(selectRustStructuralPhysicalDestinations(shape, physicalError));
+  const selected = rustStructuralObjectCarrierValue(selectRustStructuralPhysicalDestinations(shape, physicalError, () => undefined));
   for (const sourceName of ["invoke", "optional"]) {
     const selectedField = selected.fields.find(field => field.sourceName === sourceName);
     assert.equal(selectedField !== undefined, true, `${sourceName}: the exact canonical field is present`);
@@ -114,7 +114,7 @@ test("physical structural destinations preserve source errors and nested compone
   assert.equal(originalInvoke !== undefined, true, "the original exact source callable field is present");
   assert.equal(rustProgramErrorOwner(rustCallableProtocol(originalInvoke.type).error)?.kind,
     "logical", "the original immutable source carrier is untouched");
-  assert.throws(() => selectRustStructuralPhysicalDestinations(shape, () => undefined),
+  assert.throws(() => selectRustStructuralPhysicalDestinations(shape, () => undefined, () => undefined),
     error => String(error.message).includes("declared component's physical error owner"),
     "missing destination ownership cannot be silently replaced with a root or runtime error");
 });
@@ -490,6 +490,29 @@ test("bound callable access errors remain independent of their exact invocation 
       `field ${index}: native declaration syntax consumes the same access carrier as record loads and stores`);
 });
 
+test("physical method completion uses the admitted method signature without changing the source layout", () => {
+  const infallible = { kind: "target-named", id: "rust.core.Infallible" };
+  const original = rustCallableTargetType([integer], integer, lifetime);
+  const selected = rustCallableTargetType([integer], integer, lifetime, infallible);
+  for (const optional of [false, true]) {
+    const source = rustStructuralObjectTargetType("/dependency.ts", [field("read",
+      optional ? rustOptionTargetType(original) : original, { method: true, presence: optional ? "optional" : "required" })]);
+    const physical = selectRustStructuralPhysicalDestinations(source,
+      () => assert.fail("a native method must not acquire a getter's component error"),
+      (owner, index) => {
+        assert.equal(owner === source && index === 0, true, "the original checked method and storage index select the completed value");
+        return optional ? rustOptionTargetType(selected) : selected;
+      });
+    const fields = rustStructuralObjectCarrierValue(physical).fields;
+    const payload = optional ? rustOptionElementCarrier(fields[0].type) : fields[0].type;
+    assert.equal(rustTargetTypeRefEquals(payload, selected), true, "the whole method value has its exact admitted native signature");
+    assert.equal(fields[0].presence, optional ? "optional" : "required", "the original native absence contract is unchanged");
+    const sourceField = rustStructuralObjectCarrierValue(source).fields[0];
+    assert.equal(rustTargetTypeRefEquals(optional ? rustOptionElementCarrier(sourceField.type) : sourceField.type, original), true,
+      "the authored source carrier remains immutable");
+  }
+});
+
 test("physical getter completion preserves native source-absence containers and quantified optional identities", () => {
   const callable = rustCallableTargetType([integer], integer, lifetime);
   const projection = { ...rustOptionalStorageProjection(callable), identity: "authored:Optional", name: "AuthoredOptional" };
@@ -500,7 +523,7 @@ test("physical getter completion preserves native source-absence containers and 
   ]) {
     const source = rustStructuralObjectTargetType("/dependency.ts",
       [field("invoke", optional, { presence: "optional" })]);
-    const selected = rustStructuralObjectCarrierValue(selectRustStructuralPhysicalDestinations(source, physicalError)).fields[0].type;
+    const selected = rustStructuralObjectCarrierValue(selectRustStructuralPhysicalDestinations(source, physicalError, () => undefined)).fields[0].type;
     assert.equal(selected.kind, optional.kind, `${name}: the native container kind is unchanged`);
     assert.equal(Object.hasOwn(selected, "sourceAbsence"), Object.hasOwn(optional, "sourceAbsence"),
       `${name}: absence metadata presence is unchanged`);
@@ -518,10 +541,10 @@ test("physical getter completion preserves native source-absence containers and 
       `${name}: only the callable destination's actual physical error changes`);
     const methodOnly = rustStructuralObjectTargetType("/root.ts",
       [field("body", rustCallableTargetType([optional], integer, lifetime), { method: true })]);
-    assert.equal(selectRustStructuralPhysicalDestinations(methodOnly, () => assert.fail("no getter destination is selected")) === methodOnly,
+    assert.equal(selectRustStructuralPhysicalDestinations(methodOnly, () => assert.fail("no getter destination is selected"), () => undefined) === methodOnly,
       true, `${name}: an unchanged method witness retains the identical complete source carrier`);
   }
   const absorbent = { kind: "type-parameter", identity: "authored:Absorbent", name: "Absorbent", optionalStorageValue: rustJsValueTargetType() };
-  assert.equal(selectRustStructuralPhysicalDestinations(absorbent, () => assert.fail("no structural getter")) === absorbent, true,
+  assert.equal(selectRustStructuralPhysicalDestinations(absorbent, () => assert.fail("no structural getter"), () => undefined) === absorbent, true,
     "the generic mapper cannot collapse an existing optional binder whose payload absorbs native absence");
 });
