@@ -405,8 +405,9 @@ export function analyzeRustAnalysisProgram(
     producer: context.records.declarationEmission, required: context.requiredRecords });
   if (callableEntries.kind === "rejected") return callableEntries;
   const headerPlacements = createRustCallableEntryHeaderPlacements({ program: { source: context.source,
-    records, promiseBodies: context.promiseBodies.plan, projectTypes: context.projectTypes,
-    callableValues: { frames: context.callableValues.frames } }, entries: callableEntries.value,
+    records, promiseBodies: context.promiseBodies.plan, projectTypes: context.projectTypes, names: context.names,
+    sourceCallableSpecializations: context.sourceCallableSpecializations,
+    callableValues: { frames: context.callableValues.frames, generic: context.callableValues.generic } }, entries: callableEntries.value,
     classContexts, memberships: projectGenericMemberships });
   analyzeRustBorrowedInitializers(context.ast, context.nativeNodes, records, ownership.ownership.reads, context.records.borrowedInitializers);
   const retentionIssues = context.callableValues.validateStructuralRetention(declarationGenericRequirements.index, context.typeFamilies, classValues, errorTypes);

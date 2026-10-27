@@ -1,6 +1,7 @@
 import type { Node, SourceFile } from "@tsonic/tsts";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
-import { isSourceCallableBodyBoundary, Node_Initializer } from "@tsonic/target-api/source";
+import { isSourceCallableBodyBoundary, Node_Initializer, sourceDeclarationIsModuleScoped, sourceEnclosingCallable } from "@tsonic/target-api/source";
+import type { SourceOwnershipUnresolved } from "@tsonic/target-api/analysis";
 import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustCallableEntryConstruction } from "./entry-parameters.js";
 import type { RustCallableEntryHeaderPlacement, RustCallableEntryHeaderSelection, RustCallableEntryHeaderVariant } from "../../target-model/records/callable-entry-headers.js";
@@ -12,12 +13,16 @@ import type { RustProjectTypeDefinition } from "../../target-model/types/project
 import type { RustClassImplementationContextConstruction } from "../objects/class-implementation-contexts.js";
 import type { prepareRustProjectGenericMembership } from "../project-types/generic-membership.js";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
+import type { RustGenericCallablePlan } from "./generic-values.js";
+import type { RustNativeCallableEntry } from "../../target-model/records/declaration-emission.js";
 
 export function createRustCallableEntryHeaderPlacements(input: {
-  readonly program: Pick<RustAnalysisProgram, "promiseBodies" | "projectTypes"> & {
+  readonly program: Pick<RustAnalysisProgram, "promiseBodies" | "projectTypes" | "sourceCallableSpecializations" | "names"> & {
     readonly source: Pick<RustAnalysisProgram["source"], "ast">;
     readonly records: RustProgramRecords;
-    readonly callableValues: Pick<RustAnalysisProgram["callableValues"], "frames">;
+    readonly callableValues: Pick<RustAnalysisProgram["callableValues"], "frames"> & {
+      readonly generic: Pick<RustGenericCallablePlan, "implementationFor">;
+    };
   };
   readonly entries: Pick<RustCallableEntryConstruction, "get" | "selectHeader">;
   readonly classContexts: Pick<RustClassImplementationContextConstruction, "forInstance">;
@@ -45,12 +50,91 @@ export function createRustCallableEntryHeaderPlacements(input: {
     inherited: RustTargetGenericBindings, ownerLifetimes: ReadonlySet<string>,
     enclosingArguments: readonly RustTargetGenericArgument[], capturedParameters = program.records.lexicalFunction.get(declaration)?.genericParameters ?? [],
     arguments_ = variant?.targetTypeArguments, finalArguments?: readonly RustTargetGenericArgument[],
-    trailingArguments: readonly RustTargetGenericArgument[] = []) => {
+    trailingArguments: readonly RustTargetGenericArgument[] = [], traverse = true) => {
     const selected = entries.selectHeader(declaration, placement, variant, parent, { inherited, ownerLifetimes,
       enclosingArguments, trailingArguments, capturedParameters, specialization: specialization(variant, arguments_), finalArguments,
       splitBody: program.promiseBodies.declarations.has(declaration) });
-    visitBody(declaration, selected.body, selected.body, selected.body.bindings);
+    if (traverse) visitBody(declaration, selected.body, selected.body, selected.body.bindings);
     return selected;
+  };
+  const selectModule = (declaration: Node, variant: RustCallableEntryHeaderVariant | undefined, traverse = true) => {
+    const file = ast.getSourceFile(declaration);
+    if (file === undefined) failTargetAnalysisInvariant("tsonic-rust", "A native module entry requires its original source file.", declaration);
+    return select(declaration, file, variant, undefined, empty, new Set(), [], undefined, undefined, undefined, [], traverse);
+  };
+  const selectClassMember = (declaration: Node, definition: RustProjectTypeDefinition,
+    variant: RustCallableEntryHeaderVariant | undefined, traverse = true) => {
+    const ownerLifetimes = new Set(definition.genericParameters.flatMap(parameter => parameter.kind === "lifetime" ? [rustLifetimeKey(parameter.lifetime)] : []));
+    const staticSlot = program.projectTypes.memberSlotName(declaration, "static");
+    const environment = entries.get(declaration)?.nativeEntry.direct?.body.slots.find(slot => slot.kind === "class-environment");
+    const trailing = staticSlot === undefined || environment === undefined ? []
+      : projectArguments(definition, environment.genericParameterIndexes);
+    return select(declaration, definition.declaration, variant, undefined, empty, ownerLifetimes,
+      staticSlot === undefined ? projectArguments(definition, definition.genericParameters.map((_, index) => index)) : [],
+      [], undefined, undefined, trailing, traverse);
+  };
+  const nativeBody = (declaration: Node, variant: RustCallableEntryHeaderVariant | undefined,
+    enter: () => boolean, active = new Set<Node>()): SourceOwnershipUnresolved | {
+      readonly kind: "resolved"; readonly entry: RustNativeCallableEntry; readonly header: RustCallableEntryHeaderSelection;
+    } => {
+    const unresolved = (reason: string): SourceOwnershipUnresolved => ({ kind: "unresolved", at: declaration, reason });
+    if (!enter() || active.has(declaration)) return unresolved("A native pending entry requires a finite complete original header placement.");
+    const entry = entries.get(declaration);
+    if (entry?.genericHeader === undefined || entry.nativeEntry.direct === undefined)
+      return unresolved("A native pending entry requires its completed original direct physical ABI.");
+    active.add(declaration);
+    try {
+      const parent = ast.parent(declaration);
+      const owner = program.projectTypes.definitionContainingDeclaration(declaration);
+      if (owner?.kind === "class" && parent === owner.declaration) {
+        if (program.projectTypes.isPolymorphic(owner) && !ast.hasModifierKind(declaration, "static"))
+          return unresolved("A rooted native pending entry requires its exact original implementation placement and variant.");
+        return { kind: "resolved", entry: entry.nativeEntry.direct.body,
+          header: selectClassMember(declaration, owner, variant, false).body };
+      }
+      if (ast.is.IsMethodDeclaration(declaration) || ast.is.IsGetAccessorDeclaration(declaration) || ast.is.IsSetAccessorDeclaration(declaration))
+        return unresolved("A structural native pending entry requires its exact canonical owner and field placement.");
+      const binding = parent === undefined ? undefined : program.records.moduleBinding.get(parent);
+      if (sourceDeclarationIsModuleScoped(declaration, ast) ||
+        binding?.storage === "native-callable" && binding.callableDeclaration === declaration)
+        return { kind: "resolved", entry: entry.nativeEntry.direct.body, header: selectModule(declaration, variant, false).body };
+      let enclosing = sourceEnclosingCallable(parent, ast);
+      while (enclosing !== undefined) {
+        if (!enter()) return unresolved("A native pending entry exhausted its original parent header budget.");
+        const enclosingEntry = entries.get(enclosing);
+        const frame = program.callableValues.frames.implementationFor(enclosing);
+        const generic = program.callableValues.generic.implementationFor(enclosing);
+        let header: RustCallableEntryHeaderSelection | undefined;
+        if (frame !== undefined && !frame.independent) {
+          const selected = enclosingEntry?.frameEntries.get(frame);
+          if (selected === undefined) return unresolved("A native pending entry requires its identical parent frame implementation.");
+          header = select(enclosing, frame, undefined, undefined, empty, new Set(), [], undefined, undefined,
+            selected.type.definition.environmentParameters.map(type => ({ kind: "type", type })), [], false).body;
+        } else if (generic !== undefined && enclosingEntry?.genericEntries.get(generic)?.helper === true) {
+          const selected = enclosingEntry.genericEntries.get(generic)!;
+          header = select(enclosing, generic, undefined, undefined, selected.environment.substitutions,
+            new Set(), selected.arguments, undefined, undefined, undefined, [], false).body;
+        } else if (ast.is.IsFunctionDeclaration(enclosing) || program.records.lexicalFunction.get(enclosing) !== undefined ||
+          ast.is.IsMethodDeclaration(enclosing) || ast.is.IsGetAccessorDeclaration(enclosing) || ast.is.IsSetAccessorDeclaration(enclosing)) {
+          if (program.sourceCallableSpecializations.requiresSpecialization(enclosing))
+            return unresolved("A native pending lexical entry requires its actual specialized parent body placement.");
+          const selected = nativeBody(enclosing, undefined, enter, active);
+          if (selected.kind === "unresolved") return selected;
+          header = selected.header;
+        }
+        if (header !== undefined) return { kind: "resolved", entry: entry.nativeEntry.direct.body,
+          header: select(declaration, header, variant, header, header.bindings, new Set(), [], undefined,
+            undefined, undefined, [], false).body };
+        enclosing = sourceEnclosingCallable(ast.parent(enclosing), ast);
+      }
+      const scope = program.names.sourceScopeForDeclaration(declaration);
+      const file = ast.getSourceFile(declaration);
+      if (scope !== undefined && scope === file)
+        return { kind: "resolved", entry: entry.nativeEntry.direct.body, header: selectModule(declaration, variant, false).body };
+      return unresolved("A native pending entry requires its exact admitted emitted source scope or construction placement.");
+    } finally {
+      active.delete(declaration);
+    }
   };
   const visited = new Map<RustCallableEntryHeaderPlacement, Set<Node>>();
   const visitBody = (declaration: Node, placement: RustCallableEntryHeaderPlacement,
@@ -91,7 +175,7 @@ export function createRustCallableEntryHeaderPlacements(input: {
       if (ast.is.IsClassDeclaration(node) || ast.is.IsClassExpression(node)) return;
       const local = program.records.localBinding.get(node);
       if (local?.kind === "function") {
-        select(local.initializer, file, undefined, undefined, empty, new Set(), []);
+        selectModule(local.initializer, undefined);
         return;
       }
       const binding = program.records.moduleBinding.get(node);
@@ -99,13 +183,13 @@ export function createRustCallableEntryHeaderPlacements(input: {
         const declaration = binding.callableDeclaration;
         const emitted = program.records.callableDeclaration.get(declaration);
         if (emitted !== undefined) for (const variant of emitted.requiresSpecialization ? emitted.specializations : [undefined])
-          select(declaration, file, variant, undefined, empty, new Set(), []);
+          selectModule(declaration, variant);
         return;
       }
       if (ast.is.IsFunctionDeclaration(node)) {
         const declaration = program.records.callableDeclaration.get(node);
         if (declaration !== undefined) for (const variant of declaration.requiresSpecialization ? declaration.specializations : [undefined])
-          select(node, file, variant, undefined, empty, new Set(), []);
+          selectModule(node, variant);
         return;
       }
       ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
@@ -147,11 +231,9 @@ export function createRustCallableEntryHeaderPlacements(input: {
       select(implementation.declaration, implementation, undefined, undefined, empty, new Set(),
         implementation.elision === undefined ? [] : [{ kind: "lifetime", lifetime: implementation.elision.lifetime }], implementation.parameters);
   };
-  return Object.freeze({ module,
+  return Object.freeze({ module, nativeBody,
     directClass(definition: RustProjectTypeDefinition): void {
       if (definition.kind !== "class" || program.records.classDeclaration.get(definition.declaration) === undefined) return;
-      const ownerLifetimes = new Set(definition.genericParameters.flatMap(parameter => parameter.kind === "lifetime" ? [rustLifetimeKey(parameter.lifetime)] : []));
-      const enclosing = projectArguments(definition, definition.genericParameters.map((_, index) => index));
       for (const member of ast.members(definition.declaration)) {
         if (member === undefined) continue;
         if (ast.is.IsConstructorDeclaration(member)) {
@@ -161,10 +243,12 @@ export function createRustCallableEntryHeaderPlacements(input: {
         const method = program.records.methodDeclaration.get(member);
         if (method?.kind !== "body") continue;
         if (program.projectTypes.isPolymorphic(definition) && !method.isStatic) continue;
-        const trailing = method.staticSlot === undefined || method.environment === undefined ? []
-          : projectArguments(method.owner, method.environment.genericParameterIndexes);
-        for (const variant of method.variants) select(member, definition.declaration, variant.specialization, undefined,
-          empty, ownerLifetimes, method.staticSlot === undefined ? enclosing : [], [], undefined, undefined, trailing);
+        for (const variant of method.variants) {
+          const selected = nativeBody(member, variant.specialization, () => true);
+          if (selected.kind === "unresolved") failTargetAnalysisInvariant("tsonic-rust",
+            "An admitted direct class method requires its identical native body header placement.", member);
+          visitBody(member, selected.header, selected.header, selected.header.bindings);
+        }
       }
       const construction = program.records.classConstruction.get(definition.declaration);
       if (construction === undefined) return;

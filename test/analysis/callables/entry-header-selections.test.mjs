@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRust } from "../../helpers/rust-session.mjs";
 import { createRustCallableEntryHeaderSelections } from "../../../dist/analysis/callables/entry-header-selections.js";
+import { createRustCallableEntryHeaderPlacements } from "../../../dist/analysis/callables/entry-header-placements.js";
+import { prepareRustProjectGenericMembership } from "../../../dist/analysis/project-types/generic-membership.js";
 import { rustSourcePrimitiveTargetType } from "../../../dist/target-model/types/index.js";
 
 function fixture(source = "export async function empty<Value>(): Promise<void> {}", name = "empty", surfaces = []) {
@@ -20,6 +22,81 @@ function fixture(source = "export async function empty<Value>(): Promise<void> {
     trailingArguments: [], finalArguments: undefined, splitBody: false };
   return { program, file, declaration, header, construction, request };
 }
+
+function placementsFor(program) {
+  const headers = new Map();
+  const visit = node => {
+    const header = program.records.callableLeading.get(node)?.genericHeader;
+    if (header !== undefined) headers.set(node, header);
+    program.source.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+  };
+  for (const file of program.sourceFiles) visit(file);
+  const construction = createRustCallableEntryHeaderSelections({ headers, requirements: program.declarationGenericRequirements });
+  return createRustCallableEntryHeaderPlacements({ program, entries: {
+    get: declaration => program.records.callableLeading.get(declaration),
+    selectHeader: (...arguments_) => construction.select(...arguments_),
+  }, classContexts: { forInstance() { assert.fail("these direct entries do not request a rooted class context"); } },
+  memberships: prepareRustProjectGenericMembership(program.declarationGenericRequirements) });
+}
+
+test("native body header requests select the original module body without traversing late wrappers", () => {
+  const { program, file, declaration, header } = fixture();
+  const placements = placementsFor(program);
+  const selected = placements.nativeBody(declaration, undefined, () => true);
+  assert.equal(selected.kind, "resolved", "the checked module declaration has an exact original emitted placement");
+  assert.equal(selected.entry === program.records.callableLeading.get(declaration).nativeEntry.direct.body, true,
+    "early selection preserves the exact original physical body entry");
+  assert.equal(selected.header.captureArguments.some(argument => argument.kind === "type" &&
+    argument.type.kind === "type-parameter" && argument.type.identity === header.sourceContract.parameters[0].identity), true,
+    "unused native header binders remain actual pending lifetime obligations");
+  assert.equal(placements.nativeBody(declaration, undefined, () => true).header === selected.header, true,
+    "repeated early reads reuse one exact selected row");
+  placements.module(file);
+  assert.equal(placements.nativeBody(declaration, undefined, () => true).header === selected.header, true,
+    "late module preparation consumes the identical original selection");
+  assert.equal(placements.nativeBody(declaration, undefined, () => false).kind, "unresolved",
+    "exhausted shared work cannot grant a native entry");
+});
+
+test("native body header requests share direct class placement with late method emission", () => {
+  const { program } = analyzeRust({ surfaces: [], files: { "index.ts": `
+class Box { value(): number { return 7; } }
+export function read(): number { return new Box().value(); }
+` } });
+  const definition = program.projectTypes.definitions.find(entry => entry.sourceName === "Box");
+  assert.equal(definition !== undefined, true, "the real emitted class has its original definition");
+  const declaration = program.source.ast.members(definition.declaration).find(node => node !== undefined &&
+    program.source.ast.is.IsMethodDeclaration(node));
+  assert.equal(declaration !== undefined, true, "the real native method is present");
+  const placements = placementsFor(program);
+  const selected = placements.nativeBody(declaration, undefined, () => true);
+  assert.equal(selected.kind, "resolved", "the direct nonpolymorphic class has an exact native body placement");
+  assert.equal(selected.entry === program.records.callableLeading.get(declaration).nativeEntry.direct.body, true,
+    "the original physical method entry is not replaced by a module/helper entry");
+  placements.directClass(definition);
+  assert.equal(placements.nativeBody(declaration, undefined, () => true).header === selected.header, true,
+    "late direct-class preparation reuses the exact early row");
+});
+
+test("native body header requests cannot replace an unknown lexical placement with a module row", () => {
+  const { program } = analyzeRust({ surfaces: [], files: { "index.ts": `
+export function outer(): number { function inner(): number { return 7; } return inner(); }
+` } });
+  const { ast } = program.source;
+  const outer = ast.statements(program.sourceFiles[0]).find(node => node !== undefined && ast.is.IsFunctionDeclaration(node));
+  const inner = ast.statements(ast.body(outer)).find(node => node !== undefined && ast.is.IsFunctionDeclaration(node));
+  assert.equal(inner !== undefined, true, "the source contains its original nested native function");
+  const original = program.records.callableLeading.get(inner);
+  assert.equal(original?.nativeEntry.direct !== undefined, true, "the nested function has an actual direct native entry");
+  const placements = placementsFor({ ...program, callableValues: { ...program.callableValues,
+    generic: { ...program.callableValues.generic, implementationFor: () => undefined },
+    frames: { ...program.callableValues.frames, implementationFor: () => undefined } },
+  records: { ...program.records, lexicalFunction: { get: () => undefined } },
+  source: { ...program.source, ast: { ...ast, is: { ...ast.is,
+    IsFunctionDeclaration: node => node === outer ? false : ast.is.IsFunctionDeclaration(node) } } } });
+  assert.equal(placements.nativeBody(inner, undefined, () => true).kind, "unresolved",
+    "missing actual parent placement evidence cannot acquire a module header from absence of a class");
+});
 
 test("entry header selections snapshot request containers and retain exact placement and parent identities", () => {
   const { file, declaration, header, construction, request } = fixture();
