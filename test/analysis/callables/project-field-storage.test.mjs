@@ -109,8 +109,9 @@ test("physical member selection completes structural getter storage once without
   const views = [{ declaration: owner, sourceCarrier: bool, targetCarrier: target,
     fields: [{ declaration, storageIndex: 0, field: { resultCarrier: logical } }] }];
   let completed;
-  const issues = construction.completeViews(views, { completePhysicalCarrier(source, selected) {
+  const issues = construction.completeViews(views, { completePhysicalCarrier(source, selected, evidence) {
     assert.equal(source === target, true, "the original structural contract retains its owner identity");
+    assert.equal(evidence.kind, "instance", "physical field completion carries its exact instance authority");
     completed = selected;
     return { kind: "resolved", carrier: selected };
   } });
