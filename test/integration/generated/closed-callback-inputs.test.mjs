@@ -59,6 +59,10 @@ test("physical callback effects do not change an infallible direct implementatio
     files: { "index.ts": closedNativeCallbackEffectsSource +
       '\nexport function main(): void { if (!run()) throw new Error("native callback effects"); }\nmain();\n' } });
   assert.equal(result.diagnostics.length, 0, result.diagnostics.map(row => row.message).join("\n"));
-  assert.match(artifactText(result, "src/index.rs"), /pub fn positive\(value: i32\) -> bool/u);
+  assert.match(artifactText(result, "src/index.rs"), /pub\(crate\) fn positive\(value: i32\) -> bool/u);
   validateGeneratedProject("closed-native-callback-effects", result.artifacts, { run: true });
+  const library = compileRust({ surfaces: ["js"], target: { id: "rust", options: { outputType: "lib" } },
+    files: { "index.ts": closedNativeCallbackEffectsSource } }).result;
+  assert.equal(library.diagnostics.length, 0, library.diagnostics.map(row => row.message).join("\n"));
+  assert.match(artifactText(library, "src/index.rs"), /pub fn positive\(value: i32\) -> bool/u);
 });

@@ -254,7 +254,7 @@ test("huge fixed-array metadata observations erase before native value admission
   });
   assert.deepEqual(result.diagnostics, []);
   const output = artifactText(result, "src/index.rs");
-  assert.match(output, /pub fn direct\(\) -> usize \{\s*0usize\s*\}/u);
+  assert.match(output, /pub\(crate\) fn direct\(\) -> usize \{\s*0usize\s*\}/u);
   for (const artifact of result.artifacts.filter(artifact => artifact.path.endsWith(".rs"))) {
     assert.doesNotMatch(artifact.text, /9007199254740993|memoryarraylayout|NativeLayout|NativeArray/u);
   }

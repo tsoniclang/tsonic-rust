@@ -374,8 +374,8 @@ test("numeric shared arrays preserve cross-file carriers, length, indexing and n
   assert.match(output, /0\.\.for_in_length/u);
   assert.doesNotMatch(output, /as f64|as i32/u);
   const declarations = artifactText(result, "src/values.rs");
-  assert.match(declarations, /pub fn make\(\) -> \[i32; 3\]/u);
-  assert.match(declarations, /pub fn nested\(\) -> \[\[i32; 3\]; 2\]/u);
+  assert.match(declarations, /pub\(crate\) fn make\(\) -> \[i32; 3\]/u);
+  assert.match(declarations, /pub\(crate\) fn nested\(\) -> \[\[i32; 3\]; 2\]/u);
   assert.equal(validateGeneratedProject("exact-numeric-fixed-arrays", result.artifacts, { run: true }).status, 0);
 });
 
