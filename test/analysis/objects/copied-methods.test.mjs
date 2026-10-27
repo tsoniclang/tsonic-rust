@@ -4,8 +4,27 @@ import { proveRustCopiedMethodFlow, selectRustCopiedMethods } from "../../../dis
 import { rustCallableTargetType, rustSourcePrimitiveTargetType,
   rustStructuralObjectTargetType } from "../../../dist/target-model/types/index.js";
 import { structuralStorageKey } from "../../../dist/policy/types/objects/structural-storage.js";
+import { analyzeRust } from "../../helpers/rust-session.mjs";
 
 const sources = entries => new Map(entries.map(([identity, values]) => [identity, new Set(values)]));
+
+for (const surfaces of [[], ["js"]]) {
+  test(`fresh exported method views retain their original construction proof (${surfaces[0] ?? "native"})`, () => {
+    const { program } = analyzeRust({ surfaces, files: { "index.ts": `
+export function make<Value>(captured: Value): { value(): Value } {
+  return { value(): Value { return captured; } };
+}
+export function choose(flag: boolean): { value(): number } {
+  return flag ? { value(): number { return 1; } } : { value(): number { return 2; } };
+}
+` } });
+    const methods = program.sourceStorage.nodes.filter(node => program.source.ast.is.IsMethodDeclaration(node));
+    assert.equal(methods.length, 3, "all original literal method constructions remain represented");
+    for (const method of methods)
+      assert.equal(program.records.receiverIndependentMethod.get(method) !== undefined, true,
+        "each actual constructed body has its receiver-independence proof before external publication");
+  });
+}
 
 test("grounded copied methods remain receiver-independent through self and rest/spread cycles", () => {
   const incoming = sources([["original", ["rest"]], ["copy", ["original", "copy"]], ["rest", ["copy"]]]);

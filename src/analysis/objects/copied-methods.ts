@@ -6,6 +6,7 @@ import type { RustFactWalk } from "../program/walk.js";
 import { structuralStorageKey } from "../../policy/types/objects/structural-storage.js";
 import { rustStructuralObjectCarrierValue } from "../../target-model/types/index.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
+import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 
 import { rustCopiedMethodReceiverIsPreserved } from "../../policy/ownership/copied-methods.js";
 
@@ -95,6 +96,7 @@ export function selectRustCopiedMethods(
         }
       }
     }
+    const operation = records.targetOperation.get(node);
     const view = records.objectReferenceView.get(node);
     if (view?.kind === "structural") {
       const shape = rustStructuralObjectCarrierValue(view.targetCarrier);
@@ -103,10 +105,17 @@ export function selectRustCopiedMethods(
           rustCopiedMethodReceiverIsPreserved(view.sourceCarrier, field.source.storageIndex,
             view.targetCarrier, field.destinationIndex)) continue;
         const target = key(view.targetCarrier, field.destinationIndex);
-        requestMember(target, node, node, view.sourceCarrier, field.source.storageIndex);
+        if (operation?.kind === "record-literal" && operation.storage === "structural-object" &&
+          rustTargetTypeRefEquals(operation.resultCarrier, view.sourceCarrier) &&
+          operation.contributions.some(contribution => contribution.kind === "structural-method" &&
+            contribution.targetStorageIndex === field.source.storageIndex)) {
+          demands.set(target, node);
+          const sources = incoming.get(target) ?? new Set<string>();
+          sources.add(key(operation.resultCarrier, field.source.storageIndex));
+          incoming.set(target, sources);
+        } else requestMember(target, node, node, view.sourceCarrier, field.source.storageIndex);
       }
     }
-    const operation = records.targetOperation.get(node);
     if (operation?.kind === "source-field" && operation.storage === "structural-object" &&
       operation.valueSemantics.kind === "method" && operation.accessMode !== "write" && !invokedDirectly(node)) {
       const identity = key(operation.receiverCarrier, operation.storageIndex);
