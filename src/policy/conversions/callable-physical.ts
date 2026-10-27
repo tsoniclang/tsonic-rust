@@ -40,9 +40,7 @@ export function rustCallableConversionPhysical(
     // a type-erased runtime callable are carried through the native error join unchanged.
     const errorPlan = !carriedError && errorContract !== undefined && rustTargetTypeRefEquals(errorContract.source, actual.error)
       ? errorContract : undefined;
-    // A provider callback (a fallible native closure) carries the runtime error; an invoked callable whose error is
-    // uninhabited is adapted by eliminating that error.
-    const targetError = "error" in target ? target.error : logical.target.kind === "closure" ? rustRuntimeErrorTargetType() : undefined;
+    const targetError = "error" in target ? target.error : undefined;
     const eliminated = errorPlan === undefined && targetError !== undefined &&
       rustProgramErrorOwner(targetError)?.kind !== "logical" &&
       !rustTargetTypeRefEquals(actual.error, targetError) && rustUninhabitedError(actual.error);
@@ -141,8 +139,7 @@ function physicalTarget(logical: TargetTypeRef, signature: RustCallablePhysicalS
   const result = rustNamedTargetType("rust.core.Result", "Result", rustTypeGenericArguments([signature.result, signature.error]));
   const tuple: TargetTypeRef = { kind: "tuple", elements: signature.parameters };
   if (rustCallableInputProtocol(logical) !== undefined) return { kind: "closure", args: [tuple], result };
-  if (logical.kind === "closure") return rustTargetTypeRefEquals(signature.error, rustRuntimeErrorTargetType())
-    ? { ...logical, args: signature.parameters, result, fallible: false } : undefined;
+  if (logical.kind === "closure") return { ...logical, args: signature.parameters, result, fallible: false };
   const lifetime = rustCallableProtocol(logical)?.lifetime;
   return logical.kind !== "target-named" || logical.id !== rustCallableTargetId || lifetime === undefined ? undefined
     : rustRuntimeCallableTargetType(lifetime, signature.parameters, result);

@@ -7,6 +7,13 @@ import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equali
 import { rustCallableProtocol } from "../../../dist/target-model/types/carriers/callables.js";
 import { selectRustSourceValueConversion } from "../../../dist/policy/conversions/selection.js";
 import { rustAbsenceTargetType, rustCallableTargetType, rustClosureTargetType, rustJsValueTargetType, rustOptionTargetType, rustStringTargetType, rustUnitTargetType } from "../../../dist/target-model/types/index.js";
+import { rustCallableConversionPhysical, rustCallablePhysicalCarrier } from "../../../dist/policy/conversions/callable-physical.js";
+import { rustNamedTargetType, rustNativeTraitRef } from "../../../dist/target-model/types/carriers/native.js";
+import { rustProgramErrorTargetType } from "../../../dist/target-model/types/carriers/js.js";
+import { rustRuntimeErrorTargetType } from "../../../dist/target-model/types/carriers/runtime-carriers.js";
+import { rustInfallibleTargetId } from "../../../dist/target-model/types/carriers/source-types.js";
+import { rustNativeErrorJoinTargetType } from "../../../dist/target-model/types/native-error-joins.js";
+import { rustOnlyTypeGenericArguments } from "../../../dist/target-model/types/generic-arguments.js";
 
 const number = { kind: "source-primitive", name: "float64" };
 const string = { kind: "source-primitive", name: "string" };
@@ -75,6 +82,49 @@ test("native closure adapters retain exact inputs, results and invocation failur
   assert.equal(select(source, rustClosureTargetType([string], number, true)) === undefined, true);
   assert.equal(select(source, rustClosureTargetType([integer], string, true)) === undefined, true);
   assert.equal(rustCallableConversionMatches({ ...selected, parameters: [{ kind: "discard" }] }, source, target), false);
+});
+
+test("generic native closure adapters retain every actual invocation error without a runtime-error substitution", () => {
+  const integer = { kind: "source-primitive", name: "int64" };
+  const program = rustProgramErrorTargetType({ kind: "physical", domain: "project", componentId: "callback-component" });
+  const js = rustJsValueTargetType();
+  const errors = [
+    ["runtime", rustRuntimeErrorTargetType()],
+    ["program", program],
+    ["native", rustNamedTargetType("test:NativeError", "NativeError")],
+    ["associated", { kind: "associated-type", owner: { kind: "type-parameter", identity: "Callback", name: "Callback" },
+      trait: rustNativeTraitRef("CallbackContract"), name: "InvocationError" }],
+    ["js", js],
+    ["sum", rustNativeErrorJoinTargetType("/callback.ts", [program, js])],
+    ["uninhabited", { kind: "target-named", id: rustInfallibleTargetId }],
+  ];
+  for (const [label, error] of errors) {
+    assert.equal(error !== undefined, true, `${label}: the exact native error exists`);
+    const source = rustCallableTargetType([integer], number, { kind: "static" }, error);
+    const target = rustClosureTargetType([integer], number, true);
+    const conversion = select(source, target);
+    assert.equal(conversion !== undefined, true, `${label}: the native closure has no fixed destination error`);
+    const selected = rustCallableConversionPhysical(conversion,
+      { parameters: [integer], result: number, error }, "/callback.ts");
+    assert.equal(selected !== undefined, true, `${label}: the physical closure admits its actual invocation error`);
+    assert.equal(rustTargetTypeRefEquals(selected.source.error, error), true, `${label}: the source is never relabelled`);
+    assert.equal(rustTargetTypeRefEquals(selected.error, error), true, `${label}: the native result retains E`);
+    assert.equal(selected.carrier.kind, "closure", `${label}: the result is an ordinary native closure`);
+    assert.equal(selected.carrier.fallible, false, `${label}: Result is represented exactly once`);
+    const result = rustOnlyTypeGenericArguments(selected.carrier.result.genericArguments);
+    assert.equal(result?.length, 2, `${label}: the native completion is Result<Value, E>`);
+    assert.equal(rustTargetTypeRefEquals(result[0], number), true, `${label}: the native result is unchanged`);
+    assert.equal(rustTargetTypeRefEquals(result[1], error), true, `${label}: the emitted completion has exactly E`);
+    assert.equal(selected.errors.length, 1, `${label}: no extra native error arm is manufactured`);
+    assert.equal(rustTargetTypeRefEquals(selected.errors[0].errorType, error), true, `${label}: the invocation arm retains E`);
+    assert.equal(Object.hasOwn(selected, "eliminatedInvokeError"), false, `${label}: no unnecessary error elimination`);
+    assert.equal(Object.hasOwn(selected, "errorPlan"), false, `${label}: no runtime error conversion`);
+    const fixedSource = rustCallablePhysicalCarrier(source);
+    assert.equal(fixedSource !== undefined, true, `${label}: the original callable has a physical native contract`);
+    assert.equal(select(fixedSource, rustCallableTargetType([integer], number, { kind: "static" },
+      rustNamedTargetType("test:UnrelatedError", "UnrelatedError"))) === undefined, label !== "uninhabited",
+    `${label}: a fixed destination still requires exact error conversion or native empty-error elimination`);
+  }
 });
 
 test("owning callable inputs borrow only exact elided shared parameters for invocation", () => {
