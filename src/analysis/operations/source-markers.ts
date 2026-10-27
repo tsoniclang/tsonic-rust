@@ -2,7 +2,7 @@ import { requireRustRecord } from "../program/records/required-records.js";
 
 import { rustSourcePrimitiveTargetType, rustUnitTargetType } from "../../target-model/types/index.js";
 import { appendRustDiagnostic, rustResolutionContext } from "../program/walk.js";
-import { setCarrierFact } from "../operations/project-calls.js";
+import { setCarrierFact } from "./project-calls.js";
 
 import { readRustSourceNativePointerOperation, readRustSourceSafetyBuilder, readRustSourceUnsafeContext } from "../../source/extension/explicit-safety.js";
 
@@ -21,10 +21,10 @@ import type { RustTargetOperationFact } from "../../target-model/records/operati
 
 import { readRustSourceRawAddress } from "../../source/extension/raw-addresses.js";
 import { readRustRawLocation } from "../../source/extension/native-memory.js";
-import { resolveRustRawLocationCarrier } from "../operations/native-memory.js";
-import { resolveRustMemoryBindingCarrier } from "../operations/memory-bindings.js";
+import { resolveRustRawLocationCarrier } from "./native-memory.js";
+import { resolveRustMemoryBindingCarrier } from "./memory-bindings.js";
 import { resolveTsonicMemoryLayoutObservation, selectTsonicMemoryFieldBinding, selectTsonicMemoryRecordBinding } from "@tsonic/source-core/facts";
-import { resolveRustRawAddressCarrier, resolveRustRawPointerIdentityCarrier } from "../operations/raw-addresses.js";
+import { resolveRustRawAddressCarrier, resolveRustRawPointerIdentityCarrier } from "./raw-addresses.js";
 import { readRustSourceRawPointerIdentity } from "../../source/extension/raw-pointers.js";
 
 import { readRustNativeControl, resolveRustNativeControl } from "./native-controls.js";

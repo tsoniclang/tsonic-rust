@@ -1,7 +1,7 @@
 import { createRustRecordFixture } from "../../helpers/records.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
-import { rustCallableInputLifetimeParameters } from "../../../dist/analysis/callables/source-input-lifetimes.js";
+import { rustCallableInputLifetimeParameters } from "../../../dist/analysis/callables/ownership/source-input-lifetimes.js";
 
 import { rustCallableInputTargetType } from "../../../dist/target-model/types/carriers/callables.js";
 import { rustSourcePrimitiveTargetType, rustStringTargetType } from "../../../dist/target-model/types/index.js";

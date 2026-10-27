@@ -5,7 +5,7 @@ import { createSourceStorageQuery } from "@tsonic/target-api/analysis";
 import { checkRustSession, createRustSession } from "../../helpers/rust-session.mjs";
 import { createRustRecordFixture } from "../../helpers/records.mjs";
 import { createRustObjectRepresentationPlanRegistry, prepareRustObjectNativeLifetimes } from "../../../dist/analysis/project-types/object-representation.js";
-import { rustRetainedValueLifetime } from "../../../dist/analysis/callables/retained-values.js";
+import { rustRetainedValueLifetime } from "../../../dist/analysis/callables/ownership/retained-values.js";
 import { emptyRustLifetimeIndex } from "../../../dist/target-model/lifetimes/index.js";
 import { rustSourceTypeCarrier } from "../../../dist/target-model/types/carriers/source-types.js";
 

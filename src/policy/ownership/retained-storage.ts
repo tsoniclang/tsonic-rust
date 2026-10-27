@@ -2,7 +2,7 @@ import type { TargetTypeRef } from "../../target-model/types/model.js";
 
 import { rustCallableProtocol, rustCallableTargetType, rustNativeCallableProtocol } from "../../target-model/types/carriers/callables.js";
 import { rustGenericCallableProtocol, rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
-import { rustOwnedStorageChild, rustOwnedStorageChildren } from "../../policy/types/storage/owned-storage.js";
+import { rustOwnedStorageChild, rustOwnedStorageChildren } from "../types/storage/owned-storage.js";
 import { mapRustTargetTypes } from "../../target-model/types/carriers/substitution.js";
 
 export const rustRequiresCallableFieldStorage = (carrier: TargetTypeRef): boolean => carrier.kind !== "function-pointer" && carrier.kind !== "closure" &&

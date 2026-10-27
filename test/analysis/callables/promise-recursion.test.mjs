@@ -5,7 +5,7 @@ import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 import { sourcePackageGraphFixture } from "../../../../tsonic/test/fixtures/source-package-graph.mjs";
 import { createSourceStorageBudget, defaultSourceStorageLimits } from "@tsonic/target-api/analysis";
 import { analyzeRustCheckedContext } from "../../helpers/rust-session-analysis-context.mjs";
-import { selectRustPromiseBodyRecursion } from "../../../dist/analysis/callables/promise-recursion.js";
+import { selectRustPromiseBodyRecursion } from "../../../dist/analysis/callables/async/promise-recursion.js";
 
 const header = `import type { int32 } from "@tsonic/core/types.js";`;
 

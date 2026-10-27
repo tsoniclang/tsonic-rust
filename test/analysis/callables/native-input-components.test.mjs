@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { compileRust } from "../../helpers/rust-session.mjs";
 import { analyzeRustCheckedContext } from "../../helpers/rust-session-analysis-context.mjs";
-import { createRustNativeCallableInputPlan } from "../../../dist/analysis/callables/native-inputs.js";
+import { createRustNativeCallableInputPlan } from "../../../dist/analysis/callables/native/native-inputs.js";
 import { rustCallableProtocol } from "../../../dist/target-model/types/carriers/callables.js";
 import { rustOptionElementCarrier } from "../../../dist/target-model/types/carriers/optional.js";
 import { rustStructuralObjectCarrierValue } from "../../../dist/target-model/types/carriers/source-types.js";

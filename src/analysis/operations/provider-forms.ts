@@ -14,7 +14,7 @@ import { rustFrameCallableValue } from "../../target-model/types/carriers/frame-
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustUninhabitedError } from "../../policy/conversions/callable-physical.js";
 import { rustPreparedCallbackResultEffects } from "../errors/callback-effects.js";
-import { rustNativeCallableOperand } from "../callables/native-conversions.js";
+import { rustNativeCallableOperand } from "../callables/native/native-conversions.js";
 import { rustValueCarrierBeforeContextualConversion } from "../conversions/value-carrier-queries.js";
 import { rustNativeErrorJoinTargetType } from "../../target-model/types/native-error-joins.js";
 import { rustProgramErrorTargetType } from "../../target-model/types/carriers/js.js";

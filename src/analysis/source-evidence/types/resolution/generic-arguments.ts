@@ -10,7 +10,7 @@ import type { RustSourceGenericParameterContract } from "../../../../target-mode
 import { bindRustExactTypeParameters } from "../../../../target-model/types/carriers/generic-inference.js";
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
 import { rustTargetTypeParameterIdentities } from "../../../../target-model/types/carriers/generic-references.js";
-import { resolveRustEnclosingGenericParameters } from "../../../callables/generic-environment.js";
+import { resolveRustEnclosingGenericParameters } from "../../../callables/generics/generic-environment.js";
 
 export function rustSelectedCallTypeParameters(
   sourceArguments: NonNullable<RustSelectedTargetSignature["sourceSelectedMethodTypeArguments"]>,

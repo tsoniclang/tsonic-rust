@@ -5,8 +5,8 @@ import { analyzeRust } from "../../helpers/rust-session.mjs";
 
 
 
-import { rustGenericCallableInvocationBindings } from "../../../dist/analysis/callables/generic-bindings.js";
-import { selectRustGenericCallableErrors } from "../../../dist/analysis/callables/generic-errors.js";
+import { rustGenericCallableInvocationBindings } from "../../../dist/analysis/callables/generics/generic-bindings.js";
+import { selectRustGenericCallableErrors } from "../../../dist/analysis/callables/generics/generic-errors.js";
 import { rustTargetGenericReferences } from "../../../dist/target-model/types/carriers/generic-references.js";
 
 function fixture(source) {

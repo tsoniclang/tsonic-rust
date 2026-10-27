@@ -22,7 +22,7 @@ import type { TargetTypeRef } from "../../target-model/types/model.js";
 
 import type { RustGenericRequirement } from "../../target-model/records/generic-requirements.js";
 
-import { rustGenericCallableMemberInvocationBindings } from "../callables/generic-bindings.js";
+import { rustGenericCallableMemberInvocationBindings } from "../callables/generics/generic-bindings.js";
 
 import { rustSourceCallCallableStorageCarrier } from "../../policy/operations/members/native-contracts.js";
 import { bindRustStructuralInterfaceParameters, bindRustStructuralReceiverParameters } from "./structural-receiver-requirements.js";

@@ -4,7 +4,7 @@ import { rustValueConversionContract } from "../../dist/policy/conversions/contr
 import { rustNativeRepresentationMatches } from "../../dist/policy/conversions/native-representation.js";
 import { rustAbsenceTargetType, rustUnitTargetType, rustJsPromiseTargetType, rustCallableTargetType,
   rustProgramErrorTargetType, rustJsErrorTargetType, rustSourcePrimitiveTargetType } from "../../dist/target-model/types/index.js";
-import { rustFutureValueForSourceStorage, rustFutureValueMatchesCarrier, transportRustFutureValue } from "../../dist/analysis/callables/future-values.js";
+import { rustFutureValueForSourceStorage, rustFutureValueMatchesCarrier, transportRustFutureValue } from "../../dist/analysis/callables/async/future-values.js";
 import { rustSourceUnionTargetType } from "../../dist/target-model/types/carriers/source-types.js";
 
 test("native representation transport preserves native type, arity and lifetime boundaries", () => {

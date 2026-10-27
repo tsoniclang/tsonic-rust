@@ -1,6 +1,6 @@
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
 import type { TargetPlanningSourceNavigation } from "@tsonic/target-api/analysis";
-import type { RustSourceCallableSpecializationPlan } from "../callables/specializations.js";
+import type { RustSourceCallableSpecializationPlan } from "../callables/generics/specializations.js";
 import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
 import type { RustDeclarationGenericRequirementIndex } from "../declarations/generic-requirements.js";
 import type { RustClassValuePlan } from "../../target-model/records/class-values.js";

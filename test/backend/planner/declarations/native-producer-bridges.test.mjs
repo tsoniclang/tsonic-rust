@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { planRustNativeProducerBridge } from "../../../../dist/backend/planner/declarations/callables/native-producer-bridges.js";
-import { createRustNativeCallableProtocolRegistry } from "../../../../dist/analysis/callables/native-protocols.js";
+import { createRustNativeCallableProtocolRegistry } from "../../../../dist/analysis/callables/native/native-protocols.js";
 import { emptyRustTypeDefinitions } from "../../../../dist/target-model/types/source-union-definitions.js";
 import { createRustTypeDefinitionRegistry } from "../../../../dist/analysis/project-types/type-definitions.js";
 import { rustSourcePrimitiveTargetType, rustFutureTargetType, rustJsPromiseTargetType,

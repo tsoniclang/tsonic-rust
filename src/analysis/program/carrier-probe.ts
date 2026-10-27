@@ -1,9 +1,9 @@
 import { createRustProgramRecordBuilder } from "./records/create.js";
 import type { RustFactWalk } from "./walk.js";
-import { createRustSourceCallableAbiResolver } from "../callables/source-callable-abi.js";
-import { finalizeRustCallableParameterAbis } from "../callables/signature-query.js";
-import { resolveRustCallableOwnershipCarrier } from "../callables/ownership-carriers.js";
-import { rustRetainedValueLifetime } from "../callables/retained-values.js";
+import { createRustSourceCallableAbiResolver } from "../callables/calls/source-callable-abi.js";
+import { finalizeRustCallableParameterAbis } from "../callables/calls/signature-query.js";
+import { resolveRustCallableOwnershipCarrier } from "../callables/ownership/ownership-carriers.js";
+import { rustRetainedValueLifetime } from "../callables/ownership/retained-values.js";
 
 export function createRustCarrierProbe(walk: RustFactWalk): RustFactWalk {
   walk.context.records.assertOpen();

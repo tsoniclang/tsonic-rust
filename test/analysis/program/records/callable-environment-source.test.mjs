@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRust } from "../../../helpers/rust-session.mjs";
 import { createRustProgramRecordBuilder } from "../../../../dist/analysis/program/records/create.js";
-import { recordRustInlineModuleCallableUses } from "../../../../dist/analysis/callables/module-values.js";
+import { recordRustInlineModuleCallableUses } from "../../../../dist/analysis/callables/values/module-values.js";
 import { rustLifetimeKey } from "../../../../dist/target-model/lifetimes/index.js";
 import { rustTargetTypeRefEquals } from "../../../../dist/target-model/types/equality.js";
 

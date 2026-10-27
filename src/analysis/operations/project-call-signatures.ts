@@ -26,7 +26,7 @@ import type { Node } from "@tsonic/tsts";
 import type { RustOperationsProviderOptions } from "./members/model.js";
 import type { RustTargetMember, TargetTypeRef } from "../../target-model/types/model.js";
 
-import { selectRustPointerReturnCarrier } from "../callables/pointer-return.js";
+import { selectRustPointerReturnCarrier } from "../callables/ownership/pointer-return.js";
 import { resolveRustUnionMethodContracts, rustUnionMethodOwner, selectRustUnionMethods } from "./members/calls/union-methods.js";
 import { rustSourceUnionCarrierValue } from "../../target-model/types/carriers/source-types.js";
 import { rustGenericCallableValueOwner } from "../../policy/types/callables/callable-origins.js";

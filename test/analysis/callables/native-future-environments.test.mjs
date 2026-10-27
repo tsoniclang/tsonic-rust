@@ -4,8 +4,8 @@ import test from "node:test";
 import { analyzeRust } from "../../helpers/rust-session.mjs";
 import { createTargetSourceProgram, sourceEnclosingCallable } from "@tsonic/target-api/source";
 import { createSourceStorageQuery, defaultSourceStorageLimits } from "@tsonic/target-api/analysis";
-import { createRustNativeFutureInputPlan } from "../../../dist/analysis/callables/native-future-inputs.js";
-import { createRustLexicalFunctionEnvironmentPlan } from "../../../dist/analysis/callables/lexical-functions.js";
+import { createRustNativeFutureInputPlan } from "../../../dist/analysis/callables/native/native-future-inputs.js";
+import { createRustLexicalFunctionEnvironmentPlan } from "../../../dist/analysis/callables/values/lexical-functions.js";
 import { analyzeRustErrorEffects } from "../../helpers/rust-error-analysis.mjs";
 
 

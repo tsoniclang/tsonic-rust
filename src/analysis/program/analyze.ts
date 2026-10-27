@@ -7,14 +7,14 @@ import { appendMalformedSourceAstDiagnostic, recordClassBodyFacts, recordClassSi
 import { appendRustDiagnostic, rustResolutionContext, rustOperationContext } from "./walk.js";
 import { resolveRustProjectField } from "../operations/members/project-fields.js";
 import { createRustModuleBindingAnalysis } from "./module-bindings.js";
-import { recordRustModuleCallableStorage } from "../callables/module-values.js";
-import { analyzeRustStructuralMethodExposures } from "../callables/structural-method-storage.js";
+import { recordRustModuleCallableStorage } from "../callables/values/module-values.js";
+import { analyzeRustStructuralMethodExposures } from "../callables/storage/structural-method-storage.js";
 import { analyzeRustNativeHandlers } from "../operations/native-handlers.js";
 import { recordRustModuleValueDeclarations } from "./module-declarations.js";
 
-import { finalizeRustCallableParameterAbis, finalizeRustCallableSignature, resolveRustCallableSignatureCarrier } from "../callables/signature-query.js";
-import { refuseRustUnresolvedParameterCarriers } from "../callables/parameter-facts.js";
-import { createRustSourceCallableAbiResolver } from "../callables/source-callable-abi.js";
+import { finalizeRustCallableParameterAbis, finalizeRustCallableSignature, resolveRustCallableSignatureCarrier } from "../callables/calls/signature-query.js";
+import { refuseRustUnresolvedParameterCarriers } from "../callables/values/parameter-facts.js";
+import { createRustSourceCallableAbiResolver } from "../callables/calls/source-callable-abi.js";
 import { createRustSourceTypeRegistry } from "../project-types/source-type-registry.js";
 import { rustProjectGenericParameters } from "../../policy/types/project/project-generic-contract.js";
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
@@ -23,8 +23,8 @@ import { reserveTypeAliasUnion } from "../declarations/type-aliases.js";
 import { recordEnumFacts } from "../declarations/enum-facts.js";
 import { recordExportAssignmentFacts, recordFunctionBodyFacts, recordStatementFacts, recordVariableStatementFacts } from "../control-flow/statements.js";
 import { recordFallibilityFacts } from "../errors/fallibility.js";
-import { recordNestedCallableTypeSignatureFacts, recordPredeclaredNativeFunctionBindingFacts, recordTopLevelCallableValueSignatureFacts } from "../callables/signatures.js";
-import { recordFutureValueFacts } from "../callables/suspension.js";
+import { recordNestedCallableTypeSignatureFacts, recordPredeclaredNativeFunctionBindingFacts, recordTopLevelCallableValueSignatureFacts } from "../callables/calls/signatures.js";
+import { recordFutureValueFacts } from "../callables/async/suspension.js";
 import { recordResourceManagementFacts } from "../control-flow/resource-management.js";
 import { recordRustDeferredProducerEffects } from "../errors/deferred-producer-effects.js";
 import { resolveRustExternalProjectBase } from "../../policy/types/project/external-project-types.js";
@@ -56,20 +56,20 @@ import { collectRustImplicitInterfaceContracts } from "../project-types/implicit
 import { closeRustInheritedStructuralViews } from "../objects/inherited-structural-views.js";
 import { createRustSourceProfileCallableAliasQuery } from "../operations/source-profiles/callable-aliases.js";
 import { collectRustDeclaredProviderErrorCarriers } from "./provider-errors.js";
-import { createRustLexicalFunctionEnvironmentPlan, finalizeRustLexicalFunctionQueries } from "../callables/lexical-functions.js";
+import { createRustLexicalFunctionEnvironmentPlan, finalizeRustLexicalFunctionQueries } from "../callables/values/lexical-functions.js";
 import { type RustLexicalFunctionQueries } from "../../target-model/records/lexical-functions.js";
-import { recordRustLexicalValueEnvironments } from "../callables/lexical-value-environments.js";
+import { recordRustLexicalValueEnvironments } from "../callables/values/lexical-value-environments.js";
 
 import type { RustSourceCallableSpecializationIssue } from "../../target-model/records/callable-issues.js";
 import { rustSourceErrorTargetType, rustWritableSourceErrorTargetType } from "../../target-model/types/carriers/source-error.js";
 import { analyzeRustReceiverStorage } from "../project-types/receiver-storage.js";
-import { rustRetainedValueLifetime } from "../callables/retained-values.js";
-import { resolveRustCallableOwnershipCarrier } from "../callables/ownership-carriers.js";
+import { rustRetainedValueLifetime } from "../callables/ownership/retained-values.js";
+import { resolveRustCallableOwnershipCarrier } from "../callables/ownership/ownership-carriers.js";
 import { createSourceStorageBudget, defaultSourceStorageLimits, type SourceNativeTaskGraph } from "@tsonic/target-api/analysis";
 import { analyzeRustSourcePackageComponents } from "../source-modules/component-semantics.js";
 import { type RustSourcePackageComponentClassifications } from "../../target-model/records/source-package-semantics.js";
 import type { RustSourceTypeRegistry } from "../project-types/source-type-model.js";
-import { completeRustNativeTaskValues, type RustNativeTaskCompletion } from "../callables/native-tasks.js";
+import { completeRustNativeTaskValues, type RustNativeTaskCompletion } from "../callables/native/native-tasks.js";
 
 import type { RustOperationAttempt } from "./operation-attempts.js";
 

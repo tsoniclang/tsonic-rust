@@ -3,8 +3,8 @@ import test from "node:test";
 import { createTargetSourceProgram, sourceProjectFiles } from "@tsonic/target-api/source";
 import { createSourceStorageQuery } from "@tsonic/target-api/analysis";
 import { createRustSession, checkRustSession } from "../../helpers/rust-session.mjs";
-import { createRustRetainedEnvironmentQueries } from "../../../dist/analysis/callables/retained-environment-shapes.js";
-import { closeRustRetainedParameter, rustRetainedEnvironment, rustRetainedValueLifetime } from "../../../dist/analysis/callables/retained-values.js";
+import { createRustRetainedEnvironmentQueries } from "../../../dist/analysis/callables/ownership/retained-environment-shapes.js";
+import { closeRustRetainedParameter, rustRetainedEnvironment, rustRetainedValueLifetime } from "../../../dist/analysis/callables/ownership/retained-values.js";
 import { rustHasOpenOwnedStorage, selectRustClassEnvironmentStorage,
   selectRustNativeFutureEnvironmentRetention } from "../../../dist/policy/ownership/retained-storage.js";
 import { emptyRustLifetimeIndex } from "../../../dist/target-model/lifetimes/index.js";

@@ -8,7 +8,7 @@ import { mergeRustErrorEffects, rustCallableInvocationErrorEffects, rustLocalErr
   rustProducerInvocationErrorEffects, rustPureErrorEffects } from "./error-effects.js";
 import { rustCallableProtocol } from "../../target-model/types/carriers/callables.js";
 import { rustFrameCallableValue } from "../../target-model/types/carriers/frame-callables.js";
-import { rustFrameCallableEnvironmentBindings } from "../callables/frame-values.js";
+import { rustFrameCallableEnvironmentBindings } from "../callables/values/frame-values.js";
 import { substituteRustTargetGenerics } from "../../target-model/types/carriers/substitution.js";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import { callbackFallibleTemplate } from "../../policy/operations/members/deferred-callbacks.js";

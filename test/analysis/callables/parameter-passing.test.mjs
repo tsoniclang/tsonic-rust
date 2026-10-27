@@ -1,7 +1,7 @@
 import { createRustRecordFixture } from "../../helpers/records.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
-import { rustCallArgumentIsOwned } from "../../../dist/analysis/callables/parameter-passing.js";
+import { rustCallArgumentIsOwned } from "../../../dist/analysis/callables/values/parameter-passing.js";
 
 
 

@@ -7,7 +7,7 @@ import { appendRustDiagnostic, rustResolutionContext } from "../program/walk.js"
 
 import { resolveExpressionCarrier } from "../source-evidence/types/resolution/expression-carriers.js";
 
-import { resolveRustIndexedRecordContract, resolveRustIndexedRecordLiteral } from "../objects/indexed-records.js";
+import { resolveRustIndexedRecordContract, resolveRustIndexedRecordLiteral } from "./indexed-records.js";
 
 import { resolveRustTargetTypeRef } from "../source-evidence/types/resolution/source.js";
 import { resolveRustTypeComponentEvidence } from "../source-evidence/types/resolution/source-evidence.js";

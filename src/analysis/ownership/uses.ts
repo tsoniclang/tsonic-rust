@@ -8,7 +8,7 @@ import { rustProviderInputBorrowMode } from "../../policy/operations/members/inp
 import { selectRustOperationReadUses } from "../../policy/ownership/read-use.js";
 import { type RustReadUse } from "../../target-model/records/ownership.js";
 import { rustCallableProtocol } from "../../target-model/types/index.js";
-import { rustCallArgumentMode } from "../callables/parameter-passing.js";
+import { rustCallArgumentMode } from "../callables/values/parameter-passing.js";
 import { rustContextualRuntimeConversionContract } from "../../policy/conversions/contextual.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import { rustTargetGenericReferences } from "../../target-model/types/carriers/generic-references.js";

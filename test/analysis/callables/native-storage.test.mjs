@@ -5,13 +5,13 @@ import { analyzeRust, compileRust, rustSourceText } from "../../helpers/rust-ses
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 import { createTargetSourceProgram, Node_Initializer, sourceNodesOutsideErasedSubtrees } from "@tsonic/target-api/source";
 import { createSourceStorageQuery } from "@tsonic/target-api/analysis";
-import { createRustNativeCallableInputPlan } from "../../../dist/analysis/callables/native-inputs.js";
-import { createRustNativeStorageQueries } from "../../../dist/analysis/callables/native-storage.js";
-import { prepareRustProjectCallableFieldStorage } from "../../../dist/analysis/callables/project-field-storage.js";
-import { finalizeRustNativeParameterStorage } from "../../../dist/analysis/callables/native-parameters.js";
-import { createRustNativeCallableProducerPlan } from "../../../dist/analysis/callables/native-producers.js";
-import { createRustGenericCallablePlan, rustFixedStructuralMethodDeclarations } from "../../../dist/analysis/callables/generic-values.js";
-import { createRustNativeCapturePlan } from "../../../dist/analysis/callables/native-captures.js";
+import { createRustNativeCallableInputPlan } from "../../../dist/analysis/callables/native/native-inputs.js";
+import { createRustNativeStorageQueries } from "../../../dist/analysis/callables/storage/native-storage.js";
+import { prepareRustProjectCallableFieldStorage } from "../../../dist/analysis/callables/storage/project-field-storage.js";
+import { finalizeRustNativeParameterStorage } from "../../../dist/analysis/callables/native/native-parameters.js";
+import { createRustNativeCallableProducerPlan } from "../../../dist/analysis/callables/native/native-producers.js";
+import { createRustGenericCallablePlan, rustFixedStructuralMethodDeclarations } from "../../../dist/analysis/callables/generics/generic-values.js";
+import { createRustNativeCapturePlan } from "../../../dist/analysis/callables/native/native-captures.js";
 import { rustCallablePhysicalSignature } from "../../../dist/target-model/conversions/callable-physical.js";
 import { rustProducerErrorReference } from "../../../dist/target-model/types/carriers/producer-errors.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
@@ -23,7 +23,7 @@ import { rustCallableProtocol, rustCallableTargetType } from "../../../dist/targ
 import { rustSourcePrimitiveTargetType } from "../../../dist/target-model/types/carriers/native.js";
 import { sourcePackageCallbackErrorFiles, sourcePackageCallbackErrorGraph }
   from "../../../../tsonic/test/fixtures/source-package-callback-errors.mjs";
-import { createRustNativeStorageJoins } from "../../../dist/analysis/callables/native-storage-joins.js";
+import { createRustNativeStorageJoins } from "../../../dist/analysis/callables/storage/native-storage-joins.js";
 import { emptyRustTypeDefinitions } from "../../../dist/target-model/types/source-union-definitions.js";
 import { createRustStructuralShapePlanRegistry } from "../../../dist/analysis/objects/shapes/structural-shape-registry.js";
 import { rustStructuralGenericCarrier } from "../../../dist/policy/types/objects/structural-generics.js";

@@ -6,13 +6,13 @@ import { createRustProgramRecordBuilder } from "../../../dist/analysis/program/r
 import { createRustCarrierProbe } from "../../../dist/analysis/program/carrier-probe.js";
 import { rustResolutionContext } from "../../../dist/analysis/program/walk.js";
 import { sourceCallableValueParameters } from "@tsonic/target-api/source";
-import { finalizeRustCallableSignature, resolveRustCallableSignatureCarrier } from "../../../dist/analysis/callables/signature-query.js";
-import * as callableSignatures from "../../../dist/analysis/callables/signature-query.js";
+import { finalizeRustCallableSignature, resolveRustCallableSignatureCarrier } from "../../../dist/analysis/callables/calls/signature-query.js";
+import * as callableSignatures from "../../../dist/analysis/callables/calls/signature-query.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 import { closedMetadataEquals } from "../../../dist/target-model/metadata/closed-data.js";
 import { recordClassSignatureFacts, recordInterfaceFacts } from "../../../dist/analysis/declarations/project-types.js";
 import { resolveRustCallableEnvironment } from "../../../dist/analysis/source-evidence/types/resolution/callable-environments.js";
-import { rustSourceFunctionValueCarrier } from "../../../dist/analysis/callables/function-values.js";
+import { rustSourceFunctionValueCarrier } from "../../../dist/analysis/callables/values/function-values.js";
 import { rustCallableProtocol, rustCallableInputProtocol, rustCallableInputTargetType } from "../../../dist/target-model/types/carriers/callables.js";
 import { resolveRustCallableInputCarrier } from "../../../dist/analysis/source-evidence/types/resolution/callable-inputs.js";
 import { resolveRustTargetType } from "../../../dist/analysis/source-evidence/types/resolution/target.js";

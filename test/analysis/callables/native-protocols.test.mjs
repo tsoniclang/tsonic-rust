@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createRustNativeCallableProtocolRegistry } from "../../../dist/analysis/callables/native-protocols.js";
+import { createRustNativeCallableProtocolRegistry } from "../../../dist/analysis/callables/native/native-protocols.js";
 import { rustNativeCallableErrorChannel, rustNativeCallableErrorType } from "../../../dist/policy/types/callables/native-protocols.js";
 import { rustCallableTargetType, rustFutureTargetType, rustJsPromiseTargetType, rustJsValueTargetType, rustSourcePrimitiveTargetType }
   from "../../../dist/target-model/types/index.js";

@@ -14,7 +14,7 @@ import { instantiateRustProjectMethodDispatchArguments } from "../project-types/
 import type { RustProjectTypePolicy } from "../project-types/index.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import type { RustLifetimeIndex } from "../../target-model/lifetimes/index.js";
-import { sourceCallableParameterAbis, sourceCallableReturnCarrier, substituteRustCallableParameterAbi, projectOwnerTypeSubstitutions } from "../callables/adapters.js";
+import { sourceCallableParameterAbis, sourceCallableReturnCarrier, substituteRustCallableParameterAbi, projectOwnerTypeSubstitutions } from "../callables/native/adapters.js";
 import { selectRustCallableParameterAdapters, selectRustCallableValueAdapter } from "../../policy/conversions/callable-adapters.js";
 
 export interface RustObjectLiteralMethodAdapterIssue {

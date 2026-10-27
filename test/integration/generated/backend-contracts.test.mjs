@@ -13,9 +13,9 @@ import {
 } from "../../../dist/backend/planner/types/fallible-shape.js";
 import { rustTypeFromCarrier } from "../../../dist/backend/planner/types/carrier-syntax.js";
 import { requireProviderArgumentPassingFacts } from "../../../dist/backend/planner/expressions/index.js";
-import { sourceCallSelectedMemberMatches } from "../../../dist/analysis/callables/source-call-evidence.js";
+import { sourceCallSelectedMemberMatches } from "../../../dist/analysis/callables/calls/source-call-evidence.js";
 import { emptyRustTypeDefinitions } from "../../../dist/target-model/types/source-union-definitions.js";
-import { analyzeRustSourceCallArguments } from "../../../dist/analysis/callables/source-call-arguments.js";
+import { analyzeRustSourceCallArguments } from "../../../dist/analysis/callables/calls/source-call-arguments.js";
 import { createRustSourceCallArgumentProducer } from "../../../dist/analysis/program/records/source-call-arguments.js";
 import { selectRustProviderSourceOccurrence } from "../../../dist/analysis/operations/provider-source-inputs.js";
 import {

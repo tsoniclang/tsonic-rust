@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { selectRustNativeCallbackParameterStorage } from "../../../dist/analysis/callables/native-parameters.js";
+import { selectRustNativeCallbackParameterStorage } from "../../../dist/analysis/callables/native/native-parameters.js";
 import { jsOperationRows } from "../../../dist/policy/operations/source-profiles/js/rows.js";
 import { rustCallablePhysicalCarrier } from "../../../dist/policy/conversions/callable-physical.js";
 import { rustCallablePhysicalSignature } from "../../../dist/target-model/conversions/callable-physical.js";

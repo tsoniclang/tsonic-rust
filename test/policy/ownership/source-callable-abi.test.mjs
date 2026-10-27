@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createTargetSourceProgram } from "@tsonic/target-api/source";
 import { createSourceStorageQuery } from "@tsonic/target-api/analysis";
-import { createRustSourceCallableAbiResolver } from "../../../dist/analysis/callables/source-callable-abi.js";
+import { createRustSourceCallableAbiResolver } from "../../../dist/analysis/callables/calls/source-callable-abi.js";
 import { rustCallableTargetType, rustSourcePrimitiveTargetType, rustStructuralObjectTargetType, rustStructuralObjectCarrierValue } from "../../../dist/target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 import { analyzeRust, compileRust } from "../../helpers/rust-session.mjs";

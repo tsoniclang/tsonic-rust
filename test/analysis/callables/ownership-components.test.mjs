@@ -5,17 +5,17 @@ import { createSourceStorageQuery } from "@tsonic/target-api/analysis";
 import { createTargetSourceProgram, Node_Initializer, sourceParameterIsProperty } from "@tsonic/target-api/source";
 import {
   createRustCallableOwnershipComponentQueries, defaultRustCallableOwnershipLimits,
-} from "../../../dist/analysis/callables/ownership-components.js";
+} from "../../../dist/analysis/callables/ownership/ownership-components.js";
 import { analyzeRustReceiverFieldCaptures } from "../../../dist/analysis/project-types/receiver-captures.js";
 import { createRustProjectTypePolicy } from "../../../dist/analysis/project-types/catalog/resolution.js";
 import { createRustNamePlan } from "../../../dist/analysis/names/plan.js";
 import { rustProjectCallableTargetName } from "../../../dist/analysis/names/source-member-name.js";
-import { analyzeRustNativeParticipation } from "../../../dist/analysis/callables/participation.js";
+import { analyzeRustNativeParticipation } from "../../../dist/analysis/callables/calls/participation.js";
 import { createRustProgramRecordBuilder } from "../../../dist/analysis/program/records/create.js";
 import { analyzeRustLifetimes } from "../../../dist/analysis/declarations/lifetimes.js";
 import { rustProjectGenericParameters } from "../../../dist/policy/types/project/project-generic-contract.js";
-import { createRustCallableOwnershipRegistry, selectRustCallableOwnership } from "../../../dist/analysis/callables/ownership-plan.js";
-import { selectRustCallableOwnershipCarrier } from "../../../dist/analysis/callables/ownership-carriers.js";
+import { createRustCallableOwnershipRegistry, selectRustCallableOwnership } from "../../../dist/analysis/callables/ownership/ownership-plan.js";
+import { selectRustCallableOwnershipCarrier } from "../../../dist/analysis/callables/ownership/ownership-carriers.js";
 import { rustCallableTargetType, rustCallableProtocol } from "../../../dist/target-model/types/carriers/callables.js";
 import { rustFrameCallableValue } from "../../../dist/target-model/types/carriers/frame-callables.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";

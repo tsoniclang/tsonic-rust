@@ -9,7 +9,7 @@ import { rustUninhabitedError } from "../../policy/conversions/callable-physical
 import type { Node } from "@tsonic/tsts";
 import type { RustPromiseBodies } from "../../target-model/records/callables-and-resources.js";
 import { rustCallableProtocol } from "../../target-model/types/carriers/callables.js";
-import { selectRustProducerError, type RustProducerErrorContext } from "../callables/producer-errors.js";
+import { selectRustProducerError, type RustProducerErrorContext } from "../callables/calls/producer-errors.js";
 
 export const rustPureErrorEffects: RustErrorEffectsFact = Object.freeze({
   localErrors: false, nativeErrors: Object.freeze([]),

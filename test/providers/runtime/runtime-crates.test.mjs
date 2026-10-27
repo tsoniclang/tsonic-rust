@@ -15,7 +15,7 @@ import {
   rustMinimumFoundationAttributeName,
 } from "../../../dist/target-model/project/cargo-reference.js";
 
-const workspace = (prefix) => createTestWorkspace(fileURLToPath(new URL("../../../.temp/", import.meta.url)), prefix);
+const workspace = (prefix) => createTestWorkspace(fileURLToPath(new URL("../../../.temp", import.meta.url)), prefix);
 
 function crate(root, directory, manifest) {
   const path = join(root, directory);

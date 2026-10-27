@@ -6,7 +6,7 @@ import { createRustRecordFixture } from "../../../helpers/records.mjs";
 import { createRustProgramRecordBuilder } from "../../../../dist/analysis/program/records/create.js";
 import { createRustCarrierProbe } from "../../../../dist/analysis/program/carrier-probe.js";
 import { finalizeProjectSourceGenericArguments } from "../../../../dist/analysis/operations/project-call-generics.js";
-import { finalizeRustCallableSignature } from "../../../../dist/analysis/callables/signature-query.js";
+import { finalizeRustCallableSignature } from "../../../../dist/analysis/callables/calls/signature-query.js";
 import { closedMetadataEquals } from "../../../../dist/target-model/metadata/closed-data.js";
 
 // Families keyed by closed carrier metadata or physical owners, not by source nodes; the node snapshot skips them.

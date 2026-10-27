@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createRustTypeDefinitionRegistry } from "../../../dist/analysis/project-types/type-definitions.js";
 import { selectRustSourceCallResult } from "../../../dist/analysis/source-evidence/types/resolution/call-results.js";
-import { rustSourceCallResultProjectionMatches } from "../../../dist/analysis/callables/source-call-results.js";
+import { rustSourceCallResultProjectionMatches } from "../../../dist/analysis/callables/calls/source-call-results.js";
 import { rustCallableTargetType, rustOptionTargetType, rustSourceOptionalTargetType, rustJsPromiseTargetType, rustSourcePrimitiveTargetType, rustSourceUnionTargetType, rustStringTargetType, rustUnitTargetType } from "../../../dist/target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 

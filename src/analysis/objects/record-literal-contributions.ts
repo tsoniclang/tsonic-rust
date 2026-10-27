@@ -5,7 +5,7 @@ import { rustStructuralMethodStorageCarrier } from "../../policy/types/objects/m
 import { appendRustDiagnostic, rustResolutionContext } from "../program/walk.js";
 
 import { resolveExpressionCarrier } from "../source-evidence/types/resolution/expression-carriers.js";
-import { resolveFunctionExpressionCarrier } from "../callables/closures.js";
+import { resolveFunctionExpressionCarrier } from "../callables/values/closures.js";
 import { resolveObjectLiteralMethodCarrier, resolveProjectMethodPropertyCarrier, resolveRustRecordShape } from "./shapes/record-shapes.js";
 
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
@@ -17,7 +17,7 @@ import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
 import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
-import { projectRecordMemberImplementation, selectedProjectMethodContracts } from "../objects/record-member-contracts.js";
+import { projectRecordMemberImplementation, selectedProjectMethodContracts } from "./record-member-contracts.js";
 
 import { rustGenericCallableProtocol } from "../../target-model/types/carriers/generic-callables.js";
 import { rustTypeParameterFromSourceContract } from "../../target-model/types/carriers/generic-references.js";

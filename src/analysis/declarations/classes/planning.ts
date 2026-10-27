@@ -14,7 +14,7 @@ import { rustTargetGenericReferences } from "../../../target-model/types/carrier
 import { rustLifetimeKey } from "../../../target-model/lifetimes/index.js";
 import { rustLocationTargetType } from "../../../target-model/types/index.js";
 import { isRustCopyCarrier } from "../../../policy/constraints/native-traits.js";
-import { createRustNativeConstructorContract, createRustSourceCallableContract } from "../../callables/source-callable-abi.js";
+import { createRustNativeConstructorContract, createRustSourceCallableContract } from "../../callables/calls/source-callable-abi.js";
 
 export function analyzeRustClassEmission(input: {
   readonly program: Omit<RustAnalysisProgram, "reachability">;

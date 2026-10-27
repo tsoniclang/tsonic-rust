@@ -6,7 +6,7 @@ import { analyzeRust, boolCarrier, compileRust } from "../../helpers/rust-sessio
 import { runCargo, validateGeneratedProject, writeGeneratedProject } from "../../helpers/cargo-projects.mjs";
 import { assertRejectedAsyncSource } from "../../helpers/native-promise-lifetimes.mjs";
 import { analyzeRustCheckedContext } from "../../helpers/rust-session-analysis-context.mjs";
-import { analyzeRustPromiseResults, analyzeRustPromiseResultUses } from "../../../dist/analysis/callables/promise-results.js";
+import { analyzeRustPromiseResults, analyzeRustPromiseResultUses } from "../../../dist/analysis/callables/async/promise-results.js";
 import { rustAwaitSelectionLeaves } from "../../../dist/target-model/types/await.js";
 import { rustAwaitSelection } from "../../../dist/policy/operations/flow/await.js";
 import { rustJsPromiseTargetType } from "../../../dist/target-model/types/carriers/promises.js";

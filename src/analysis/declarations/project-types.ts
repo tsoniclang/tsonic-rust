@@ -13,8 +13,8 @@ import { appendRustDiagnostic, rustOperationContext, rustResolutionContext } fro
 import { resolveRustTargetTypeRef } from "../source-evidence/types/resolution/source.js";
 import { selectRustCapturedFieldStorage } from "../../policy/ownership/captured-field-storage.js";
 
-import { finalizeRustCallableSignature } from "../callables/signature-query.js";
-import { recordCallableDefaultParameterFacts, recordParameterAbiFacts } from "../callables/parameter-facts.js";
+import { finalizeRustCallableSignature } from "../callables/calls/signature-query.js";
+import { recordCallableDefaultParameterFacts, recordParameterAbiFacts } from "../callables/values/parameter-facts.js";
 import { recordStatementFacts } from "../control-flow/statements.js";
 import { resolveTypeNodeCarrier } from "../source-evidence/types/source-carriers.js";
 import { requireDenseSourceNodes } from "../source-evidence/dense-nodes.js";

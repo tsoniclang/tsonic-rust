@@ -3,7 +3,7 @@ import test from "node:test";
 import { createSourceStorageQuery } from "@tsonic/target-api/analysis";
 import { createTargetSourceProgram } from "@tsonic/target-api/source";
 import { analyzeRust, compileRust } from "../../helpers/rust-session.mjs";
-import { analyzeRustNativeParticipation } from "../../../dist/analysis/callables/participation.js";
+import { analyzeRustNativeParticipation } from "../../../dist/analysis/callables/calls/participation.js";
 import { createRustProgramRecordBuilder } from "../../../dist/analysis/program/records/create.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 import { rustUnionLeaves } from "../../../dist/target-model/types/union-relations.js";

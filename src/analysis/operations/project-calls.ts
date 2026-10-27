@@ -7,7 +7,7 @@ import { appendMalformedSourceAst } from "../declarations/project-types.js";
 import { appendRustDiagnostic, rustResolutionContext } from "../program/walk.js";
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 
-import { resolveParameterAbi } from "../callables/parameter-facts.js";
+import { resolveParameterAbi } from "../callables/values/parameter-facts.js";
 
 import { resolveExpressionCarrier } from "../source-evidence/types/resolution/expression-carriers.js";
 
@@ -25,15 +25,15 @@ import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustSelectedTargetSignature } from "../../target-model/records/member-selections.js";
 
 import { retainRustSelectedCallableResultTemplate, retainRustSelectedSourceCallResultStorage, selectRustSourceCallResult } from "../source-evidence/types/resolution/call-results.js";
-import { rustSourceCallArgumentCarriers, rustSourceCallResultWithInputLifetimes } from "../callables/source-call-lifetimes.js";
-import { rustRetainedCallLifetimes, rustRetainedCallResult } from "../callables/retained-environments.js";
-import { rustRetainedEnvironment } from "../callables/retained-values.js";
+import { rustSourceCallArgumentCarriers, rustSourceCallResultWithInputLifetimes } from "../callables/ownership/source-call-lifetimes.js";
+import { rustRetainedCallLifetimes, rustRetainedCallResult } from "../callables/ownership/retained-environments.js";
+import { rustRetainedEnvironment } from "../callables/ownership/retained-values.js";
 import { rustTargetGenericReferences } from "../../target-model/types/carriers/generic-references.js";
 import { rustLifetimeKey, rustPlaceholderLifetime } from "../../target-model/lifetimes/index.js";
 
 import { recordRustComputedCallEvaluation } from "./computed-members.js";
 import { requireRustRecord } from "../program/records/required-records.js";
-import { rustPromiseBodyInvocationCarrier } from "../callables/promise-bodies.js";
+import { rustPromiseBodyInvocationCarrier } from "../callables/async/promise-bodies.js";
 import { rustSpreadElementCarrier } from "../../target-model/operations/rest-assembly.js";
 import { rustFixedArrayCarrierValue } from "../../target-model/types/carriers/native.js";
 import { rustTargetConstInteger } from "../../target-model/types/generic-arguments.js";

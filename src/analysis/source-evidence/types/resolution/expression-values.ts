@@ -15,7 +15,7 @@ import { resolveArrayLiteralCarrier } from "../../../operations/array-literals.j
 import { resolveCallLikeCarrier, resolveIdentifierCarrier } from "./references.js";
 import { resolveExpressionCarrier } from "./expression-carriers.js";
 import { createRustCarrierProbe } from "../../../program/carrier-probe.js";
-import { resolveFunctionExpressionCarrier } from "../../../callables/closures.js";
+import { resolveFunctionExpressionCarrier } from "../../../callables/values/closures.js";
 import { resolveRecordLiteralCarrier } from "../../../objects/object-literals.js";
 import { resolveRustTargetTypeRef } from "./source.js";
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";

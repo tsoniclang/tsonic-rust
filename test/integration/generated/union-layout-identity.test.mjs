@@ -8,8 +8,8 @@ import { rustUnionEntryTransferIssue } from "../../../dist/policy/conversions/un
 import { emptyRustTypeDefinitions } from "../../../dist/target-model/types/source-union-definitions.js";
 import { rustCallableTargetType, rustFutureTargetType, rustJsArrayTargetType, rustOptionTargetType, rustSourcePrimitiveTargetType,
   rustSourceUnionTargetType, rustVecTargetType } from "../../../dist/target-model/types/index.js";
-import { selectRustNativeFutureTypeDemand } from "../../../dist/analysis/callables/native-future-inputs.js";
-import { createRustNativeStorageJoins } from "../../../dist/analysis/callables/native-storage-joins.js";
+import { selectRustNativeFutureTypeDemand } from "../../../dist/analysis/callables/native/native-future-inputs.js";
+import { createRustNativeStorageJoins } from "../../../dist/analysis/callables/storage/native-storage-joins.js";
 
 const bodyType = "string | number | boolean | null | Record<string, unknown> | unknown[]";
 const identityCode = "RUST_UNION_ENTRY_STORAGE_IDENTITY_NOT_PRESERVED";

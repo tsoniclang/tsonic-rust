@@ -6,10 +6,10 @@ import { analyzeRust, artifactText, compileRust } from "../../helpers/rust-sessi
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 import { analyzeRustCheckedContext } from "../../helpers/rust-session-analysis-context.mjs";
 import { analyzeRustErrorEffects } from "../../helpers/rust-error-analysis.mjs";
-import { createRustNativeCallableProducerPlan } from "../../../dist/analysis/callables/native-producers.js";
-import { createRustGenericCallablePhysicalPlan } from "../../../dist/analysis/callables/generic-physical.js";
-import { createRustNativeCapturePlan } from "../../../dist/analysis/callables/native-captures.js";
-import { createRustFrameCallablePlan } from "../../../dist/analysis/callables/frame-values.js";
+import { createRustNativeCallableProducerPlan } from "../../../dist/analysis/callables/native/native-producers.js";
+import { createRustGenericCallablePhysicalPlan } from "../../../dist/analysis/callables/generics/generic-physical.js";
+import { createRustNativeCapturePlan } from "../../../dist/analysis/callables/native/native-captures.js";
+import { createRustFrameCallablePlan } from "../../../dist/analysis/callables/values/frame-values.js";
 import { rustCallableProtocol } from "../../../dist/target-model/types/carriers/callables.js";
 import { rustOptionElementCarrier } from "../../../dist/target-model/types/carriers/optional.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";

@@ -900,11 +900,11 @@ test("provider purity uses one generic operation-form writability policy", () =>
 });
 
 test("operation carriers and selected identities are admitted before native rendering", () => {
-  const calls = readFileSync(join(sourceRoot, "analysis/callables/source-calls.ts"), "utf8");
-  const arguments_ = readFileSync(join(sourceRoot, "analysis/callables/source-call-arguments.ts"), "utf8");
+  const calls = readFileSync(join(sourceRoot, "analysis/callables/calls/source-calls.ts"), "utf8");
+  const arguments_ = readFileSync(join(sourceRoot, "analysis/callables/calls/source-call-arguments.ts"), "utf8");
   const binary = readFileSync(join(sourceRoot, "analysis/operations/binary-emission.ts"), "utf8");
   const unary = readFileSync(join(sourceRoot, "analysis/operations/expression-unary.ts"), "utf8");
-  const closure = readFileSync(join(sourceRoot, "analysis/callables/lambda-emission.ts"), "utf8");
+  const closure = readFileSync(join(sourceRoot, "analysis/callables/emission/lambda-emission.ts"), "utf8");
   const provider = readFileSync(join(sourceRoot, "analysis/operations/provider-inputs.ts"), "utf8");
   assert.match(calls, /sourceCallEffectsMatch\(fact, effects, program\.typeDefinitions, native, method\)/u);
   assert.match(arguments_, /sourceCallSelectedMemberMatches\(fact, selectedCall/u);
@@ -934,7 +934,7 @@ test("malformed compiler collection slots fail closed instead of disappearing", 
     .map((path) => readFileSync(path, "utf8"))
     .join("\n");
   const sourceArrays = readFileSync(join(sourceRoot, "analysis/operations/array-literals.ts"), "utf8");
-  const sourceCallables = readFileSync(join(sourceRoot, "analysis/callables/lambda-emission.ts"), "utf8");
+  const sourceCallables = readFileSync(join(sourceRoot, "analysis/callables/emission/lambda-emission.ts"), "utf8");
   assert.match(sourceArrays, /presentElements\.length/u);
   assert.match(sourceArrays, /Fixed-array literal has/u);
   assert.match(sourceCallables, /parameters\.length - leading\.length !== sourceParameters\.length/u);
@@ -959,7 +959,7 @@ test("malformed compiler collection slots fail closed instead of disappearing", 
 
 test("project-source admission requires the exact finalized selected member ABI", () => {
   const expressions = readFileSync(
-    join(sourceRoot, "analysis/callables/source-call-evidence.ts"),
+    join(sourceRoot, "analysis/callables/calls/source-call-evidence.ts"),
     "utf8",
   );
   const selectedGate = expressions.slice(expressions.indexOf("export function sourceCallSelectedMemberMatches("));

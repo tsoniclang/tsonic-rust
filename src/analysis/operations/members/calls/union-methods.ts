@@ -3,7 +3,7 @@ import type { Node } from "@tsonic/tsts";
 import { sourceCallableValueParameters } from "@tsonic/target-api/source";
 import type { RustCheckedCallSelectionInput } from "../../../../policy/model/contracts.js";
 import { resolveRustTargetTypeRef } from "../../../source-evidence/types/resolution/source.js";
-import { selectRustPointerReturnCarrier } from "../../../callables/pointer-return.js";
+import { selectRustPointerReturnCarrier } from "../../../callables/ownership/pointer-return.js";
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
 import { rustOptionElementCarrier, rustSourceUnionCarrierValue, substituteRustTargetGenerics } from "../../../../target-model/types/index.js";
 import { rustLifetimeKey, type RustLifetimeRef } from "../../../../target-model/lifetimes/index.js";

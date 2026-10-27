@@ -19,7 +19,7 @@ import { providerEvaluationOrderSource } from "../../../../tsonic/test/fixtures/
 
 
 import { rustProviderInputBorrowMode } from "../../../dist/policy/operations/members/input-borrows.js";
-import { rustCallArgumentIsOwned, rustCallArgumentMode } from "../../../dist/analysis/callables/parameter-passing.js";
+import { rustCallArgumentIsOwned, rustCallArgumentMode } from "../../../dist/analysis/callables/values/parameter-passing.js";
 import { borrowedScalarFieldWritesSource, ordinaryScalarFieldWritesSource, ownedFieldSnapshotSource } from "../../../../tsonic/test/fixtures/borrowed-scalar-field-writes.mjs";
 import { receiverFieldCaptureEdges } from "../../../../tsonic/test/fixtures/receiver-field-capture-edges.mjs";
 

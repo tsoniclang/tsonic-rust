@@ -4,7 +4,7 @@ import { analyzeRust } from "../../helpers/rust-session.mjs";
 import { independentFrameAlternativesSource } from "../../../../tsonic/test/fixtures/independent-frame-alternatives.mjs";
 import { createTargetSourceProgram } from "@tsonic/target-api/source";
 import { createSourceStorageQuery } from "@tsonic/target-api/analysis";
-import { createRustFrameCallablePlan } from "../../../dist/analysis/callables/frame-values.js";
+import { createRustFrameCallablePlan } from "../../../dist/analysis/callables/values/frame-values.js";
 
 test("native frame storage retains only counters required after construction", () => {
   const { program } = analyzeRust({ files: { "index.ts": independentFrameAlternativesSource } });

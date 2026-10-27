@@ -33,19 +33,19 @@ import { classifyRustCallableRequirements } from "./generic-callable-requirement
 import { normalizeRustGenericRequirements } from "./generic-requirement-contract.js";
 import { mapRustTargetTypes } from "../../target-model/types/carriers/substitution.js";
 import { rustTypeFamilyNormalizer } from "../project-types/type-family-normalization.js";
-import type { RustGenericCallablePlan } from "../callables/generic-values.js";
-import type { RustNativeCallableInputPlan } from "../callables/native-inputs.js";
+import type { RustGenericCallablePlan } from "../callables/generics/generic-values.js";
+import type { RustNativeCallableInputPlan } from "../callables/native/native-inputs.js";
 import type { RustFrameCallablePlan } from "../../target-model/records/frame-callables.js";
 import type { RustProjectStructuralView } from "../../target-model/records/project-structural-views.js";
 import { rustStructuralViewRequirementUses } from "./structural-view-requirements.js";
 import type { RustAnalyzedErrorRegions } from "../errors/regions.js";
 import type { RustErrorTypeContext } from "../errors/error-types.js";
 import type { RustPromiseBodies } from "../../target-model/records/callables-and-resources.js";
-import type { RustNativeStoragePlan } from "../callables/native-storage.js";
+import type { RustNativeStoragePlan } from "../callables/storage/native-storage.js";
 import type { RustClassValuePlan } from "../../target-model/records/class-values.js";
 import type { RustStaticRequirementEvidence } from "./generic-carrier-requirements.js";
-import type { RustProjectCallableFieldStorage } from "../callables/project-field-storage.js";
-import { rustSuspendingPromiseBorrowReason } from "../callables/suspension-storage.js";
+import type { RustProjectCallableFieldStorage } from "../callables/storage/project-field-storage.js";
+import { rustSuspendingPromiseBorrowReason } from "../callables/storage/suspension-storage.js";
 
 import type { RustGenericRequirement, RustDeclarationGenericRequirementContract } from "../../target-model/records/generic-requirements.js";
 

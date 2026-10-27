@@ -8,7 +8,7 @@ import { rustOptionElementCarrier } from "../../../dist/target-model/types/carri
 import { rustUnionLeaves } from "../../../dist/target-model/types/union-relations.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 import { closedUnionCallbackCompletionSource } from "../../../../tsonic/test/fixtures/closed-union-callback-completion.mjs";
-import * as futureInputs from "../../../dist/analysis/callables/native-future-inputs.js";
+import * as futureInputs from "../../../dist/analysis/callables/native/native-future-inputs.js";
 import { rustFutureTargetType } from "../../../dist/target-model/types/carriers/primitives.js";
 import { rustSourcePrimitiveTargetType } from "../../../dist/target-model/types/carriers/native.js";
 import { rustCallableTargetType } from "../../../dist/target-model/types/carriers/callables.js";

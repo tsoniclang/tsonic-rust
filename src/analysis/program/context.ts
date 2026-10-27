@@ -26,9 +26,9 @@ import { createRustProjectMethodPropertyPlanRegistry } from "../project-types/me
 import type { RustProjectMethodPropertyPlanRegistry } from "../project-types/method-properties.js";
 import { createRustProjectFieldDispatchPlanRegistry } from "../project-types/field-dispatch.js";
 import type { RustProjectFieldDispatchPlanRegistry } from "../project-types/field-dispatch.js";
-import { createRustSourceCallableSpecializationPlanRegistry } from "../callables/specializations.js";
-import type { RustSourceCallableSpecializationPlanRegistry } from "../callables/specializations.js";
-import { createRustCallableValuePlanRegistry, type RustCallableValuePlanRegistry } from "../callables/value-plan.js";
+import { createRustSourceCallableSpecializationPlanRegistry } from "../callables/generics/specializations.js";
+import type { RustSourceCallableSpecializationPlanRegistry } from "../callables/generics/specializations.js";
+import { createRustCallableValuePlanRegistry, type RustCallableValuePlanRegistry } from "../callables/values/value-plan.js";
 import { createRustStructuralShapePlanRegistry } from "../objects/shapes/structural-shape-registry.js";
 import type { RustStructuralShapePlanRegistry } from "../objects/shapes/structural-shape-registry.js";
 import { createRustFrozenDataWriteRegistry, type RustFrozenDataWriteRegistry } from "../objects/frozen-data-writes.js";
@@ -44,19 +44,19 @@ import { analyzeSourceReceiverOccurrences, createSourceStorageQuery, type Source
 import { createRustRetainedErrorDemandSelection } from "../objects/retained-error-demands.js";
 import { createRustSourceProfileRegistry } from "../project/source-profiles.js";
 import { createRustSourceProfileStorageEffects } from "../operations/source-profiles/source-storage-effects.js";
-import { createRustCallableOwnershipRegistry, type RustCallableOwnershipRegistry } from "../callables/ownership-plan.js";
-import { createRustSourceCallableQueries } from "../callables/borrowed-returns.js";
+import { createRustCallableOwnershipRegistry, type RustCallableOwnershipRegistry } from "../callables/ownership/ownership-plan.js";
+import { createRustSourceCallableQueries } from "../callables/ownership/borrowed-returns.js";
 import { createRustExplicitUnsafeContexts } from "../safety/explicit-regions.js";
-import { createRustRetainedEnvironmentQueries } from "../callables/retained-environment-shapes.js";
+import { createRustRetainedEnvironmentQueries } from "../callables/ownership/retained-environment-shapes.js";
 import { analyzeRustNumericLiteralAdmission } from "../numeric/literal-admission.js";
-import { analyzeRustPromiseResultUses } from "../callables/promise-results.js";
+import { analyzeRustPromiseResultUses } from "../callables/async/promise-results.js";
 import type { RustPromiseResultUses } from "../../target-model/records/promise-results.js";
-import { createRustPromiseBodySelection, type RustPromiseBodySelection } from "../callables/promise-bodies.js";
-import { analyzeRustNativeParticipation } from "../callables/participation.js";
+import { createRustPromiseBodySelection, type RustPromiseBodySelection } from "../callables/async/promise-bodies.js";
+import { analyzeRustNativeParticipation } from "../callables/calls/participation.js";
 import { selectRustSourcePackageComponentIdentities, type SelectRustSourcePackageComponentIdentitiesResult } from "../source-modules/component-semantics.js";
 import { collectRustSourcePackageBoundaries } from "../source-modules/boundaries.js";
 import { selectRustNativeModuleCallables, type RustNativeModuleCallables } from "./module-bindings.js";
-import { analyzeRustNativeTaskGraph } from "../callables/native-tasks.js";
+import { analyzeRustNativeTaskGraph } from "../callables/native/native-tasks.js";
 
 export interface RustAnalysisContext extends RustSourcePolicyContext {
   readonly sourceProfiles: import("../../policy/types/model/source-profile.js").RustSourceProfileRegistry;

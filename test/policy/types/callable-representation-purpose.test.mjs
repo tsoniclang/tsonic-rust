@@ -9,10 +9,10 @@ import { resolveRustConstructSignature } from "../../../dist/analysis/source-evi
 import { analyzeRust } from "../../helpers/rust-session.mjs";
 import { rustCallableInputProtocol } from "../../../dist/target-model/types/carriers/callables.js";
 import { rustCallableTargetType } from "../../../dist/target-model/types/carriers/callables.js";
-import { rustSourceClosureValueCarrier } from "../../../dist/analysis/callables/function-values.js";
+import { rustSourceClosureValueCarrier } from "../../../dist/analysis/callables/values/function-values.js";
 import { rustResolutionContext } from "../../../dist/analysis/program/walk.js";
 import { analyzeRustOperations } from "../../helpers/rust-operation-analysis.mjs";
-import { selectRustCallableOwnership } from "../../../dist/analysis/callables/ownership-plan.js";
+import { selectRustCallableOwnership } from "../../../dist/analysis/callables/ownership/ownership-plan.js";
 
 
 for (const surfaces of [[], ["js"]]) {

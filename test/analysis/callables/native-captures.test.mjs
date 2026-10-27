@@ -5,7 +5,7 @@ import { analyzeRustErrorEffects } from "../../helpers/rust-error-analysis.mjs";
 import { createRustRecordFixture } from "../../helpers/records.mjs";
 
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
-import { createRustNativeCapturePlan, completeRustNativeCaptureCarrier } from "../../../dist/analysis/callables/native-captures.js";
+import { createRustNativeCapturePlan, completeRustNativeCaptureCarrier } from "../../../dist/analysis/callables/native/native-captures.js";
 import { rustTargetGenericReferences } from "../../../dist/target-model/types/carriers/generic-references.js";
 import { rustFixedArrayTargetType, rustFixedArrayCarrierValue } from "../../../dist/target-model/types/carriers/native.js";
 import { rustLifetimeKey } from "../../../dist/target-model/lifetimes/index.js";

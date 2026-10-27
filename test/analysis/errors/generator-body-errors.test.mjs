@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRustErrorEffects } from "../../helpers/rust-error-analysis.mjs";
-import { selectRustProducerError } from "../../../dist/analysis/callables/producer-errors.js";
+import { selectRustProducerError } from "../../../dist/analysis/callables/calls/producer-errors.js";
 import { rustProducerErrorReference } from "../../../dist/target-model/types/carriers/producer-errors.js";
 import { rustInfallibleTargetId } from "../../../dist/target-model/types/carriers/source-types.js";
 import { Node_Expression } from "@tsonic/target-api/source";

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { sourceCallEffectsMatch } from "../../../../dist/analysis/callables/source-calls.js";
+import { sourceCallEffectsMatch } from "../../../../dist/analysis/callables/calls/source-calls.js";
 import { rustJsPromiseTargetType } from "../../../../dist/target-model/types/carriers/promises.js";
 import { int32Carrier } from "../../../helpers/rust-session.mjs";
 import { rustSourceOptionalTargetType } from "../../../../dist/target-model/types/index.js";

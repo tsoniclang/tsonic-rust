@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRust, compileRust, int32Carrier } from "../../helpers/rust-session.mjs";
 import { rustGenericCallableCarrier, rustGenericCallableValue } from "../../../dist/target-model/types/carriers/generic-callables.js";
-import { selectRustGenericCallableIdentity } from "../../../dist/analysis/callables/generic-identities.js";
+import { selectRustGenericCallableIdentity } from "../../../dist/analysis/callables/generics/generic-identities.js";
 import { createRustEffectsWorkBudget } from "../../../dist/analysis/errors/effects-work-budget.js";
 
 function fixture(source, fileName = "index.ts") {

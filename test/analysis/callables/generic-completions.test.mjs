@@ -2,10 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRustErrorEffects } from "../../helpers/rust-error-analysis.mjs";
 import { analyzeRustSourcePackageComponents } from "../../../dist/analysis/source-modules/component-semantics.js";
-import { createRustGenericCallableCompletionPlan } from "../../../dist/analysis/callables/generic-completions.js";
+import { createRustGenericCallableCompletionPlan } from "../../../dist/analysis/callables/generics/generic-completions.js";
 import { rustJsPromiseOutputTargetType } from "../../../dist/target-model/types/carriers/promises.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
-import { rustGenericCallableMemberInvocationBindings } from "../../../dist/analysis/callables/generic-bindings.js";
+import { rustGenericCallableMemberInvocationBindings } from "../../../dist/analysis/callables/generics/generic-bindings.js";
 
 function fixture(second) {
   const context = analyzeRustErrorEffects(`

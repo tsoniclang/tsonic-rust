@@ -1,7 +1,7 @@
 import { createRustRecordFixture } from "../../helpers/records.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
-import { recordRustModuleCallableStorage } from "../../../dist/analysis/callables/module-values.js";
+import { recordRustModuleCallableStorage } from "../../../dist/analysis/callables/values/module-values.js";
 import { createRustProgramRecordBuilder } from "../../../dist/analysis/program/records/create.js";
 
 

@@ -13,7 +13,7 @@ import type { RustCallableConversion } from "../../target-model/conversions/call
 import { rustCallableConversionErrorArities } from "../../policy/conversions/callable-physical.js";
 import type { RustCallableValueAdapter } from "../../target-model/records/callable-adapters.js";
 import type { RustNativeCallableProducer } from "../../target-model/records/native-producers.js";
-import type { RustCallableValuePlan } from "../callables/value-plan.js";
+import type { RustCallableValuePlan } from "../callables/values/value-plan.js";
 import type { RustProducerErrorReference } from "../../target-model/types/carriers/producer-errors.js";
 import { rustProducerErrorReference, rustProducerErrorTargetType } from "../../target-model/types/carriers/producer-errors.js";
 import { bindRustGenericArguments } from "../../target-model/types/carriers/generic-argument-bindings.js";
@@ -34,7 +34,7 @@ import { selectRustJsRejectionRegion } from "../../policy/operations/flow/js-rej
 import { rustCallableProtocol } from "../../target-model/types/carriers/callables.js";
 import { rustJsValueTargetType, rustProgramErrorTargetType } from "../../target-model/types/carriers/js.js";
 import type { RustPromiseBodies } from "../../target-model/records/callables-and-resources.js";
-import type { RustNativeTaskCompletion } from "../callables/native-tasks.js";
+import type { RustNativeTaskCompletion } from "../callables/native/native-tasks.js";
 import { mapRustAwaitSelection, type RustAwaitSelection } from "../../target-model/types/await.js";
 import type { RustAwaitValueLeafFact } from "../../target-model/records/await-values.js";
 import type { RustBinaryHookPlan } from "../project/index.js";
@@ -46,7 +46,7 @@ import { mergeRustErrorEffects, rustProducerInvocationErrorEffects } from "./err
 import { rustUninhabitedError } from "../../policy/conversions/callable-physical.js";
 import type { RustFrameCallablePlan } from "../../target-model/records/frame-callables.js";
 import { rustFrameCallableValue } from "../../target-model/types/carriers/frame-callables.js";
-import { rustFrameCallableEnvironmentBindings } from "../callables/frame-values.js";
+import { rustFrameCallableEnvironmentBindings } from "../callables/values/frame-values.js";
 
 export interface RustAnalyzedErrorRegions extends Pick<RustErrorRegionRecords, "get" | "sourceFor" | "producerError"> {
   lifecycleFor(initializers: readonly RustInitializerSelection[], owner: RustPhysicalErrorOwner): TargetStageResult<RustLifecycleErrorSelection>;

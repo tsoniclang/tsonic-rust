@@ -18,7 +18,7 @@ import type { RustModuleBindingAnalysis } from "./module-bindings.js";
 import type { RustOperationsProviderOptions } from "../operations/members/index.js";
 import type { RustPreparedDeferredCheckedCall } from "../../target-model/records/deferred-callbacks.js";
 import type { RustProviderOperationRow } from "../../target-model/identities/provider-relations.js";
-import type { RustSourceCallableAbiResolver } from "../callables/source-callable-abi.js";
+import type { RustSourceCallableAbiResolver } from "../callables/calls/source-callable-abi.js";
 import type { RustSourceProfileRegistry } from "../../policy/types/model/source-profile.js";
 import type { RustSourceTypeRegistry } from "../project-types/source-type-model.js";
 import type { RustTargetTypeResolutionContext } from "../source-evidence/types/resolution/index.js";
@@ -30,8 +30,8 @@ import type { RustTargetOperationFact } from "../../target-model/records/operati
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 import { recordRustConversionSelection } from "./records/value-carrier-admission.js";
 import type { RustOperationAttempt } from "./operation-attempts.js";
-import type { RustCallableSignatureState } from "../callables/signature-query.js";
-import type { RustInferredReturnMemo } from "../callables/inferred-return.js";
+import type { RustCallableSignatureState } from "../callables/calls/signature-query.js";
+import type { RustInferredReturnMemo } from "../callables/calls/inferred-return.js";
 import type { RustModuleCycleAnalysis } from "../module-initialization/cycles.js";
 
 export const rustTargetSemanticsExtensionId = "tsonic.rust.policy";

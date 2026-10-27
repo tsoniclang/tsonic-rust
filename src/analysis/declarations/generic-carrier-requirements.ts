@@ -5,9 +5,9 @@ import type { RustGenericRequirement, RustDeclarationGenericRequirementContract 
 import type { RustSourceGenericContract, RustLifetimeRef } from "../../target-model/lifetimes/index.js";
 import { rustLifetimeKey, rustStaticLifetime } from "../../target-model/lifetimes/index.js";
 import { rustRequiresCallableFieldStorage } from "../../policy/ownership/retained-storage.js";
-import type { RustProjectCallableFieldStorage } from "../callables/project-field-storage.js";
+import type { RustProjectCallableFieldStorage } from "../callables/storage/project-field-storage.js";
 import { rustLifetimeOutlives } from "../../policy/constraints/lifetime-outlives.js";
-import type { RustGenericCallablePlan } from "../callables/generic-values.js";
+import type { RustGenericCallablePlan } from "../callables/generics/generic-values.js";
 import type { RustFrameCallablePlan } from "../../target-model/records/frame-callables.js";
 import type { RustFrameCallableDefinition, RustFrameCallableEntryDefinition } from "../../target-model/records/frame-callables.js";
 import type { RustClassValuePlan } from "../../target-model/records/class-values.js";

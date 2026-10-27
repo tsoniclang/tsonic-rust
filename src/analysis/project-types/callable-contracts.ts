@@ -9,7 +9,7 @@ import { rustCallableInvocationResult } from "../../policy/types/callables/retur
 import { rustCallableProtocol } from "../../target-model/types/carriers/callables.js";
 import { selectRustProjectCallableSignature } from "../../policy/types/objects/project-dispatch-callables.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
-import { createRustSourceCallableContract } from "../callables/source-callable-abi.js";
+import { createRustSourceCallableContract } from "../callables/calls/source-callable-abi.js";
 
 export function closeRustProjectCallableContracts(
   program: Omit<RustAnalysisProgram, "reachability">,

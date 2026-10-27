@@ -21,15 +21,15 @@ import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustFactWalk } from "../../../program/walk.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 
-import { rustSourceFunctionValueCarrier } from "../../../callables/function-values.js";
-import { recordCallableValueSignatureForDeclaration } from "../../../callables/signatures.js";
+import { rustSourceFunctionValueCarrier } from "../../../callables/values/function-values.js";
+import { recordCallableValueSignatureForDeclaration } from "../../../callables/calls/signatures.js";
 
 import { rustCallableInvocationResult } from "../../../../policy/types/callables/return-contexts.js";
 import { resolveRustModuleBindingValue } from "../../../program/module-declarations.js";
 
 import { recordProjectSourceBinding, selectedDeclarationIsProjectSource } from "../../../storage/source-bindings.js";
 import { resolveSharedSourceMarkerCarrier } from "../../../operations/source-markers.js";
-import { applySelectedRuntimeCallableCall } from "../../../callables/runtime-callables.js";
+import { applySelectedRuntimeCallableCall } from "../../../callables/native/runtime-callables.js";
 export function resolveIdentifierCarrier(
   walk: RustFactWalk,
   identifier: Node,

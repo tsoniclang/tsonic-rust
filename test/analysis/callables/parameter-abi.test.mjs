@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createRustProgramRecordBuilder } from "../../../dist/analysis/program/records/create.js";
-import { recordRustParameterAbiSelection } from "../../../dist/analysis/callables/parameter-facts.js";
+import { recordRustParameterAbiSelection } from "../../../dist/analysis/callables/values/parameter-facts.js";
 import { selectRustSourceValueConversion } from "../../../dist/policy/conversions/selection.js";
 import { rustValueConversionContract } from "../../../dist/policy/conversions/contracts.js";
 

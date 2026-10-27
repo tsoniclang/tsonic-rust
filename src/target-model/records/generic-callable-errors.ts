@@ -1,9 +1,9 @@
 import type { TargetTypeRef } from "../types/model.js";
 
 import type { RustNativeErrorSource } from "../types/native-error-joins.js";
-import type { RustSourceCallEffectsFact } from "../records/object-methods.js";
-import type { RustGenericCallableEffectsFact } from "../records/generic-callable-effects.js";
-import type { RustGenericCallablePhysicalDefinition, RustGenericCallablePhysicalMember } from "../records/generic-callables.js";
+import type { RustSourceCallEffectsFact } from "./object-methods.js";
+import type { RustGenericCallableEffectsFact } from "./generic-callable-effects.js";
+import type { RustGenericCallablePhysicalDefinition, RustGenericCallablePhysicalMember } from "./generic-callables.js";
 
 export interface RustGenericCallableErrorIndex {
   forDefinition(definition: RustGenericCallablePhysicalDefinition): RustGenericCallableErrorSelection | undefined;

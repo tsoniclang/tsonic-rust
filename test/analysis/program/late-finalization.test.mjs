@@ -4,7 +4,7 @@ import { createRustProgramRecordBuilder } from "../../../dist/analysis/program/r
 import { createRustCarrierProbe } from "../../../dist/analysis/program/carrier-probe.js";
 import { recordFallibilityFacts } from "../../../dist/analysis/errors/fallibility.js";
 import { recordResourceManagementFacts } from "../../../dist/analysis/control-flow/resource-management.js";
-import { recordFutureValueFacts } from "../../../dist/analysis/callables/suspension.js";
+import { recordFutureValueFacts } from "../../../dist/analysis/callables/async/suspension.js";
 import { recordRustDeferredProducerEffects } from "../../../dist/analysis/errors/deferred-producer-effects.js";
 import { recordMethodSelfModeFacts } from "../../../dist/analysis/declarations/project-types.js";
 

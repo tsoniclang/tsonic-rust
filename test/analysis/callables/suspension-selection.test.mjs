@@ -5,8 +5,8 @@ import { analyzeRustOperations } from "../../helpers/rust-operation-analysis.mjs
 import { createRustRecordFixture } from "../../helpers/records.mjs";
 import { createRustProgramRecordBuilder } from "../../../dist/analysis/program/records/create.js";
 import { createRustCarrierProbe } from "../../../dist/analysis/program/carrier-probe.js";
-import { resolveRustSuspendedCallableStorage } from "../../../dist/analysis/callables/suspension-storage.js";
-import { finalizeRustCallableSignature } from "../../../dist/analysis/callables/signature-query.js";
+import { resolveRustSuspendedCallableStorage } from "../../../dist/analysis/callables/storage/suspension-storage.js";
+import { finalizeRustCallableSignature } from "../../../dist/analysis/callables/calls/signature-query.js";
 import { rustJsPromiseTargetType } from "../../../dist/target-model/types/carriers/promises.js";
 import { rustStringTargetType } from "../../../dist/target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";

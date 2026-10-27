@@ -2,7 +2,7 @@ import type { Node } from "@tsonic/tsts";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 
 import type { RustFactWalk } from "../program/walk.js";
-import { collectRustLexicalCaptures } from "../callables/closures.js";
+import { collectRustLexicalCaptures } from "../callables/values/closures.js";
 import { allocateRustGeneratedName } from "../../target-model/names/generated.js";
 import { rustSnakeCaseIdentifier } from "../../target-model/names/identifiers.js";
 import { Node_Initializer, sourceClassFieldIsTypeOnly } from "@tsonic/target-api/source";

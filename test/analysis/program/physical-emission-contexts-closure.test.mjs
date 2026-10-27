@@ -5,8 +5,8 @@ import { targetUseSiteRef } from "@tsonic/target-api/analysis";
 import { createTargetSourceProgram, sourceClassFieldHasStorage } from "@tsonic/target-api/source";
 import { analyzeRust, compileRust } from "../../helpers/rust-session.mjs";
 import { analyzeRustAnalysisProgram } from "../../../dist/analysis/program/index.js";
-import { prepareRustEmissionContextRequests, rustEmissionIdentityBindings } from "../../../dist/analysis/callables/emission-contexts.js";
-import { rustEmissionDeclarationBindings } from "../../../dist/analysis/callables/emission-requests.js";
+import { prepareRustEmissionContextRequests, rustEmissionIdentityBindings } from "../../../dist/analysis/callables/emission/emission-contexts.js";
+import { rustEmissionDeclarationBindings } from "../../../dist/analysis/callables/emission/emission-requests.js";
 import { rustLifetimeKey } from "../../../dist/target-model/lifetimes/index.js";
 import { prepareRustPhysicalEmissionContexts } from "../../../dist/analysis/program/physical-emission-contexts.js";
 import { analyzeRustInitializationErrors } from "../../../dist/analysis/errors/initialization.js";
@@ -300,15 +300,15 @@ test("the planner phase label starts at publication, after the actual callable s
   const ordinary = compileRust(options);
   assert.equal(ordinary.result.diagnostics.length, 0, ordinary.result.diagnostics.map(issue => issue.message).join("\n").slice(0, 2048));
   assert.equal(ordinary.result.artifacts.length > 0, true, "uninjected ordinary pipeline reaches emission");
-  const registryUrl = new URL("../../../dist/analysis/callables/value-plan.js", import.meta.url).href;
+  const registryUrl = new URL("../../../dist/analysis/callables/values/value-plan.js", import.meta.url).href;
   const componentsUrl = new URL("../../../dist/analysis/source-modules/component-semantics.js", import.meta.url).href;
   const handlerUrl = new URL("../../../dist/analysis/operations/native-handlers.js", import.meta.url).href;
-  const collectorUrl = new URL("../../../dist/analysis/callables/emission-requests.js", import.meta.url).href;
-  const storageUrl = new URL("../../../dist/analysis/callables/native-storage.js", import.meta.url).href;
-  const producersUrl = new URL("../../../dist/analysis/callables/native-producers.js", import.meta.url).href;
-  const lifecycleUrl = new URL("../../../dist/analysis/callables/physical-lifecycle.js", import.meta.url).href;
-  const identityUrl = new URL("../../../dist/analysis/callables/generic-identities.js", import.meta.url).href;
-  const dispatchUrl = new URL("../../../dist/analysis/callables/generic-dispatch.js", import.meta.url).href;
+  const collectorUrl = new URL("../../../dist/analysis/callables/emission/emission-requests.js", import.meta.url).href;
+  const storageUrl = new URL("../../../dist/analysis/callables/storage/native-storage.js", import.meta.url).href;
+  const producersUrl = new URL("../../../dist/analysis/callables/native/native-producers.js", import.meta.url).href;
+  const lifecycleUrl = new URL("../../../dist/analysis/callables/ownership/physical-lifecycle.js", import.meta.url).href;
+  const identityUrl = new URL("../../../dist/analysis/callables/generics/generic-identities.js", import.meta.url).href;
+  const dispatchUrl = new URL("../../../dist/analysis/callables/generics/generic-dispatch.js", import.meta.url).href;
   const carriersUrl = new URL("../../../dist/target-model/types/carriers/generic-callables.js", import.meta.url).href;
   const helperUrl = new URL("../../helpers/rust-session.mjs", import.meta.url).href;
   const key = "r14-instrumented-callable-publication-proof";
@@ -750,7 +750,7 @@ test("a required missing physical operand refuses at the preparation owner befor
   const arithmetic = actual("export function value(input: number): number { return input + 1; }", []);
   assert.equal(arithmetic.physicalEmissionContexts.contexts.some(context => context.use.role === "native-body"), true,
     "ordinary arithmetic retains its real body context without artificial callable-storage reads");
-  const preparationUrl = new URL("../../../dist/analysis/callables/emission-contexts.js", import.meta.url).href;
+  const preparationUrl = new URL("../../../dist/analysis/callables/emission/emission-contexts.js", import.meta.url).href;
   const helperUrl = new URL("../../helpers/rust-session.mjs", import.meta.url).href;
   const key = "r14-actual-missing-operand-preparation";
   const script = `
@@ -831,7 +831,7 @@ export const seed: number = checked(1);`,
 }
 
 test("worker contexts retain the existing complete initializer selection, not an invented module error region (instrumented load observation)", () => {
-  const collectorUrl = new URL("../../../dist/analysis/callables/emission-requests.js", import.meta.url).href;
+  const collectorUrl = new URL("../../../dist/analysis/callables/emission/emission-requests.js", import.meta.url).href;
   const helperUrl = new URL("../../helpers/rust-session.mjs", import.meta.url).href;
   const initializationUrl = new URL("../../../dist/analysis/errors/initialization.js", import.meta.url).href;
   const preparationUrl = new URL("../../../dist/analysis/program/physical-emission-contexts.js", import.meta.url).href;
@@ -933,7 +933,7 @@ export function value(input: number): number { return seed(input) + Item.current
   const ordinary = compileRust(options);
   assert.equal(ordinary.result.diagnostics.length, 0, ordinary.result.diagnostics.map(issue => issue.message).join("\n").slice(0, 2048));
   assert.equal(ordinary.result.artifacts.length > 0, true, "uninjected genuine boundary source emits normally");
-  const collectorUrl = new URL("../../../dist/analysis/callables/emission-requests.js", import.meta.url).href;
+  const collectorUrl = new URL("../../../dist/analysis/callables/emission/emission-requests.js", import.meta.url).href;
   const helperUrl = new URL("../../helpers/rust-session.mjs", import.meta.url).href;
   const key = "r14-checked-source-file-boundary-proof";
   const script = `

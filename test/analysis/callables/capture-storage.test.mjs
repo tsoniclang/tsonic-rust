@@ -4,7 +4,7 @@ import test from "node:test";
 import { createRustProgramRecordBuilder } from "../../../dist/analysis/program/records/create.js";
 import { createCompilerSessionFromFiles, formatDiagnostics } from "@tsonic/tsts";
 import { createTargetSourceProgram, sourceBindingHasSingleCaptureOwner } from "@tsonic/target-api/source";
-import { rustCapturedBindingStorage } from "../../../dist/analysis/callables/capture-storage.js";
+import { rustCapturedBindingStorage } from "../../../dist/analysis/callables/storage/capture-storage.js";
 
 
 

@@ -13,7 +13,7 @@ import type { Node } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
 
 import type { TargetTypeRef } from "../../target-model/types/model.js";
-import { projectRecordMemberImplementation } from "../objects/record-member-contracts.js";
+import { projectRecordMemberImplementation } from "./record-member-contracts.js";
 
 export function selectRustRecordLiteralLayout(
   walk: RustFactWalk, expression: Node, selectedExpected: TargetTypeRef,

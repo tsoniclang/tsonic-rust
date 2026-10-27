@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRust } from "../../helpers/rust-session.mjs";
-import { createRustCallableEntryHeaderSelections } from "../../../dist/analysis/callables/entry-header-selections.js";
-import { createRustCallableEntryHeaderPlacements } from "../../../dist/analysis/callables/entry-header-placements.js";
+import { createRustCallableEntryHeaderSelections } from "../../../dist/analysis/callables/emission/entry-header-selections.js";
+import { createRustCallableEntryHeaderPlacements } from "../../../dist/analysis/callables/emission/entry-header-placements.js";
 import { prepareRustProjectGenericMembership } from "../../../dist/analysis/project-types/generic-membership.js";
 import { rustSourcePrimitiveTargetType } from "../../../dist/target-model/types/index.js";
 

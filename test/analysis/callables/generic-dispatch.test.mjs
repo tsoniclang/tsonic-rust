@@ -2,7 +2,7 @@ import { createRustRecordFixture } from "../../helpers/records.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createRustGenericCallableDispatchPlan, prepareRustGenericCallableDispatchRequests,
-  selectRustGenericCallableInvocationStorage } from "../../../dist/analysis/callables/generic-dispatch.js";
+  selectRustGenericCallableInvocationStorage } from "../../../dist/analysis/callables/generics/generic-dispatch.js";
 
 
 

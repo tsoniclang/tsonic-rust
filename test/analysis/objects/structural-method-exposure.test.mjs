@@ -3,7 +3,7 @@ import test from "node:test";
 import { analyzeRust, compileRust } from "../../helpers/rust-session.mjs";
 import { analyzeRustCheckedContext } from "../../helpers/rust-session-analysis-context.mjs";
 import { selectRustStructuralMethodExposure } from "../../../dist/policy/types/objects/structural-emission.js";
-import { rustFixedStructuralMethodDeclarations } from "../../../dist/analysis/callables/generic-values.js";
+import { rustFixedStructuralMethodDeclarations } from "../../../dist/analysis/callables/generics/generic-values.js";
 import { selectRustStructuralFactoryReceiver } from "../../../dist/policy/ownership/retained-storage.js";
 import { isRustCopyCarrier, rustCarrierSupportsClone, rustCarrierSupportsTrait } from "../../../dist/policy/constraints/native-traits.js";
 import { rustStructuralObjectTargetType, rustStructuralObjectCarrierValue } from "../../../dist/target-model/types/carriers/source-types.js";

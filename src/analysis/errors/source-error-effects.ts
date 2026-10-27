@@ -25,11 +25,11 @@ import { rustCallableProtocol, rustNativeCallableProtocol } from "../../target-m
 import { rustGenericCallableProtocol } from "../../target-model/types/carriers/generic-callables.js";
 import { inferRustTargetGenericBindings } from "../../target-model/types/carriers/generic-inference.js";
 import { rustLifetimeKey, type RustLifetimeRef } from "../../target-model/lifetimes/index.js";
-import { rustRetainedCallSubstitutions } from "../callables/retained-call-lifetimes.js";
+import { rustRetainedCallSubstitutions } from "../callables/ownership/retained-call-lifetimes.js";
 import type { RustTargetConstArgument } from "../../target-model/types/model.js";
 import type { RustTargetGenericBindings } from "../../target-model/types/carriers/generic-inference.js";
-import type { RustNativeStoragePlan } from "../callables/native-storage.js";
-import type { RustNativeCallableInputPlan } from "../callables/native-inputs.js";
+import type { RustNativeStoragePlan } from "../callables/storage/native-storage.js";
+import type { RustNativeCallableInputPlan } from "../callables/native/native-inputs.js";
 import type { RustNativeCallableProducerPlan } from "../../target-model/records/native-producers.js";
 
 type RustSourceErrorContext = {

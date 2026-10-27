@@ -3,12 +3,12 @@ import test from "node:test";
 import { targetUseSiteRef } from "@tsonic/target-api/analysis";
 import { analyzeRustErrorEffects } from "../../helpers/rust-error-analysis.mjs";
 import { analyzeRust, boolCarrier, compileRust, rustSourceText } from "../../helpers/rust-session.mjs";
-import { createRustPhysicalCallableLifecycle } from "../../../dist/analysis/callables/physical-lifecycle.js";
-import { createRustNativeCallableProducerPlan } from "../../../dist/analysis/callables/native-producers.js";
-import { createRustGenericCallablePhysicalPlan } from "../../../dist/analysis/callables/generic-physical.js";
-import { createRustNativeCapturePlan } from "../../../dist/analysis/callables/native-captures.js";
-import { createRustNativeStorageQueries } from "../../../dist/analysis/callables/native-storage.js";
-import { finalizeRustNativeParameterStorage } from "../../../dist/analysis/callables/native-parameters.js";
+import { createRustPhysicalCallableLifecycle } from "../../../dist/analysis/callables/ownership/physical-lifecycle.js";
+import { createRustNativeCallableProducerPlan } from "../../../dist/analysis/callables/native/native-producers.js";
+import { createRustGenericCallablePhysicalPlan } from "../../../dist/analysis/callables/generics/generic-physical.js";
+import { createRustNativeCapturePlan } from "../../../dist/analysis/callables/native/native-captures.js";
+import { createRustNativeStorageQueries } from "../../../dist/analysis/callables/storage/native-storage.js";
+import { finalizeRustNativeParameterStorage } from "../../../dist/analysis/callables/native/native-parameters.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 import { rustCallableInputTargetType, rustCallableProtocol } from "../../../dist/target-model/types/carriers/callables.js";
 import { rustGenericCallableValue } from "../../../dist/target-model/types/carriers/generic-callables.js";
@@ -16,9 +16,9 @@ import { rustCallablePhysicalSignature } from "../../../dist/target-model/conver
 import { rustNamedTypeCarrierValue } from "../../../dist/target-model/types/carriers/native.js";
 import { rustLifetimesEqual } from "../../../dist/target-model/lifetimes/index.js";
 import { prepareRustGenericCallableIdentitySources, prepareRustGenericCallableIdentityRequests,
-  createRustGenericCallableIdentityPlan } from "../../../dist/analysis/callables/generic-identities.js";
+  createRustGenericCallableIdentityPlan } from "../../../dist/analysis/callables/generics/generic-identities.js";
 import { createRustEffectsWorkBudget } from "../../../dist/analysis/errors/effects-work-budget.js";
-import { rustEmissionIdentityBindings, rustEmissionSourceIdentity } from "../../../dist/analysis/callables/emission-contexts.js";
+import { rustEmissionIdentityBindings, rustEmissionSourceIdentity } from "../../../dist/analysis/callables/emission/emission-contexts.js";
 import { prepareRustProviderSourceOccurrences } from "../../../dist/analysis/operations/provider-source-inputs.js";
 
 let checkedContext;

@@ -7,7 +7,7 @@ import type { Node, Type } from "@tsonic/tsts";
 import type { SourceCallableTypeEvidence, SourceTypeComponentEvidence } from "@tsonic/target-api/source";
 import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "./model.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
-import { selectRustPointerReturnCarrier } from "../../../callables/pointer-return.js";
+import { selectRustPointerReturnCarrier } from "../../../callables/ownership/pointer-return.js";
 import { rustTargetGenericReferences } from "../../../../target-model/types/carriers/generic-references.js";
 import { inferRustTargetGenericBindings, inferRustTargetTypeParameterBindings } from "../../../../target-model/types/carriers/generic-inference.js";
 import { mapRustTargetTypes, substituteRustTargetGenerics } from "../../../../target-model/types/carriers/substitution.js";
@@ -23,7 +23,7 @@ import { retainRustCallableStructuralStorage } from "./structural-instantiations
 import { resolveRustCallableInputCarrier } from "./callable-inputs.js";
 import { sourceEnclosingCallable, sourceReceiverOwner } from "@tsonic/target-api/source";
 import { rustSourceStorageSubjectContext } from "./source-storage-projection.js";
-import type { RustCallableOwnershipInput } from "../../../callables/ownership-plan.js";
+import type { RustCallableOwnershipInput } from "../../../callables/ownership/ownership-plan.js";
 
 export function resolveRustCallableEvidence(
   callable: SourceCallableTypeEvidence,

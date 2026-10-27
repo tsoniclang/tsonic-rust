@@ -8,8 +8,8 @@ import { rustResolutionContext } from "../program/walk.js";
 import { resolveRustTargetTypeRef } from "../source-evidence/types/resolution/source.js";
 import { rustCallableProtocol, rustOptionElementCarrier, rustSourceOptionalTargetType } from "../../target-model/types/index.js";
 import { rustProjectCallableTargetName } from "../names/source-member-name.js";
-import { resolveParameterAbi } from "../callables/parameter-facts.js";
-import { projectOwnerTypeSubstitutions, substituteRustCallableParameterAbi } from "../callables/adapters.js";
+import { resolveParameterAbi } from "../callables/values/parameter-facts.js";
+import { projectOwnerTypeSubstitutions, substituteRustCallableParameterAbi } from "../callables/native/adapters.js";
 import { selectRustCallableParameterAdapters, selectRustCallableValueAdapter } from "../../policy/conversions/callable-adapters.js";
 import { substituteRustTargetTypeParameters } from "../../target-model/types/index.js";
 

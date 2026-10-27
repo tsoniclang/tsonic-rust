@@ -7,7 +7,7 @@ import { rustCallableProtocol, rustProgramErrorTargetType, substituteRustTargetT
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { closedMetadataEquals } from "../../target-model/metadata/closed-data.js";
 import { selectRustPhysicalProgramErrorOwner } from "../errors/error-types.js";
-import { sourceCallableParameterAbis, sourceCallableReturnCarrier, projectOwnerTypeSubstitutions } from "../callables/adapters.js";
+import { sourceCallableParameterAbis, sourceCallableReturnCarrier, projectOwnerTypeSubstitutions } from "../callables/native/adapters.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 
 export function analyzeRustProjectLiteralEmission(program: Omit<RustAnalysisProgram, "reachability">,

@@ -12,7 +12,7 @@ import {
   projectOwnerTypeSubstitutions,
   sourceCallableParameterAbis,
   sourceCallableReturnCarrier,
-} from "../callables/adapters.js";
+} from "../callables/native/adapters.js";
 import { selectRustCallableParameterAdapters, selectRustCallableValueAdapter } from "../../policy/conversions/callable-adapters.js";
 
 export function selectRustProjectCallableAdapters(

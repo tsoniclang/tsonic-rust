@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRustErrorEffects } from "../../helpers/rust-error-analysis.mjs";
-import { createRustNativeOutwardResults } from "../../../dist/analysis/callables/native-outward-results.js";
+import { createRustNativeOutwardResults } from "../../../dist/analysis/callables/native/native-outward-results.js";
 import { rustProducerErrorReference } from "../../../dist/target-model/types/carriers/producer-errors.js";
 
 import { rustErrorEffectsAreFallible } from "../../../dist/analysis/errors/error-effects.js";

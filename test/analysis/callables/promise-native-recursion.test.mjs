@@ -4,8 +4,8 @@ import { createSourceStorageBudget, defaultSourceStorageLimits } from "@tsonic/t
 import { compileRust, rustSourceText } from "../../helpers/rust-session.mjs";
 import { analyzeRustCheckedContext } from "../../helpers/rust-session-analysis-context.mjs";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
-import { selectRustPromiseBodyRecursion } from "../../../dist/analysis/callables/promise-recursion.js";
-import { rustDirectPromiseBodyCallee } from "../../../dist/analysis/callables/promise-bodies.js";
+import { selectRustPromiseBodyRecursion } from "../../../dist/analysis/callables/async/promise-recursion.js";
+import { rustDirectPromiseBodyCallee } from "../../../dist/analysis/callables/async/promise-bodies.js";
 import { rustAwaitSelection } from "../../../dist/policy/operations/flow/await.js";
 import { assertRejectedAsyncSource } from "../../helpers/native-promise-lifetimes.mjs";
 

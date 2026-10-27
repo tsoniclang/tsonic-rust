@@ -1,17 +1,17 @@
 import { createRustRecordFixture } from "../../helpers/records.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createRustGenericCallablePlan, rustFixedStructuralMethodDeclarations } from "../../../dist/analysis/callables/generic-values.js";
+import { createRustGenericCallablePlan, rustFixedStructuralMethodDeclarations } from "../../../dist/analysis/callables/generics/generic-values.js";
 import { rustGenericCallableTargetType } from "../../../dist/target-model/types/carriers/generic-callables.js";
 
 
-import { createRustGenericCallableFlowIndex } from "../../../dist/analysis/callables/generic-callable-flow.js";
+import { createRustGenericCallableFlowIndex } from "../../../dist/analysis/callables/generics/generic-callable-flow.js";
 import { rustGenericCallableConversionMatches } from "../../../dist/policy/conversions/generic-callable.js";
-import { createRustCallableValuePlanRegistry } from "../../../dist/analysis/callables/value-plan.js";
-import { createRustLexicalFunctionEnvironmentPlan } from "../../../dist/analysis/callables/lexical-functions.js";
-import { createRustSourceCallableQueries } from "../../../dist/analysis/callables/borrowed-returns.js";
+import { createRustCallableValuePlanRegistry } from "../../../dist/analysis/callables/values/value-plan.js";
+import { createRustLexicalFunctionEnvironmentPlan } from "../../../dist/analysis/callables/values/lexical-functions.js";
+import { createRustSourceCallableQueries } from "../../../dist/analysis/callables/ownership/borrowed-returns.js";
 import { createRustRuntimeValueUsePlan } from "../../../dist/analysis/program/runtime-value-uses.js";
-import { analyzeRustNativeParticipation } from "../../../dist/analysis/callables/participation.js";
+import { analyzeRustNativeParticipation } from "../../../dist/analysis/callables/calls/participation.js";
 import { createRustProgramRecordBuilder } from "../../../dist/analysis/program/records/create.js";
 import { emptyRustLifetimeIndex } from "../../../dist/target-model/lifetimes/index.js";
 import { createRustTypeDefinitionRegistry } from "../../../dist/analysis/project-types/type-definitions.js";
@@ -20,12 +20,12 @@ import { createRustSourceTypeRegistry } from "../../../dist/analysis/project-typ
 import { analyzeRustReceiverStorage } from "../../../dist/analysis/project-types/receiver-storage.js";
 import { createRustObjectRepresentationPlan, prepareRustObjectNativeLifetimes } from "../../../dist/analysis/project-types/object-representation.js";
 import { createRustStructuralShapePlanRegistry } from "../../../dist/analysis/objects/shapes/structural-shape-registry.js";
-import { createRustRetainedEnvironmentQueries } from "../../../dist/analysis/callables/retained-environment-shapes.js";
+import { createRustRetainedEnvironmentQueries } from "../../../dist/analysis/callables/ownership/retained-environment-shapes.js";
 import { compileRust } from "../../helpers/rust-session.mjs";
 import { analyzeRustCheckedContext } from "../../helpers/rust-session-analysis-context.mjs";
 import { analyzeRustAnalysisProgram } from "../../../dist/analysis/program/target-program.js";
-import { prepareRustCallableEntryParameters } from "../../../dist/analysis/callables/entry-parameters.js";
-import { analyzeRustLexicalFunctionEmission } from "../../../dist/analysis/callables/lexical-emission.js";
+import { prepareRustCallableEntryParameters } from "../../../dist/analysis/callables/emission/entry-parameters.js";
+import { analyzeRustLexicalFunctionEmission } from "../../../dist/analysis/callables/emission/lexical-emission.js";
 
 
 

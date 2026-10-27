@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createRustProgramRecordBuilder } from "../../../dist/analysis/program/records/create.js";
-import { recordRustInlineModuleCallableUses } from "../../../dist/analysis/callables/module-values.js";
+import { recordRustInlineModuleCallableUses } from "../../../dist/analysis/callables/values/module-values.js";
 import { rustCallableTargetType } from "../../../dist/target-model/types/index.js";
 
 const integer = { kind: "source-primitive", name: "int32" };

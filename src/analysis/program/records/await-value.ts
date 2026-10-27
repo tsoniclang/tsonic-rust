@@ -9,7 +9,7 @@ import type { RustValueConversion } from "../../../target-model/operations/model
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustTypeDefinitions } from "../../../target-model/types/source-union-definitions.js";
 import { rustAwaitSelectionLeaves } from "../../../target-model/types/await.js";
-import { finalizeRustAwaitValueFact } from "../../callables/await-values.js";
+import { finalizeRustAwaitValueFact } from "../../callables/async/await-values.js";
 import { rustFoundationForFinalizedConversion } from "../../foundation/conversion-requirements.js";
 import { createRustRecordFamily } from "./family.js";
 

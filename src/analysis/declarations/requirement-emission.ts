@@ -6,7 +6,7 @@ import { rustCarrierSupportsClone } from "../../policy/constraints/native-traits
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
 import { requirementUseHasValidStorage } from "./generic-requirement-contract.js";
-import { rustPhysicalEmissionRecordCarriers } from "../callables/emission-contexts.js";
+import { rustPhysicalEmissionRecordCarriers } from "../callables/emission/emission-contexts.js";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import { sourceEnclosingCallable } from "@tsonic/target-api/source";
 import { rustProgramNodeIsOutsideNativeCode } from "../control-flow/compile-time-statements.js";

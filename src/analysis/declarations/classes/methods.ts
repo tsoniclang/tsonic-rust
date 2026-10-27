@@ -9,7 +9,7 @@ import type { RustMethodEmissionVariant } from "../../../target-model/records/me
 import { instantiateRustProjectMethodDispatchArguments } from "../../project-types/method-dispatch.js";
 import { rustSourceItemIdentity } from "../../../target-model/names/source-output-identities.js";
 import { isValidRustIdentifier } from "../../../target-model/names/identifiers.js";
-import type { RustCallableEntryConstruction } from "../../callables/entry-parameters.js";
+import type { RustCallableEntryConstruction } from "../../callables/emission/entry-parameters.js";
 
 export function analyzeRustMethodEmission(input: {
   readonly callableEntries: Pick<RustCallableEntryConstruction, "get">;

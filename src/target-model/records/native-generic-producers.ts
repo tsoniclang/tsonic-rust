@@ -2,11 +2,11 @@ import type { Node } from "@tsonic/tsts";
 
 import type { TargetTypeRef } from "../types/model.js";
 
-import type { RustGenericCallablePhysicalDefinition } from "../records/generic-callables.js";
+import type { RustGenericCallablePhysicalDefinition } from "./generic-callables.js";
 
-import type { RustNativeCallableInput } from "../records/native-protocols.js";
+import type { RustNativeCallableInput } from "./native-protocols.js";
 
-import type { RustNativeCallableProtocol } from "../records/native-protocols.js";
+import type { RustNativeCallableProtocol } from "./native-protocols.js";
 
 export interface RustNativeGenericProducerBinding {
   readonly inputs: readonly RustNativeCallableInput[];

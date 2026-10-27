@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRustErrorEffects } from "../../helpers/rust-error-analysis.mjs";
-import { selectRustInferredReturn } from "../../../dist/analysis/callables/inferred-return.js";
+import { selectRustInferredReturn } from "../../../dist/analysis/callables/calls/inferred-return.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 import { rustCallableTargetType } from "../../../dist/target-model/types/carriers/callables.js";
 import { createRustCarrierProbe } from "../../../dist/analysis/program/carrier-probe.js";

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { resolveRustEnclosingGenericParameters } from "../../../dist/analysis/callables/generic-environment.js";
+import { resolveRustEnclosingGenericParameters } from "../../../dist/analysis/callables/generics/generic-environment.js";
 import { rustLifetimeKey } from "../../../dist/target-model/lifetimes/index.js";
 
 test("enclosing generic selection uses exact declaration identity, not shadowed names", () => {

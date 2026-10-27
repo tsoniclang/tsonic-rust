@@ -6,7 +6,7 @@ import { acmeTestingPackage, analyzeRust, compileRust } from "../../helpers/rust
 import { projectSourceResultContracts } from "../../fixtures/project-source-result-contracts.mjs";
 
 
-import { rustSourceCallResultProjectionMatches } from "../../../dist/analysis/callables/source-call-results.js";
+import { rustSourceCallResultProjectionMatches } from "../../../dist/analysis/callables/calls/source-call-results.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 import { rustOptionElementCarrier, rustStringTargetType } from "../../../dist/target-model/types/index.js";
 

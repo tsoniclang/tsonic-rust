@@ -6,8 +6,8 @@ import { analyzeRustOperations } from "../../../helpers/rust-operation-analysis.
 import { rustProgramPlanContext, rustProgramWithTypeEmissions, rustSourceFilePlanContext } from "../../../helpers/plan-context.mjs";
 
 import { planRustCallableParameters, planRustCallableParameterPrelude } from "../../../../dist/backend/planner/declarations/callables/parameters.js";
-import { analyzeRustCallableParameterEmission } from "../../../../dist/analysis/callables/parameters.js";
-import { recordRustParameterAbiSelection } from "../../../../dist/analysis/callables/parameter-facts.js";
+import { analyzeRustCallableParameterEmission } from "../../../../dist/analysis/callables/values/parameters.js";
+import { recordRustParameterAbiSelection } from "../../../../dist/analysis/callables/values/parameter-facts.js";
 import { createRustCallableParameterProducer } from "../../../../dist/analysis/program/records/parameter-emission.js";
 import { createRustSyntheticNameState } from "../../../../dist/backend/planner/names/synthetic.js";
 import { rustOptionTargetType } from "../../../../dist/target-model/types/carriers/optional.js";

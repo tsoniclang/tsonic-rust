@@ -7,8 +7,8 @@ import { createRustProgramRecordBuilder } from "../../../../dist/analysis/progra
 import { recordProjectSourceBinding } from "../../../../dist/analysis/storage/source-bindings.js";
 import { resolveIdentifierCarrier } from "../../../../dist/analysis/source-evidence/types/resolution/references.js";
 import { recordExportAssignmentFacts } from "../../../../dist/analysis/control-flow/statements.js";
-import { finalizeRustCallableSignature } from "../../../../dist/analysis/callables/signature-query.js";
-import { recordPredeclaredNativeFunctionBindingFacts } from "../../../../dist/analysis/callables/signatures.js";
+import { finalizeRustCallableSignature } from "../../../../dist/analysis/callables/calls/signature-query.js";
+import { recordPredeclaredNativeFunctionBindingFacts } from "../../../../dist/analysis/callables/calls/signatures.js";
 import { recordRustIndexedCallKeyArguments } from "../../../../dist/analysis/operations/indexed-call-keys.js";
 import { rustUnitTargetType } from "../../../../dist/target-model/types/index.js";
 import { rustSourceCallableValueEquals } from "../../../../dist/target-model/records/equality.js";

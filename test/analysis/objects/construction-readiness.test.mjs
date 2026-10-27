@@ -5,7 +5,7 @@ import { createTargetSourceProgram, selectSourceNativeGuardResult } from "@tsoni
 import { checkedSource, namedDeclaration, projectSourceFile } from "../../../../tsonic/test/fixtures/source-navigation.mjs";
 import { minimalSourceGlobals } from "../../../../tsonic/test/fixtures/minimal-source-globals.mjs";
 import { analyzeRustConstructionReadiness } from "../../../dist/analysis/project-types/construction-readiness.js";
-import { analyzeRustNativeParticipation } from "../../../dist/analysis/callables/participation.js";
+import { analyzeRustNativeParticipation } from "../../../dist/analysis/callables/calls/participation.js";
 import { createRustProgramRecordBuilder } from "../../../dist/analysis/program/records/create.js";
 import { createSourceStorageQuery } from "@tsonic/target-api/analysis";
 import { analyzeRust } from "../../helpers/rust-session.mjs";

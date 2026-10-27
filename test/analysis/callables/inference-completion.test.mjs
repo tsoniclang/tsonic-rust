@@ -5,13 +5,13 @@ import { createRustRecordFixture } from "../../helpers/records.mjs";
 import { createRustProgramRecordBuilder } from "../../../dist/analysis/program/records/create.js";
 import { createRustCarrierProbe } from "../../../dist/analysis/program/carrier-probe.js";
 import { rustResolutionContext } from "../../../dist/analysis/program/walk.js";
-import { selectRustInferredReturn } from "../../../dist/analysis/callables/inferred-return.js";
-import { selectedSourceCallableReturn } from "../../../dist/analysis/callables/source-callable-abi.js";
+import { selectRustInferredReturn } from "../../../dist/analysis/callables/calls/inferred-return.js";
+import { selectedSourceCallableReturn } from "../../../dist/analysis/callables/calls/source-callable-abi.js";
 import { resolveRustTargetTypeRef } from "../../../dist/analysis/source-evidence/types/resolution/source.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 import { rustOptionTargetType } from "../../../dist/target-model/types/index.js";
 import { rustCallableProtocol } from "../../../dist/target-model/types/carriers/callables.js";
-import { resolveFunctionExpressionCarrier } from "../../../dist/analysis/callables/closures.js";
+import { resolveFunctionExpressionCarrier } from "../../../dist/analysis/callables/values/closures.js";
 
 function fixture(source, name = "width", maskParameters = false) {
   const { context, walk } = analyzeRustOperations(source);

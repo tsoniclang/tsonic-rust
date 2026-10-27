@@ -10,8 +10,8 @@ import { createCompilerSessionFromFiles, formatDiagnostics } from "@tsonic/tsts"
 import { createTargetSourceProgram } from "@tsonic/target-api/source";
 import { acmeFilesPackage, analyzeRust } from "../../../helpers/rust-session.mjs";
 import { createRustProgramRecordBuilder } from "../../../../dist/analysis/program/records/create.js";
-import { rustCapturedBindingStorage } from "../../../../dist/analysis/callables/capture-storage.js";
-import { rustRetainedCallSubstitutions } from "../../../../dist/analysis/callables/retained-call-lifetimes.js";
+import { rustCapturedBindingStorage } from "../../../../dist/analysis/callables/storage/capture-storage.js";
+import { rustRetainedCallSubstitutions } from "../../../../dist/analysis/callables/ownership/retained-call-lifetimes.js";
 import { rustArgumentPassingMode } from "../../../../dist/policy/ownership/argument-passing.js";
 import { rustLifetimeKey } from "../../../../dist/target-model/lifetimes/index.js";
 import { rustTargetTypeRefEquals } from "../../../../dist/target-model/types/equality.js";

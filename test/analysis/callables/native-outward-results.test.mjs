@@ -4,7 +4,7 @@ import test from "node:test";
 import { sourceNodeIdentity } from "@tsonic/target-api/source";
 import { analyzeRustErrorEffects } from "../../helpers/rust-error-analysis.mjs";
 import { compileRust } from "../../helpers/rust-session.mjs";
-import { createRustNativeOutwardResults } from "../../../dist/analysis/callables/native-outward-results.js";
+import { createRustNativeOutwardResults } from "../../../dist/analysis/callables/native/native-outward-results.js";
 
 
 

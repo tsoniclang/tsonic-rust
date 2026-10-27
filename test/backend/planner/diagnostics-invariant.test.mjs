@@ -2,4 +2,4 @@ import { registerTargetPlannerInvariantContractTests } from "../../../../tsonic/
 import { failRustPlannerInvariant } from "../../../dist/backend/planner/diagnostics.js";
 
 registerTargetPlannerInvariantContractTests("tsonic-rust", failRustPlannerInvariant,
-  new URL("../../../src/backend/", import.meta.url));
+  new URL("../../../src/backend", import.meta.url));

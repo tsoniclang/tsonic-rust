@@ -25,7 +25,7 @@ import { rustProducerErrorReference } from "../../../target-model/types/carriers
 import { rustNativeErrorJoinReference } from "../../../target-model/types/native-error-joins.js";
 import { rustFrameCallableValue } from "../../../target-model/types/carriers/frame-callables.js";
 import { rustClassConstructorInstance } from "../../../target-model/types/carriers/class-constructors.js";
-import { rustPhysicalEmissionRecordCarriers } from "../../callables/emission-contexts.js";
+import { rustPhysicalEmissionRecordCarriers } from "../../callables/emission/emission-contexts.js";
 import { rustSourceUnionCarrierValue, rustStructuralObjectCarrierValue, rustSourceTypeCarrierValue,
   rustNamedTypeCarrierValue, rustFixedArrayCarrierValue, rustCallableInputTargetId, rustCallableTargetId, rustFutureTargetId, rustProgramErrorTargetType, rustUnitTargetType, rustEmptyObjectTargetId } from "../../../target-model/types/index.js";
 import { selectRustTypePositions } from "../../../policy/types/resolution/type-emission.js";

@@ -14,7 +14,7 @@ import { selectRustFlowReadProjection } from "../../../dist/policy/conversions/v
 import { rustOptionTargetType, rustSourceLocationTargetType } from "../../../dist/target-model/types/index.js";
 import { rustIndexedFieldKey, rustIndexedFieldProjection, rustIndexedFieldTrait } from "../../../dist/target-model/types/carriers/indexed-fields.js";
 import { rustSourceOptionalTargetType } from "../../../dist/target-model/types/projections.js";
-import { createRustNativeCallableProtocolRegistry } from "../../../dist/analysis/callables/native-protocols.js";
+import { createRustNativeCallableProtocolRegistry } from "../../../dist/analysis/callables/native/native-protocols.js";
 import { rustNativeCallableErrorChannel, rustNativeCallableErrorType } from "../../../dist/policy/types/callables/native-protocols.js";
 import { rustCallableTargetType } from "../../../dist/target-model/types/carriers/callables.js";
 import { rustFutureTargetType } from "../../../dist/target-model/types/carriers/primitives.js";

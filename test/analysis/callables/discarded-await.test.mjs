@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { finalizeRustDiscardedAwaitSelection, rustAwaitValueMatchesCarrier } from "../../../dist/analysis/callables/await-values.js";
+import { finalizeRustDiscardedAwaitSelection, rustAwaitValueMatchesCarrier } from "../../../dist/analysis/callables/async/await-values.js";
 import { rustFutureTargetType, rustSourcePrimitiveTargetType, rustSourceUnionTargetType } from "../../../dist/target-model/types/index.js";
 import { emptyRustTypeDefinitions } from "../../../dist/target-model/types/source-union-definitions.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";

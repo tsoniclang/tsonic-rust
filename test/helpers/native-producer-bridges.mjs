@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
-import { createRustNativeCallableProtocolRegistry } from "../../dist/analysis/callables/native-protocols.js";
-import { analyzeRustNativeProtocolEmission } from "../../dist/analysis/callables/native-protocol-emission.js";
+import { createRustNativeCallableProtocolRegistry } from "../../dist/analysis/callables/native/native-protocols.js";
+import { analyzeRustNativeProtocolEmission } from "../../dist/analysis/callables/emission/native-protocol-emission.js";
 import { createRustNativeProtocolProducer } from "../../dist/analysis/program/records/native-protocol-emission.js";
 import { sealRustNativeCallableDispatch } from "../../dist/analysis/program/records/native-dispatch.js";
 import { analyzeRustTypeEmission } from "../../dist/analysis/source-evidence/types/emission.js";

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { selectRustCallableParameterAdapters, selectRustCallableValueAdapter } from "../../../dist/policy/conversions/callable-adapters.js";
-import * as sourceCollectors from "../../../dist/analysis/callables/adapters.js";
+import * as sourceCollectors from "../../../dist/analysis/callables/native/adapters.js";
 import { emptyRustTypeDefinitions } from "../../../dist/target-model/types/source-union-definitions.js";
 import { rustOptionTargetType, rustSourcePrimitiveTargetType, rustStringTargetType, rustVecTargetType,
   rustJsArrayTargetType, rustUnitTargetType } from "../../../dist/target-model/types/index.js";

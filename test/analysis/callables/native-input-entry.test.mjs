@@ -8,7 +8,7 @@ import { rustRetainedErrorTargetType, rustSourceErrorTargetType, rustWritableSou
 import { selectRustSourceValueConversion } from "../../../dist/policy/conversions/selection.js";
 import { rustCallableProtocol } from "../../../dist/target-model/types/carriers/callables.js";
 import { createTargetSourceProgram } from "@tsonic/target-api/source";
-import { createRustNativeEntryLayouts } from "../../../dist/analysis/callables/entry-layout.js";
+import { createRustNativeEntryLayouts } from "../../../dist/analysis/callables/emission/entry-layout.js";
 
 test("admitted native entries never omit an unused formal whose selected incoming carrier is missing", () => {
   const { program, source: checked } = analyzeRust({ surfaces: [], files: { "index.ts": `

@@ -8,7 +8,7 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const walkerContracts = new Map([
   ["analysis/source-modules/component-semantics.ts", [1, "mixed"]],
   ["analysis/reachability/generated-item-usage.ts", [1, "native-domain"]],
-  ["analysis/callables/lexical-value-environments.ts", [1, "native-domain"]],
+  ["analysis/callables/values/lexical-value-environments.ts", [1, "native-domain"]],
   ["analysis/objects/class-values.ts", [1, "native-domain"]],
   ["analysis/project-types/receiver-captures.ts", [1, "native-domain"]],
   ["analysis/errors/regions.ts", [1, "native-domain"]],
@@ -22,23 +22,23 @@ const walkerContracts = new Map([
   ["analysis/project-types/mutable-storage-requirements.ts", [1, "native-domain"]],
   ["analysis/project-types/object-representation.ts", [2, "native-domain"]],
   ["analysis/errors/thrown-values.ts", [1, "native-domain"]],
-  ["analysis/callables/async-results.ts", [1, "admitted-callable-subtrees"]],
-  ["analysis/callables/specializations.ts", [1, "admitted-name-inventory"]],
+  ["analysis/callables/async/async-results.ts", [1, "admitted-callable-subtrees"]],
+  ["analysis/callables/generics/specializations.ts", [1, "admitted-name-inventory"]],
   ["analysis/project-types/construction-readiness.ts", [2, "native-domain"]],
-  ["analysis/callables/inferred-return.ts", [1, "admitted-callable-subtrees"]],
+  ["analysis/callables/calls/inferred-return.ts", [1, "admitted-callable-subtrees"]],
   ["analysis/declarations/generic-callable-requirements.ts", [1, "admitted-contract-subtrees"]],
   ["analysis/errors/closed-errors.ts", [1, "native-domain"]],
   ["analysis/project-types/catalog/helpers.ts", [1, "admitted-name-inventory"]],
   ["analysis/reachability/this-references.ts", [1, "admitted-method-subtrees"]],
   ["analysis/project-types/source-declarations.ts", [1, "native-domain"]],
-  ["analysis/callables/generic-values.ts", [1, "native-domain"]],
-  ["analysis/callables/ownership-components.ts", [2, "checked-source-identities-and-native-roots"]],
-  ["analysis/callables/signatures.ts", [1, "native-domain"]],
-  ["analysis/callables/emission-requests.ts", [1, "native-domain"]],
-  ["analysis/callables/native-inputs.ts", [1, "admitted-callable-subtrees"]],
-  ["analysis/callables/entry-parameters.ts", [1, "admitted-leading-receiver-subtrees"]],
-  ["analysis/callables/entry-header-placements.ts", [2, "admitted-emitted-header-placement-subtrees"]],
-  ["analysis/callables/native-storage-values.ts", [1, "admitted-callable-subtrees"]],
+  ["analysis/callables/generics/generic-values.ts", [1, "native-domain"]],
+  ["analysis/callables/ownership/ownership-components.ts", [2, "checked-source-identities-and-native-roots"]],
+  ["analysis/callables/calls/signatures.ts", [1, "native-domain"]],
+  ["analysis/callables/emission/emission-requests.ts", [1, "native-domain"]],
+  ["analysis/callables/native/native-inputs.ts", [1, "admitted-callable-subtrees"]],
+  ["analysis/callables/emission/entry-parameters.ts", [1, "admitted-leading-receiver-subtrees"]],
+  ["analysis/callables/emission/entry-header-placements.ts", [2, "admitted-emitted-header-placement-subtrees"]],
+  ["analysis/callables/storage/native-storage-values.ts", [1, "admitted-callable-subtrees"]],
   ["analysis/control-flow/binding-liveness.ts", [1, "admitted-callable-subtrees"]],
   ["analysis/operations/optional-chains.ts", [1, "admitted-operation-subtrees"]],
   ["analysis/declarations/emission.ts", [1, "admitted-parameter-subtrees"]],
@@ -49,7 +49,7 @@ const walkerContracts = new Map([
   ["analysis/project-types/construction-plan.ts", [1, "native-domain"]],
   ["analysis/source-modules/emission.ts", [1, "admitted-module-statements"]],
   ["analysis/source-modules/package-initializers.ts", [1, "checked-source-name-inventory"]],
-  ["analysis/callables/value-plan.ts", [1, "native-domain"]],
+  ["analysis/callables/values/value-plan.ts", [1, "native-domain"]],
   ["analysis/declarations/lifetimes.ts", [2, "native-domain"]],
   ["analysis/module-initialization/analyze.ts", [1, "admitted-module-statements"]],
   ["analysis/names/plan.ts", [1, "native-domain"]],
@@ -68,15 +68,15 @@ const walkerContracts = new Map([
 
 const checkedStorageConsumers = new Map([
   ["analysis/program/context.ts", [2, "checked Promise-result disposition and integer-range identity; participation receives the actual storage owner"]],
-  ["analysis/callables/participation.ts", [1, "the sole native-domain producer checks source failure before reading the finite domain"]],
-  ["analysis/callables/ownership-components.ts", [1, "checked source foreign-node and binding identity domain"]],
-  ["analysis/callables/native-future-inputs.ts", [1, "checked source identity membership; discovery uses nativeNodes"]],
-  ["analysis/callables/native-storage.ts", [1, "checked source identity membership; conversion discovery uses nativeNodes"]],
-  ["analysis/callables/generic-physical.ts", [1, "complete checked source-file ownership identity"]],
-  ["analysis/callables/native-captures.ts", [1, "complete checked capture identity membership"]],
-  ["analysis/callables/borrowed-returns.ts", [2, "checked lexical callable and borrowed-return identities"]],
-  ["analysis/callables/physical-lifecycle.ts", [1, "exact checked source-node identity map"]],
-  ["analysis/callables/promise-results.ts", [1, "checked promise-result disposition identity domain"]],
+  ["analysis/callables/calls/participation.ts", [1, "the sole native-domain producer checks source failure before reading the finite domain"]],
+  ["analysis/callables/ownership/ownership-components.ts", [1, "checked source foreign-node and binding identity domain"]],
+  ["analysis/callables/native/native-future-inputs.ts", [1, "checked source identity membership; discovery uses nativeNodes"]],
+  ["analysis/callables/storage/native-storage.ts", [1, "checked source identity membership; conversion discovery uses nativeNodes"]],
+  ["analysis/callables/generics/generic-physical.ts", [1, "complete checked source-file ownership identity"]],
+  ["analysis/callables/native/native-captures.ts", [1, "complete checked capture identity membership"]],
+  ["analysis/callables/ownership/borrowed-returns.ts", [2, "checked lexical callable and borrowed-return identities"]],
+  ["analysis/callables/ownership/physical-lifecycle.ts", [1, "exact checked source-node identity map"]],
+  ["analysis/callables/async/promise-results.ts", [1, "checked promise-result disposition identity domain"]],
 ]);
 
 function sourceFiles(directory) {
@@ -143,7 +143,7 @@ test("native context failure stops before numeric names lifetimes and body work"
 });
 
 test("the native-domain owner refuses incomplete source storage before any callback", () => {
-  const source = readFileSync(join(root, "src/analysis/callables/participation.ts"), "utf8");
+  const source = readFileSync(join(root, "src/analysis/callables/calls/participation.ts"), "utf8");
   const body = source.slice(source.indexOf("export function analyzeRustNativeParticipation("));
   assert.match(body, /readonly storage: Pick<SourceStorageQueries, "nodes" \| "failureReason">;/u);
   assert.equal(body.indexOf('if (failure !== undefined) return Object.freeze({ kind: "unresolved", reason: failure });') >= 0 &&

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { selectRustNativePendingEnvironment } from "../../../dist/analysis/callables/retained-environments.js";
+import { selectRustNativePendingEnvironment } from "../../../dist/analysis/callables/ownership/retained-environments.js";
 import { rustNativeFutureOutputType } from "../../../dist/target-model/types/callable-completions.js";
 import { rustSourcePrimitiveTargetType } from "../../../dist/target-model/types/carriers/native.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";

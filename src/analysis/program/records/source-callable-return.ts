@@ -6,7 +6,7 @@ import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustUnitTargetType } from "../../../target-model/types/index.js";
 import { rustSourceCallableReturnFactEquals } from "../../../target-model/records/equality.js";
 import { closedMetadataKey } from "../../../target-model/metadata/closed-data.js";
-import { selectRustSourceCallableReturn } from "../../callables/source-callable-abi.js";
+import { selectRustSourceCallableReturn } from "../../callables/calls/source-callable-abi.js";
 import type { RustFactWalk } from "../walk.js";
 import { createRustRecordFamily } from "./family.js";
 import type { RustRetainedEnvironmentProducer } from "./retained-environment.js";

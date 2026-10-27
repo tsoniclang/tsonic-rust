@@ -3,7 +3,7 @@ import test from "node:test";
 import { selectRustObjectNativeLifetimeContract } from "../../../dist/policy/types/objects/representation.js";
 import { analyzeRust } from "../../helpers/rust-session.mjs";
 import { createRustRecordFixture } from "../../helpers/records.mjs";
-import { prepareRustProjectCallableFieldStorage } from "../../../dist/analysis/callables/project-field-storage.js";
+import { prepareRustProjectCallableFieldStorage } from "../../../dist/analysis/callables/storage/project-field-storage.js";
 import { rustGenericCallableTargetType, rustGenericCallableValue } from "../../../dist/target-model/types/carriers/generic-callables.js";
 import { rustFrameCallableTargetType } from "../../../dist/target-model/types/carriers/frame-callables.js";
 import { rustCallableInputTargetType, rustCallableTargetType } from "../../../dist/target-model/types/carriers/callables.js";

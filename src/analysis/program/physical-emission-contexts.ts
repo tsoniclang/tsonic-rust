@@ -4,7 +4,7 @@ import { rejectedTargetStage, resolvedTargetStage, type TargetStageResult } from
 import type { RustInitializationErrorRecords, RustInitializerSelection, RustModuleErrorInitializer } from "../../target-model/records/error-regions.js";
 import type { RustEmissionProviderOperation, RustPhysicalEmissionContext, RustPhysicalEmissionOperand } from "../../target-model/records/physical-emission-contexts.js";
 import type { Node } from "@tsonic/tsts";
-import { prepareRustCallableEmissionContexts, prepareRustEmissionContextRequests, rustEmissionIdentityBindings, type RustCallableEmissionPreparation, type RustCallableEmissionPreparationInput, type RustEmissionContextRequest } from "../callables/emission-contexts.js";
+import { prepareRustCallableEmissionContexts, prepareRustEmissionContextRequests, rustEmissionIdentityBindings, type RustCallableEmissionPreparation, type RustCallableEmissionPreparationInput, type RustEmissionContextRequest } from "../callables/emission/emission-contexts.js";
 
 export interface RustPhysicalEmissionPreparationInput extends RustCallableEmissionPreparationInput {
   readonly sourceFiles: readonly SourceFile[];

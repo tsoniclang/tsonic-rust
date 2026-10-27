@@ -9,8 +9,8 @@ import { rustNativeRepresentationMatches } from "../../../dist/policy/conversion
 import { rustTargetGenericReferences } from "../../../dist/target-model/types/carriers/generic-references.js";
 import { rustUnitTargetType, rustAbsenceTargetType,
   rustSourcePrimitiveTargetType } from "../../../dist/target-model/types/index.js";
-import { sourceCallSelectedMemberMatches } from "../../../dist/analysis/callables/source-call-evidence.js";
-import { rustSourceCallResultWithInputLifetimes } from "../../../dist/analysis/callables/source-call-lifetimes.js";
+import { sourceCallSelectedMemberMatches } from "../../../dist/analysis/callables/calls/source-call-evidence.js";
+import { rustSourceCallResultWithInputLifetimes } from "../../../dist/analysis/callables/ownership/source-call-lifetimes.js";
 import { rustCallableInputTargetType, rustCallableTargetType } from "../../../dist/target-model/types/carriers/callables.js";
 
 const inferred = { kind: "placeholder" };

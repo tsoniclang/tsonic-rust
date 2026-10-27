@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createCompilerSessionFromFiles } from "@tsonic/tsts";
 import { createTargetSourceProgram } from "@tsonic/target-api/source";
-import { createRustNativeCallableDispatchPlan } from "../../../dist/analysis/callables/native-dispatch.js";
+import { createRustNativeCallableDispatchPlan } from "../../../dist/analysis/callables/native/native-dispatch.js";
 
 test("native dispatch preserves open and invoked protocols but omits closed forward-only slots", () => {
   const closed = { ownerFileName: "/closed.ts" };

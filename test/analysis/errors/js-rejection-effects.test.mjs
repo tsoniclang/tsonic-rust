@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { rustFutureValueForOperation } from "../../../dist/analysis/callables/future-values.js";
+import { rustFutureValueForOperation } from "../../../dist/analysis/callables/async/future-values.js";
 import { analyzeRustErrorEffects } from "../../helpers/rust-error-analysis.mjs";
 import { compileRust } from "../../helpers/rust-session.mjs";
 import { rustJsPromiseTargetType, rustSourcePrimitiveTargetType, rustJsValueTargetType,

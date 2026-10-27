@@ -56,8 +56,8 @@ import { resolveExpressionCarrier } from "../source-evidence/types/resolution/ex
 import { reconcileRequiredCarrier } from "../conversions/contextual-values.js";
 import { selectRustDeclaredBinding } from "../declarations/binding-storage.js";
 import { recordBindingPatternFacts } from "./binding-patterns.js";
-import { recordCallableDefaultParameterFacts } from "../callables/parameter-facts.js";
-import { recordCallableValueSignatureForDeclaration } from "../callables/signatures.js";
+import { recordCallableDefaultParameterFacts } from "../callables/values/parameter-facts.js";
+import { recordCallableValueSignatureForDeclaration } from "../callables/calls/signatures.js";
 import { recordThrowFacts } from "../errors/thrown-values.js";
 import { requireDenseSourceNodes } from "../source-evidence/dense-nodes.js";
 

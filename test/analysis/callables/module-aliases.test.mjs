@@ -3,7 +3,7 @@ import test from "node:test";
 import { createRustRecordFixture } from "../../helpers/records.mjs";
 import { createCompilerSessionFromFiles } from "@tsonic/tsts";
 import { createTargetSourceProgram } from "@tsonic/target-api/source";
-import { selectRustInlineModuleCallableAliases } from "../../../dist/analysis/callables/module-aliases.js";
+import { selectRustInlineModuleCallableAliases } from "../../../dist/analysis/callables/values/module-aliases.js";
 
 
 

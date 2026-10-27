@@ -35,8 +35,8 @@ export function value(text: string): boolean { return new Item(text).field; }
 `;
 
 function observed(text, verify) {
-  const preparationUrl = new URL("../../../dist/analysis/callables/emission-contexts.js", import.meta.url).href;
-  const originUrl = new URL("../../../dist/analysis/callables/emission-source-origins.js", import.meta.url).href;
+  const preparationUrl = new URL("../../../dist/analysis/callables/emission/emission-contexts.js", import.meta.url).href;
+  const originUrl = new URL("../../../dist/analysis/callables/emission/emission-source-origins.js", import.meta.url).href;
   const helperUrl = new URL("../../helpers/rust-session.mjs", import.meta.url).href;
   const key = "r14-physical-emission-source-origins";
   const script = `

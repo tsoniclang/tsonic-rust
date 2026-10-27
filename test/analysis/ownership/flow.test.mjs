@@ -5,11 +5,11 @@ import { createSourceStorageQuery } from "@tsonic/target-api/analysis";
 import { checkedSource } from "../../../../tsonic/test/fixtures/source-navigation.mjs";
 import { analyzeRustOwnershipFlow } from "../../../dist/analysis/ownership/flow.js";
 import { analyzeRustReadUses, rustNativeArgumentBorrowsRead } from "../../../dist/analysis/ownership/uses.js";
-import { analyzeRustNativeParticipation } from "../../../dist/analysis/callables/participation.js";
+import { analyzeRustNativeParticipation } from "../../../dist/analysis/callables/calls/participation.js";
 import { createRustProgramRecordBuilder } from "../../../dist/analysis/program/records/create.js";
-import { createRustLexicalFunctionEnvironmentPlan } from "../../../dist/analysis/callables/lexical-functions.js";
+import { createRustLexicalFunctionEnvironmentPlan } from "../../../dist/analysis/callables/values/lexical-functions.js";
 import { createRustRuntimeValueUsePlan } from "../../../dist/analysis/program/runtime-value-uses.js";
-import { createRustSourceCallableQueries } from "../../../dist/analysis/callables/borrowed-returns.js";
+import { createRustSourceCallableQueries } from "../../../dist/analysis/callables/ownership/borrowed-returns.js";
 import { rustStringTargetType } from "../../../dist/target-model/types/carriers/native.js";
 import { analyzeRust } from "../../helpers/rust-session.mjs";
 

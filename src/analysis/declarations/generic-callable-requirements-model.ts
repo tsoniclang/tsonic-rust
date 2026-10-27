@@ -18,10 +18,10 @@ import type { RustAnalysisRecords } from "../../target-model/records/analysis.js
 
 import type { RustLifetimeIndex } from "../../target-model/lifetimes/index.js";
 
-import type { RustGenericCallablePlan } from "../callables/generic-values.js";
+import type { RustGenericCallablePlan } from "../callables/generics/generic-values.js";
 import type { RustClassValuePlan } from "../../target-model/records/class-values.js";
 
-import type { RustNativeCallableInputPlan } from "../callables/native-inputs.js";
+import type { RustNativeCallableInputPlan } from "../callables/native/native-inputs.js";
 
 import type { RustFrameCallablePlan } from "../../target-model/records/frame-callables.js";
 import type { RustStructuralShapePlan } from "../objects/shapes/structural-shape-plan.js";
@@ -29,8 +29,8 @@ import type { RustProjectStructuralView } from "../../target-model/records/proje
 
 import type { RustAnalyzedErrorRegions } from "../errors/regions.js";
 
-import type { RustNativeStoragePlan } from "../callables/native-storage.js";
-import type { RustProjectCallableFieldStorage } from "../callables/project-field-storage.js";
+import type { RustNativeStoragePlan } from "../callables/storage/native-storage.js";
+import type { RustProjectCallableFieldStorage } from "../callables/storage/project-field-storage.js";
 
 export interface RustCallableRequirementInput {
   readonly ownershipFlow: RustOwnershipFlow;

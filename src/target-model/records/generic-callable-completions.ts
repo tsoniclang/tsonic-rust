@@ -1,6 +1,6 @@
 import type { TargetTypeRef } from "../types/model.js";
 
-import type { RustGenericCallablePhysicalMember } from "../records/generic-callables.js";
+import type { RustGenericCallablePhysicalMember } from "./generic-callables.js";
 
 export interface RustGenericCallableMemberCompletion {
   readonly result: TargetTypeRef;

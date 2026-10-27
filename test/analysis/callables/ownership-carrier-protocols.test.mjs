@@ -3,7 +3,7 @@ import test from "node:test";
 import { createCompilerSessionFromFiles } from "@tsonic/tsts";
 import { createSourceStorageQuery } from "@tsonic/target-api/analysis";
 import { createTargetSourceProgram } from "@tsonic/target-api/source";
-import { selectRustCallableOwnershipCarrier } from "../../../dist/analysis/callables/ownership-carriers.js";
+import { selectRustCallableOwnershipCarrier } from "../../../dist/analysis/callables/ownership/ownership-carriers.js";
 import { rustGenericCallableTargetType } from "../../../dist/target-model/types/carriers/generic-callables.js";
 import { rustCallableProtocol, rustCallableTargetType } from "../../../dist/target-model/types/carriers/callables.js";
 import { rustStaticLifetime } from "../../../dist/target-model/lifetimes/index.js";

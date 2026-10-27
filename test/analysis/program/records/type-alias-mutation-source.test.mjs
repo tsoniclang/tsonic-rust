@@ -139,7 +139,7 @@ test("in-place string append and iteration assignment mark the written binding",
   }
 });
 
-const root = fileURLToPath(new URL("../../../../", import.meta.url));
+const root = fileURLToPath(new URL("../../../..", import.meta.url));
 const directory = resolve(root, ".temp/type-alias-mutation-type-proof");
 const compiler = resolve(root, "../tsonic/node_modules/.bin/tsgo");
 

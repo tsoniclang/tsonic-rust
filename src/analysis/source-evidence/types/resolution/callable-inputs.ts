@@ -6,7 +6,7 @@ import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions }
 import { rustNativeCallableResultMatches } from "../../../../policy/ownership/callable-result-contract.js";
 import { selectRustParameterEntryConversion } from "../../../../policy/ownership/parameter-entry-conversion.js";
 import { rustTargetGenericReferences } from "../../../../target-model/types/carriers/generic-references.js";
-import { rustSourceInputLifetime } from "../../../callables/source-input-lifetimes.js";
+import { rustSourceInputLifetime } from "../../../callables/ownership/source-input-lifetimes.js";
 
 export function resolveRustCallableInputCarrier(
   subject: SourceStorageSubject,

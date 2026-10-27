@@ -35,7 +35,7 @@ import { rustSourceHasExplicitUnsafeContext } from "../safety/regions.js";
 import { admitRustThrowCompletion } from "../errors/throw-admission.js";
 import { admitRustProjectFieldDispatch } from "../errors/field-dispatch.js";
 import { analyzeRustOptionalChainBodyFallibility } from "../errors/optional-chains.js";
-import { admitRustAwaitBoundary } from "../callables/await-admission.js";
+import { admitRustAwaitBoundary } from "../callables/async/await-admission.js";
 import { admitRustSourceValueConversions } from "../conversions/source-admission.js";
 import type { RustProjectFieldDispatchQueries } from "../project-types/field-dispatch.js";
 import type { RustSourcePackageComponentClassifications } from "../../target-model/records/source-package-semantics.js";

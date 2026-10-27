@@ -17,7 +17,7 @@ import { rustCallableTargetId } from "../../target-model/types/carriers/source-t
 import type { RustCallableJoinWrite } from "../../target-model/records/native-storage.js";
 import { rustCallableConversionPhysical } from "../../policy/conversions/callable-physical.js";
 import { rustCallableInputProtocol } from "../../target-model/types/index.js";
-import { rustNativeCallableOperand } from "../callables/native-conversions.js";
+import { rustNativeCallableOperand } from "../callables/native/native-conversions.js";
 import { rustProgramNodeIsOutsideNativeCode } from "../control-flow/compile-time-statements.js";
 import type { RustCallableValueAdapter } from "../../target-model/records/callable-adapters.js";
 import { rustNativeCallablePhysicalSource } from "../../policy/conversions/native-callables.js";

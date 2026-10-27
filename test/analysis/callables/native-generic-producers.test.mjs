@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRustErrorEffects } from "../../helpers/rust-error-analysis.mjs";
 import { createRustNativeGenericProducerPlan, prepareRustNativeGenericProducerRequests }
-  from "../../../dist/analysis/callables/native-generic-producers.js";
+  from "../../../dist/analysis/callables/native/native-generic-producers.js";
 
 const producerPlan = options => createRustNativeGenericProducerPlan({ ...options,
   requests: prepareRustNativeGenericProducerRequests(options) });

@@ -5,7 +5,7 @@ import { join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
-const root = fileURLToPath(new URL("../../../", import.meta.url));
+const root = fileURLToPath(new URL("../../..", import.meta.url));
 
 test("the ownership handoff rejects executable queries and writable catalogs at compile time", () => {
   const temporary = join(root, ".temp");

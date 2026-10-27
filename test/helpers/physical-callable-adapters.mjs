@@ -5,7 +5,7 @@ import { createRustProgramRecordBuilder } from "../../dist/analysis/program/reco
 import { recordRustValueCarrierReconciliation } from "../../dist/analysis/program/records/value-carrier-admission.js";
 import { createRustPlanningContext } from "../../dist/backend/planner/context.js";
 import { analyzeRustErrorRegions } from "../../dist/analysis/errors/regions.js";
-import { analyzeRustGenericErrorEmission } from "../../dist/analysis/callables/generic-error-emission.js";
+import { analyzeRustGenericErrorEmission } from "../../dist/analysis/callables/emission/generic-error-emission.js";
 import { createRustErrorEmissionProducer } from "../../dist/analysis/program/records/error-emission.js";
 import { analyzeRustCallableEmission } from "../../dist/analysis/conversions/callable-emission.js";
 import { createRustCallableConversionProducer } from "../../dist/analysis/program/records/callable-conversions.js";

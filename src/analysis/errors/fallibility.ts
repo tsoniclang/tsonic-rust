@@ -32,7 +32,7 @@ import type { Node, SourceFile } from "@tsonic/tsts";
 import { rustPropertyProjectionGetters } from "../conversions/property-projections.js";
 import type { RustFactWalk } from "../program/walk.js";
 
-import { rustFutureValueForSourceStorage } from "../callables/future-values.js";
+import { rustFutureValueForSourceStorage } from "../callables/async/future-values.js";
 import { rustAwaitSelectionLeaves } from "../../target-model/types/await.js";
 import { rustAwaitSelection } from "../../policy/operations/flow/await.js";
 import { collectRustErrorRegionEffects } from "./region-effects.js";

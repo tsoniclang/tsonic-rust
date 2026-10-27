@@ -7,7 +7,7 @@ import { analyzeRust, compileRust } from "../../helpers/rust-session.mjs";
 
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 import { rustOptionElementCarrier } from "../../../dist/target-model/types/index.js";
-import { rustSourceCallResultProjectionMatches } from "../../../dist/analysis/callables/source-call-results.js";
+import { rustSourceCallResultProjectionMatches } from "../../../dist/analysis/callables/calls/source-call-results.js";
 
 const sourceText = `
 class Base<Value> {

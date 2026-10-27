@@ -2,7 +2,7 @@ import { createRustRecordFixture } from "../../helpers/records.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRustErrorEffects } from "../../helpers/rust-error-analysis.mjs";
-import { selectRustProducerError } from "../../../dist/analysis/callables/producer-errors.js";
+import { selectRustProducerError } from "../../../dist/analysis/callables/calls/producer-errors.js";
 import { rustProducerErrorReference } from "../../../dist/target-model/types/carriers/producer-errors.js";
 
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";

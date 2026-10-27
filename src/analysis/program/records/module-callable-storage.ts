@@ -1,7 +1,7 @@
 import { requireRustRecord } from "./required-records.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustProgramRecords } from "../../../target-model/records/program.js";
-import { recordRustInlineModuleCallableUses, selectRustModuleCallableStorage } from "../../callables/module-values.js";
+import { recordRustInlineModuleCallableUses, selectRustModuleCallableStorage } from "../../callables/values/module-values.js";
 import type { RustFactWalk } from "../walk.js";
 import { createRustRecordFamily } from "./family.js";
 

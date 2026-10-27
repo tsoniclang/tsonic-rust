@@ -4,7 +4,7 @@ import { rustCallableInvocationSignaturesMatch } from "../../dist/policy/convers
 import { rustCallableTargetType } from "../../dist/target-model/types/carriers/callables.js";
 import { rustJsPromiseTargetType } from "../../dist/target-model/types/carriers/promises.js";
 import { rustCallableSignatureBinding } from "../../dist/target-model/types/carriers/callable-signatures.js";
-import { rustFrameCallableEnvironmentBindings } from "../../dist/analysis/callables/frame-values.js";
+import { rustFrameCallableEnvironmentBindings } from "../../dist/analysis/callables/values/frame-values.js";
 
 const integer = { kind: "source-primitive", name: "int64" };
 const number = { kind: "source-primitive", name: "float64" };

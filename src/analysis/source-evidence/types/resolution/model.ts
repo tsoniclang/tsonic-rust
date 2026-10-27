@@ -8,7 +8,7 @@ import type { Node, SourceFile, Type, TypePropertyInfo } from "@tsonic/tsts";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import type { RustSourceTypeFamilyImplementation } from "../../../../target-model/types/type-families.js";
 import type { RustTargetGenericBindings } from "../../../../target-model/types/carriers/generic-inference.js";
-import type { RustCallableOwnershipInput } from "../../../callables/ownership-plan.js";
+import type { RustCallableOwnershipInput } from "../../../callables/ownership/ownership-plan.js";
 import type { RustLifetimeRef } from "../../../../target-model/lifetimes/index.js";
 
 export interface RustClassFrameInstantiation {

@@ -15,7 +15,7 @@ import { rustNativeIndexStorageProjection, rustNativeStoragePathsDisjoint, rustN
 import { rustNativeWriteTargets, rustNoNativeWrites } from "./effect-paths.js";
 
 import { rustSourceValueWrapperContains } from "../../policy/ownership/source-value-wrappers.js";
-import { rustCallArgumentMode } from "../callables/parameter-passing.js";
+import { rustCallArgumentMode } from "../callables/values/parameter-passing.js";
 
 type StoredField = Extract<RustTargetOperationFact, { readonly kind: "source-field" }>;
 

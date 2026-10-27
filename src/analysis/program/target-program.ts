@@ -12,11 +12,11 @@ import type { AnalyzeRustTargetProgramResult, RustTargetAnalysisRequest, RustAna
 import type { RustTargetProgram } from "../../target-model/records/target-program.js";
 import { analyzeRustCaptureStorage } from "../storage/capture-storage.js";
 
-import { analyzeRustGenericAdoption, analyzeRustPromiseResults } from "../callables/promise-results.js";
-import { publishRustNativeTaskUses } from "../callables/native-task-uses.js";
-import { analyzeRustLexicalFunctionEmission } from "../callables/lexical-emission.js";
-import { prepareRustCallableEntryParameters } from "../callables/entry-parameters.js";
-import { createRustCallableEntryHeaderPlacements } from "../callables/entry-header-placements.js";
+import { analyzeRustGenericAdoption, analyzeRustPromiseResults } from "../callables/async/promise-results.js";
+import { publishRustNativeTaskUses } from "../callables/native/native-task-uses.js";
+import { analyzeRustLexicalFunctionEmission } from "../callables/emission/lexical-emission.js";
+import { prepareRustCallableEntryParameters } from "../callables/emission/entry-parameters.js";
+import { createRustCallableEntryHeaderPlacements } from "../callables/emission/entry-header-placements.js";
 import { prepareRustClassImplementationContexts } from "../objects/class-implementation-contexts.js";
 import { prepareRustProjectGenericMembership } from "../project-types/generic-membership.js";
 import { createRustModuleInitializationPlan } from "../module-initialization/analyze.js";
@@ -53,8 +53,8 @@ import { analyzeRustErrorTransport } from "../errors/transport.js";
 import { analyzeRustBorrowedInitializers } from "../storage/borrowed-initializers.js";
 
 import { analyzeRustSourceOutputIdentities } from "../names/source-output-identities.js";
-import { analyzeRustRetainedCallableInputs } from "../callables/retained-inputs.js";
-import { analyzeRustGenericCallableErrors } from "../callables/generic-errors.js";
+import { analyzeRustRetainedCallableInputs } from "../callables/ownership/retained-inputs.js";
+import { analyzeRustGenericCallableErrors } from "../callables/generics/generic-errors.js";
 
 import { analyzeRustReadUses, rustNativeArgumentBorrowsRead } from "../ownership/uses.js";
 import { analyzeRustStatementCompletions } from "../control-flow/statement-completion.js";
