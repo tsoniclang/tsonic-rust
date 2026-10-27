@@ -42,7 +42,7 @@ export function selectRustGeneratorSourceErrors(
         : callableValues.nativeStorage.genericBindingsFor(declaration, activation.bindings);
       if (generics?.kind === "unresolved") return undefined;
       const substitutions = generics === undefined ? undefined : selection.bindingsFor(creation, declaration,
-        effects.nativeErrors.map(error => error.errorType),
+        selection.bindingCarriersFor(effects.nativeErrors),
         { storageBindings: activation.bindings, genericBindings: generics.bindings });
       const edge = selection.edgeFor(declaration, "invoke", effects, substitutions);
       if (edge === undefined || selected !== undefined && !rustSourceErrorEffectEdgeEquals(selected, edge)) return undefined;

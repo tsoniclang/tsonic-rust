@@ -56,6 +56,7 @@ export interface RustSourceErrorEffectSelection {
   bindingsFor(node: Node, declaration: Node, carriers: readonly TargetTypeRef[],
     activation?: { readonly storageBindings: SourceStorageBindings;
       readonly genericBindings: RustTargetGenericBindings }): RustSourceErrorBindings | undefined;
+  bindingCarriersFor(errors: readonly RustNativeErrorEffect[]): readonly TargetTypeRef[];
   edgeFor(declaration: Node, kind: RustSourceErrorEffectEdge["kind"], effects: RustErrorEffectsFact,
     bindings: RustSourceErrorBindings | undefined): RustSourceErrorEffectEdge | undefined;
   pending(error: RustNativeErrorEffect, complete: () => RustNativeErrorEffect | undefined,
@@ -356,6 +357,7 @@ export function createRustSourceErrorEffectSelection(walk: { readonly context: R
           return Object.freeze({ identity: selectedIdentity, errorType: snapshotClosedMetadata(selectedType) });
         });
       } else if (!rustTargetTypeRefEquals(target.errorType, errorType)) return undefined;
+      if (substitutedOnCompletion.has(source.identity)) substitutedOnCompletion.add(target.identity);
       nativeErrors.push(Object.freeze({ source, target }));
     }
     const selectedEffects = mergeRustErrorEffects([{ localErrors: effects.localErrors,
@@ -384,6 +386,9 @@ export function createRustSourceErrorEffectSelection(walk: { readonly context: R
     } finally { active.delete(error.identity); }
   };
   return Object.freeze({ register, bindingsFor, edgeFor, complete,
+    bindingCarriersFor(errors: readonly RustNativeErrorEffect[]) {
+      return errors.flatMap(error => substitutedOnCompletion.has(error.identity) ? [] : [error.errorType]);
+    },
     pending(error: RustNativeErrorEffect, select: () => RustNativeErrorEffect | undefined, substitution: "bound" | "completed" = "bound") {
       if (!register([error])) return false;
       pending.set(error.identity, select);

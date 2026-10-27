@@ -81,7 +81,7 @@ export function selectRustAwaitSourceErrors(
       const generics = callableValues.nativeStorage.genericBindingsFor(target, activation.bindings);
       if (generics.kind !== "resolved") return reject(generics.reason);
       const substitutions = selection.bindingsFor(invocation, target,
-        [asynchronous.futureCarrier, ...effects.nativeErrors.map(error => error.errorType)],
+        [asynchronous.futureCarrier, ...selection.bindingCarriersFor(effects.nativeErrors)],
         { storageBindings: activation.bindings, genericBindings: generics.bindings });
       const edge = selection.edgeFor(target, "await", effects, substitutions);
       if (substitutions === undefined) return reject("An original asynchronous invocation has no exact error-channel substitution.");
