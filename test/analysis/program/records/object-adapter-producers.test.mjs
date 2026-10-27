@@ -66,7 +66,7 @@ function copiedFixture(builder, { method = { kind: "KindMethodDeclaration", chil
     kind: node => node.kind ?? "KindIdentifier",
     kindName: node => node.kind ?? "KindIdentifier",
     parent: node => invoked ? node === read ? parenthesized ? wrapper : invocation : node === wrapper ? invocation : undefined : undefined,
-    is: new Proxy({}, { get: (_, property) => node => property === `Is${node.kind?.slice(4)}` }),
+    is: new Proxy({}, { get: (_target, property) => node => property === `Is${node.kind?.slice(4)}` }),
     as: new Proxy({}, { get: () => node => node }),
   }, sourceStorage: {
     storageSubjectFor(node, projection) {

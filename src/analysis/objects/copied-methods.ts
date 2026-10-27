@@ -51,11 +51,6 @@ export function selectRustCopiedMethods(
   const requestMember = (identity: string, node: Node, receiver: Node,
     carrier: TargetTypeRef, index: number): void => {
     demands.set(identity, node);
-    const subject = storage.subjectFor(receiver);
-    if (subject.kind === "unresolved") {
-      independent.set(identity, { kind: "rejected", reason: subject.reason });
-      return;
-    }
     const shape = walk.sourceTypes.structuralObjectForCarrier(carrier);
     const field = shape?.fields[index];
     if (shape === undefined || field?.method !== true || field.storageIndex !== index ||
@@ -65,9 +60,23 @@ export function selectRustCopiedMethods(
           : `The copied method receiver has no exact checked method declaration at storage index ${index}.` });
       return;
     }
-    for (const declaration of field.declarations) {
-      const selected = storage.subject(subject.subject.node, subject.subject.kind,
-        [...subject.subject.projection, { kind: "method-value", declaration }]);
+    const semantics = walk.context.semanticsFor(receiver);
+    const receiverType = ast.is.IsBindingElement(receiver)
+      ? semantics.declarations.declaredValueType(receiver)
+      : semantics.types.expressionType(receiver);
+    const correspondence = receiverType === undefined ? undefined
+      : semantics.types.structuralMembers(receiverType, shape.sourceType, "read");
+    const members = correspondence?.kind !== "available" ? [] : correspondence.members.filter(member =>
+      member.kind === "present" && member.destination.read === "method" &&
+      member.destination.declarations.some(declaration => field.declarations.includes(declaration)));
+    const member = members.length === 1 ? members[0] : undefined;
+    if (member?.kind !== "present" || member.source.read !== "method" || member.source.declarations.length === 0) {
+      independent.set(identity, { kind: "rejected", reason:
+        "The copied method receiver has no exact checked source-to-storage member correspondence." });
+      return;
+    }
+    for (const declaration of member.source.declarations) {
+      const selected = storage.storageSubjectFor(receiver, [{ kind: "method-value", declaration }]);
       if (selected.kind === "unresolved") independent.set(identity, { kind: "rejected", reason: selected.reason });
       else request(identity, node, selected.subject);
     }
