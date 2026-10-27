@@ -78,6 +78,26 @@ export function read(): number { return new Box().value(); }
     "late direct-class preparation reuses the exact early row");
 });
 
+test("native body header requests require the identical registered specialization variant", () => {
+  const { program, declaration, header } = fixture();
+  const variant = { declaration, sourceTypeParameterIdentities: [header.sourceContract.parameters[0].identity],
+    targetTypeArguments: [rustSourcePrimitiveTargetType("int32")], targetName: "empty_int32" };
+  const placements = placementsFor({ ...program, sourceCallableSpecializations: {
+    ...program.sourceCallableSpecializations, requiresSpecialization: node => node === declaration,
+    variantsForCallable: node => node === declaration ? [variant] : [],
+  } });
+  assert.equal(placements.nativeBody(declaration, undefined, () => true).kind, "unresolved",
+    "a specialized emitted item cannot select an unspecialized header domain");
+  assert.equal(placements.nativeBody(declaration, { ...variant }, () => true).kind, "unresolved",
+    "equal-shaped foreign specialization rows cannot select an emitted native body");
+  assert.equal(placements.nativeBody(declaration, { ...variant, declaration: {} }, () => true).kind, "unresolved",
+    "a variant cannot change the original declaration owner");
+  const selected = placements.nativeBody(declaration, variant, () => true);
+  assert.equal(selected.kind, "resolved", "the exact original registered variant selects its native body");
+  assert.equal(selected.header.specialization.get(variant.sourceTypeParameterIdentities[0]) === variant.targetTypeArguments[0], true,
+    "the selected header preserves its exact registered specialization argument");
+});
+
 test("native body header requests cannot replace an unknown lexical placement with a module row", () => {
   const { program } = analyzeRust({ surfaces: [], files: { "index.ts": `
 export function outer(): number { function inner(): number { return 7; } return inner(); }

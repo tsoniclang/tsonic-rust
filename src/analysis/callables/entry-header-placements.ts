@@ -79,6 +79,10 @@ export function createRustCallableEntryHeaderPlacements(input: {
     } => {
     const unresolved = (reason: string): SourceOwnershipUnresolved => ({ kind: "unresolved", at: declaration, reason });
     if (!enter() || active.has(declaration)) return unresolved("A native pending entry requires a finite complete original header placement.");
+    if (program.sourceCallableSpecializations.requiresSpecialization(declaration) && variant === undefined ||
+      variant !== undefined && (variant.declaration !== declaration ||
+        !program.sourceCallableSpecializations.variantsForCallable(declaration).some(registered => registered === variant)))
+      return unresolved("A native pending entry requires its exact registered original specialization variant.");
     const entry = entries.get(declaration);
     if (entry?.genericHeader === undefined || entry.nativeEntry.direct === undefined)
       return unresolved("A native pending entry requires its completed original direct physical ABI.");
