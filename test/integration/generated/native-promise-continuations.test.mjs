@@ -30,3 +30,31 @@ test("native Promise continuations route rejections to unknown handlers as the p
   assert.doesNotMatch(source, /JsValue|TsValue|dyn Future|Box::pin/u, "the rejection reason is the program error, not a dynamic value");
   validateGeneratedProject("native-promise-continuations", result.artifacts, { run: true });
 });
+
+test("native Promise then and catch retain named and stored infallible callback contracts", { timeout: 300_000 }, () => {
+  const { result } = compileRust({ surfaces: [], target: { id: "rust", options: { outputType: "bin" } }, files: {
+    "index.ts": `
+      async function seed(): Promise<number> { return 1; }
+      async function fail(): Promise<number> { throw new Error("expected rejection"); }
+      function same(value: number): number { return value; }
+      function recover(reason: unknown): number { return 2; }
+      export async function main(): Promise<void> {
+        const storedSame = same;
+        const storedRecover = recover;
+        const namedThen = await seed().then(same);
+        const storedThen = await seed().then(storedSame);
+        const namedCatch = await fail().catch(recover);
+        const storedCatch = await fail().catch(storedRecover);
+        if (namedThen !== 1 || storedThen !== 1 || namedCatch !== 2 || storedCatch !== 2)
+          throw new Error("native callback contract");
+      }
+      await main();
+    `,
+  } });
+  assertNoTargetDiagnostics(result.diagnostics);
+  const source = artifactText(result, "src/index.rs");
+  assert.match(source, /async fn native_promise_then/u, "then remains a native continuation");
+  assert.match(source, /async fn native_promise_catch/u, "catch remains a native continuation");
+  assert.doesNotMatch(source, /JsValue|TsValue|dyn Future|Box::pin/u, "fixed native errors introduce no dynamic carrier or boxed future");
+  validateGeneratedProject("native-promise-infallible-callbacks", result.artifacts, { run: true });
+});

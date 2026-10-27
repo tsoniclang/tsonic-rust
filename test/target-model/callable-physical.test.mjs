@@ -91,7 +91,7 @@ test("physical adapters preserve source error and native Future payload without 
   const selected = select(rustCallableTargetType([], future), rustCallableTargetType([integer], future));
   const native = rustNativeCompletionFutureType({ identity: "fixture:Future", output: integer, error: failure, captures: [] });
   for (const error of [infallible, failure]) {
-    const physical = rustCallableConversionPhysical(selected, { parameters: [], result: native, error }, file);
+    const physical = rustCallableConversionPhysical(selected, { parameters: [], result: native, error }, file, undefined);
     assert.equal(physical !== undefined, true);
     assert.equal(rustTargetTypeRefEquals(physical.result, native), true);
     assert.equal(rustTargetTypeRefEquals(physical.error, error), true);
@@ -111,7 +111,7 @@ test("physical adapters eliminate uninhabited invocation errors only for concret
     const target = rustCallableTargetType([integer], integer, { kind: "static" }, error);
     const selected = select(physicalCarrier(actual), target);
     assert.equal(selected !== undefined, true, "the exact native source admits uninhabited-error elimination");
-    const physical = rustCallableConversionPhysical(selected, actual, file);
+    const physical = rustCallableConversionPhysical(selected, actual, file, undefined);
     assert.equal(physical !== undefined, true, "the selected concrete destination error is representable");
     assert.equal(physical.eliminatedInvokeError, true);
     assert.equal(rustTargetTypeRefEquals(physical.error, error), true);
@@ -123,7 +123,7 @@ test("physical adapters eliminate uninhabited invocation errors only for concret
 
 test("fallible argument and result adapters expose canonical distinct exact error channels", () => {
   const selected = select(rustCallableTargetType([integer], wide), rustCallableTargetType([wide], integer));
-  const physical = rustCallableConversionPhysical(selected, { parameters: [integer], result: wide, error: failure }, file);
+  const physical = rustCallableConversionPhysical(selected, { parameters: [integer], result: wide, error: failure }, file, undefined);
   assert.equal(physical !== undefined, true);
   assert.deepEqual(physical.errors.map(error => error.identity), ["invoke", "parameter:0", "result"]);
   assert.deepEqual(rustCallableConversionErrorArities(selected), [3]);
@@ -142,7 +142,7 @@ test("nested result adaptation reuses its own exact physical payload not the out
   const selected = select(rustCallableTargetType([], original), rustCallableTargetType([], target));
   const nested = { parameters: [], result: wide, error: failure };
   const physical = rustCallableConversionPhysical(selected,
-    { parameters: [], result: physicalCarrier(nested), error: infallible }, file);
+    { parameters: [], result: physicalCarrier(nested), error: infallible }, file, undefined);
   assert.equal(physical !== undefined, true);
   assert.equal(physical.resultPlan.kind, "callable");
   assert.equal(rustTargetTypeRefEquals(physical.error, infallible), true, "constructing the nested adapter is infallible");
@@ -153,7 +153,7 @@ test("nested result adaptation reuses its own exact physical payload not the out
 
 test("borrowed input adapters expose native tuple closure and exact Result without owning storage", () => {
   const selected = select(rustCallableTargetType([], integer), rustCallableInputTargetType([integer], integer));
-  const physical = rustCallableConversionPhysical(selected, { parameters: [], result: integer, error: failure }, file);
+  const physical = rustCallableConversionPhysical(selected, { parameters: [], result: integer, error: failure }, file, undefined);
   assert.equal(physical !== undefined, true);
   assert.equal(physical.carrier.kind, "closure");
   assert.equal(rustTargetTypeRefEquals(rustCallablePhysicalSignature(physical.carrier).error, failure), true);
@@ -165,10 +165,10 @@ test("physical adapter validation rejects malformed selections and inconsistent 
   for (const [label, source] of [["arity", { ...actual, parameters: [] }], ["sparse", { ...actual, parameters: new Array(1) }],
     ["input", { ...actual, parameters: [wide] }], ["result", { ...actual, result: integer }],
     ["missing error", { ...actual, error: undefined }], ["extra", { ...actual, extra: true }]])
-    assert.equal(rustCallableConversionPhysical(selected, source, file) === undefined, true, label);
+    assert.equal(rustCallableConversionPhysical(selected, source, file, undefined) === undefined, true, label);
   for (const changed of [null, undefined, { ...selected, extra: true }, { ...selected, result: { kind: "borrow" } },
     { ...selected, parameters: [] }]) {
-    assert.equal(rustCallableConversionPhysical(changed, actual, file) === undefined, true);
+    assert.equal(rustCallableConversionPhysical(changed, actual, file, undefined) === undefined, true);
     assert.equal(rustCallableConversionErrorArities(changed) === undefined, true);
   }
   assert.equal(rustCallablePhysicalSignature(selected.source) === undefined, true, "logical source cannot masquerade as physical");

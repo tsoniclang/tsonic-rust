@@ -71,7 +71,7 @@ export function create(): (value: int32) => int64 {
   const program = { ...current.program, errorRegions, records: { ...selectedRecords,
     ...errors.records, nativeErrorRegion: errors.regions } };
   const adapters = createRustCallableConversionProducer(() => {});
-  analyzeRustCallableEmission(program, nativeNodes, adapters);
+  analyzeRustCallableEmission(program, nativeNodes, adapters, new WeakMap());
   program.records = { ...program.records, ...adapters.records };
   const admitted = program.records.callableContract.get(current.node, conversion);
   assert.equal(admitted !== undefined, true, "the native conversion owner admits the exact selected adapter");

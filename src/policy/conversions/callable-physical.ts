@@ -15,17 +15,21 @@ import { type RustCallableConversion } from "../../target-model/conversions/call
 import { rustCallableConversionMatches } from "./callable.js";
 import { type RustValueConversionContract } from "../../target-model/conversions/contracts.js";
 import { rustValueConversionContract } from "./contracts.js";
+import { selectRustSourceValueConversion } from "./selection.js";
+import type { RustCallbackOperationTemplate } from "../../target-model/operations/model.js";
 
 import { rustCallableConversionSource, rustCallablePhysicalSignature, type RustCallablePhysicalConversion, type RustCallablePhysicalSignature, type RustCallablePhysicalValueConversion } from "../../target-model/conversions/callable-physical.js";
 export function rustCallableConversionPhysical(
   conversion: RustCallableConversion,
   source: RustCallablePhysicalSignature,
   fileName: string,
+  closureError: Extract<RustCallbackOperationTemplate["failure"], { readonly kind: "invocation" }>["resultError"] | undefined,
   definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
   carriedError = false,
 ): RustCallablePhysicalConversion | undefined {
   let remaining = 4096;
-  const select = (logical: RustCallableConversion, actual: RustCallablePhysicalSignature, depth: number): RustCallablePhysicalConversion | undefined => {
+  const select = (logical: RustCallableConversion, actual: RustCallablePhysicalSignature, depth: number,
+    selectedClosureError: typeof closureError): RustCallablePhysicalConversion | undefined => {
     if (remaining-- <= 0 || depth > 128 || logical === null || typeof logical !== "object" ||
       actual === null || typeof actual !== "object" || !isClosedMetadata(actual) ||
       !hasExactObjectKeys(actual, ["parameters", "result", "error"]) || !isDenseDataArray(actual.parameters) ||
@@ -34,13 +38,24 @@ export function rustCallableConversionPhysical(
     const source = rustCallableConversionSource(logical.source)!;
     const target = rustCallableProtocol(logical.target) ?? rustClosureProtocol(logical.target);
     if (target === undefined || source.parameters.length !== actual.parameters.length) return undefined;
+    if (logical.target.kind === "closure" && selectedClosureError === undefined ||
+      logical.target.kind !== "closure" && selectedClosureError !== undefined) return undefined;
     const errorContract = logical.error === undefined ? undefined : rustValueConversionContract(logical.error, definitions);
     if (logical.error !== undefined && errorContract === undefined) return undefined;
     // A concrete invoked error is converted here; an abstract one (a native input's associated error) and the error of
     // a type-erased runtime callable are carried through the native error join unchanged.
-    const errorPlan = !carriedError && errorContract !== undefined && rustTargetTypeRefEquals(errorContract.source, actual.error)
+    let errorPlan = !carriedError && errorContract !== undefined && rustTargetTypeRefEquals(errorContract.source, actual.error)
       ? errorContract : undefined;
-    const targetError = "error" in target ? target.error : undefined;
+    const targetError = "error" in target ? target.error
+      : selectedClosureError?.kind === "native" ? selectedClosureError.carrier : undefined;
+    if (logical.target.kind === "closure" && targetError !== undefined && !rustTargetTypeRefEquals(actual.error, targetError) &&
+      !rustUninhabitedError(actual.error) && errorPlan === undefined) {
+      const conversion = selectRustSourceValueConversion(actual.error, targetError, definitions);
+      const contract = conversion === undefined ? undefined : rustValueConversionContract(conversion, definitions);
+      if (contract === undefined || contract.fallible || contract.category !== "exact" || contract.sourceMode !== "value" ||
+        !rustTargetTypeRefEquals(contract.source, actual.error) || !rustTargetTypeRefEquals(contract.target, targetError)) return undefined;
+      errorPlan = contract;
+    }
     const eliminated = errorPlan === undefined && targetError !== undefined &&
       rustProgramErrorOwner(targetError)?.kind !== "logical" &&
       !rustTargetTypeRefEquals(actual.error, targetError) && rustUninhabitedError(actual.error);
@@ -75,7 +90,8 @@ export function rustCallableConversionPhysical(
       resultPlan = { kind: logical.result.kind };
     } else if (logical.result.kind === "value" && logical.result.conversion.kind === "callable-adapter") {
       const nestedSignature = rustCallablePhysicalSignature(actual.result);
-      const nested = nestedSignature === undefined ? undefined : select(logical.result.conversion, nestedSignature, depth + 1);
+      const nested = nestedSignature === undefined ? undefined : select(logical.result.conversion, nestedSignature, depth + 1,
+        logical.result.conversion.target.kind === "closure" ? { kind: "native", carrier: rustRuntimeErrorTargetType() } : undefined);
       if (nested === undefined) return undefined;
       result = nested.carrier;
       resultPlan = { kind: "callable", conversion: nested };
@@ -87,6 +103,7 @@ export function rustCallableConversionPhysical(
     } else return undefined;
     const error = rustNativeErrorJoinTargetType(fileName, errors.map(source => source.errorType));
     if (error === undefined) return undefined;
+    if (logical.target.kind === "closure" && targetError !== undefined && !rustTargetTypeRefEquals(error, targetError)) return undefined;
     const signature = { parameters, result, error };
     const carrier = physicalTarget(logical.target, signature);
     return carrier === undefined ? undefined : snapshotClosedMetadata({ logical, source: actual, carrier,
@@ -100,7 +117,7 @@ export function rustCallableConversionPhysical(
       return { kind: "value", contract, errorIdentity: identity };
     }
   };
-  return select(conversion, source, 0);
+  return select(conversion, source, 0, closureError);
 }
 
 export function rustCallableConversionErrorArities(

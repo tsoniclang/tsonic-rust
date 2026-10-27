@@ -21,9 +21,12 @@ import { rustNativeCallableOperand } from "../callables/native/native-conversion
 import { rustProgramNodeIsOutsideNativeCode } from "../control-flow/compile-time-statements.js";
 import type { RustCallableValueAdapter } from "../../target-model/records/callables/callable-adapters.js";
 import { rustNativeCallablePhysicalSource } from "../../policy/conversions/native-callables.js";
+import type { RustOperationAttempt } from "../program/operation-attempts.js";
+import { rustCallableClosureErrorBoundary } from "./callable-error-boundary.js";
 
 export function analyzeRustCallableEmission(program: Omit<RustAnalysisProgram, "reachability">,
-  nodes: readonly Node[], producer: RustCallableConversionProducer): readonly TargetTypeRef[] {
+  nodes: readonly Node[], producer: RustCallableConversionProducer,
+  attempts: Pick<WeakMap<Node, RustOperationAttempt>, "get">): readonly TargetTypeRef[] {
   const types: TargetTypeRef[] = [];
   const operand = (node: Node, source: TargetTypeRef | undefined): RustCallableOperandEmission | undefined => {
     if (source === undefined) return undefined;
@@ -50,8 +53,9 @@ export function analyzeRustCallableEmission(program: Omit<RustAnalysisProgram, "
     const file = program.source.ast.getSourceFile(node);
     const fileName = file === undefined ? undefined : program.source.ast.getFileName(file);
     const physical = source === undefined || fileName === undefined ? undefined
-      : rustCallableConversionPhysical(conversion, providerCallbackSignature(conversion, source.signature), fileName, program.typeDefinitions,
-        source.erased === true);
+      : rustCallableConversionPhysical(conversion, providerCallbackSignature(conversion, source.signature), fileName,
+        conversion.target.kind === "closure" ? rustCallableClosureErrorBoundary(node, program.source.ast, attempts) : undefined,
+        program.typeDefinitions, source.erased === true);
     if (source === undefined || fileName === undefined || physical === undefined)
       failTargetAnalysisInvariant("tsonic-rust", "An admitted callable adapter requires its exact physical source and closed native conversion.", node);
     const compile = (selected: RustCallablePhysicalConversion, actual: RustNativeCallablePhysicalSource): RustCallableConversionEmission => {

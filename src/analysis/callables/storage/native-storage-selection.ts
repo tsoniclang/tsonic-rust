@@ -59,6 +59,7 @@ import { selectRustNativeCallbackParameterStorage } from "../native/native-param
 import { selectRustTypedLocationSourceOperation } from "../../../source/extension/typed-locations.js";
 
 import type { RustNativeStorageRequest } from "./native-storage-request.js";
+import { rustCallableClosureErrorBoundary } from "../../conversions/callable-error-boundary.js";
 
 export function createRustNativeStorageSelection(
   input: Parameters<typeof createRustNativeStorageQueries>[0],
@@ -179,8 +180,9 @@ export function createRustNativeStorageSelection(
           }) });
       const file = input.ast.getSourceFile(origin.node);
       const physical = source === undefined || file === undefined ? undefined
-        : rustCallableConversionPhysical(conversion, source.signature, input.ast.getFileName(file), input.definitions,
-          source.erased === true)?.carrier;
+        : rustCallableConversionPhysical(conversion, source.signature, input.ast.getFileName(file),
+          conversion.target.kind === "closure" ? rustCallableClosureErrorBoundary(origin.node, input.ast, input.operationAttempts) : undefined,
+          input.definitions, source.erased === true)?.carrier;
       return physical ?? fail("Native callable conversion storage has no exact physical adaptation contract.");
     };
     const boundInvocation = (declaration: Node, invocation: Node, callerBindings: SourceStorageBindings,

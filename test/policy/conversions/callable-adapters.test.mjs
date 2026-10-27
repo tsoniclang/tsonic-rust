@@ -110,7 +110,7 @@ test("physical callable fields use one arity and uninhabited-error adapter into 
   assert.equal(rustCallableConversionMatches(adapter?.conversion, source, adapter?.targetCarrier), true,
     "the selected conversion admits the exact physical source");
   const selected = rustCallableConversionPhysical(adapter?.conversion, rustCallablePhysicalSignature(source),
-    "physical-field.ts", emptyRustTypeDefinitions, true);
+    "physical-field.ts", undefined, emptyRustTypeDefinitions, true);
   assert.equal(selected?.eliminatedInvokeError, true, "the uninhabited invocation error is eliminated natively");
   assert.equal(rustTargetTypeRefEquals(selected?.error, error), true, "the target carries only its exact fixed error");
   assert.equal(selected?.parameters.length, 1, "the getter keeps its full fixed parameter list");
