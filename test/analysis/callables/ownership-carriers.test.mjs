@@ -177,15 +177,23 @@ export function escaped${generic ? "<U>(seed: U)" : "()"}: (count: number) => nu
       const pending = [...program.source.sourceFiles];
       let factory;
       let retained;
+      let field;
       while (pending.length !== 0) {
         const node = pending.pop();
         const name = ast.name(node);
         const text = name !== undefined && ast.is.IsIdentifier(name) ? ast.text(name) : "";
         if (ast.is.IsFunctionDeclaration(node) && text === "escaped") factory = node;
         if (ast.is.IsVariableDeclaration(node) && text === "before") retained = node;
+        if (ast.is.IsPropertyDeclaration(node) && text === "recurse") field = node;
         ast.forEachChild(node, child => { if (child !== undefined) pending.push(child); });
       }
       assert.equal(factory !== undefined && retained !== undefined, true, "exact authored factory and retained callback");
+      assert.equal(field !== undefined, true, "the original class callback declaration remains the field owner");
+      const declared = rustFrameCallableValue(program.records.runtimeCarrier.get(field)?.carrier);
+      assert.equal(declared?.owner.kind, "class", "class storage publishes its declaration-owned frame before receiver reads");
+      const declarationParameters = rustTargetGenericReferences(declared.owner.instance).typeParameters;
+      assert.equal(declarationParameters.length, 1, "the original class template retains its one exact type parameter");
+      assert.equal(declarationParameters[0].name, "T", "a factory instantiation never rewrites the class declaration's own carrier");
       const returned = program.records.sourceCallableReturn.get(factory)?.returnCarrier;
       const local = program.records.runtimeCarrier.get(retained)?.carrier;
       assert.equal(rustFrameCallableValue(returned) !== undefined, true, "physical owner remains a closed frame");

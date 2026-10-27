@@ -97,6 +97,21 @@ export function resolveRustCallableStorageCarrier(
           sourceTypeParameterSubstitutions: new Map(), callableRepresentation: "storage" }, receiver), options, new Set());
       if (template === undefined) return undefined;
       const references = rustTargetGenericReferences(template);
+      if (subject.kind === "member" && subject.projection.length === 0 &&
+        context.ast.is.IsPropertyDeclaration(subject.node) && context.ast.parent(subject.node) === owner &&
+        !context.ast.hasModifierKind(subject.node, "static")) {
+        const lexical = context.sourceStorage.bindingsForLexicalOwner(subject.node);
+        if (lexical.kind === "unresolved") return undefined;
+        const selectedKey = context.sourceStorage.contextKeyFor([subject], source.bindings);
+        const lexicalKey = context.sourceStorage.contextKeyFor([subject], lexical.bindings);
+        const bindings = selectedKey.kind !== "resolved" || lexicalKey.kind !== "resolved" || selectedKey.key !== lexicalKey.key
+          ? undefined : inferRustTargetGenericBindings(template, template, {
+            typeIdentities: new Set(references.typeIdentities), lifetimeIdentities: new Set(references.lifetimeIdentities),
+            constIdentities: new Set(references.constIdentities),
+          });
+        return bindings === undefined || protocol === undefined ? undefined : Object.freeze({ kind: "selected", instance: template,
+          parameters: protocol.parameters, result: protocol.result, bindings });
+      }
       let instance: TargetTypeRef | undefined;
       let selectedProtocol: ReturnType<typeof rustCallableProtocol>;
       for (const producer of sources) {

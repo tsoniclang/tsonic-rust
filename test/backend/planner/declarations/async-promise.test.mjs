@@ -95,7 +95,7 @@ test("settled tail errors preserve the exact native payload without a redundant 
   const scoped = wrapRustJsPromiseBody(body, true, { kind: "settled", settledAwaits: [] }, integerCompletion).statements[0].expr;
   assert.equal(scoped.args[0].kind, "block", "earlier effects retain their lexical evaluation order");
   assert.equal(scoped.args[0].body === body, true, "no statement or payload is copied, lost or reordered");
-  const attributed = { statements: [{ ...tail, attrs: [{ kind: "list", path: "cfg", arguments: [{ kind: "list", path: "all", arguments: [] }] }] }] };
+  const attributed = { statements: [tail], innerAttrs: [{ kind: "list", path: "cfg", arguments: [{ kind: "list", path: "all", arguments: [] }] }] };
   const preserved = wrapRustJsPromiseBody(attributed, true, { kind: "settled", settledAwaits: [] }, integerCompletion).statements[0].expr;
   assert.equal(preserved.args[0].kind, "block", "attributes prevent direct tail extraction");
   assert.equal(preserved.args[0].body === attributed, true, "the complete attributed syntax survives");

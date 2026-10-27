@@ -20,7 +20,7 @@ export function wrapRustJsPromiseBody(
     const completion: RustExpr = rustPromiseBodyLeavesEarly(body)
       ? { kind: "invoke", callee: { kind: "closure-block", params: [], move: true, async: false, body }, args: [] }
       : !attributed && tail?.kind === "tail" && (tail.attrs?.length ?? 0) === 0 ? tail.expr
-        : !attributed && tail?.kind === "throw" && tail.tail === true && (tail.attrs?.length ?? 0) === 0
+        : !attributed && tail?.kind === "throw" && tail.tail === true
           ? { kind: "call", path: "Err", args: [tail.error] }
         : !attributed && body.statements.length === 0 ? { kind: "tuple-literal", elements: [] }
           : { kind: "block", body };
