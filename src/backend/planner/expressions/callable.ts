@@ -36,7 +36,7 @@ import { planRustParameterEntryConversion } from "../declarations/callables/para
 import { rustCallableParameterReturnContext } from "../declarations/callables/parameters.js";
 import type { RustCallableParameterInitialization } from "../../../target-model/records/calls/parameter-emission.js";
 import { planRustCallableLeadingParameters } from "../declarations/callables/leading-parameters.js";
-import { applyFinalizedValueConversion } from "./value-conversions.js";
+import { applyFinalizedValueConversion, lowerRustValueConversion } from "./value-conversions.js";
 import { planRustCapturedReceiverFields, planRustCapturedReceivers, rustRecursiveReceiverFieldContext } from "./receiver-captures.js";
 import { planRustErrorRegion } from "../program/error-regions.js";
 import { resolveRustGeneratorBodyError } from "../declarations/callables/return-types.js";
@@ -414,7 +414,8 @@ export function planRustCallableExpressionBody(
         ? [planRustReturnExit(undefined, bodyContext)] : [])],
   };
   const bodyWithBindings = { statements: [...bindingStatements, ...block.statements] };
-  const bodyErrorType = suspended && fallible ? rustActiveErrorType(callableClosureContext) : invocationErrorType;
+  const bodyErrorType = suspended && fallible || emission.bodyErrorConversion !== undefined
+    ? rustActiveErrorType(callableClosureContext) : invocationErrorType;
   const loweredBody = generator === undefined ? applyFallibleShape(applyRustTailShape(
     bodyWithBindings,
     !emission.unitBody || bodyIsFallible,
@@ -430,6 +431,18 @@ export function planRustCallableExpressionBody(
       }
     : { fallible: false, hasReturnValue: !emission.unitBody }) : block;
   let finalizedBlock: RustBlock = loweredBody;
+  if (emission.bodyErrorConversion !== undefined) {
+    const errorName = allocateRustSyntheticName(context.syntheticNames!, "callable_body_error");
+    const converted = lowerRustValueConversion(emission.bodyErrorConversion, { kind: "path", path: errorName }, callableClosureContext, node);
+    if (converted === undefined || invocationErrorType === undefined) return undefined;
+    finalizedBlock = { statements: [{ kind: "tail", expr: {
+      kind: "method-call", receiver: { kind: "invoke", callee: {
+        kind: "closure-block", params: [], move: false, async: false, body: loweredBody,
+      }, args: [] }, method: "map_err",
+      genericArguments: [{ kind: "type", type: invocationErrorType }, { kind: "type", type: { kind: "infer" } }],
+      args: [{ kind: "closure", params: [{ name: errorName }], body: converted }],
+    } }] };
+  }
   if (generator !== undefined) {
     context.usedAliases?.add("rt");
     finalizedBlock = { statements: [...bindingStatements, {

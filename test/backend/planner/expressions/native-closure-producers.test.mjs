@@ -14,6 +14,7 @@ import { compileRust, rustSourceText, analyzeRust } from "../../../helpers/rust-
 import { createRustProviderPackage } from "../../../../dist/public/provider.js";
 import { analyzeRustLambdaEmission } from "../../../../dist/analysis/callables/emission/lambda-emission.js";
 import { createRustLambdaEmissionProducer } from "../../../../dist/analysis/program/records/callables/lambda-emission.js";
+import { createRustConversionEmissionProducer } from "../../../../dist/analysis/program/records/operations/conversion-emission.js";
 import { rustGenericCallableValue } from "../../../../dist/target-model/types/carriers/generic-callables.js";
 import { rustJsValueTargetType } from "../../../../dist/target-model/types/carriers/js.js";
 
@@ -57,7 +58,8 @@ function lambdaEmissionWithout(source, withhold) {
   program.sourceFiles.forEach(visit);
   assert.equal(closures.length > 0, true, "checked closure producers");
   const producer = createRustLambdaEmissionProducer(() => undefined);
-  return () => analyzeRustLambdaEmission(withhold(program, closures[0]), closures, producer);
+  return () => analyzeRustLambdaEmission(withhold(program, closures[0]), closures, producer,
+    createRustConversionEmissionProducer(() => undefined));
 }
 
 test("pure closure construction owns Infallible instead of inheriting the consumer's error", () => {

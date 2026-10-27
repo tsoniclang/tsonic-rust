@@ -3,6 +3,7 @@ import type { TargetTypeRef } from "../../types/model.js";
 import type { RustRecordFamily } from "../program.js";
 import type { rustCallableProtocol, rustClosureProtocol } from "../../types/index.js";
 import type { RustCallableJoinWrite } from "../native/native-storage.js";
+import type { RustValueConversionContract } from "../../conversions/contracts.js";
 
 export interface RustLambdaParameterEmission {
   readonly declaration: Node;
@@ -26,6 +27,7 @@ export interface RustNativeLambdaEmission {
   readonly unitBody: boolean;
   readonly physicalCarrier: TargetTypeRef | undefined;
   readonly invocationError: TargetTypeRef | undefined;
+  readonly bodyErrorConversion: RustValueConversionContract | undefined;
   readonly resultFallible: boolean;
   readonly bodyFallible: boolean;
   readonly staticStorage: boolean;

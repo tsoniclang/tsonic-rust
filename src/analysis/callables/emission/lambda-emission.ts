@@ -23,9 +23,15 @@ import { rustFixedStructuralMethodDeclarations } from "../generics/generic-value
 import { rustProgramErrorOwner } from "../../../target-model/types/carriers/program-errors.js";
 import { rustRuntimeErrorTargetType } from "../../../target-model/types/carriers/runtime-carriers.js";
 import { mapRustTargetTypes } from "../../../target-model/types/carriers/substitution.js";
+import { rustErrorRegionCarrier } from "../../errors/regions.js";
+import { selectRustSourceValueConversion } from "../../../policy/conversions/selection.js";
+import { admitRustConversionEmission } from "../../conversions/emission.js";
+import type { RustConversionEmissionProducer } from "../../program/records/operations/conversion-emission.js";
+import type { RustValueConversionContract } from "../../../target-model/conversions/contracts.js";
 
 export function analyzeRustLambdaEmission(program: Omit<RustAnalysisProgram, "reachability">,
-  nodes: readonly Node[], producer: RustLambdaEmissionProducer): readonly TargetDiagnostic[] {
+  nodes: readonly Node[], producer: RustLambdaEmissionProducer,
+  conversions: RustConversionEmissionProducer): readonly TargetDiagnostic[] {
   const { ast } = program.source;
   const fixedMethods = rustFixedStructuralMethodDeclarations(ast, program.structuralShapes);
   const issues: TargetDiagnostic[] = [];
@@ -133,6 +139,21 @@ export function analyzeRustLambdaEmission(program: Omit<RustAnalysisProgram, "re
     const producedError = producedReference === undefined ? invocationError : program.errorRegions.producerError(producedReference);
     if (nativeClosure !== undefined && resultFallible && producedError === undefined)
       failTargetAnalysisInvariant("tsonic-rust", "An admitted native closure requires its completed physical invocation error.", node);
+    let bodyErrorConversion: RustValueConversionContract | undefined;
+    if (!suspended && fallible) {
+      const bodyError = rustErrorRegionCarrier(region);
+      if (bodyError === undefined || producedError === undefined)
+        failTargetAnalysisInvariant("tsonic-rust", "An admitted callable body requires its exact intrinsic and outward error carriers.", node);
+      if (!rustTargetTypeRefEquals(bodyError, producedError)) {
+        const conversion = selectRustSourceValueConversion(bodyError, producedError, program.typeDefinitions);
+        if (conversion === undefined)
+          failTargetAnalysisInvariant("tsonic-rust", "An admitted callable construction requires its exact intrinsic-body error conversion.", node);
+        bodyErrorConversion = admitRustConversionEmission(conversions, conversion, program.typeDefinitions);
+        if (bodyErrorConversion.fallible || bodyErrorConversion.category !== "exact" || bodyErrorConversion.sourceMode !== "value" ||
+          !rustTargetTypeRefEquals(bodyErrorConversion.source, bodyError) || !rustTargetTypeRefEquals(bodyErrorConversion.target, producedError))
+          failTargetAnalysisInvariant("tsonic-rust", "An admitted callable construction requires an exact infallible body error conversion.", node);
+      }
+    }
     const nativeInvocationError = producedError === undefined ? undefined : mapRustTargetTypes(producedError, carrier => {
       const owner = rustProgramErrorOwner(carrier);
       return owner?.kind === "physical" && owner.domain === "runtime" ? rustRuntimeErrorTargetType() : carrier;
@@ -147,6 +168,7 @@ export function analyzeRustLambdaEmission(program: Omit<RustAnalysisProgram, "re
     producer.lambda(node, { construction, constructionCarrier, protocol, nativeClosure, borrowedInput, parameters: Object.freeze(selected),
       resultCarrier, bodyCarrier, unitBody: isRustUnitCarrier(bodyCarrier), physicalCarrier,
       invocationError: nativeClosure === undefined ? invocationError : nativeInvocationError,
+      bodyErrorConversion,
       resultFallible, bodyFallible: suspended ? fallible : resultFallible,
       staticStorage: protocol?.lifetime?.kind === "static", mutableCapture: closure.resultCarrier.kind === "closure" &&
         (closure.resultCarrier.callTrait === "FnMut" || closure.resultCarrier.callTrait === "FnOnce"),

@@ -5,12 +5,15 @@ import { rustCallablePhysicalSignature } from "../../../dist/target-model/conver
 import { rustProgramErrorTargetType } from "../../../dist/target-model/types/carriers/js.js";
 import { selectRustPhysicalProgramErrorOwner } from "../../../dist/analysis/errors/error-types.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
+import { rustNamedTargetType } from "../../../dist/target-model/types/carriers/native.js";
+import { rustNativeErrorJoinReference } from "../../../dist/target-model/types/native-error-joins.js";
+import { rustErrorRegionCarrier } from "../../../dist/analysis/errors/regions.js";
+import { nativeClosureProducerFailurePackage } from "../../helpers/native-closure-producers.mjs";
 import { compileRust } from "../../helpers/rust-session.mjs";
 
-for (const surfaces of [[], ["js"]]) for (const mode of ["value", "ref"]) for (const fallible of [false, true]) {
-  test(`provider callable construction keeps its fixed error before ${mode} passing (${surfaces[0] ?? "native"}, ${fallible ? "fallible" : "pure"})`, () => {
-    const unit = { kind: "tuple", elements: [] };
-    const provider = createRustProviderPackage({
+function fixedCallbackConsumer(mode) {
+  const unit = { kind: "tuple", elements: [] };
+  return createRustProviderPackage({
       id: "provider-callable-construction-errors", version: "1.0.0", displayName: "Provider callable construction errors",
       crates: [],
       modules: [{ moduleSpecifier: "test:callable-errors", providerModuleId: "test.callable-errors", exports: [{
@@ -24,7 +27,12 @@ for (const surfaces of [[], ["js"]]) for (const mode of ["value", "ref"]) for (c
         target: { form: "call", path: "fixture::consume", argModes: [mode] },
         parameterCarriers: [rustCallableTargetType([], unit)], resultCarrier: unit,
       }],
-    });
+  });
+}
+
+for (const surfaces of [[], ["js"]]) for (const mode of ["value", "ref"]) for (const fallible of [false, true]) {
+  test(`provider callable construction keeps its fixed error before ${mode} passing (${surfaces[0] ?? "native"}, ${fallible ? "fallible" : "pure"})`, () => {
+    const provider = fixedCallbackConsumer(mode);
     const { result } = compileRust({ surfaces, packages: [provider], files: { "index.ts": `
 import { consume } from "test:callable-errors";
 export function run(): void {
@@ -65,5 +73,53 @@ export function run(): void {
       "the construction uses the fixed provider error ABI, not its independently inferred body error");
     assert.equal(program.records.errorEffects.get(declaration)?.localErrors, fallible,
       "selection preserves the body's independent intrinsic effects");
+    assert.equal(program.records.lambdaBody.get(declaration).bodyErrorConversion === undefined, true,
+      "an infallible or already exact local body adds no error adapter");
+  });
+}
+
+for (const surfaces of [[], ["js"]]) for (const mode of ["value", "ref"]) for (const local of [false, true]) {
+  test(`fixed provider callbacks admit their exact intrinsic ${local ? "mixed" : "native"} body error conversion (${surfaces[0] ?? "native"}, ${mode})`, () => {
+    const failure = rustNamedTargetType("fixture:CallbackBodyFailure", "CallbackBodyFailure");
+    const { result } = compileRust({ surfaces, packages: [fixedCallbackConsumer(mode), nativeClosureProducerFailurePackage(failure)],
+      files: { "index.ts": `
+        import { consume } from "test:callable-errors";
+        import { fail } from "test:producer";
+        export function run(): void {
+          consume((): void => {
+            const value = fail();
+            ${local ? 'if (value < 0) throw new Error("native callback body");' : "void value;"}
+          });
+        }
+      ` },
+    });
+    assert.equal(result.diagnostics.length, 0,
+      result.diagnostics.map(issue => `${issue.code}: ${issue.message}`).join("; "));
+    assert.equal(result.program !== undefined && result.plan !== undefined, true, "the real checked producer reaches native planning");
+    const program = result.program;
+    const declarations = [];
+    const visit = node => {
+      if (program.source.ast.is.IsArrowFunction(node)) declarations.push(node);
+      program.source.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+    };
+    program.sourceFiles.forEach(visit);
+    assert.equal(declarations.length, 1, "one unchanged original callback owns both intrinsic effects");
+    const declaration = declarations[0];
+    const emission = program.records.lambdaBody.get(declaration);
+    assert.equal(emission?.construction, "native", "the selected producer is an ordinary native callable");
+    const contract = emission.bodyErrorConversion;
+    assert.equal(contract !== undefined, true, "the body-to-construction boundary is decided before publication");
+    assert.equal(contract.lowering, "program-error", "the existing exact native error conversion owns transport");
+    assert.equal(contract.fallible, false, "transport cannot introduce another failure");
+    assert.equal(contract.category, "exact", "the conversion preserves the exact native error");
+    assert.equal(rustTargetTypeRefEquals(contract.source, rustErrorRegionCarrier(program.records.nativeErrorRegion.get(declaration))), true,
+      "the conversion starts at the complete original intrinsic region");
+    assert.equal(rustTargetTypeRefEquals(contract.target, rustCallablePhysicalSignature(emission.physicalCarrier).error), true,
+      "the conversion ends at the actual fixed construction error");
+    const errors = local ? rustNativeErrorJoinReference(contract.source)?.errors : [contract.source];
+    assert.equal(errors?.length, local ? 2 : 1, "the body retains every local and native error channel");
+    assert.equal(rustTargetTypeRefEquals(errors.at(-1), failure), true, "the original native error is not relabelled before the boundary");
+    assert.equal(program.records.errorEffects.get(declaration)?.localErrors, local, "local throw effects remain independently exact");
+    assert.equal(program.records.errorEffects.get(declaration)?.nativeErrors.length, 1, "the original provider failure remains one native channel");
   });
 }
