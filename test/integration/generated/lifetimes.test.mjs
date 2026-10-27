@@ -35,6 +35,42 @@ export function identity(value: int32): int32 {
   assert.doesNotMatch(source, /identity<'|&(?:'\w+ )?i32/u);
 });
 
+for (const surfaces of [[], ["js"]]) {
+  test(`project member selection retains its declared lifetime owner (${surfaces[0] ?? "native"})`, () => {
+    const { program } = analyzeRust({ surfaces, files: { "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+import type { Life, Ref } from "@tsonic/rust/types.js";
+export class Left<L extends Life> {
+  value: Ref<int32, L>;
+  constructor(value: Ref<int32, L>) { this.value = value; }
+  current(): Ref<int32, L> { return this.value; }
+}
+export class Right<L extends Life> {
+  value: Ref<int32, L>;
+  constructor(value: Ref<int32, L>) { this.value = value; }
+  current(): Ref<int32, L> { return this.value; }
+}
+` } });
+    const { ast } = program.source;
+    const reads = [];
+    const visit = node => {
+      const selected = program.records.targetOperation.get(node);
+      if (selected?.kind === "source-field" && selected.storage === "project-object") reads.push(selected);
+      ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+    };
+    program.sourceFiles.forEach(visit);
+    assert.equal(reads.length, 4, "both writes and reads retain their own exact project field");
+    for (const selected of reads) {
+      const receiverOwner = program.projectTypes.definitionForCarrier(selected.receiverCarrier);
+      const memberOwner = program.projectTypes.definitionContainingDeclaration(selected.declaration);
+      assert.equal(receiverOwner !== undefined && receiverOwner === memberOwner, true,
+        "same generic arity and structural field names cannot substitute a foreign owner");
+      assert.equal(selected.resultCarrier.kind, "reference", "the field remains a native reference");
+      assert.equal(selected.resultCarrier.lifetime?.kind, "parameter", "the authored lifetime is not replaced by static");
+    }
+  });
+}
+
 test("explicit Rust lifetime source types lower fields, aliases, bounds, nested references, and results exactly", () => {
   const { result } = compileRust({
     files: {

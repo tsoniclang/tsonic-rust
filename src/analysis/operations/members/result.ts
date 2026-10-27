@@ -121,14 +121,19 @@ export function selectedMemberReceiverCarrier(
     ) !== undefined) {
     return sourceUnionCarrier;
   }
+  const selectedOwner = options.projectTypes.definitionContainingDeclaration(
+    request.sourceSelectedDeclaration,
+  );
+  const projectReceiver = request.optionalChain === true ? rustOptionValueCarrier(sourceCarrier) : sourceCarrier;
+  if (projectReceiver !== undefined && selectedOwner !== undefined &&
+    options.projectTypes.relationship(projectReceiver, selectedOwner).kind === "related") {
+    return projectReceiver;
+  }
   const receiverStorage = context.sourceStorage.subjectFor(receiver);
   const selectedCarrier = resolveRustTargetTypeRef(
     request.sourceReceiverType,
     rustSourceStorageSubjectContext(context, receiverStorage),
     options,
-  );
-  const selectedOwner = options.projectTypes.definitionContainingDeclaration(
-    request.sourceSelectedDeclaration,
   );
   if (sourceCarrier !== undefined && options.sourceTypes.structuralObjectForType(
     request.sourceReceiverType, sourceCarrier) !== undefined) {
@@ -145,10 +150,6 @@ export function selectedMemberReceiverCarrier(
         ) !== undefined)) {
         return sourceCarrier;
       }
-    }
-    if (sourceCarrier !== undefined && selectedOwner !== undefined &&
-      options.projectTypes.relationship(sourceCarrier, selectedOwner).kind === "related") {
-      return sourceCarrier;
     }
     const selectedSourceProfileMember = resolveSelectedSourceProfilePropertyMembers(
       context,
