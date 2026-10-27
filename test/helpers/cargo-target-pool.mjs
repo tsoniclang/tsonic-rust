@@ -38,9 +38,10 @@ export function generatedCargoOptions(projectRoot, args, { isolated = false, ...
 
 export function finishGeneratedCargoProject(projectRoot) {
   const root = resolve(projectRoot);
-  if (!projects.has(root)) return;
+  const project = projects.get(root);
+  if (project === undefined) return;
   projects.delete(root);
-  if (!existsSync(join(root, "Cargo.toml"))) {
+  if (project.profiles.size === 0 || !existsSync(join(root, "Cargo.toml"))) {
     return;
   }
   const options = {
@@ -62,10 +63,12 @@ export function finishGeneratedCargoProject(projectRoot) {
     return members.has(package_.id) && !isAbsolute(path) && path !== ".." && !path.startsWith(`..${sep}`);
   });
   if (packages.length !== 0) {
-    const cleaned = spawnSync("cargo", ["clean", "--offline", "--target-dir", lease.directory,
-      ...packages.flatMap(package_ => ["--package", package_.id])], options);
-    if (cleaned.status !== 0) {
-      throw new Error(`Generated Cargo package cleanup failed in ${root}: ${cleaned.error?.message ?? ""}\n${cleaned.stderr}`);
+    for (const profile of project.profiles) {
+      const cleaned = spawnSync("cargo", ["clean", "--offline", "--target-dir", lease.directory, "--profile", profile,
+        ...packages.flatMap(package_ => ["--package", package_.id])], options);
+      if (cleaned.status !== 0) {
+        throw new Error(`Generated Cargo package cleanup failed in ${root}: ${cleaned.error?.message ?? ""}\n${cleaned.stderr}`);
+      }
     }
   }
 }
