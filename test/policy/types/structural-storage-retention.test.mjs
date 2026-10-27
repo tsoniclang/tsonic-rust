@@ -8,6 +8,35 @@ import { createRustTypeDefinitionRegistry } from "../../../dist/analysis/project
 import { analyzeRust } from "../../helpers/rust-session.mjs";
 
 for (const surfaces of [[], ["js"]]) {
+  test(`conditional alias retention proves selected fields without inverting native type families in ${surfaces[0] ?? "native"}`, () => {
+    const { program } = analyzeRust({ surfaces, files: { "index.ts": `
+import type { int32, int64 } from "@tsonic/core/types.js";
+declare const storage: unique symbol;
+interface Stored<Value> { readonly [storage]: Value; }
+type Storage<Value> = Value extends Stored<infer Inner> ? Inner : Value;
+class Wide {
+  declare readonly [storage]: int64;
+  value: int64;
+  constructor(value: int64) { this.value = value; }
+}
+type Entry<Key, Value> = { key: Storage<Key>; value: Storage<Value> };
+export function retain(entry: Entry<Wide, int32>): Entry<Wide, int32> { return entry; }
+export function select(value: int64): int64 { return retain({ key: value, value: 3 as int32 }).key; }
+` } });
+    const { ast } = program.source;
+    const declaration = program.sourceStorage.nodes.find(node => ast.is.IsFunctionDeclaration(node) &&
+      ast.text(ast.name(node)) === "retain");
+    assert.equal(declaration !== undefined, true, "the original conditional-alias owner is retained");
+    const returned = program.records.sourceCallableReturn.get(declaration);
+    const shape = rustStructuralObjectCarrierValue(returned?.returnCarrier);
+    assert.equal(shape !== undefined, true, "source argument correspondence admits the complete native result");
+    for (const [name, kind] of [["key", "int64"], ["value", "int32"]]) {
+      const field = shape.fields.find(field => field.sourceName === name);
+      assert.equal(field?.type.kind === "source-primitive" && field.type.name === kind, true,
+        `${name}: the checked noninvertible family retains its exact native field, never float64`);
+    }
+  });
+
   test(`nongeneric structural aliases retain callable storage without synthetic type arguments in ${surfaces[0] ?? "native"}`, () => {
     const { program } = analyzeRust({ surfaces, files: { "index.ts": `
 import type { int32 } from "@tsonic/core/types.js";

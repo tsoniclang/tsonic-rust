@@ -121,7 +121,8 @@ export function bindRustSourceAliasArguments(
   const nativeArguments = nativeCarrier === undefined || parameters.length === 0 || nativeTemplate === undefined || nativeParameters === undefined ? undefined
     : inferRustTargetTypeParameterBindings(rustCarrierWithTargetPlaceholderLifetimes(nativeTemplate, nativeCarrier), nativeCarrier,
       new Set(nativeParameters.flatMap(parameter => parameter.kind === "type" ? [parameter.identity] : [])));
-  if (nativeCarrier !== undefined && parameters.length !== 0 && nativeArguments === undefined) return undefined;
+  if (nativeCarrier !== undefined && parameters.length !== 0 &&
+    (nativeTemplate === undefined || nativeParameters === undefined)) return undefined;
   const reference = authoredTypeNode === undefined || !context.ast.is.IsTypeReferenceNode(authoredTypeNode)
     ? undefined : context.source.navigation.sourceReferenceFor(TypeReferenceNode_TypeName(context.ast, authoredTypeNode));
   const argumentNodes = authoredTypeNode !== undefined && reference?.declaration === application.declaration
