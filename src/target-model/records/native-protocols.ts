@@ -40,6 +40,7 @@ export interface RustNativeCallableProtocol {
   readonly method: {
     readonly parameters: readonly TargetTypeRef[];
     readonly result: TargetTypeRef;
+    readonly sourceResult: TargetTypeRef;
     readonly binder: RustLifetimeBinder;
     readonly outlives: readonly RustNativeCallableOutlivesBound[];
   };

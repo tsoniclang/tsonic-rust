@@ -35,7 +35,7 @@ function inputs(parameterCarrier, valueCarrier = string, resultCarrier = number)
   const binding = { environment: [], protocol: {
     environmentParameters: [],
     signature: { environmentParameters: [], typeParameters: [] },
-    method: { parameters: [parameterCarrier], result: number, binder: { parameters: [] } },
+    method: { parameters: [parameterCarrier], result: number, sourceResult: number, binder: { parameters: [] } },
   } };
   const operation = { kind: "source-call", parameters: [{ parameterCarrier, valueCarrier }], resultCarrier };
   return { binding, operation };
@@ -107,6 +107,7 @@ test("native input elision retains every explicit borrow, referent, result and s
   const { binding, operation } = inputs(shared);
   binding.protocol.method.parameters = [{ ...shared, lifetime }];
   binding.protocol.method.result = { ...shared, lifetime };
+  binding.protocol.method.sourceResult = binding.protocol.method.result;
   binding.protocol.method.binder.parameters = [{ lifetime, outlives: [] }];
   const exact = { ...operation, parameters: [{ parameterCarrier: { ...shared, lifetime: named }, valueCarrier: string }],
     resultCarrier: { ...shared, lifetime: named } };

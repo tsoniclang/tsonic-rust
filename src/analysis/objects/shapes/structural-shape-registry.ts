@@ -20,6 +20,7 @@ export interface RustStructuralShapePlanRegistry extends RustStructuralShapeLayo
   ): RustStructuralShapeLayoutPlan;
   initializeUnions(unions: readonly RustSourceUnionDefinition[]): void;
   completePhysicalCarrier(source: TargetTypeRef, physical: TargetTypeRef): RustStructuralPhysicalCarrierSelection;
+  instantiateSourceCarrier(source: TargetTypeRef, instance: TargetTypeRef): RustStructuralPhysicalCarrierSelection;
   finalizeMethodStorage(selections: ReadonlyMap<RustStructuralShapeLayout,
     ReadonlyMap<number, RustStructuralMethodStorageSelection>>, errorForFile: (fileName: string) => TargetTypeRef | undefined): void;
   isInitialized(): boolean;
@@ -79,6 +80,10 @@ export function createRustStructuralShapePlanRegistry(): RustStructuralShapePlan
         names.set(shape.componentId, selected);
       }
       unions = createRustGeneratedUnionPlan(definitions, componentForFile, names);
+    },
+    instantiateSourceCarrier(source: TargetTypeRef, instance: TargetTypeRef) {
+      if (sealed || construction === undefined) failTargetAnalysisInvariant("tsonic-rust", "Native source instances require their open initialized structural builder.");
+      return construction.instantiateSourceCarrier(source, instance);
     },
     completePhysicalCarrier(source: TargetTypeRef, physical: TargetTypeRef) {
       if (sealed || construction === undefined) failTargetAnalysisInvariant("tsonic-rust", "Structural physical carriers require their open initialized builder.");

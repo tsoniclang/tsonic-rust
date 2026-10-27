@@ -7,8 +7,10 @@ import { substituteElidedLifetime } from "./lifetime-elision.js";
 
 export function bindRustCallableInputLifetimes(
   parameters: readonly TargetTypeRef[], result: TargetTypeRef,
+  purpose: { readonly kind: "invocation" } | { readonly kind: "owned-output"; readonly carrier: TargetTypeRef },
 ): { readonly parameters: readonly TargetTypeRef[]; readonly result: TargetTypeRef;
-  readonly binder: RustLifetimeBinder } | undefined {
+  readonly binder: RustLifetimeBinder; readonly ownedOutput: boolean } | undefined {
+  if (purpose === undefined) return undefined;
   const identity = "rust.callable-input-lifetimes";
   const used = new Set([...parameters, result].flatMap(type => rustTargetGenericReferences(type).lifetimes.map(lifetime => lifetime.name)));
   const fresh = (): Extract<RustLifetimeRef, { readonly kind: "bound" }> => {
@@ -32,8 +34,12 @@ export function bindRustCallableInputLifetimes(
   const inputs = [...new Map(selected.flatMap(type => rustTargetGenericReferences(type).elisionInputs)
     .map(lifetime => [rustLifetimeKey(lifetime), lifetime])).values()];
   const elidedResult = rustTargetGenericReferences(result).elisionInputs.some(lifetime => lifetime.kind === "placeholder");
-  if (elidedResult && inputs.length !== 1) return undefined;
-  return Object.freeze({ parameters: Object.freeze(selected), result: elidedResult ? substituteElidedLifetime(result, inputs[0]!) : result,
+  const ownedOutput = elidedResult && inputs.length === 0 && purpose.kind === "owned-output";
+  if (elidedResult && inputs.length !== 1 && !ownedOutput) return undefined;
+  const selectedResult = ownedOutput && purpose.kind === "owned-output" ? purpose.carrier
+    : elidedResult ? substituteElidedLifetime(result, inputs[0]!) : result;
+  if (ownedOutput && rustTargetGenericReferences(selectedResult).elisionInputs.some(lifetime => lifetime.kind === "placeholder")) return undefined;
+  return Object.freeze({ parameters: Object.freeze(selected), result: selectedResult, ownedOutput,
     binder: Object.freeze({ identity, parameters: Object.freeze([...new Map(bound.map(lifetime => [rustLifetimeKey(lifetime), lifetime])).values()]
       .map(lifetime => Object.freeze({ lifetime, outlives: Object.freeze([]) }))) }) });
 }

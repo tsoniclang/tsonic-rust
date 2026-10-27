@@ -244,7 +244,8 @@ test("bridge planning fails closed on an unrenderable input instead of guessing 
 
 test("equal checked signatures share a bridge without consulting recipient errors", () => {
   const usedNames = new Set();
-  const protocols = createRustNativeCallableProtocolRegistry({ definitions: emptyRustTypeDefinitions, usedNames });
+  const protocols = createRustNativeCallableProtocolRegistry({ definitions: emptyRustTypeDefinitions, usedNames,
+    structuralShapes: { instantiateSourceCarrier() { assert.fail("this scalar bridge fixture has no structural output"); } } });
   const carrier = rustCallableTargetType([integer], integer);
   const first = nativeProducerFixture({ carrier, identity: "left", protocols });
   const second = nativeProducerFixture({ carrier, identity: "right", protocols });

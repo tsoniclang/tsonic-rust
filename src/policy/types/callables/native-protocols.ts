@@ -5,7 +5,7 @@ import { instantiateRustNativeCompletion, rustNativeCompletionFutureType } from 
 import { rustNativeCallableCompletion } from "./native-completion.js";
 import { type RustTypeDefinitions } from "../../../target-model/types/source-union-definitions.js";
 import { closedMetadataKey } from "../../../target-model/metadata/closed-data.js";
-import { rustLifetimeKey } from "../../../target-model/lifetimes/index.js";
+import { rustLifetimeKey, rustStaticLifetime, type RustLifetimeRef } from "../../../target-model/lifetimes/index.js";
 import { rustTargetGenericReferences } from "../../../target-model/types/carriers/generic-references.js";
 import { rustTargetTypeChildren } from "../../../target-model/types/carriers/children.js";
 import { type RustNativeCallableProtocol, type RustNativeCallableProtocolBinding, type RustNativeCallableOutlivesBound,
@@ -22,6 +22,8 @@ import { rustCallableProtocol } from "../../../target-model/types/carriers/calla
 import { rustOptionElementCarrier } from "../../../target-model/types/carriers/optional.js";
 import { bindRustCallableInputLifetimes } from "../../../target-model/types/carriers/callable-input-lifetimes.js";
 import { rustGenericCallablePhysicalBindings } from "./generic-bindings.js";
+import { closeRustRetainedCallableCarrier } from "../../ownership/retained-storage.js";
+import { substituteRustTargetGenerics } from "../../../target-model/types/carriers/substitution.js";
 
 export function selectRustNativeCallableOutlivesBounds(method: Pick<RustNativeCallableProtocol["method"], "parameters" | "binder">): readonly RustNativeCallableOutlivesBound[] {
   const lifetimes = new Set(method.binder.parameters.map(parameter => rustLifetimeKey(parameter.lifetime)));
@@ -128,13 +130,43 @@ export function selectRustNativeCallableProtocolSignature(source: TargetTypeRef,
         rustCallableSignatureBinding([], ordinary.parameters, ordinary.result) :
         { signature: generic.signature, environment: generic.environment };
       if (binding === undefined) return undefined;
-      const selectedMethod = bindRustCallableInputLifetimes(binding.signature.parameters, binding.signature.result);
+      const outputLifetime = ordinary?.lifetime;
+      const owningLifetime = outputLifetime === undefined || outputLifetime.kind === "placeholder" ? rustStaticLifetime : outputLifetime;
+      const ownedResult = closeRustRetainedCallableCarrier(binding.signature.result, owningLifetime);
+      const selectedMethod = bindRustCallableInputLifetimes(binding.signature.parameters, binding.signature.result,
+        { kind: "owned-output", carrier: ownedResult });
       if (selectedMethod === undefined) return undefined;
-      const method = Object.freeze({ ...selectedMethod, outlives: selectRustNativeCallableOutlivesBounds(selectedMethod) });
+      const invocationLifetimes = new Set(selectedMethod.binder.parameters.map(parameter => rustLifetimeKey(parameter.lifetime)));
+      const references = rustTargetGenericReferences({ kind: "tuple", elements: [...selectedMethod.parameters, selectedMethod.result] });
+      const environmentLifetimes = [...new Map([...references.lifetimes, ...references.callScopedElisions]
+        .filter(lifetime => !invocationLifetimes.has(rustLifetimeKey(lifetime)))
+        .map(lifetime => [rustLifetimeKey(lifetime), lifetime])).values()];
+      const lifetimeParameters = environmentLifetimes.map((_lifetime, index) => Object.freeze({ kind: "parameter" as const,
+        identity: `rust.native-protocol:environment:${index}`, name: `environment_${index}` }));
+      const lifetimeBindings: ReadonlyMap<string, RustLifetimeRef> = new Map(environmentLifetimes.map((lifetime, index) =>
+        [rustLifetimeKey(lifetime), lifetimeParameters[index]!]));
+      const bindEnvironment = (carrier: TargetTypeRef): TargetTypeRef => lifetimeBindings.size === 0 ? carrier
+        : substituteRustTargetGenerics(carrier, new Map(), lifetimeBindings, new Map(), (current, original) => {
+          if (original.kind === "type-parameter" && original.optionalStorageValue !== undefined) {
+            const payload = bindEnvironment(original.optionalStorageValue);
+            return rustTargetTypeRefEquals(payload, original.optionalStorageValue) ? original
+              : Object.freeze({ ...original, optionalStorageValue: payload });
+          }
+          return rustTargetTypeRefEquals(current, original) ? original : current;
+        }, parent => parent.kind !== "type-parameter");
+      const nativeMethod = { binder: selectedMethod.binder,
+        parameters: Object.freeze(selectedMethod.parameters.map(bindEnvironment)),
+        result: bindEnvironment(selectedMethod.result),
+        sourceResult: bindEnvironment(selectedMethod.ownedOutput ? binding.signature.result : selectedMethod.result) };
+      const method = Object.freeze({ ...nativeMethod, outlives: selectRustNativeCallableOutlivesBounds(nativeMethod) });
       const completion = rustNativeCallableCompletion(method.result, definitions);
 
   return Object.freeze({ signature: binding.signature,
-    environmentParameters: Object.freeze(rustTypeGenericArguments(binding.signature.environmentParameters)),
-    environment: Object.freeze(rustTypeGenericArguments(binding.environment)), method,
-    identityMethod: selectedMethod, ...(completion === undefined ? {} : { completion }) });
+    environmentParameters: Object.freeze([
+      ...lifetimeParameters.map(lifetime => ({ kind: "lifetime" as const, lifetime })),
+      ...rustTypeGenericArguments(binding.signature.environmentParameters)]),
+    environment: Object.freeze([
+      ...environmentLifetimes.map(lifetime => ({ kind: "lifetime" as const, lifetime })),
+      ...rustTypeGenericArguments(binding.environment)]), method,
+    identityMethod: nativeMethod, ...(completion === undefined ? {} : { completion }) });
 }

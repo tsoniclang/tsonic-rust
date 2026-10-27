@@ -422,7 +422,8 @@ test("constrained field obligations preserve one exact native output equality", 
 });
 
 test("native associated error obligations require exact callable evidence and declared parameter closure", () => {
-  const protocols = createRustNativeCallableProtocolRegistry({ definitions: emptyRustTypeDefinitions, usedNames: new Set() });
+  const protocols = createRustNativeCallableProtocolRegistry({ definitions: emptyRustTypeDefinitions, usedNames: new Set(),
+    structuralShapes: { instantiateSourceCarrier() { assert.fail("this scalar family fixture has no structural output"); } } });
   const binding = protocols.bind("/source.ts", rustCallableTargetType([parameter], rustFutureTargetType(parameter)));
   const implementation = { kind: "type-parameter", identity: "source:Implementation", name: "Implementation" };
   const error = rustNativeCallableErrorType(binding, implementation, "invocation", []);

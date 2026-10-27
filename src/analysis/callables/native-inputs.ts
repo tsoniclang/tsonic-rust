@@ -41,7 +41,7 @@ import { rustNodeInCatchingTryBody } from "../errors/catching-try.js";
 import { rustProgramErrorTargetType } from "../../target-model/types/carriers/js.js";
 import type { RustCallableEntryConstruction } from "./entry-parameters.js";
 import type { RustProjectTypePolicy } from "../../target-model/types/project-types.js";
-import type { RustStructuralShapeLayoutPlan } from "../objects/shapes/structural-shape-plan.js";
+import type { RustStructuralShapePlanRegistry } from "../objects/shapes/structural-shape-registry.js";
 import type { RustSourceCallableSpecializationIssue } from "../../target-model/records/callable-issues.js";
 import { rustNativeStorageProjectionDepth, rustNativeStorageProjectionSteps } from "./native-storage-generics.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
@@ -77,7 +77,7 @@ export function createRustNativeCallableInputPlan(input: {
   readonly records: RustProgramRecords;
   readonly definitions: RustTypeDefinitions;
   readonly projectTypes: RustProjectTypePolicy;
-  readonly structuralShapes: Pick<RustStructuralShapeLayoutPlan, "definitionForCarrier" | "field">;
+  readonly structuralShapes: Pick<RustStructuralShapePlanRegistry, "definitionForCarrier" | "field" | "instantiateSourceCarrier">;
   readonly sourcePackages: TargetSourcePackageGraph;
   readonly usedNames: Set<string>;
   /**

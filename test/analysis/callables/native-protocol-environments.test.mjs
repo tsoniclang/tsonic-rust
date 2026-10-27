@@ -12,7 +12,8 @@ import { rustGenericCallableEnvironmentGenerics } from "../../../dist/backend/pl
 
 function fixture() {
   const value = Object.freeze({ kind: "type-parameter", identity: "source:value", name: "Value" });
-  const registry = createRustNativeCallableProtocolRegistry({ definitions: emptyRustTypeDefinitions, usedNames: new Set() });
+  const registry = createRustNativeCallableProtocolRegistry({ definitions: emptyRustTypeDefinitions, usedNames: new Set(),
+    structuralShapes: { instantiateSourceCarrier() { assert.fail("the primitive environment fixture has no structural output"); } } });
   const binding = registry.bind("/source.ts", rustCallableTargetType([value], value));
   assert.equal(binding !== undefined, true, "the original callable signature has its canonical native protocol");
   return { value, binding, registry };
@@ -42,7 +43,7 @@ test("native protocol physical and invocation binding preserve item lifetime arg
   const reference = Object.freeze({ kind: "reference", mutable: false, lifetime: formalLifetime, referent: formal[1].type });
   const protocol = { ...binding.protocol, environmentParameters: formal,
     trait: { ...binding.protocol.trait, genericArguments: formal },
-    method: { ...binding.protocol.method, parameters: [reference], result: reference } };
+    method: { ...binding.protocol.method, parameters: [reference], result: reference, sourceResult: reference } };
   protocol.result = selectRustNativeCallableProtocolResult(protocol, emptyRustTypeDefinitions);
   assert.equal(protocol.result !== undefined, true, "the existing result owner accepts the full canonical native environment");
   const input = { ...binding, protocol, environment: actual, trait: { ...protocol.trait, genericArguments: actual },

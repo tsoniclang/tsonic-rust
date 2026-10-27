@@ -25,7 +25,8 @@ import { printRustSourceFile } from "./printed-rust-source.mjs";
 export function nativeProducerFixture({
   parameters = [], result, carrier = rustCallableTargetType(parameters, result),
   definitions = createRustTypeDefinitionRegistry(), identity = "producer-proof", usedNames = new Set(),
-  protocols = createRustNativeCallableProtocolRegistry({ definitions, usedNames }),
+  protocols = createRustNativeCallableProtocolRegistry({ definitions, usedNames,
+    structuralShapes: { instantiateSourceCarrier() { assert.fail("these native producer fixtures have no structural output"); } } }),
 } = {}) {
   const { program: base } = analyzeRust({ files: { "index.ts": "export function probe(): void {}\n" } });
   const [sourceFile] = rustProgramSourceFiles(base);

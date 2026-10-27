@@ -27,7 +27,7 @@ export function rustNativeCallableInvocationArguments(
     if (argument?.kind !== "type") return undefined;
     substitutions.set(parameter.identity, argument.type);
   }
-  const pattern: TargetTypeRef = { kind: "tuple", elements: [...protocol.method.parameters, protocol.method.result]
+  const pattern: TargetTypeRef = { kind: "tuple", elements: [...protocol.method.parameters, protocol.method.sourceResult]
     .map(carrier => substituteRustTargetGenerics(carrier, substitutions, environment.lifetimes, environment.consts)) };
   const actual: TargetTypeRef = { kind: "tuple", elements: [...operation.parameters.map(parameter => parameter.parameterCarrier),
     operation.resultCarrier] };

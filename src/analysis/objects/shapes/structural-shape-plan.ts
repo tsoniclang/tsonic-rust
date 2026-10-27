@@ -75,6 +75,7 @@ export function createRustStructuralShapeConstruction(
   methodStorageFinalized(): boolean;
   close(): RustStructuralShapePlan;
   completePhysicalCarrier(source: TargetTypeRef, physical: TargetTypeRef): RustStructuralPhysicalCarrierSelection;
+  instantiateSourceCarrier(source: TargetTypeRef, instance: TargetTypeRef): RustStructuralPhysicalCarrierSelection;
   finalizeMethodStorage(selections: ReadonlyMap<RustStructuralShapeLayout,
     ReadonlyMap<number, RustStructuralMethodStorageSelection>>, errorForFile: (fileName: string) => TargetTypeRef | undefined): void;
 } {
@@ -418,6 +419,20 @@ export function createRustStructuralShapeConstruction(
       const complete = requireCompleted();
       closed = true;
       return complete;
+    },
+    instantiateSourceCarrier(source: TargetTypeRef, instance: TargetTypeRef) {
+      const unresolved = (reason: string): RustStructuralPhysicalCarrierSelection => Object.freeze({ kind: "unresolved", reason });
+      if (closed || methodStorageFinalized) return unresolved("Native source instances require their open original structural template.");
+      const selected = definitionFor(source);
+      const original = originsByKey.get(closedMetadataKey(source));
+      if (selected === undefined || original === undefined || instantiateStructuralDefinition(original, instance) === undefined)
+        return unresolved("A native source instance requires its exact original template and generic argument correspondence.");
+      const owner = originsByKey.get(closedMetadataKey(instance));
+      if (owner !== undefined && owner !== original)
+        return unresolved("A native source instance cannot replace a different canonical structural owner.");
+      registerCarrier(original, instance, original);
+      publishedInstances = Object.freeze([...byKey.values()]);
+      return Object.freeze({ kind: "resolved", carrier: instance });
     },
     completePhysicalCarrier(source: TargetTypeRef, physical: TargetTypeRef) {
       const unresolved = (reason: string): RustStructuralPhysicalCarrierSelection => Object.freeze({ kind: "unresolved", reason });

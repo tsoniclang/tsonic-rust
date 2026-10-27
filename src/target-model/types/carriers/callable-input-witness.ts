@@ -19,7 +19,7 @@ export function rustCallableInputAbsenceWitness(carrier: TargetTypeRef): TargetT
   const witness = mapRustTargetTypes(carrier, selected => {
     const protocol = rustCallableInputProtocol(selected);
     if (protocol === undefined || selected.kind !== "reference") return selected;
-    const signature = bindRustCallableInputLifetimes(protocol.parameters, protocol.result);
+    const signature = bindRustCallableInputLifetimes(protocol.parameters, protocol.result, { kind: "invocation" });
     if (signature === undefined) {
       valid = false;
       return selected;

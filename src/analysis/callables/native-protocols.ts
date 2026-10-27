@@ -17,14 +17,38 @@ export interface RustNativeCallableProtocolRegistry {
 export function createRustNativeCallableProtocolRegistry(input: {
   readonly definitions: RustTypeDefinitions;
   readonly usedNames: Set<string>;
+  readonly structuralShapes: Pick<RustStructuralShapePlanRegistry, "instantiateSourceCarrier">;
 }): RustNativeCallableProtocolRegistry {
   const protocols = new Map<string, RustNativeCallableProtocol>();
+  const registerSignature = (source: readonly TargetTypeRef[], selected: readonly TargetTypeRef[]): boolean => {
+    if (source.length !== selected.length) return false;
+    const pending = source.map((carrier, index) => ({ source: carrier, selected: selected[index]! }));
+    const visited = new Map<TargetTypeRef, Set<TargetTypeRef>>();
+    for (let index = 0; index < pending.length; index++) {
+      if (index >= rustNativeStorageProjectionSteps) return false;
+      const pair = pending[index]!;
+      if (rustTargetTypeRefEquals(pair.source, pair.selected)) continue;
+      const known = visited.get(pair.source) ?? new Set<TargetTypeRef>();
+      if (known.has(pair.selected)) continue;
+      known.add(pair.selected);
+      visited.set(pair.source, known);
+      if (rustStructuralObjectCarrierValue(pair.source) !== undefined &&
+        input.structuralShapes.instantiateSourceCarrier(pair.source, pair.selected).kind === "unresolved") return false;
+      const sources = rustTargetTypeChildren(pair.source);
+      const selections = rustTargetTypeChildren(pair.selected);
+      if (sources.length !== selections.length) return false;
+      if (pending.length + sources.length > rustNativeStorageProjectionSteps) return false;
+      pending.push(...sources.map((carrier, index) => ({ source: carrier, selected: selections[index]! })));
+    }
+    return true;
+  };
   return Object.freeze({
     bind(ownerFileName: string, source: TargetTypeRef): RustNativeCallableProtocolBinding | undefined {
       if (ownerFileName.length === 0) return undefined;
       const binding = selectRustNativeCallableProtocolSignature(source, input.definitions);
       if (binding === undefined) return undefined;
       const { method, completion } = binding;
+      if (!registerSignature([...binding.signature.parameters, binding.signature.result], [...method.parameters, method.result])) return undefined;
       const contract = { ownerFileName, signature: binding.signature, environmentParameters: binding.environmentParameters, method,
         ...(completion === undefined ? {} : { completion }) };
       const key = closedMetadataKey({ ...contract, method: binding.identityMethod });
@@ -59,3 +83,8 @@ export function createRustNativeCallableProtocolRegistry(input: {
 
 import { selectRustNativeCallableProtocolSignature, selectRustNativeCallableProtocolResult } from "../../policy/types/callables/native-protocols.js";
 import { rustNativeCallableProtocolIdPrefix } from "../../target-model/records/native-protocols.js";
+import type { RustStructuralShapePlanRegistry } from "../objects/shapes/structural-shape-registry.js";
+import { rustStructuralObjectCarrierValue } from "../../target-model/types/carriers/source-types.js";
+import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
+import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
+import { rustNativeStorageProjectionSteps } from "./native-storage-generics.js";

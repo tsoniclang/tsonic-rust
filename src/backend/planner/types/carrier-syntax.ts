@@ -78,7 +78,7 @@ export function rustTypeFromCarrier(
       return undefined;
     }
     const signature = carrier.id === rustCallableInputTargetId
-      ? bindRustCallableInputLifetimes(argumentsCarrier.elements, resultCarrier) : undefined;
+      ? bindRustCallableInputLifetimes(argumentsCarrier.elements, resultCarrier, { kind: "invocation" }) : undefined;
     if (carrier.id === rustCallableInputTargetId && signature === undefined) return undefined;
     const argumentsType = rustTypeFromCarrier(signature === undefined ? argumentsCarrier :
       { kind: "tuple", elements: signature.parameters }, resolveSourceTypePath, resolveStructuralShape, position);

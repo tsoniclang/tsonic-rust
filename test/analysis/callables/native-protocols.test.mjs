@@ -9,7 +9,8 @@ import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../../../dist/targ
 
 const integer = rustSourcePrimitiveTargetType("int32");
 const implementation = { kind: "type-parameter", identity: "input:left", name: "Left" };
-const create = () => createRustNativeCallableProtocolRegistry({ definitions: emptyRustTypeDefinitions, usedNames: new Set() });
+const create = () => createRustNativeCallableProtocolRegistry({ definitions: emptyRustTypeDefinitions, usedNames: new Set(),
+  structuralShapes: { instantiateSourceCarrier() { assert.fail("these scalar protocol fixtures have no structural output"); } } });
 
 test("equal native signatures share one protocol while implementation and associated errors stay distinct", () => {
   const registry = create();
