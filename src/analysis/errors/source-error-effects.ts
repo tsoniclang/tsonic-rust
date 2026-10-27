@@ -180,100 +180,106 @@ export function createRustSourceErrorEffectSelection(walk: { readonly context: R
     const absentInputs = new Set<string>();
     const erasedInputs = new Map<string, TargetTypeRef>();
     const bindings = new Set<string>();
-    const references = rustTargetGenericReferences({ kind: "tuple", elements: carriers });
-    const needed = new Set(references.typeIdentities);
-    if (storageBindings !== undefined) for (const input of [...native.inputsFor(declaration), ...native.capturesFor(declaration)]) {
-      const signature = rustTargetGenericReferences(substituteRustTargetGenerics(input.carrier, types, lifetimes, consts));
-      if (signature.typeIdentities.some(identity => references.typeIdentities.includes(identity)) ||
-        signature.lifetimeIdentities.some(identity => references.lifetimeIdentities.includes(identity)) ||
-        signature.constIdentities.some(identity => references.constIdentities.includes(identity))) needed.add(input.implementation.identity);
-    }
-    for (const identity of needed) {
-      const input = inputs.get(identity);
-      if (input === undefined || bindings.has(identity)) continue;
-      bindings.add(identity);
-      if (storageBindings === undefined && input.owner !== declaration) {
-        if (!available.has(input)) return undefined;
-        continue;
+    const bindCarriers = (selectedCarriers: readonly TargetTypeRef[]): boolean => {
+      const references = rustTargetGenericReferences({ kind: "tuple", elements: selectedCarriers });
+      const needed = new Set(references.typeIdentities);
+      if (storageBindings !== undefined) for (const input of [...native.inputsFor(declaration), ...native.capturesFor(declaration)]) {
+        const signature = rustTargetGenericReferences(substituteRustTargetGenerics(input.carrier, types, lifetimes, consts));
+        if (signature.typeIdentities.some(identity => references.typeIdentities.includes(identity)) ||
+          signature.lifetimeIdentities.some(identity => references.lifetimeIdentities.includes(identity)) ||
+          signature.constIdentities.some(identity => references.constIdentities.includes(identity))) needed.add(input.implementation.identity);
       }
-      const absenceWitness = walk.context.callableValues.nativeStorage.invocationWitnessFor(input, node);
-      if (absenceWitness !== undefined) {
-        absentInputs.add(identity);
-        types.set(identity, absenceWitness);
-        continue;
-      }
-      const selected = storageBindings === undefined
-        ? walk.context.callableValues.nativeStorage.invocationOriginsFor(input, node, caller)
-        : walk.context.sourceStorage.boundOriginsFor(input.subject, storageBindings);
-      if (selected.kind !== "resolved") return undefined;
-      let actual: TargetTypeRef | undefined;
-      let erasedActual: TargetTypeRef | undefined;
-      let producer: RustNativeCallableProducer | undefined;
-      for (const subject of selected.subjects) {
-        const parameter = native.inputs.find(candidate => candidate.subject === subject);
-        const erased = parameter === undefined ? erasedClosureParameter(subject) : undefined;
-        if (erased !== undefined) {
-          if (erased.physical === undefined) return undefined;
-          if (producer !== undefined || actual !== undefined && !rustTargetTypeRefEquals(actual, erased.physical)) return undefined;
-          actual = erased.physical;
-          erasedActual = erased.logical;
-          if (storageBindings !== undefined && !bindSignature(input.carrier, erased.logical)) return undefined;
-        } else if (parameter !== undefined) {
-          if (producer !== undefined || actual !== undefined && !rustTargetTypeRefEquals(actual, parameter.implementation)) return undefined;
-          actual = parameter.implementation;
-          if (storageBindings !== undefined && !bindSignature(input.carrier, parameter.carrier)) return undefined;
-        } else {
-          if (rustOptionElementCarrier(input.carrier) !== undefined && subject.projection.length === 0 &&
-            isRustAbsenceCarrier(walk.context.records.runtimeCarrier.get(subject.node)?.carrier)) continue;
-          const candidate = subject.projection.length === 0
-            ? walk.context.callableValues.nativeProducers.forDeclaration(subject.node) : undefined;
-          if (candidate === undefined || actual !== undefined || producer !== undefined && candidate !== producer) return undefined;
-          producer = candidate;
-          if (storageBindings !== undefined) {
-            const operation = walk.context.records.targetOperation.get(subject.node);
-            const carrier = operation?.kind === "closure" ? operation.resultCarrier
-              : walk.context.records.runtimeCarrier.get(subject.node)?.carrier;
-            if (carrier === undefined || !bindSignature(input.carrier, carrier)) return undefined;
+      for (const identity of needed) {
+        const input = inputs.get(identity);
+        if (input === undefined || bindings.has(identity)) continue;
+        if (storageBindings === undefined && input.owner !== declaration) {
+          if (!available.has(input)) return false;
+          bindings.add(identity);
+          continue;
+        }
+        const absenceWitness = walk.context.callableValues.nativeStorage.invocationWitnessFor(input, node);
+        if (absenceWitness !== undefined) {
+          absentInputs.add(identity);
+          types.set(identity, absenceWitness);
+          bindings.add(identity);
+          continue;
+        }
+        const selected = storageBindings === undefined
+          ? walk.context.callableValues.nativeStorage.invocationOriginsFor(input, node, caller)
+          : walk.context.sourceStorage.boundOriginsFor(input.subject, storageBindings);
+        if (selected.kind !== "resolved") return false;
+        let actual: TargetTypeRef | undefined;
+        let erasedActual: TargetTypeRef | undefined;
+        let producer: RustNativeCallableProducer | undefined;
+        for (const subject of selected.subjects) {
+          const parameter = native.inputs.find(candidate => candidate.subject === subject);
+          const erased = parameter === undefined ? erasedClosureParameter(subject) : undefined;
+          if (erased !== undefined) {
+            if (erased.physical === undefined) return false;
+            if (producer !== undefined || actual !== undefined && !rustTargetTypeRefEquals(actual, erased.physical)) return false;
+            actual = erased.physical;
+            erasedActual = erased.logical;
+            if (storageBindings !== undefined && !bindSignature(input.carrier, erased.logical)) return false;
+          } else if (parameter !== undefined) {
+            if (producer !== undefined || actual !== undefined && !rustTargetTypeRefEquals(actual, parameter.implementation)) return false;
+            actual = parameter.implementation;
+            if (storageBindings !== undefined && !bindSignature(input.carrier, parameter.carrier)) return false;
+          } else {
+            if (rustOptionElementCarrier(input.carrier) !== undefined && subject.projection.length === 0 &&
+              isRustAbsenceCarrier(walk.context.records.runtimeCarrier.get(subject.node)?.carrier)) continue;
+            const candidate = subject.projection.length === 0
+              ? walk.context.callableValues.nativeProducers.forDeclaration(subject.node) : undefined;
+            if (candidate === undefined || actual !== undefined || producer !== undefined && candidate !== producer) return false;
+            producer = candidate;
+            if (storageBindings !== undefined) {
+              const operation = walk.context.records.targetOperation.get(subject.node);
+              const carrier = operation?.kind === "closure" ? operation.resultCarrier
+                : walk.context.records.runtimeCarrier.get(subject.node)?.carrier;
+              if (carrier === undefined || !bindSignature(input.carrier, carrier)) return false;
+            }
           }
         }
+        if (actual !== undefined) {
+          types.set(identity, actual);
+          if (erasedActual !== undefined) erasedInputs.set(identity, erasedActual);
+        }
+        else if (producer !== undefined) {
+          const carrier = substituteRustTargetGenerics(input.carrier, types, lifetimes, consts);
+          producers.set(identity, producer);
+          physicalInputs.set(identity, carrier);
+        }
+        else return false;
+        bindings.add(identity);
       }
-      if (actual !== undefined) {
-        types.set(identity, actual);
-        if (erasedActual !== undefined) erasedInputs.set(identity, erasedActual);
+      // A producer that fills a callable slot is materialized with the slot's parameter carriers, so each of the
+      // producer's own native callable inputs is the slot's formal parameter at the same position. Without this the
+      // producer's error keeps its inputs' implementation parameters, which no caller outside the producer can bind.
+      for (const [identity, producer] of producers) {
+        const slot = inputs.get(identity)!.carrier;
+        const slotCarrier = rustOptionElementCarrier(slot) ?? slot;
+        const formal = rustGenericCallableProtocol(slotCarrier) ?? rustCallableProtocol(slotCarrier) ??
+          rustNativeCallableProtocol(slotCarrier);
+        if (formal === undefined) continue;
+        const parameters = sourceCallableValueParameters(walk.context.ast, producer.declaration,
+          walk.context.sourceStorage.source.semantics.forNode(producer.declaration));
+        if (parameters === undefined) return false;
+        for (const own of native.inputsFor(producer.declaration)) {
+          if (types.has(own.implementation.identity)) continue;
+          const position = parameters.indexOf(own.subject.node);
+          const parameter = position < 0 ? undefined : formal.parameters[position];
+          if (parameter === undefined) continue;
+          const carrier = substituteRustTargetGenerics(parameter, types, lifetimes, consts);
+          const selected = rustOptionElementCarrier(carrier) ?? carrier;
+          if (selected.kind === "target-named" && selected.id === rustCallableTargetId) {
+            const physical = rustCallablePhysicalCarrier(selected);
+            if (physical === undefined) return false;
+            types.set(own.implementation.identity, physical);
+          } else types.set(own.implementation.identity, selected);
+        }
       }
-      else if (producer !== undefined) {
-        const carrier = substituteRustTargetGenerics(input.carrier, types, lifetimes, consts);
-        producers.set(identity, producer);
-        physicalInputs.set(identity, carrier);
-      }
-      else return undefined;
-    }
-    // A producer that fills a callable slot is materialized with the slot's parameter carriers, so each of the
-    // producer's own native callable inputs is the slot's formal parameter at the same position. Without this the
-    // producer's error keeps its inputs' implementation parameters, which no caller outside the producer can bind.
-    for (const [identity, producer] of producers) {
-      const slot = inputs.get(identity)!.carrier;
-      const slotCarrier = rustOptionElementCarrier(slot) ?? slot;
-      const formal = rustGenericCallableProtocol(slotCarrier) ?? rustCallableProtocol(slotCarrier) ??
-        rustNativeCallableProtocol(slotCarrier);
-      if (formal === undefined) continue;
-      const parameters = sourceCallableValueParameters(walk.context.ast, producer.declaration,
-        walk.context.sourceStorage.source.semantics.forNode(producer.declaration));
-      if (parameters === undefined) return undefined;
-      for (const own of native.inputsFor(producer.declaration)) {
-        if (types.has(own.implementation.identity)) continue;
-        const position = parameters.indexOf(own.subject.node);
-        const parameter = position < 0 ? undefined : formal.parameters[position];
-        if (parameter === undefined) continue;
-        const carrier = substituteRustTargetGenerics(parameter, types, lifetimes, consts);
-        const selected = rustOptionElementCarrier(carrier) ?? carrier;
-        if (selected.kind === "target-named" && selected.id === rustCallableTargetId) {
-          const physical = rustCallablePhysicalCarrier(selected);
-          if (physical === undefined) return undefined;
-          types.set(own.implementation.identity, physical);
-        } else types.set(own.implementation.identity, selected);
-      }
-    }
+      return true;
+    };
+    if (!bindCarriers(carriers)) return undefined;
     const substitute = (carrier: TargetTypeRef, selectedTypes: ReadonlyMap<string, TargetTypeRef>): TargetTypeRef | undefined => {
       let valid = true;
       const selected = substituteRustTargetGenerics(carrier, selectedTypes, lifetimes, consts, (type, original) => {
@@ -304,6 +310,7 @@ export function createRustSourceErrorEffectSelection(walk: { readonly context: R
     return Object.freeze({ types, lifetimes, consts, identity,
       substitute: (carrier: TargetTypeRef) => substitute(carrier, types),
       complete(carrier: TargetTypeRef, physical: Pick<RustNativeStoragePlan, "invocationInputFor" | "boundSubjectFor">) {
+        if (!bindCarriers([carrier])) return undefined;
         const logical = substitute(carrier, types);
         if (logical === undefined) return undefined;
         const needed = new Set(rustTargetGenericReferences(logical).typeIdentities);
