@@ -42,7 +42,9 @@ for (const [name, source] of [
       program = analysis.value;
       return { kind: "resolved", value: { artifacts: [] }, diagnostics: [] };
     } });
-    assert.equal(compiled.result.diagnostics.length, 0, "the real producer admits the complete checked fixture");
+    assert.equal(compiled.result.diagnostics.length, 0,
+      `the real producer admits the complete checked fixture: ${JSON.stringify(compiled.result.diagnostics.slice(0, 8)
+        .map(({ code, message }) => ({ code, message: message.slice(0, 512) })))}`);
     const nodes = [];
     const visit = node => { nodes.push(node); compiled.source.ast.forEachChild(node, child => { if (child !== undefined) visit(child); }); };
     visit(compiled.source.getSourceFile("/src/index.ts"));

@@ -21,7 +21,8 @@ const cases = [
     type Identity = <Value>(value: Value) => Value;
     export function retain(callback: Identity): Identity { return callback; }
     export function forward(callback: Identity): Identity { return retain(callback); }
-  `, ["retain", "forward"]],
+    export function invoke<Value>(callback: Identity, value: Value): Value { return forward(callback)<Value>(value); }
+  `, ["retain", "forward", "invoke"]],
 ];
 
 for (const [name, source, names] of cases) for (const surfaces of [[], ["js"]]) {
