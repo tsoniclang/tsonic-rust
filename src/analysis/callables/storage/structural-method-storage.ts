@@ -53,6 +53,7 @@ import { rustCallablePhysicalSignature } from "../../../target-model/conversions
 import { bindRustStructuralImplementationContract } from "../../../policy/types/objects/structural-storage.js";
 import { rustCallableInvocationSignaturesMatch } from "../../../policy/conversions/callable-input.js";
 import { selectRustProgramErrorConversion } from "../../../policy/conversions/program-error.js";
+import { isRustFinalizedSourceInput } from "../../../target-model/operations/finalized-inputs.js";
 
 
 type RustStructuralMethodShape = RustStructuralShapePlanRegistry["definitions"][number];
@@ -374,9 +375,9 @@ export function createRustStructuralMethodStorage(input: {
         }
         if (operation?.kind !== "provider-operation") continue;
         for (const argument of operation.abi.targetArguments) {
-          if (argument.source.kind !== "argument" || !("parameterCarrier" in argument)) continue;
+          if (!isRustFinalizedSourceInput(argument) || argument.source.kind !== "argument") continue;
           const sourceIndex = argument.source.sourceIndex;
-          const carrier = rustOptionElementCarrier(argument.parameterCarrier) ?? argument.parameterCarrier;
+          const carrier = rustOptionElementCarrier(argument.conversion.targetCarrier) ?? argument.conversion.targetCarrier;
           const protocol = rustCallableProtocol(carrier);
           const source = operation.abi.sourceArguments.find(candidate => candidate.sourceIndex === sourceIndex);
           if (protocol?.error === undefined || source === undefined || source.disposition !== "runtime" ||
