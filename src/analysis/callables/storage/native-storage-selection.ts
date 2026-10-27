@@ -58,6 +58,7 @@ import type { createRustNativeStorageQueries, RustNativeInvocationBindingsSelect
 import { snapshotRustCallableBindings } from "../../../policy/types/callables/generic-bindings.js";
 import type { RustSourceErrorEffectSelection } from "../../errors/source-error-effects.js";
 import { selectRustNativeCallbackParameterStorage } from "../native/native-parameters.js";
+import { pointerOperationFactKey } from "@tsonic/tsts";
 
 type RustNativeStorageRequest = {
   readonly subject: SourceStorageSubject;
@@ -291,10 +292,14 @@ export function createRustNativeStorageSelection(
         let selected: TargetTypeRef | undefined;
         for (const origin of origins.producers) {
           const subject = origin.subject;
-          const plan = subject.kind === "value" && subject.projection.length === 0
-            ? input.records.typedLocationPlan.get(subject.node) : undefined;
+          const operation = subject.kind === "value" && subject.projection.length === 0
+            ? input.records.targetOperation.get(subject.node) : undefined;
+          const plan = operation?.kind === "typed-location" && operation.operation === "allocate"
+            ? input.storage.source.sourceFacts.getFact(subject.node, pointerOperationFactKey) : undefined;
           let candidate: TargetTypeRef | undefined;
-          if (plan?.operation === "allocate") {
+          if (operation?.kind === "typed-location" && operation.operation === "allocate") {
+            if (plan?.operation !== "allocate" || plan.call !== subject.node)
+              return fail("A native callable allocation requires its original checked initialization evidence.");
             const source = input.storage.subjectFor(plan.initialExpression);
             if (source.kind === "unresolved") return fail(source.reason);
             candidate = visit(pointee, source.subject, origin.bindings, depth + 1, false, position);
@@ -812,16 +817,18 @@ export function createRustNativeStorageSelection(
         const fieldSemantics = input.storage.source.semantics.forFile(selectedType.sourceFile);
         const presentType = fieldSemantics.types.nonNullableType(selectedType.type);
         if (presentType === undefined) return fail("Structural physical fields require their exact checked present source type.");
-        const checkedProperties = fieldSemantics.types.propertyInfos(presentType);
+        const correspondence = fieldSemantics.types.structuralMembers(presentType, presentType, "correspondence");
+        if (correspondence.kind !== "available")
+          return fail("Structural physical fields require their original checked member correspondence.");
         const inputFields: Extract<RustStructuralPhysicalCompletionEvidence, { readonly kind: "native-input" }>["fields"][number][] = [];
         const fields = structural.fields.map(field => {
           if (field.method === true || field.accessor !== undefined) return field;
           const requiresImplementation = requiresPhysicalSelection(field.type, depth + 1);
           if (requiresImplementation === undefined) return undefined;
           if (requiresImplementation === false) return field;
-          const property = checkedProperties.find(property => property.name === field.sourceName);
-          const declarations = property === undefined ? [] : [...new Set([property.symbol, ...property.rootSymbols]
-            .flatMap(symbol => fieldSemantics.declarations.symbolDeclarations(symbol)))];
+          const member = correspondence.members.find(member => member.kind === "present" &&
+            member.source.property.name === field.sourceName);
+          const declarations = member?.kind === "present" ? member.source.declarations : [];
           let physical: TargetTypeRef | undefined;
           for (const declaration of declarations) {
             const component = project(selectedSubject, { kind: "member", declaration });
@@ -840,8 +847,15 @@ export function createRustNativeStorageSelection(
                 candidate.subject.projection.slice(0, component.projection.length));
               return prefix.kind === "resolved" && prefix.subject === component;
             });
-            if (nativeInputs.length !== 0) inputFields.push(Object.freeze({ sourceName: field.sourceName,
-              subject: component, carrier: type, inputs: Object.freeze(nativeInputs) }));
+            if (nativeInputs.length !== 0) {
+              if (member?.kind !== "present" || member.source.property.name !== field.sourceName ||
+                !member.source.declarations.includes(declaration)) {
+                fail("A structural input requires its original checked field-to-declaration correspondence.");
+                return undefined;
+              }
+              inputFields.push(Object.freeze({ sourceName: field.sourceName, member: member.source,
+                subject: component, carrier: type, inputs: Object.freeze(nativeInputs) }));
+            }
           }
           return physical === undefined ? undefined : Object.freeze({ ...field, type: physical });
         });

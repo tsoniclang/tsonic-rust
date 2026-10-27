@@ -2,7 +2,7 @@ import { assertRustRecordRequirement } from "../../helpers/required-records.mjs"
 import assert from "node:assert/strict";
 import test from "node:test";
 import { Node_Expression, Node_Initializer } from "@tsonic/target-api/source";
-import { analyzeRust } from "../../helpers/rust-session.mjs";
+import { analyzeRust, compileRust } from "../../helpers/rust-session.mjs";
 import { analyzeRustErrorEffects } from "../../helpers/rust-error-analysis.mjs";
 
 import { rustValueCarrierBeforeContextualConversion } from "../../../dist/analysis/conversions/value-carrier-queries.js";
@@ -188,10 +188,24 @@ test("physical callable signatures substitute declaration-generic environments w
 });
 
 test("physical callable operand queries reject unrelated values, missing owners and ambiguous source alternatives", () => {
-  const current = fixture(`
+  const ambiguous = `
     export function choose(left: () => number, right: () => number): () => number {
       left = right; const selected = left; return selected;
     }
+    export function original(): number { return 3; }
+    export function create(): () => number { const callback = original; const other = 3; return callback; }
+  `;
+  const rejection = compileRust({ surfaces: [], files: { "index.ts": ambiguous } });
+  assert.equal(rejection.result.artifacts.length, 0, "ambiguous formal implementations are rejected before emission");
+  assert.deepEqual(rejection.result.diagnostics.map(({ code, message }) => ({ code, message })), [
+    { code: "RUST_SOURCE_CALLABLE_SPECIALIZATION_NOT_CLOSED",
+      message: "Native callable storage has distinct physical input alternatives requiring a sealed join." },
+    { code: "RUST_SOURCE_CALLABLE_SPECIALIZATION_NOT_CLOSED",
+      message: "Native callable storage has distinct physical input alternatives requiring a sealed join." },
+  ], "both original ambiguous storage obligations remain precise source refusals");
+  for (const diagnostic of rejection.result.diagnostics)
+    assert.equal(diagnostic.sourceNode !== undefined, true, "the admission refusal retains its exact original source location");
+  const current = fixture(`
     export function original(): number { return 3; }
     export function create(): () => number { const callback = original; const other = 3; return callback; }
   `);
@@ -202,8 +216,6 @@ test("physical callable operand queries reject unrelated values, missing owners 
     "unrelated checked source node is not a callable operand");
   assert.equal(rustNativeCallableOperand(source, {}, current.input) === undefined, true,
     "unowned source node cannot supply an exact physical carrier");
-  assert.equal(rustNativeCallableOperand(source, current.initializer("selected"), current.input) === undefined, true,
-    "distinct formal implementations require a sealed join, never a guessed selection");
   const selected = current.input.storage.valueFor(current.declaration("callback"));
   assert.equal(selected.kind, "selected");
   assert.equal(rustNativeCallablePhysicalSource(source,

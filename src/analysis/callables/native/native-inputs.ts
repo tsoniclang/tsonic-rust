@@ -7,7 +7,7 @@ import type { RustProgramRecords } from "../../../target-model/records/program.j
 
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustCallableInputProtocol, rustCallableProtocol } from "../../../target-model/types/carriers/callables.js";
-import { rustCallableTargetId, rustStructuralObjectCarrierValue } from "../../../target-model/types/carriers/source-types.js";
+import { rustCallableTargetId, rustStructuralObjectCarrierValue, rustSourceTypeCarrierValue } from "../../../target-model/types/carriers/source-types.js";
 import { rustGenericCallableProtocol, rustGenericCallableValue } from "../../../target-model/types/carriers/generic-callables.js";
 import { rustOptionElementCarrier } from "../../../target-model/types/carriers/optional.js";
 import { rustCallableInvocationSignaturesMatch } from "../../../policy/conversions/callable-input.js";
@@ -247,13 +247,16 @@ export function createRustNativeCallableInputPlan(input: {
     }
     return result;
   };
-  const hasCallableData = (carrier: TargetTypeRef, active: Set<TargetTypeRef>, step: (depth: number) => boolean,
+  const componentIdentity = (carrier: TargetTypeRef): TargetTypeRef | string =>
+    rustSourceTypeCarrierValue(carrier) === undefined ? carrier : closedMetadataKey(carrier);
+  const hasCallableData = (carrier: TargetTypeRef, active: Set<TargetTypeRef | string>, step: (depth: number) => boolean,
     depth: number): boolean | undefined => {
     if (!step(depth)) return undefined;
     const selected = rustOptionElementCarrier(carrier) ?? carrier;
     if (rustGenericCallableValue(selected) !== undefined || rustCallableProtocol(selected) !== undefined) return true;
-    if (active.has(selected)) return false;
-    active.add(selected);
+    const identity = componentIdentity(selected);
+    if (active.has(identity)) return false;
+    active.add(identity);
     try {
       const structural = rustStructuralObjectCarrierValue(selected);
       const element = selected.kind === "array" || selected.kind === "slice" ? selected.element
@@ -269,18 +272,19 @@ export function createRustNativeCallableInputPlan(input: {
       }
       return false;
     } finally {
-      active.delete(selected);
+      active.delete(identity);
     }
   };
   const collectInputComponents = (parameter: Node, carrier: TargetTypeRef,
-    projection: SourceStorageSubject["projection"], active: Set<TargetTypeRef>, step: (depth: number) => boolean,
+    projection: SourceStorageSubject["projection"], active: Set<TargetTypeRef | string>, step: (depth: number) => boolean,
     depth = 0): string | undefined => {
     if (!step(depth)) return "Native callable input components exceed their bounded storage projection budget.";
     const required = hasCallableData(carrier, new Set(), step, depth);
     if (required === undefined) return "Native callable input components exceed their bounded storage projection budget.";
     if (!required) return;
     const selected = rustOptionElementCarrier(carrier) ?? carrier;
-    if (active.has(selected)) return "Native callable input components require a finite complete storage path.";
+    const identity = componentIdentity(selected);
+    if (active.has(identity)) return "Native callable input components require a finite complete storage path.";
     if (rustGenericCallableValue(selected) !== undefined || rustCallableProtocol(selected) !== undefined) {
       const subject = input.storage.subject(parameter, "input", projection);
       if (subject.kind === "unresolved") return subject.reason;
@@ -293,7 +297,7 @@ export function createRustNativeCallableInputPlan(input: {
         return "Native callable input components require their exact completed input protocol binding.";
       return;
     }
-    active.add(selected);
+    active.add(identity);
     try {
       if (selected.kind === "tuple") {
         for (const [index, element] of selected.elements.entries()) {
@@ -354,7 +358,7 @@ export function createRustNativeCallableInputPlan(input: {
         }
       }
     } finally {
-      active.delete(selected);
+      active.delete(identity);
     }
     return undefined;
   };

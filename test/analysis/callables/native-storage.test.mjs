@@ -891,16 +891,27 @@ test("concrete quantified producers retain the existing sealed family through al
 });
 
 test("physical selection rejects ambiguous mutation alternatives and seals concrete producers", () => {
-  const current = fixture(`
+  const ambiguous = `
     export function choose(left: () => number, right: () => number): () => number {
       left = right; const selected = left; return selected;
     }
     export function create(): () => number { return () => 7; }
     export function concrete(): () => number { const supplied = create(); return supplied; }
+  `;
+  const rejection = compileRust({ surfaces: [], files: { "index.ts": ambiguous } });
+  assert.equal(rejection.result.artifacts.length, 0, "neither ambiguous return nor local storage can reach emission");
+  assert.deepEqual(rejection.result.diagnostics.map(({ code, message }) => ({ code, message })), [
+    { code: "RUST_SOURCE_CALLABLE_SPECIALIZATION_NOT_CLOSED",
+      message: "Native callable storage has distinct physical input alternatives requiring a sealed join." },
+    { code: "RUST_SOURCE_CALLABLE_SPECIALIZATION_NOT_CLOSED",
+      message: "Native callable storage has distinct physical input alternatives requiring a sealed join." },
+  ], "no signature-based choice, closed error guess, or silent fallback");
+  for (const diagnostic of rejection.result.diagnostics)
+    assert.equal(diagnostic.sourceNode !== undefined, true, "each refusal belongs to its original ambiguous source node");
+  const current = fixture(`
+    export function create(): () => number { return () => 7; }
+    export function concrete(): () => number { const supplied = create(); return supplied; }
   `);
-  for (const result of [current.plan.prepareReturn(current.declaration("choose")),
-    current.plan.valueFor(current.declaration("selected"))])
-    assert.equal(result.kind, "unresolved", "no signature-based choice, closed error guess, or silent fallback");
   const created = current.plan.prepareReturn(current.declaration("create"));
   const returned = current.plan.invocationReturnFor(current.declaration("create"), current.initializer("supplied"));
   assert.equal(created.kind, "selected");
@@ -1127,13 +1138,73 @@ test("raw callable and Future data fields still require their own exact physical
     export function callableData(value: { stored: () => number }): number { return 1; }
     export function futureData(value: { stored: Promise<number> }): number { return 1; }
   `);
+  const missing = createRustStructuralShapePlanRegistry();
+  missing.initialize([], [], () => "missing", [], [], new Map());
+  const unownedLayouts = createRustNativeStorageQueries({ ...current.input, native: current.native, structuralShapes: missing });
   for (const name of ["callableData", "futureData"]) {
     const owner = current.declaration(name);
     const parameter = current.source.ast.parameters(owner)[0];
-    const selected = current.plan.parameterFor(parameter);
+    const admitted = current.program.callableValues.nativeStorage.parameterFor(parameter);
+    assert.equal(admitted.kind !== "unresolved", true, `${name} has a finalized original physical aggregate owner`);
+    assert.equal(current.program.structuralShapes.definitionForCarrier(admitted.carrier) !== undefined, true,
+      `${name} uses its actual canonical native data layout`);
+    const subject = current.exactSubject(parameter, "input");
+    const positive = current.plan.subjectFor(subject, admitted.carrier, owner);
+    assert.equal(positive.kind !== "unresolved", true, `${name} retains its physical layout when the owner is present`);
+    const selected = unownedLayouts.subjectFor(subject, admitted.carrier, owner);
     assert.equal(selected.kind, "unresolved", `${name} cannot substitute method-signature readiness for stored data`);
-    assert.match(selected.reason, /physical aggregate layout owner/u,
+    assert.equal(selected.reason, "A structural value requires its actual checked physical layout owner.",
       `${name} retains the exact physical data-layout obligation`);
     assert.equal(Object.isFrozen(selected), true, `${name} preserves its immutable unresolved physical storage`);
+    assert.equal(current.program.callableValues.nativeStorage.parameterFor(parameter) === admitted, true,
+      `${name} negative owner queries never change the finalized formal storage`);
   }
+});
+
+test("nominal data discovery terminates semantic recursion without conflating native applications", () => {
+  const { program } = analyzeRust({ surfaces: [], files: { "index.ts": `
+    import type { int32, int64 } from "@tsonic/core/types.js";
+    class Chain<Value> {
+      next: Chain<Value> | undefined;
+      value: Value;
+      constructor(value: Value) { this.next = undefined; this.value = value; }
+    }
+    class Left<Value> {
+      next: Right<Value> | undefined;
+      constructor() { this.next = undefined; }
+    }
+    class Right<Value> {
+      next: Left<Value> | undefined;
+      constructor() { this.next = undefined; }
+    }
+    export function narrow(value: Chain<int32>): void {}
+    export function wide(value: Chain<int64>): void {}
+    export function mutual(value: Left<int32>): void {}
+  ` } });
+  const { ast } = program.source;
+  for (const name of ["narrow", "wide", "mutual"]) {
+    const declaration = program.sourceFiles.flatMap(file => ast.statements(file)).find(node =>
+      ast.is.IsFunctionDeclaration(node) && ast.text(ast.name(node)) === name);
+    assert.equal(declaration !== undefined, true, `${name} retains its original checked declaration`);
+    assert.equal(program.callableValues.native.inputsFor(declaration).length, 0,
+      `${name} recursive plain nominal data requires no callable implementation input`);
+  }
+});
+
+test("a callable sibling after nominal recursion requires a finite physical storage path", () => {
+  const { result } = compileRust({ surfaces: [], files: { "index.ts": `
+    class Chain<Value> {
+      next: Chain<Value> | undefined;
+      callback: () => Value;
+      constructor(callback: () => Value) { this.next = undefined; this.callback = callback; }
+    }
+    export function inspect(value: Chain<number>): void {}
+  ` } });
+  assert.equal(result.artifacts.length, 0, "a genuinely recursive callable payload never publishes a partial physical layout");
+  assert.equal(result.diagnostics.some(diagnostic => diagnostic.code === "RUST_SOURCE_CALLABLE_SPECIALIZATION_NOT_CLOSED" &&
+    diagnostic.message === "Native callable input components require a finite complete storage path."), true,
+  "the canonical input owner discovers the callable sibling and refuses its infinite component path");
+  assert.equal(result.diagnostics.some(diagnostic => diagnostic.message ===
+    "Native callable input components exceed their bounded storage projection budget."), false,
+  "fresh nominal metadata allocations cannot turn a semantic cycle into budget exhaustion");
 });

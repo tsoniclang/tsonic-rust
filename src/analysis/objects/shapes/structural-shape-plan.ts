@@ -4,6 +4,7 @@ import { preferredShapeName, allocateSnakeName, allocatePascalName } from "../..
 import type { RustStructuralShapeField, RustStructuralShapeDefinition, RustStructuralMethodStorageSelection, RustStructuralMethodExposure, RustStructuralMethodPlan } from "../../../target-model/records/objects/structural-shapes.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { SourceStorageSubject } from "@tsonic/target-api/analysis";
+import type { SourceStructuralMember } from "@tsonic/target-api/source";
 import type { RustNativeCallableInput } from "../../../target-model/records/native/native-protocols.js";
 
 import { rustPropertyStorageNames } from "../../../target-model/names/property-storage.js";
@@ -39,7 +40,8 @@ export type RustStructuralPhysicalCompletionEvidence =
   | { readonly kind: "instance" }
   | { readonly kind: "native-input"; readonly owner: RustNativeCallableInput["owner"];
       readonly subject: SourceStorageSubject; readonly fields: readonly {
-        readonly sourceName: string; readonly subject: SourceStorageSubject; readonly carrier: TargetTypeRef;
+        readonly sourceName: string; readonly member: SourceStructuralMember;
+        readonly subject: SourceStorageSubject; readonly carrier: TargetTypeRef;
         readonly inputs: readonly RustNativeCallableInput[];
       }[] };
 
@@ -472,9 +474,11 @@ export function createRustStructuralShapeConstruction(
             subject.projectionKey.startsWith(`${prefix.projectionKey}/`));
         if (evidence.subject.kind !== "input" || shape === undefined || !evidence.fields?.length || evidence.fields.some(field => {
           const selected = shape.fields.find(selected => selected.sourceName === field.sourceName);
+          const component = field.subject.projection[field.subject.projection.length - 1];
           if (selected === undefined || !rustTargetTypeRefEquals(selected.type, field.carrier) ||
             field.subject.projection.length !== evidence.subject.projection.length + 1 ||
-            field.subject.projection[field.subject.projection.length - 1]?.kind !== "member" || !extendsSubject(field.subject, evidence.subject) ||
+            component?.kind !== "member" || field.member?.property.name !== field.sourceName ||
+            !field.member.declarations.includes(component.declaration) || !extendsSubject(field.subject, evidence.subject) ||
             field.inputs.length === 0) return true;
           const identities = new Set(rustTargetGenericReferences(field.carrier).typeIdentities);
           return field.inputs.some(input => input.owner !== evidence.owner || !extendsSubject(input.subject, field.subject) ||
