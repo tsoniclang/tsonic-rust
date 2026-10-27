@@ -218,10 +218,12 @@ export function analyzeRustProviderForms(program: Omit<RustAnalysisProgram, "rea
         if (vector.projections.includes("native-string")) {
           const source = rustJsErrorTargetType();
           const target = rustErrorRegionCarrier(operand);
-          const conversion = target === undefined ? undefined : rustTargetTypeRefEquals(source, target)
-            ? { kind: "native-representation" as const, source, target }
-            : selectRustSourceValueConversion(source, target, program.typeDefinitions);
-          projection = conversion === undefined ? undefined : rustValueConversionContract(conversion, program.typeDefinitions);
+          if (target !== undefined && rustTargetTypeRefEquals(source, target)) {
+            projection = { category: "exact", lowering: "identity", sourceMode: "value", source, target, fallible: false };
+          } else {
+            const conversion = target === undefined ? undefined : selectRustSourceValueConversion(source, target, program.typeDefinitions);
+            projection = conversion === undefined ? undefined : rustValueConversionContract(conversion, program.typeDefinitions);
+          }
           if (projection === undefined || projection.fallible)
             failTargetAnalysisInvariant("tsonic-rust", "A native callback projection requires its exact native error conversion.", argument);
         }
