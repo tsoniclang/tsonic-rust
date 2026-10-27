@@ -737,8 +737,10 @@ export function createRustNativeStorageSelection(
         const selectedType = input.storage.typeFor(selectedSubject);
         if (selectedType.kind === "unresolved") return fail(selectedType.reason);
         const fieldSemantics = input.storage.source.semantics.forFile(selectedType.sourceFile);
-        const checkedProperties = fieldSemantics.types.propertyInfos(selectedType.type);
-        const fields = structural.fields.map((field, index) => {
+        const presentType = fieldSemantics.types.nonNullableType(selectedType.type);
+        if (presentType === undefined) return fail("Structural physical fields require their exact checked present source type.");
+        const checkedProperties = fieldSemantics.types.propertyInfos(presentType);
+        const fields = structural.fields.map(field => {
           if (field.method === true || field.accessor !== undefined) return field;
           const requiresImplementation = requiresPhysicalSelection(field.type, depth + 1);
           if (requiresImplementation === undefined) return undefined;
@@ -749,9 +751,7 @@ export function createRustNativeStorageSelection(
           let physical: TargetTypeRef | undefined;
           for (const declaration of declarations) {
             const component = project(selectedSubject, { kind: "member", declaration });
-            const fixed = component?.kind === "input" && input.native.isConcreteCallableStorage(component) === true;
-            const type = component === undefined ? undefined : fixed ? completed.fields[index]?.carrier
-              : visit(field.type, component, bindings, depth + 1, false, position);
+            const type = component === undefined ? undefined : visit(field.type, component, bindings, depth + 1, false, position);
             if (type === undefined) return undefined;
             if (physical !== undefined && !rustTargetTypeRefEquals(physical, type)) {
               fail("A structural field requires one exact physical storage across its checked declarations.");
@@ -766,8 +766,6 @@ export function createRustNativeStorageSelection(
           structural.representation, structural.construction, structural.bases,
           methods.length === 0 ? undefined : { kind: "physical", methods: Object.freeze(methods) });
         if (rustTargetTypeRefEquals(current, physical)) return current;
-        const existing = input.structuralShapes.definitionForCarrier(physical);
-        if (existing !== undefined) return existing.carrier;
         const completion = input.structuralShapes.completePhysicalCarrier(current, physical);
         return completion.kind === "resolved" ? completion.carrier : fail(completion.reason);
       }

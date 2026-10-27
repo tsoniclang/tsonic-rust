@@ -114,6 +114,7 @@ export function createRustNativeStorageQueries(input: {
   const unresolved = (reason: string): Extract<RustNativeStorageSelection, { readonly kind: "unresolved" }> =>
     Object.freeze({ kind: "unresolved", reason });
   const returns = new Map<Node, RustNativeStorageSelection>();
+  const parameters = new Map<Node, { readonly carrier: TargetTypeRef; readonly selection: RustNativeStorageSelection }>();
   const unpreparedReturn = unresolved("Native callable return requires its prepared physical source selection.");
   const bindingsFor = (owner: Node | undefined): SourceStorageBindings | undefined => owner === undefined
     ? input.storage.emptyBindings : nodes.has(owner) ? input.native.bindingsFor(owner) : undefined;
@@ -253,9 +254,16 @@ export function createRustNativeStorageQueries(input: {
         : select(subject.subject, carrier, bindingsFor(valueOwnerFor(node)), valueOwnerFor(node), "input");
     },
     subjectFor(subject: SourceStorageSubject, carrier: TargetTypeRef, owner?: Node): RustNativeStorageSelection {
-      const checked = input.storage.typeFor(subject);
       const scope = owner ?? ownerFor(subject.node);
-      return checked.kind === "unresolved" ? checked : select(subject, carrier, bindingsFor(scope), scope);
+      const parameter = subject.kind === "input" && subject.projection.length === 0 && scope === input.ast.parent(subject.node) &&
+        rustTargetTypeRefEquals(input.records.sourceParameterAbi.get(subject.node)?.parameterCarrier, carrier);
+      const previous = parameter ? parameters.get(subject.node) : undefined;
+      if (previous !== undefined) return rustTargetTypeRefEquals(previous.carrier, carrier) ? previous.selection
+        : unresolved("A native parameter requires its one prepared original physical storage contract.");
+      const checked = input.storage.typeFor(subject);
+      const selection = checked.kind === "unresolved" ? checked : select(subject, carrier, bindingsFor(scope), scope);
+      if (parameter && selection.kind !== "unresolved") parameters.set(subject.node, { carrier, selection });
+      return selection;
     },
     boundSubjectFor(subject: SourceStorageSubject, carrier: TargetTypeRef, bindings: SourceStorageBindings): RustNativeStorageSelection {
       const selected = input.storage.boundOriginsFor(subject, bindings);

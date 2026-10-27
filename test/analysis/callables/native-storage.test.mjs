@@ -261,21 +261,26 @@ test("native input classification includes checked union subjects before publica
     "the published classification is a pure lookup without checked-source or storage queries");
 });
 
-test("fixed structural callable data and generic data retain distinct native input contracts", () => {
-  const current = fixture(`
+test("structural callable data retains its original generic input binders and exact native widths", () => {
+  const { program, source: checked } = analyzeRust({ surfaces: [], files: { "index.ts": `
     import type { int32 } from "@tsonic/core/types.js";
     type Fixed<Value> = { readonly invoke: (value: Value) => Value };
-    type Generic<Value> = { readonly invoke: Value };
     export function fixed(value: Fixed<int32>): Fixed<int32> { return value; }
-    export function generic(value: Generic<(value: int32) => int32>): Generic<(value: int32) => int32> { return value; }
-  `);
-  const fixed = current.declaration("fixed");
-  const generic = current.declaration("generic");
-  assert.equal(current.native.inputsFor(fixed).length, 0,
-    "the original fixed callable slot is not replaced with a new implementation binder");
-  const inputs = current.native.inputsFor(generic);
+    export function generic<Value>(value: Fixed<Value>): Fixed<Value> { return value; }
+  ` } });
+  const source = createTargetSourceProgram(checked);
+  const native = program.callableValues.native;
+  const fixedInputs = native.inputs.filter(input => source.ast.text(source.ast.name(input.owner)) === "fixed");
+  assert.equal(fixedInputs.length, 1,
+    "the declared callable data slot retains its original native implementation binder");
+  assert.equal(fixedInputs[0].implementation.kind, "type-parameter",
+    "a declared callable data slot does not acquire a boxed concrete storage shortcut");
+  const protocol = rustCallableProtocol(fixedInputs[0].carrier);
+  assert.equal(protocol?.parameters[0]?.name === "int32" && protocol.result.name === "int32", true,
+    "the original checked native argument and result widths remain exact");
+  const inputs = native.inputs.filter(input => source.ast.text(source.ast.name(input.owner)) === "generic");
   assert.equal(inputs.length, 1, "the original generic data slot retains its exact native implementation binder");
-  assert.equal(inputs[0].subject.node === current.source.ast.parameters(generic)[0], true,
+  assert.equal(inputs[0].subject.node === source.ast.parameters(inputs[0].owner)[0], true,
     "the native binder belongs to the original generic input");
   assert.equal(inputs[0].subject.projection[0]?.kind, "member",
     "the checked generic data-member projection is preserved");

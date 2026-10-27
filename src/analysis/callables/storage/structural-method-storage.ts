@@ -1,7 +1,7 @@
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { AstReader, Node } from "@tsonic/tsts";
 import type { SourceStorageBindings, SourceStorageProducer, SourceStorageQueries, SourceStorageSubject } from "@tsonic/target-api/analysis";
-import { sourceEnclosingCallable, asSourceNode } from "@tsonic/target-api/source";
+import { sourceEnclosingCallable, asSourceNode, sourceCallableValueParameters } from "@tsonic/target-api/source";
 import type { RustProgramRecords } from "../../../target-model/records/program.js";
 import type { RustTargetOperationFact } from "../../../target-model/records/operations/operations.js";
 import type { RustErrorRegionRecords } from "../../../target-model/records/errors/error-regions.js";
@@ -383,6 +383,20 @@ export function createRustStructuralMethodStorage(input: {
     },
     complete(errors, errorForFile) {
       if (complete) failTargetAnalysisInvariant("tsonic-rust", "Structural method physical storage completes exactly once.");
+      for (const parameter of input.nativeNodes) {
+        if (!ast.is.IsParameterDeclaration(parameter)) continue;
+        const owner = ast.parent(parameter);
+        if (owner === undefined || !input.native.inputsFor(owner).some(candidate =>
+          candidate.subject.node === parameter && candidate.subject.projection.length !== 0)) continue;
+        if (sourceCallableValueParameters(ast, owner, sourceStorage.source.semantics.forNode(owner))?.includes(parameter) !== true)
+          return reject(parameter, "Physical aggregate input storage requires its original checked callable parameter.");
+        const carrier = records.sourceParameterAbi.get(parameter)?.parameterCarrier;
+        const subject = sourceStorage.subject(parameter, "input");
+        if (carrier === undefined || subject.kind === "unresolved") return reject(parameter,
+          subject.kind === "unresolved" ? subject.reason : "Physical aggregate input storage requires its exact admitted source ABI.");
+        const selected = input.nativeStorage.subjectFor(subject.subject, carrier, owner);
+        if (selected.kind === "unresolved") return reject(parameter, selected.reason);
+      }
       const literals: { readonly definition: RustStructuralMethodShape; readonly carrier: TargetTypeRef }[] = [];
       for (const node of input.nativeNodes) {
         const operation = records.targetOperation.get(node);
