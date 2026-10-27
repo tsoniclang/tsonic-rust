@@ -1,6 +1,6 @@
 import type { Node, SourceFile } from "@tsonic/tsts";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
-import { Node_Initializer } from "@tsonic/target-api/source";
+import { isSourceCallableBodyBoundary, Node_Initializer } from "@tsonic/target-api/source";
 import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustCallableEntryConstruction } from "./entry-parameters.js";
 import type { RustCallableEntryHeaderPlacement, RustCallableEntryHeaderSelection, RustCallableEntryHeaderVariant } from "../../target-model/records/callable-entry-headers.js";
@@ -71,8 +71,10 @@ export function createRustCallableEntryHeaderPlacements(input: {
       if (ast.is.IsMethodDeclaration(node) || ast.is.IsGetAccessorDeclaration(node) || ast.is.IsSetAccessorDeclaration(node)) return;
       ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
     };
-    const body = ast.body(declaration);
-    for (const root of roots ?? (body === undefined ? [] : [body])) visit(root);
+    const callable = isSourceCallableBodyBoundary(ast, declaration);
+    const body = callable ? ast.body(declaration) : undefined;
+    for (const root of roots ?? (callable ? body === undefined ? [] : [body] : [declaration])) visit(root);
+    if (!callable) return;
     for (const parameter of ast.parameters(declaration)) {
       if (parameter === undefined) continue;
       const initializer = Node_Initializer(ast, parameter);
