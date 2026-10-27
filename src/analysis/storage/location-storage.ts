@@ -108,7 +108,7 @@ export function analyzeRustLocationStorage(program: Omit<RustAnalysisProgram, "r
     const location = analysisRecords.typedLocationPlan.get(node);
     if (location?.operation === "address-of") admit(location.storageExpression);
     if (location?.operation === "allocate" && program.records.nativeBacking.get(node) === undefined) {
-      const selection = program.callableValues.nativeStorage.valueFor(node);
+      const selection = program.callableValues.nativeStorage.operandFor(node);
       if (selection.kind === "unresolved") {
         if (selection.diagnostic !== undefined) issues.push(selection.diagnostic);
         else failTargetAnalysisInvariant("tsonic-rust", selection.reason, node);

@@ -6,11 +6,51 @@ import { analyzeRustAnalysisProgram } from "../../../dist/analysis/program/targe
 import { rustCallablePhysicalSignature } from "../../../dist/target-model/conversions/callable-physical.js";
 import { rustProducerErrorReference } from "../../../dist/target-model/types/carriers/producer-errors.js";
 import { rustInfallibleTargetId } from "../../../dist/target-model/types/carriers/source-types.js";
+import { rustLocationPointeeCarrier } from "../../../dist/target-model/types/carriers/callables.js";
+import { rustOptionElementCarrier } from "../../../dist/target-model/types/carriers/optional.js";
 
 const imports = `import { allocateptr, loadptr } from "@tsonic/core/lang.js";
 import type { Pointer, uint32 } from "@tsonic/core/types.js";`;
 
 for (const surfaces of [[], ["js"]]) {
+  test(`allocation construction precedes its optional destination in ${surfaces[0] ?? "native"}`, () => {
+    const { result } = compileRust({ surfaces, files: { "index.ts": `${imports}
+export function annotated(flag: boolean): Pointer<uint32> | undefined {
+  if (flag) return allocateptr<uint32>(7);
+}
+export function inferred(flag: boolean) {
+  if (flag) return allocateptr<uint32>(11);
+}
+export function conditional(flag: boolean): Pointer<uint32> | undefined {
+  return flag ? allocateptr<uint32>(13) : undefined;
+}` } });
+    assert.equal(result.diagnostics.length, 0,
+      result.diagnostics.slice(0, 6).map(issue => `${issue.code}: ${issue.message}`).join("; "));
+    assert.equal(result.program !== undefined && result.plan !== undefined, true,
+      "the complete optional pointer program is admitted and planned");
+    const program = result.program;
+    const allocations = [];
+    const visit = node => {
+      const operation = program.records.targetOperation.get(node);
+      if (operation?.kind === "typed-location" && operation.operation === "allocate") allocations.push(node);
+      program.source.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+    };
+    program.sourceFiles.forEach(visit);
+    assert.equal(allocations.length, 3, "annotated, inferred and conditional constructions remain distinct");
+    for (const allocation of allocations) {
+      const selected = program.callableValues.nativeStorage.operandFor(allocation);
+      assert.equal(selected.kind !== "unresolved", true, "the exact physical construction operand is complete");
+      const emitted = program.records.locationAllocation.get(allocation);
+      assert.equal(emitted !== undefined && Object.isFrozen(emitted), true, "the allocation decision is sealed");
+      assert.equal(emitted.carrier === selected.carrier, true, "the constructor uses its original pre-context physical owner");
+      assert.equal(rustOptionElementCarrier(emitted.carrier), undefined, "an optional destination is not an allocation owner");
+      const pointee = rustLocationPointeeCarrier(emitted.carrier);
+      assert.equal(pointee === emitted.pointeeCarrier, true, "the sealed native owner and pointee are identical");
+      assert.equal(pointee?.kind === "source-primitive" && pointee.name === "uint32", true,
+        "the exact native pointee width is not replaced by optional or floating storage");
+    }
+  });
+
   test(`loaded callable pointers consume checked allocation origins in ${surfaces[0] ?? "native"}`, () => {
     let program;
     const { result } = compileRust({ surfaces, files: { "index.ts": `${imports}
@@ -57,7 +97,7 @@ export function read(): uint32 {
     assert.equal(factories.has("first") && factories.has("second"), true, "both distinct original allocation factories are selected");
     assert.equal(allocations.length, 2, "both original factory allocations have their own emission owners");
     for (const allocation of allocations) {
-      const selected = program.callableValues.nativeStorage.valueFor(allocation);
+      const selected = program.callableValues.nativeStorage.operandFor(allocation);
       assert.equal(selected.kind !== "unresolved", true, "the original allocation has completed physical storage");
       const emitted = program.records.locationAllocation.get(allocation);
       assert.equal(emitted !== undefined && Object.isFrozen(emitted), true, "allocation syntax consumes immutable physical evidence");
