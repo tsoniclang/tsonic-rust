@@ -391,7 +391,7 @@ export function createRustNativeStorageSelection(
               if (candidatePhysical === undefined) return fail("Native callable storage conflicts with its exact input callable contract.");
             } else if (candidate !== undefined) candidatePhysical = formalCarrier(candidate, current);
             else {
-              const originCarrier = origin.projection.length === 0
+              const originCarrier = origin.kind === "input" ? logicalCarrierFor(origin, frontier.bindings) : origin.projection.length === 0
                 ? input.records.receiverIndependentMethod.get(origin.node)?.carrier ?? input.records.runtimeCarrier.get(origin.node)?.carrier
                 : frameFieldCarrier(origin);
               // A callable parameter of an owner emitted as a closure value is a concrete runtime callable supplied by
@@ -491,6 +491,8 @@ export function createRustNativeStorageSelection(
           if (physical === undefined || rustTargetTypeRefEquals(physical, candidatePhysical)) physical = candidatePhysical;
           else distinct = true;
         }
+        if (physical === undefined && absent.size !== 0)
+          return rustCallablePhysicalCarrier(current) ?? fail("Absent callable storage requires its exact declared physical contract.");
         if (!distinct) return physical === undefined ? fail("Native callable storage has no selected physical input implementation.")
           : current.kind === "target-named" && current.id === rustCallableTargetId && joinable &&
             selectedSubject.projection.some(component => component.kind === "array-element")
@@ -661,6 +663,24 @@ export function createRustNativeStorageSelection(
             return fail("A structural call result requires its exact admitted native implementation template.");
           return admitted.carrier;
         }
+        if (selectedSubject.kind === "return" || selectedSubject.kind === "value") {
+          const origins = input.storage.boundValueFrontierFor(selectedSubject, bindings, [], position);
+          if (origins.kind === "unresolved") return fail(origins.reason);
+          if (origins.frontier.length !== 0 && origins.frontier.every(origin => origin.subject.kind === "input")) {
+            let physical: TargetTypeRef | undefined;
+            for (const origin of origins.frontier) {
+              const source = logicalCarrierFor(origin.subject, origin.bindings);
+              if (source === undefined || rustStructuralObjectCarrierValue(source) === undefined)
+                return fail("A structural input transport requires its original checked native layout.");
+              const candidate = visit(source, origin.subject, origin.bindings, depth + 1, false, position);
+              if (candidate === undefined) return undefined;
+              if (physical !== undefined && !rustTargetTypeRefEquals(physical, candidate))
+                return fail("A structural input transport requires one exact physical storage across its original inputs.");
+              physical = candidate;
+            }
+            return physical;
+          }
+        }
         if (structural.implementation === undefined && structural.fields.some((field, index) =>
           field.method === true && input.structuralShapes.field(current, index)?.methodPlan?.kind === "fixed")) {
           const origins = input.storage.boundValueFrontierFor(selectedSubject, bindings, [], position);
@@ -718,7 +738,7 @@ export function createRustNativeStorageSelection(
         if (selectedType.kind === "unresolved") return fail(selectedType.reason);
         const fieldSemantics = input.storage.source.semantics.forFile(selectedType.sourceFile);
         const checkedProperties = fieldSemantics.types.propertyInfos(selectedType.type);
-        const fields = structural.fields.map(field => {
+        const fields = structural.fields.map((field, index) => {
           if (field.method === true || field.accessor !== undefined) return field;
           const requiresImplementation = requiresPhysicalSelection(field.type, depth + 1);
           if (requiresImplementation === undefined) return undefined;
@@ -729,7 +749,9 @@ export function createRustNativeStorageSelection(
           let physical: TargetTypeRef | undefined;
           for (const declaration of declarations) {
             const component = project(selectedSubject, { kind: "member", declaration });
-            const type = component === undefined ? undefined : visit(field.type, component, bindings, depth + 1, false, position);
+            const fixed = component?.kind === "input" && input.native.isConcreteCallableStorage(component) === true;
+            const type = component === undefined ? undefined : fixed ? completed.fields[index]?.carrier
+              : visit(field.type, component, bindings, depth + 1, false, position);
             if (type === undefined) return undefined;
             if (physical !== undefined && !rustTargetTypeRefEquals(physical, type)) {
               fail("A structural field requires one exact physical storage across its checked declarations.");

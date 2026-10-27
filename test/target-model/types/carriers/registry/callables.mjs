@@ -309,6 +309,20 @@ export const callablesCarrierRegistry = Object.freeze([
     frozen: false,
   },
   {
+    id: "src/analysis/callables/ownership/retained-environments.ts#selectRustNativePendingEnvironment",
+    kinds: ["tuple"],
+    declaration: { module: "src/analysis/callables/ownership/retained-environments.ts", symbol: "selectRustNativePendingEnvironment" },
+    responsibility: "callables/native-pending-environment",
+    frozen: false,
+  },
+  {
+    id: "src/analysis/declarations/generic-carrier-requirements.ts#rustStructuralMethodStorageWithoutSelf",
+    kinds: ["tuple"],
+    declaration: { module: "src/analysis/declarations/generic-carrier-requirements.ts", symbol: "rustStructuralMethodStorageWithoutSelf" },
+    responsibility: "callables/structural-method-storage-without-self",
+    frozen: false,
+  },
+  {
     id: "src/analysis/callables/ownership/retained-values.ts#closeRustRetainedParameter",
     kinds: ["array", "associated-type", "closure", "function-pointer", "impl-trait", "opaque", "pointer", "reference", "slice", "source-primitive", "target-named", "target-specific", "trait-object", "trait-ref", "tuple", "type-parameter"],
     declaration: { module: "src/analysis/callables/ownership/retained-values.ts", symbol: "closeRustRetainedParameter" },

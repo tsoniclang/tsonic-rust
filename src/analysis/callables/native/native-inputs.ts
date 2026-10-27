@@ -77,7 +77,7 @@ export function createRustNativeCallableInputPlan(input: {
   readonly records: RustProgramRecords;
   readonly definitions: RustTypeDefinitions;
   readonly projectTypes: RustProjectTypePolicy;
-  readonly structuralShapes: Pick<RustStructuralShapePlanRegistry, "definitionForCarrier" | "field" | "instantiateSourceCarrier">;
+  readonly structuralShapes: Pick<RustStructuralShapePlanRegistry, "definitionForCarrier" | "templateForCarrier" | "field" | "instantiateSourceCarrier">;
   readonly sourcePackages: TargetSourcePackageGraph;
   readonly usedNames: Set<string>;
   /**
@@ -295,7 +295,9 @@ export function createRustNativeCallableInputPlan(input: {
       const structural = rustStructuralObjectCarrierValue(selected);
       if (structural === undefined) return;
       const layout = input.structuralShapes.definitionForCarrier(selected);
-      if (layout === undefined || layout.fields.length !== structural.fields.length)
+      const template = input.structuralShapes.templateForCarrier(selected);
+      if (layout === undefined || template === undefined || layout.fields.length !== structural.fields.length ||
+        template.fields.length !== structural.fields.length)
         return "Native callable input components require their exact initialized structural layout.";
       const subject = input.storage.subject(parameter, "input", projection);
       if (subject.kind === "unresolved") return subject.reason;
@@ -326,7 +328,14 @@ export function createRustNativeCallableInputPlan(input: {
           if (input.ast.is.IsMethodDeclaration(declaration) || input.ast.is.IsMethodSignatureDeclaration(declaration) ||
             input.ast.is.IsGetAccessorDeclaration(declaration) || input.ast.is.IsSetAccessorDeclaration(declaration))
             return "Native callable data components cannot replace a checked method or accessor owner.";
-          const failure = collectInputComponents(parameter, field.type, [...projection, { kind: "member", declaration }], active, step, depth + 1);
+          const projected = [...projection, { kind: "member" as const, declaration }];
+          const declared = template.fields[index]!.carrier;
+          if (rustCallableProtocol(rustOptionElementCarrier(declared) ?? declared) !== undefined) {
+            const subject = input.storage.subject(parameter, "input", projected);
+            if (subject.kind === "unresolved") return subject.reason;
+            concreteStorage.set(subject.subject, true);
+          }
+          const failure = collectInputComponents(parameter, field.type, projected, active, step, depth + 1);
           if (failure !== undefined) return failure;
         }
       }
@@ -348,6 +357,9 @@ export function createRustNativeCallableInputPlan(input: {
     const failure = collectInputComponents(node, carrier, [], new Set(),
       depth => remaining-- > 0 && depth <= rustNativeStorageProjectionDepth);
     if (failure !== undefined) componentIssues.push(Object.freeze({ subject: node, message: failure }));
+  }
+  for (const subject of input.storage.subjects) {
+    if (subject.kind === "input" || subject.kind === "member") selectConcreteStorage(subject);
   }
   for (const node of input.nativeNodes) {
     const carrier = input.records.runtimeCarrier.get(node)?.carrier;

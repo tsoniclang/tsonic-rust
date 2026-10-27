@@ -50,6 +50,8 @@ import type { RustProjectTypePolicy } from "../../project-types/index.js";
 import type { RustObjectRepresentationPlan } from "../../project-types/object-representation.js";
 import { rustCallablePhysicalSignature } from "../../../target-model/conversions/callable-physical.js";
 import { bindRustStructuralImplementationContract } from "../../../policy/types/objects/structural-storage.js";
+import { rustCallableInvocationSignaturesMatch } from "../../../policy/conversions/callable-input.js";
+import { selectRustProgramErrorConversion } from "../../../policy/conversions/program-error.js";
 
 
 type RustStructuralMethodShape = RustStructuralShapePlanRegistry["definitions"][number];
@@ -239,6 +241,7 @@ export function createRustStructuralMethodStorage(input: {
       const parent = new Map<Node, Node>();
       const errorByProducer = new Map<Node, TargetTypeRef>();
       const demands = new Map<Node, TargetTypeRef[]>();
+      const nativeDemands = new Map<Node, TargetTypeRef[]>();
       const slots = new Map<RustStructuralMethodShape, Map<number, Node>>();
       const rootFor = (declaration: Node): Node => {
         const previous = parent.get(declaration);
@@ -310,6 +313,44 @@ export function createRustStructuralMethodStorage(input: {
         }
       }
       for (let index = roots.length - 1; index >= 0; index -= 1) if (covered.has(roots[index]!)) roots.splice(index, 1);
+      for (const invocation of input.nativeNodes) {
+        const operation = records.targetOperation.get(invocation);
+        if (operation?.kind !== "provider-operation") continue;
+        for (const argument of operation.abi.targetArguments) {
+          if (argument.source.kind !== "argument" || !("parameterCarrier" in argument)) continue;
+          const sourceIndex = argument.source.sourceIndex;
+          const carrier = rustOptionElementCarrier(argument.parameterCarrier) ?? argument.parameterCarrier;
+          const protocol = rustCallableProtocol(carrier);
+          const source = operation.abi.sourceArguments.find(candidate => candidate.sourceIndex === sourceIndex);
+          if (protocol?.error === undefined || source === undefined || source.disposition !== "runtime" ||
+            !rustCallableInvocationSignaturesMatch(rustOptionElementCarrier(source.carrier) ?? source.carrier, carrier)) continue;
+          const expression = ast.arguments(invocation)[sourceIndex];
+          if (expression === undefined) continue;
+          const subject = sourceStorage.subjectFor(expression);
+          if (subject.kind === "unresolved") return reject(expression, subject.reason);
+          const bindings = sourceStorage.bindingsForLexicalOwner(invocation);
+          if (bindings.kind === "unresolved") return reject(expression, bindings.reason);
+          const selected = sourceStorage.storageProducersFor(subject.subject, bindings.bindings);
+          if (selected.kind === "unresolved") return reject(expression, selected.reason);
+          const declared = normalizeRustErrorType(protocol.error, context, invocation);
+          if (declared === undefined) return reject(invocation,
+            "A native callable input requires its selected invocation's exact physical error owner.");
+          for (const producer of selected.producers) {
+            const origin = producer.subject;
+            if (origin.kind !== "value" || origin.projection.length !== 0 ||
+              records.targetOperation.get(origin.node)?.kind !== "closure") continue;
+            const error = input.nativeProducers.errorFor(origin.node, "invoke");
+            const intrinsic = error === undefined ? undefined : normalizeRustErrorType(error, context, origin.node);
+            if (intrinsic === undefined) return reject(origin.node,
+              "A native callable input requires its original producer's completed intrinsic error.");
+            rootFor(origin.node);
+            errorByProducer.set(origin.node, intrinsic);
+            const requirements = nativeDemands.get(origin.node) ?? [];
+            if (!requirements.some(requirement => rustTargetTypeRefEquals(requirement, declared))) requirements.push(declared);
+            nativeDemands.set(origin.node, requirements);
+          }
+        }
+      }
       const groups = new Map<Node, Node[]>();
       for (const declaration of parent.keys()) {
         const root = rootFor(declaration);
@@ -321,8 +362,15 @@ export function createRustStructuralMethodStorage(input: {
       const infallible = (carrier: TargetTypeRef): boolean => carrier.kind === "target-named" && carrier.id === rustInfallibleTargetId;
       for (const members of groups.values()) {
         const intrinsic = members.map(member => errorByProducer.get(member)!);
+        const required = members.flatMap(member => nativeDemands.get(member) ?? []);
         let selected = intrinsic[0]!;
-        if (!intrinsic.every(error => rustTargetTypeRefEquals(error, selected))) {
+        if (required.length !== 0) {
+          selected = required[0]!;
+          if (!required.every(error => rustTargetTypeRefEquals(error, selected)) ||
+            !intrinsic.every(error => infallible(error) || rustTargetTypeRefEquals(error, selected) ||
+              selectRustProgramErrorConversion(error, selected, input.typeDefinitions) !== undefined))
+            return reject(members[0]!, "A retained callable requires one exact native construction error ABI across its original uses.");
+        } else if (!intrinsic.every(error => rustTargetTypeRefEquals(error, selected))) {
           const candidates = members.flatMap(member => demands.get(member) ?? []);
           const shared = candidates.find(candidate => intrinsic.every(error => infallible(error) || rustTargetTypeRefEquals(error, candidate)));
           if (shared === undefined) return reject(members[0]!, "Connected retained method slots require one admitted native construction error ABI.");

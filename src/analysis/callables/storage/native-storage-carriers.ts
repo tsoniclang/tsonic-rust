@@ -16,6 +16,7 @@ import { rustSourceUnionCarrierValue } from "../../../target-model/types/carrier
 import { inferRustTargetGenericBindings } from "../../../target-model/types/carriers/generic-inference.js";
 import { rustTargetGenericReferences } from "../../../target-model/types/carriers/generic-references.js";
 import { directReturnedValues } from "./native-storage-values.js";
+import { rustCallablePhysicalCarrier } from "../../../policy/conversions/callable-physical.js";
 import type { RustProgramRecords } from "../../../target-model/records/program.js";
 import type { RustTypeDefinitions } from "../../../target-model/types/source-union-definitions.js";
 import type { RustFrameCallablePlan } from "../../../target-model/records/callables/frame-callables.js";
@@ -40,12 +41,13 @@ export function rustNativeStorageAbsentOrigin(input: RustNativeStorageCarrierInp
 
 // The one stored payload of a union carrier that is a type-erased runtime callable with the destination's signature.
 export function rustNativeStorageErasedUnionCallablePayload(input: RustNativeStorageCarrierInput, union: TargetTypeRef | undefined, current: TargetTypeRef): TargetTypeRef | undefined {
-  const value = rustSourceUnionCarrierValue(union);
+  const present = rustOptionElementCarrier(union) ?? union;
+  const value = rustSourceUnionCarrierValue(present);
   const payloads = value?.payloads.kind === "physical" ? value.payloads.types
-    : union === undefined ? undefined : rustUnionAlternatives(union, input.definitions)?.map(variant => variant.carrier);
+    : present === undefined ? undefined : rustUnionAlternatives(present, input.definitions)?.map(variant => variant.carrier);
   const matching = (payloads ?? []).filter(payload => payload.kind === "target-named" && payload.id === rustCallableTargetId &&
     rustCallableInvocationSignaturesMatch(current, payload));
-  return matching.length === 1 ? matching[0] : undefined;
+  return matching.length === 1 ? rustCallablePhysicalCarrier(matching[0]!) : undefined;
 }
 
 // A class field reached through an unbound receiver holds the field's own storage; a frame-callable field stores
@@ -76,9 +78,10 @@ export function rustNativeStorageErasedFieldCallable(input: RustNativeStorageCar
   const component = origin.projection.length === 1 ? origin.projection[0] : undefined;
   if (origin.kind !== "receiver" || component?.kind !== "member") return undefined;
   const binding = input.frames.bindingFor(component.declaration);
-  const carrier = binding === undefined ? input.records.runtimeCarrier.get(component.declaration)?.carrier : binding.carrier;
+  const declared = binding === undefined ? input.records.runtimeCarrier.get(component.declaration)?.carrier : binding.carrier;
+  const carrier = rustOptionElementCarrier(declared) ?? declared;
   return carrier?.kind === "target-named" && carrier.id === rustCallableTargetId &&
-    rustCallableInvocationSignaturesMatch(current, carrier) ? carrier : undefined;
+    rustCallableInvocationSignaturesMatch(current, carrier) ? rustCallablePhysicalCarrier(carrier) : undefined;
 }
 
 // Binds the free type parameters of a producer signature from the destination signature it is stored at.

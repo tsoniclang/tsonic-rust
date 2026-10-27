@@ -245,6 +245,42 @@ function fixture(text, options = {}) {
     revokeSource: guardedAst.revoke, revokeQueries: guardedQueries.revoke };
 }
 
+test("native input classification includes checked union subjects before publication", () => {
+  const current = fixture(`
+    export function inspect(value: string | (() => string) | undefined): void {
+      if (typeof value === "function") value();
+    }
+  `);
+  const parameter = current.source.ast.parameters(current.declaration("inspect"))[0];
+  const subject = current.exactSubject(parameter, "input");
+  assert.equal(current.native.isConcreteCallableStorage(subject), false,
+    "the original checked union input has a prepared non-concrete classification");
+  current.revokeSource();
+  current.revokeQueries();
+  assert.equal(current.native.isConcreteCallableStorage(subject), false,
+    "the published classification is a pure lookup without checked-source or storage queries");
+});
+
+test("fixed structural callable data and generic data retain distinct native input contracts", () => {
+  const current = fixture(`
+    import type { int32 } from "@tsonic/core/types.js";
+    type Fixed<Value> = { readonly invoke: (value: Value) => Value };
+    type Generic<Value> = { readonly invoke: Value };
+    export function fixed(value: Fixed<int32>): Fixed<int32> { return value; }
+    export function generic(value: Generic<(value: int32) => int32>): Generic<(value: int32) => int32> { return value; }
+  `);
+  const fixed = current.declaration("fixed");
+  const generic = current.declaration("generic");
+  assert.equal(current.native.inputsFor(fixed).length, 0,
+    "the original fixed callable slot is not replaced with a new implementation binder");
+  const inputs = current.native.inputsFor(generic);
+  assert.equal(inputs.length, 1, "the original generic data slot retains its exact native implementation binder");
+  assert.equal(inputs[0].subject.node === current.source.ast.parameters(generic)[0], true,
+    "the native binder belongs to the original generic input");
+  assert.equal(inputs[0].subject.projection[0]?.kind, "member",
+    "the checked generic data-member projection is preserved");
+});
+
 for (const surfaces of [[], ["js"]]) {
   test(`optional callable literal state consumes its complete native interface field contract on ${surfaces[0] ?? "native"}`, () => {
     const { program } = analyzeRust({ surfaces, files: { "index.ts": `
