@@ -25,7 +25,7 @@ import { rustJsErrorTargetType } from "../../target-model/types/carriers/js.js";
 import { rustCallbackProtocol } from "../../policy/operations/members/callbacks.js";
 import { selectRustSourceValueConversion } from "../../policy/conversions/selection.js";
 import { rustValueConversionContract } from "../../policy/conversions/contracts.js";
-import { rustCallableInvocationErrorEffects } from "../errors/error-effects.js";
+import { rustCallableInvocationErrorEffects, rustPureErrorEffects } from "../errors/error-effects.js";
 
 export interface RustProviderReadSelection {
   readonly node: Node;
@@ -176,8 +176,12 @@ export function analyzeRustProviderForms(program: Omit<RustAnalysisProgram, "rea
         operand.sources.length !== effects.nativeErrors.length || operand.sources.some(source =>
           !effects.nativeErrors.some(error => error.identity === source.identity && rustTargetTypeRefEquals(error.errorType, source.errorType))))
         failTargetAnalysisInvariant("tsonic-rust", "An admitted provider callback requires its exact selected physical error correspondence.", node);
+      const failure = callback.value.callback.failure;
+      const emptyInvocation = frame === undefined && helperError === undefined && !callback.value.template.isFallible &&
+        failure.kind === "invocation" && failure.resultError.kind === "callback" && rustUninhabitedError(signature.error);
       const invocationSelection = frame === undefined
-        ? selectRustErrorRegion(callback.callbackEffects.invocationOwner, callback.callbackEffects.invocationEffects,
+        ? selectRustErrorRegion(callback.callbackEffects.invocationOwner,
+          emptyInvocation ? rustPureErrorEffects : callback.callbackEffects.invocationEffects,
           { ast, records: program.records, producers: program.callableValues.nativeProducers,
             definitions: program.typeDefinitions, components: program.sourcePackageComponents, promiseBodies: program.promiseBodies }, false)
         : undefined;
@@ -198,9 +202,10 @@ export function analyzeRustProviderForms(program: Omit<RustAnalysisProgram, "rea
       if (expected === undefined || callbackFallible && !rustTargetTypeRefEquals(signature.error, expected) &&
         !(helperError !== undefined && rustUninhabitedError(signature.error)))
         failTargetAnalysisInvariant("tsonic-rust", "An admitted provider Result requires its exact selected callback adapter error contract.", node);
-      if (abi.effects.invocation === "fallible") nativeResult = materializeRustSourceErrorRegion(node, { operand,
-        local: operand.localOwner === undefined ? undefined : { kind: "local" },
-        channels: operand.sources.map(source => ({ sourceIdentity: source.identity, targetIdentity: source.identity,
+      const resultOperand = emptyInvocation && vector === undefined ? invocationOperand : operand;
+      if (abi.effects.invocation === "fallible") nativeResult = materializeRustSourceErrorRegion(node, { operand: resultOperand,
+        local: resultOperand.localOwner === undefined ? undefined : { kind: "local" },
+        channels: resultOperand.sources.map(source => ({ sourceIdentity: source.identity, targetIdentity: source.identity,
           uninhabited: rustUninhabitedError(source.errorType) })) });
       if (vector !== undefined) {
         const lambda = program.records.lambdaBody.get(argument);

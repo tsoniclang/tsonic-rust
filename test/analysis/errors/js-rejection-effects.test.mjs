@@ -223,6 +223,21 @@ for (const [name, source] of [
     assert.equal(result.diagnostics.length, 0,
       "the complete native program retains the admitted invocation and rejection conversions: " +
       result.diagnostics.map(diagnostic => `${diagnostic.code}: ${diagnostic.message}`).join("; "));
+    const providerResults = [];
+    const visit = node => {
+      const operation = result.program.records.targetOperation.get(node);
+      if (operation?.kind === "provider-operation" && operation.operationId === "tsonic.rust.js.Array.forEach.call.value") {
+        providerResults.push(result.program.records.providerForm.get(node, operation.abi)?.nativeResult);
+      }
+      result.program.source.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+    };
+    result.program.sourceFiles.forEach(visit);
+    assert.equal(providerResults.length, 1, "the real helper has one sealed native Result transport");
+    assert.equal(providerResults[0]?.operand.kind, "infallible", "the generic helper retains its actual impossible error");
+    assert.equal(providerResults[0]?.operand.localOwner === undefined, true,
+      "a pure physical adapter does not manufacture the separate logical invocation error");
+    assert.equal(providerResults[0]?.operand.sources.length, 0, "empty elimination invents no native failure channel");
+    assert.equal(Object.isFrozen(providerResults[0]), true, "physical transport is selected and frozen before rendering");
     const joins = result.program.records.nativeErrorJoinDeclarations.get("/src/index.ts");
     assert.equal(joins !== undefined, true, "the actual source module has its sealed native join inventory");
     assert.equal(joins.some(declaration => declaration.arity > 1), false,
