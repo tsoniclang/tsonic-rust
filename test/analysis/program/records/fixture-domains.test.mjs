@@ -4,7 +4,7 @@ import { createRustRecordFixture } from "../../../helpers/records.mjs";
 
 test("record fixtures retain the complete raw analysis domain when no base is supplied", () => {
   const records = createRustRecordFixture();
-  assert.equal(Object.keys(records).length, 347, "the complete current raw analysis family domain");
+  assert.equal(Object.keys(records).length, 348, "the complete current raw analysis family domain");
   assert.equal(typeof records.typedLocationPlan.get, "function", "the raw source producer remains available");
 });
 

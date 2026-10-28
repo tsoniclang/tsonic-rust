@@ -42,7 +42,7 @@ function edge(declaration) {
 test("all eleven completion/error families expose only their exact frozen reader after sealing", () => {
   const builder = createRustProgramRecordBuilder();
   const records = builder.seal([]);
-  assert.equal(Object.keys(records).length, 347, "347 sealed analysis record families, including the canonical nativeHandler and nativeTaskUse families");
+  assert.equal(Object.keys(records).length, 348, "348 sealed analysis record families, including the canonical nativeHandler and nativeTaskUse families");
   for (const [family, owner] of owners) {
     assert.equal(builder[family] === builder[owner].records, true, family);
     assert.equal(records[family] === builder[family], true, family);

@@ -23,7 +23,7 @@ const families = [
 test("guard/capture families expose frozen readers, not generic writers or sealed producers", () => {
   const builder = createRustProgramRecordBuilder();
   const records = builder.seal([]);
-  assert.equal(Object.keys(records).length, 347, "347 sealed analysis record families, including the canonical nativeHandler and nativeTaskUse families");
+  assert.equal(Object.keys(records).length, 348, "348 sealed analysis record families, including the canonical nativeHandler and nativeTaskUse families");
   for (const [family, producer, attempt] of families) {
     assert.equal(builder[family] === builder[producer].records && records[family] === builder[family], true, family);
     assert.deepEqual(Object.keys(records[family]), ["get"], family);

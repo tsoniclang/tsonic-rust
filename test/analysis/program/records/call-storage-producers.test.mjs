@@ -26,7 +26,7 @@ test("call/storage families expose exact frozen readers and only their semantic 
   const builder = createRustProgramRecordBuilder();
   const builderRequiredRecords = [];
   const records = builder.seal(builderRequiredRecords);
-  assert.equal(Object.keys(records).length, 347, "347 sealed analysis record families, including the canonical nativeHandler and nativeTaskUse families");
+  assert.equal(Object.keys(records).length, 348, "348 sealed analysis record families, including the canonical nativeHandler and nativeTaskUse families");
   for (const [family, producer, attempt] of families) {
     assert.equal(builder[family] === builder[producer].records, true, family);
     assert.equal(records[family] === builder[family], true, family);

@@ -34,7 +34,7 @@ function indexAbi(value = integer) {
 test("the four async and member families publish the same immutable getter ports without general writers", () => {
   const builder = createRustProgramRecordBuilder();
   const records = builder.seal([]);
-  assert.equal(Object.keys(records).length, 347, "347 sealed analysis record families, including the canonical nativeHandler and nativeTaskUse families");
+  assert.equal(Object.keys(records).length, 348, "348 sealed analysis record families, including the canonical nativeHandler and nativeTaskUse families");
   for (const [family, producer] of [["asyncFunction", "asyncFunctions"], ["yield", "yields"],
     ["computedMember", "computedMembers"], ["compoundWrite", "compoundWrites"]]) {
     assert.equal(builder[family] === builder[producer].records && records[family] === builder[family], true, family);
