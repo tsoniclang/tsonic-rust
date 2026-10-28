@@ -432,7 +432,7 @@ export async function* borrowedAsyncValues<L extends Life>(
     assert.deepEqual(generator.params[0].type, retain.params[0].type);
     assert.equal(generator.returnType.path, path);
     assert.deepEqual(generator.returnType.genericArguments[0], { kind: "lifetime", lifetime: { kind: "named", name: "L" } });
-    assert.deepEqual(generator.returnType.genericArguments.slice(1).map(argument => argument.type), [nativeType("i32"), nativeType("()"), nativeType("()")]);
+    assert.deepEqual(generator.returnType.genericArguments.slice(1).map(argument => argument.type), [nativeType("i32"), nativeType("()"), nativeType("()"), { kind: "named", path: "core::convert::Infallible" }]);
   }
   const pair = nativeFunction(result, "borrowedPair");
   assert.deepEqual(pair.generics.parameters.filter(parameter => parameter.kind === "lifetime").map(parameter =>
@@ -443,7 +443,7 @@ export async function* borrowedAsyncValues<L extends Life>(
   assert.equal(pair.returnType.path, "rt::BorrowedGenerator");
   assert.deepEqual(pair.returnType.genericArguments, [
     { kind: "lifetime", lifetime: { kind: "named", name: "Short" } },
-    ...[nativeType("i32"), nativeType("i32"), nativeType("()")].map(type => ({ kind: "type", type })),
+    ...[nativeType("i32"), nativeType("i32"), nativeType("()"), { kind: "named", path: "core::convert::Infallible" }].map(type => ({ kind: "type", type })),
   ]);
   const consume = nativeFunction(result, "consumeBorrowedValues");
   const local = nativeNodes(consume.body, node => node.kind === "let" && node.name === "generator");

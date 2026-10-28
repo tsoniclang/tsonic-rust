@@ -6,7 +6,6 @@ import { rustSourceTypeParameter } from "../../../../source/extension/type-param
 import { substituteRustTargetTypeParameters } from "../../../../target-model/types/carriers/substitution.js";
 import { rustSourceStorageProjectedCarrier } from "../../../objects/value-domain-carriers.js";
 import { rustSourceStorageSubjectContext } from "./source-storage-projection.js";
-import { projectRustProviderIndexedStorageCarrier } from "./indexed-access.js";
 
 export function resolveRustCallableEnvironment(
   declaration: Node | undefined,
@@ -49,7 +48,6 @@ export function resolveRustCallableEnvironment(
       if (abi === undefined) return undefined;
       carrier = rustSourceStorageProjectedCarrier({ sourceStorage: context.sourceStorage,
         sourceTypes: options.sourceTypes, projectFieldProjection: options.projectFieldProjection,
-        projectIndexedCarrier: (component, owner) => projectRustProviderIndexedStorageCarrier(component, owner, selectedContext, options),
         types: { resolveNode: node => context.records.runtimeCarrier.get(node)?.carrier },
         semantics: context.semantics,
       }, { subject: selected.subject, bindings: scope.bindings }, abi.valueCarrier);

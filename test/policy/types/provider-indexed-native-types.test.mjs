@@ -3,8 +3,7 @@ import test from "node:test";
 import { createRustRecordFixture } from "../../helpers/records.mjs";
 import { providerVirtualDeclarationFactKey } from "@tsonic/tsts";
 import { providerIndexedPolicyFixture } from "../../../../tsonic/test/fixtures/provider-indexed-policy.mjs";
-import { resolveRustProviderIndexedAccess, projectRustProviderIndexedStorageCarrier } from "../../../dist/analysis/source-evidence/types/resolution/indexed-access.js";
-import { rustSourceStorageProjectedCarrier } from "../../../dist/analysis/objects/value-domain-carriers.js";
+import { resolveRustProviderIndexedAccess } from "../../../dist/analysis/source-evidence/types/resolution/indexed-access.js";
 import { rustNamedTargetType, rustOptionTargetType, rustSourceOptionalTargetType } from "../../../dist/target-model/types/index.js";
 
 const integer = { kind: "source-primitive", name: "uint64" };
@@ -50,46 +49,8 @@ function fixture(options = {}) {
     providerTypes: [{ ...owner, targetCarrier: options.wrongOwner ? rustNamedTargetType("native.other", "native::Other") : generic, genericParameters: parameters }],
     providerRows: options.missingRelation ? [] : options.duplicate ? [...rows, rows[0]] : rows,
   };
-  if (options.storageProjection) {
-    const selectedIndex = selected.evidence.members[0];
-    assert.equal(selectedIndex.selection.kind, "index", "the actual checked index supplies storage projection evidence");
-    const ownerType = selected.semantics.types.authoredType(selected.evidence.owner);
-    assert.equal(ownerType !== undefined, true, "the index retains its actual instantiated source owner");
-    const component = { kind: "indexed-value", sourceType: ownerType, ownerType, index: selectedIndex.selection.index };
-    const nativeOwner = options.referenceOwner ? { kind: "reference", mutable: options.mutableOwner === true, referent: ownerCarrier } : ownerCarrier;
-    let calls = 0;
-    const projected = rustSourceStorageProjectedCarrier({
-      sourceStorage: { ...context.sourceStorage, failureReason: () => undefined },
-      sourceTypes: { structuralFieldProjectionForDeclaration: () => assert.fail("an index is not a structural field") },
-      projectFieldProjection: () => assert.fail("an index cannot re-resolve its field carrier"),
-      projectIndexedCarrier(index, actualOwner, node) {
-        calls += 1;
-        assert.equal(index === component && actualOwner === nativeOwner && node === selected.node, true,
-          "one native projector receives the exact checked component, physical owner and source identity");
-        return projectRustProviderIndexedStorageCarrier(index, actualOwner, context, resolutionOptions);
-      },
-      types: { resolveNode: () => assert.fail("physical owner is supplied, not reconstructed") },
-      semantics: context.semantics,
-    }, { subject: { kind: "value", node: selected.node, projection: [{ kind: "array-element" }, component] },
-      bindings: Object.freeze({}) }, { kind: "array", element: nativeOwner });
-    assert.equal(calls, 1, "the complete array/index path has one provider projection owner");
-    return projected;
-  }
   return resolveRustProviderIndexedAccess(selected.node, context, resolutionOptions);
 }
-
-test("indexed storage projections preserve exact native generic, optional and borrowed provider carriers", () => {
-  for (const options of [{}, { physicalArguments: true }, { noSourceParameters: true },
-    { referenceOwner: true }, { referenceOwner: true, mutableOwner: true }])
-    assert.deepEqual(fixture({ ...options, keys: "string", storageProjection: true }), integer);
-  assert.deepEqual(fixture({ keys: "string", storageProjection: true, nativeOptional: true }), rustOptionTargetType(integer));
-  assert.equal(fixture({ keys: "string", storageProjection: true, unowned: true }), undefined,
-    "an unrelated source index cannot supply native provider evidence");
-  for (const options of [{ wrongOwner: true }, { missingGeneric: true }, { missingRelation: true },
-    { duplicate: true }, { wrongSignature: true }, { wrongKind: true }, { physicalArguments: true, wrongPhysical: true }])
-    assert.deepEqual(fixture({ ...options, keys: "string", storageProjection: true }),
-      { kind: "opaque", id: "provider-indexed-type-evidence-unavailable" }, JSON.stringify(options));
-});
 
 test("provider indexed type policy closes native generics and optional properties", () => {
   assert.deepEqual(fixture(), integer);

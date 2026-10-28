@@ -1,6 +1,5 @@
 import { providerVirtualDeclarationFactKey, type Node, type ExtensionFactSubject, type TypeIndexedAccessMember } from "@tsonic/tsts";
 import { sourceIndexedTypeEvidence } from "@tsonic/target-api/source";
-import type { SourceStorageProjection } from "@tsonic/target-api/analysis";
 import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "./model.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import { providerCarrierFromRelations, instantiateProviderTargetType } from "../../../../policy/types/project/provider-instantiation.js";
@@ -22,19 +21,6 @@ export function resolveRustProviderIndexedAccess(
   if (evidence === undefined) return undefined;
   return projectRustProviderIndexedMembers(() => resolveRustTargetTypeRef(evidence.owner, context, options),
     evidence.members, context, options);
-}
-
-export function projectRustProviderIndexedStorageCarrier(
-  component: Extract<SourceStorageProjection, { readonly kind: "indexed-value" }>,
-  owner: TargetTypeRef,
-  context: RustTargetTypeResolutionContext,
-  options: RustTargetTypeResolutionOptions,
-): TargetTypeRef | undefined {
-  const index = component.index;
-  const subjects = [...new Set([index.declaration, ...index.components,
-    ...context.currentSemantics.facts.selectedSubjects(index.symbol, index.declaration)]
-    .filter((subject): subject is ExtensionFactSubject => subject !== undefined))];
-  return projectRustProviderIndexedMembers(() => owner, [{ selection: { kind: "index", index }, subjects }], context, options);
 }
 
 function projectRustProviderIndexedMembers(
