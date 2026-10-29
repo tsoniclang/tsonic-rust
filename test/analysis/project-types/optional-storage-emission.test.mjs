@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { appendFileSync } from "node:fs";
 import { prepareRustProjectGenericMembership } from "../../../dist/analysis/project-types/generic-membership.js";
 import { sourceEnclosingCallable } from "@tsonic/target-api/source";
 import * as optionalStorageEmission from "../../../dist/analysis/project-types/optional-storage-emission.js";
@@ -14,7 +15,8 @@ import { rustSourcePrimitiveTargetType, rustStringTargetType, substituteRustTarg
 import { rustSourceOptionalTargetType } from "../../../dist/target-model/types/projections.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 import { closedMetadataKey } from "../../../dist/target-model/metadata/closed-data.js";
-import { analyzeRust } from "../../helpers/rust-session.mjs";
+import { analyzeRust, artifactText, compileRust } from "../../helpers/rust-session.mjs";
+import { runCargo, writeGeneratedProject } from "../../helpers/cargo-projects.mjs";
 import { structuralMemberWritesSource } from "../../../../tsonic/test/fixtures/structural-member-writes.mjs";
 import { rustDeclarationEmissionCarriers } from "../../../dist/analysis/source-evidence/types/emission-inventory.js";
 import { sealRustAnalysisProgram } from "../../../dist/analysis/program/index.js";
@@ -276,8 +278,8 @@ export function read(): string { const value: Named<string> = new Child("ready")
       "no projection decision can be written after sealing");
   });
 
-  test(`closed native state and selected structural output dependencies are admitted on ${surfaces[0] ?? "native"}`, () => {
-    const { program } = analyzeRust({ surfaces, files: { "index.ts": `
+  test(`closed native state and selected structural output dependencies are admitted on ${surfaces[0] ?? "native"}`, { timeout: 300_000 }, () => {
+    const source = `
 interface View<Value> { value: Value; }
 class Box<Value> {
   value: Value;
@@ -291,19 +293,79 @@ export function run(): string {
   change(value, "after");
   return inspect(value);
 }
-` } });
-    const admitted = (carrier, label) => {
+`;
+    const { program } = analyzeRust({ surfaces, files: { "index.ts": source } });
+    const admitted = (carrier, label, position = "general") => {
       assert.equal(program.records.optionalStorageTypeArguments.get(carrier) !== undefined, true,
         `${label}: the actual native output carrier has its explicit optional row`);
       assert.equal(program.records.typeEmission.get(carrier) !== undefined, true,
         `${label}: the actual native output carrier has its completed type record`);
+      assert.equal(program.records.typeEmission.get(carrier).positions[position], true,
+        `${label}: the native output is admitted in its exact ${position} position`);
     };
-    const views = program.classValues.instanceViewImplementations;
-    assert.equal(views.length > 0, true, "the real checked mapped view exercises the native view producer");
-    for (const view of views) {
-      admitted(view.sourceCarrier, "view source");
-      admitted(view.targetCarrier, "view target");
+    const ast = program.source.ast;
+    const statements = program.sourceFiles.flatMap(file => ast.statements(file));
+    const declaration = name => statements.find(node => ast.name(node) !== undefined && ast.text(ast.name(node)) === name);
+    const box = program.records.projectDeclaration.get(declaration("Box"));
+    const view = program.records.projectDeclaration.get(declaration("View"));
+    assert.equal(box?.kind === "class" && view?.kind === "interface", true, "the exact authored native owners exist");
+    assert.equal(program.records.nativeClass.get(box.declaration) !== undefined, true, "the original class has native output");
+    assert.equal(program.nativeDeclarations.get(view.declaration)?.definition === view, true,
+      "the original interface has its exact native output");
+    const inspect = declaration("inspect");
+    const run = declaration("run");
+    const abi = program.records.sourceParameterAbi.get(ast.parameters(inspect)[0]);
+    assert.equal(program.records.projectType.get(abi?.valueCarrier) === view, true,
+      "the readonly parameter retains the actual named View owner");
+    admitted(abi.valueCarrier, "inspect value", "parameter");
+    admitted(abi.parameterCarrier, "inspect physical ABI", "parameter");
+    const created = [];
+    const calls = [];
+    const visit = node => {
+      if (ast.is.IsNewExpression(node)) created.push(node);
+      if (ast.is.IsCallExpression(node)) calls.push(node);
+      ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+    };
+    visit(run);
+    assert.equal(created.length, 1, "the original run constructs one concrete Box");
+    const closedBox = program.records.runtimeCarrier.get(created[0])?.carrier;
+    assert.equal(program.records.projectType.get(closedBox) === box, true, "the constructed carrier is the actual Box owner");
+    const openBox = program.projectTypes.openCarrier(box);
+    for (const [carrier, label] of [[openBox, "open Box"], [closedBox, "closed Box"]]) {
+      admitted(carrier, label);
+      const related = program.records.projectRelationship.get(carrier, view);
+      assert.equal(related !== undefined && program.records.projectType.get(related) === view, true,
+        `${label}: the exact native View relationship exists`);
+      admitted(related, `${label} View`);
+      const contracts = program.records.projectInstanceContracts.get(carrier)?.filter(entry => entry.definition === view);
+      assert.equal(contracts?.length, 1, `${label}: one actual View contract is published`);
+      assert.equal(rustTargetTypeRefEquals(contracts[0].carrier, related), true, `${label}: the actual contract uses the relationship carrier`);
+      const fields = program.records.projectClassFields.get(view, related);
+      assert.equal(fields?.length, 1, `${label}: the contract has its real nonempty field inventory`);
+      for (const field of fields) admitted(field.carrier, `${label} View field`);
+      const roots = program.records.projectRootEmission.get(carrier)?.contracts.filter(entry => entry.definition === view);
+      assert.equal(roots?.length, 1, `${label}: one actual View output selection is published`);
+      assert.equal(roots[0].fields.has(fields[0].declaration), true, `${label}: the selected native root implements the exact field`);
     }
+    assert.equal(calls.length, 2, "the unchanged run exercises both mutation and generic inspection");
+    for (const [index, call] of calls.entries()) {
+      const selected = program.records.selectedOperation.get(call);
+      const result = program.records.runtimeCarrier.get(call)?.carrier;
+      assert.equal(selected?.resultType !== undefined && result !== undefined, true,
+        `call ${index}: both selected and runtime results exist`);
+      admitted(selected.resultType, `call ${index} selected result`);
+      admitted(result, `call ${index} runtime result`);
+      const projection = program.records.valueProjection.get(call);
+      assert.equal(projection !== undefined, true, `call ${index}: its actual output-context selection exists`);
+      if (projection.contextual !== undefined) {
+        admitted(projection.contextual.sourceCarrier, `call ${index} contextual source`);
+        admitted(projection.contextual.targetCarrier, `call ${index} contextual target`);
+      }
+    }
+    const outputCarrier = program.records.sourceCallableReturn.get(run)?.returnCarrier;
+    assert.equal(outputCarrier !== undefined && rustTargetTypeRefEquals(outputCarrier, rustStringTargetType()), true,
+      "the original exported run returns its native String carrier");
+    admitted(outputCarrier, "run native output", "return");
     let layers = 0;
     for (const definition of program.projectTypes.definitions) {
       const carrier = program.projectTypes.openCarrier(definition);
@@ -322,7 +384,8 @@ export function run(): string {
       }
     }
     assert.equal(layers > 0, true, "the actual class layout publishes native state layers");
-    assert.equal(program.structuralShapes.instances.length > 0, true, "the source creates actual native structural selections");
+    assert.equal(program.records.projectRootEmission.get(openBox).contracts.some(entry => entry.definition === view), true,
+      "the named View has a nonempty actual native output selection, not an invented anonymous shape");
     for (const shape of program.structuralShapes.instances) {
       const selected = program.records.typeEmission.get(shape.carrier)?.structural;
       assert.equal(selected !== undefined, true, "each actual structural instance retains its native output selection");
@@ -332,6 +395,18 @@ export function run(): string {
       for (const argument of selected.arguments) if (argument.kind === "type") admitted(argument.type, "selected state argument");
       if (selected.context !== undefined) admitted(selected.context, "selected structural context");
     }
+    const { result } = compileRust({ surfaces, files: { "index.ts": source } });
+    assert.equal(result.diagnostics.length, 0, "the unchanged run source compiles before native execution");
+    const project = writeGeneratedProject(`readonly-output-dependencies-${surfaces[0] ?? "native"}`, result.artifacts);
+    runCargo(project, ["generate-lockfile", "--offline"]);
+    runCargo(project, ["fmt", "--check"]);
+    const initialize = artifactText(result, "src/lib.rs").includes("pub fn initialize()") ? "crate::initialize();" : "";
+    const invocation = program.records.fallible.get(run) === undefined ? "run()" : "run().unwrap()";
+    appendFileSync(`${project}/src/index.rs`, `\n#[test]\nfn original_readonly_live_view() { ${initialize} assert_eq!(${invocation}, "after"); }\n`);
+    runCargo(project, ["fmt"]);
+    runCargo(project, ["fmt", "--check"]);
+    runCargo(project, ["clippy", "--all-targets", "--locked", "--offline", "--", "-D", "warnings"]);
+    runCargo(project, ["test", "--locked", "--offline", "--", "--test-threads=1"]);
   });
 
   test(`native lifetime exclusions remain explicit checked projection decisions on ${surfaces[0] ?? "native"}`, () => {

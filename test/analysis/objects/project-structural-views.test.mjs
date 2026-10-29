@@ -4,7 +4,7 @@ import test from "node:test";
 import { createCompilerSessionFromFiles } from "@tsonic/tsts";
 import { createTargetSourceProgram } from "@tsonic/target-api/source";
 import { createSourceStorageQuery } from "@tsonic/target-api/analysis";
-import { analyzeRust } from "../../helpers/rust-session.mjs";
+import { analyzeRust, artifactText, compileRust } from "../../helpers/rust-session.mjs";
 import { receiverFieldStorageCases } from "../../../../tsonic/test/fixtures/receiver-field-storage-cases.mjs";
 import { genericCallableOwnershipCases } from "../../../../tsonic/test/fixtures/generic-callable-ownership.mjs";
 import { sourcePackageGraphFixture } from "../../../../tsonic/test/fixtures/source-package-graph.mjs";
@@ -669,25 +669,88 @@ export function main(): string { return view(new Box<string>("value")).identity(
     const example = receiverFieldStorageCases.find(entry => entry.name === "generic-deferred-non-copy-view");
     assert.equal(example !== undefined, true);
     const { program } = analyzeRust({ surfaces, files: { "index.ts": example.source } });
-    const definition = program.projectTypes.definitions.find(entry => entry.sourceName === "Box");
-    assert.equal(definition !== undefined, true, "the exact Box source owner exists");
-    const views = program.classValues.instanceViews.filter(view => view.declaration === definition.declaration);
-    assert.equal(views.length > 0, true, "the requested native live view exists");
-    for (const view of views) {
-      assert.equal(rustTargetTypeRefEquals(view.sourceCarrier, program.projectTypes.openCarrier(definition)), true,
-        "the native view implementation uses the open class owner");
-      assert.deepEqual(rustTargetGenericReferences(view.targetCarrier).typeIdentities, definition.typeParameterIdentities);
-      const shape = rustStructuralObjectCarrierValue(view.targetCarrier);
-      assert.equal(shape !== undefined, true);
-      assert.equal(shape.fields.length, 1);
-      assert.equal(view.fields[0].readAdapter.kind, "identity");
-      assert.equal(view.fields[0].field !== undefined, true, "the exact selected source field remains available");
-      assert.equal(rustTargetTypeRefEquals(view.fields[0].field.resultCarrier, shape.fields[0].type), true,
-        "the native selected member and destination storage share the same exact binder");
-      assert.equal(view.fields[0].field.dispatch !== undefined, true, "live nominal dispatch remains intact");
-    }
-    assert.equal(program.classValues.instanceViewImplementations.filter(view => view.declaration === definition.declaration).length, 1,
-      "closed requests share one native generic implementation");
+    const ast = program.source.ast;
+    const statements = program.sourceFiles.flatMap(file => ast.statements(file));
+    const declaration = (name, predicate) => statements.find(node => predicate(node) && ast.text(ast.name(node)) === name);
+    const box = declaration("Box", ast.is.IsClassDeclaration);
+    const view = declaration("View", ast.is.IsInterfaceDeclaration);
+    const inspect = declaration("inspect", ast.is.IsFunctionDeclaration);
+    assert.equal(box !== undefined && view !== undefined && inspect !== undefined, true,
+      "the unchanged source retains its exact Box, View and generic inspect declarations");
+    const definition = program.records.projectDeclaration.get(box);
+    const contractDefinition = program.records.projectDeclaration.get(view);
+    assert.equal(definition?.declaration === box && definition.kind === "class", true, "the canonical Box owner is exact");
+    assert.equal(contractDefinition?.declaration === view && contractDefinition.kind === "interface", true,
+      "the canonical View owner is exact");
+    assert.equal(program.records.nativeClass.get(box) !== undefined, true, "the real class has its sealed native output");
+    assert.equal(program.nativeDeclarations.get(view)?.definition === contractDefinition, true,
+      "the real interface has its sealed declaration output");
+    const abi = program.records.sourceParameterAbi.get(ast.parameters(inspect)[0]);
+    assert.equal(program.records.projectType.get(abi?.valueCarrier) === contractDefinition, true,
+      "Readonly<View<Value>> uses the SAME named View declaration");
+    const openBox = program.projectTypes.openCarrier(definition);
+    const related = program.records.projectRelationship.get(openBox, contractDefinition);
+    assert.equal(related !== undefined, true, "the exact open Box to View relationship is admitted");
+    assert.equal(program.records.projectType.get(related) === contractDefinition, true,
+      "the relationship retains the exact destination owner");
+    assert.deepEqual(rustTargetGenericReferences(related).typeIdentities, definition.typeParameterIdentities,
+      "View uses Box's exact open binder, never a selected String");
+    const contracts = program.records.projectInstanceContracts.get(openBox)?.filter(entry => entry.definition === contractDefinition);
+    assert.equal(contracts?.length, 1, "one genuine checked interface contract is published");
+    assert.equal(rustTargetTypeRefEquals(contracts[0].carrier, related), true, "the contract and relationship have the same carrier");
+    const viewField = ast.members(view)[0];
+    const boxField = ast.members(box).find(member => ast.text(ast.name(member)) === "value");
+    const fields = program.records.projectClassFields.get(contractDefinition, related);
+    assert.equal(fields?.length, 1, "the instantiated View has its one original value field");
+    assert.equal(fields[0].declaration === viewField && fields[0].storage === "stored" && fields[0].storageIndex === 0, true,
+      "the native View field retains its exact declaration and storage slot");
+    assert.deepEqual(rustTargetGenericReferences(fields[0].carrier).typeIdentities, definition.typeParameterIdentities,
+      "the instantiated field uses the class binder");
+    const roots = program.records.projectRootEmission.get(openBox)?.contracts.filter(entry => entry.definition === contractDefinition);
+    assert.equal(roots?.length, 1, "closed requests share ONE actual open native View implementation");
+    assert.equal(rustTargetTypeRefEquals(roots[0].carrier, related), true, "the root contract retains the open relationship");
+    const implementation = roots[0].fields.get(viewField);
+    assert.equal(implementation?.implementation.kind === "stored" && implementation.implementation.declaration === boxField, true,
+      "the View contract directly reads and writes the actual Box.value storage");
+    assert.equal(implementation.dispatch.declaration === viewField && implementation.dispatch.stored === true, true,
+      "the live native dispatch belongs to the selected interface field");
+    const dispatch = program.records.projectDispatchEmission.get(contractDefinition)?.fields.get(viewField);
+    assert.equal(dispatch !== undefined && implementation.read === dispatch.read && implementation.write === dispatch.write, true,
+      "the root implements the exact published read and write slots");
+    assert.equal(implementation.read === program.records.projectMemberSlot.get(viewField, "read") &&
+      implementation.write !== undefined && implementation.write === program.records.projectMemberSlot.get(viewField, "write"), true,
+    "both native slots retain their canonical field identities");
+    const localField = program.records.projectClassFields.get(contractDefinition, abi.valueCarrier);
+    const binder = program.sourceLifetimes.parameterFor(ast.typeParameters(inspect)[0]);
+    assert.equal(binder?.kind, "type", "inspect retains its own declared generic parameter");
+    assert.equal(localField?.length === 1 && localField[0].declaration === viewField, true,
+      "the parameter View has its actual instantiated field");
+    assert.deepEqual(rustTargetGenericReferences(localField[0].carrier).typeIdentities, [binder.identity],
+      "the function field uses inspect's own binder, not the equally named class binder");
+    const properties = [];
+    const visit = node => {
+      if (ast.is.IsPropertyAccessExpression(node)) properties.push(node);
+      ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+    };
+    visit(inspect);
+    assert.equal(properties.length, 1, "the original inspect has one actual property read");
+    const selected = program.records.selectedOperation.get(properties[0]);
+    assert.equal(selected?.provenance?.sourceSelectedDeclaration === viewField, true,
+      "the checked property provenance retains the original View.value declaration");
+    assert.equal(rustTargetTypeRefEquals(selected.resultType, localField[0].carrier), true,
+      "the selected read uses its function-local instantiated field carrier");
+    assert.equal(rustTargetTypeRefEquals(program.records.runtimeCarrier.get(properties[0])?.carrier, localField[0].carrier), true,
+      "the physical property result retains the same generic carrier");
+    assert.equal(rustTargetTypeRefEquals(program.records.sourceCallableReturn.get(inspect)?.returnCarrier, localField[0].carrier), true,
+      "the function return is the exact selected field value");
+    const { result } = compileRust({ surfaces, files: { "index.ts": example.source } });
+    assert.equal(result.diagnostics.length, 0, "the original generic source emits without rejection");
+    const output = artifactText(result, "src/index.rs");
+    const parameterName = definition.genericParameters[0].targetName;
+    assert.equal(new RegExp(`impl<${parameterName}:[^>]*> ${contractDefinition.dispatchName}<${parameterName}> for ${definition.rootName}<${parameterName}>`, "u").test(output), true,
+      "the actual native implementation header preserves the open class binder");
+    assert.equal(output.includes(`${contractDefinition.dispatchName}<String> for ${definition.rootName}<`), false,
+      "a closed String supertrait cannot replace the generic native implementation");
   });
 }
 

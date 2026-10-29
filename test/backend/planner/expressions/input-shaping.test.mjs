@@ -2,6 +2,7 @@ import { createRustRecordFixture } from "../../../helpers/records.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRust } from "../../../helpers/rust-session.mjs";
+import { planExpressionBeforeValueProjections } from "../../../../dist/backend/planner/expressions/entry.js";
 import { applyFinalizedRustArgumentMode, createRustSharedReferenceArgument } from "../../../../dist/backend/planner/expressions/input-shaping.js";
 import { rustStringTargetType } from "../../../../dist/target-model/types/index.js";
 
@@ -212,4 +213,36 @@ export function measure(value: string | number): number {
   assert.deepEqual(planRustSharedReceiver(subject, expression, selected), { kind: "reference", expr: expression });
   assert.deepEqual(createRustSharedReferenceArgument(selected, { stage: "source", node: subject, expression }),
     { kind: "reference", expr: expression }, "an overridden native storage value never reuses the original payload reference");
+});
+
+test("native shared receiver overrides retain distinct reference, storage and owned snapshot roles", () => {
+  const reference = { kind: "path", path: "native_receiver" };
+  const place = { kind: "dereference", pointer: reference };
+  const selected = context(undefined, {
+    expression: place, carrier: stringCarrier, valueForm: "storage", storageForm: "shared-reference", reference,
+  });
+  const ownership = selected.input.program.records.readOwnership.get(sourceNode);
+  selected.input.program.records = { ...selected.input.program.records,
+    readOwnership: { get: () => ({ ...ownership, snapshot: { kind: "clone" } }) } };
+  assert.equal(planRustSharedReceiver(sourceNode, place, selected) === reference, true,
+    "shared receiver use consumes the identical selected native reference without another borrow");
+  assert.equal(planExpressionBeforeValueProjections(sourceNode, selected, "value", "shared-place") === place, true,
+    "raw storage use retains the identical referent place");
+  const snapshot = planExpressionBeforeValueProjections(sourceNode, selected, "value", "value");
+  assert.equal(snapshot.kind === "method-call" && snapshot.method === "clone" && snapshot.receiver === place && snapshot.args.length === 0, true,
+    "an owned value read retains its existing selected referent snapshot, not the shared reference");
+  const later = {};
+  assert.throws(() => planRustSharedReceiver(sourceNode, place, selected, later), failure =>
+    failure?.diagnostic?.code === "TSONIC_INTERNAL_PLANNER_INVARIANT" &&
+    failure.diagnostic.message === "A shared receiver lost its selected source evaluation-order borrow.",
+  "native receiver metadata cannot bypass the selected later-effect borrow guard");
+  ownership.borrowedAcross.add(later);
+  assert.equal(planRustSharedReceiver(sourceNode, place, selected, later) === reference, true,
+    "an admitted later-effect borrow still consumes the identical native reference");
+  for (const storageForm of ["plain", "borrow-guard"]) {
+    const ordinary = context(undefined, { expression: place, carrier: stringCarrier, valueForm: "storage", storageForm });
+    const borrowed = planRustSharedReceiver(sourceNode, place, ordinary);
+    assert.equal(borrowed.kind === "reference" && borrowed.expr === place, true,
+      `${storageForm}: an ordinary storage override still borrows its referent instead of guessing a native reference`);
+  }
 });
