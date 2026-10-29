@@ -688,6 +688,9 @@ export function main(): string { return view(new Box<string>("value")).identity(
     const abi = program.records.sourceParameterAbi.get(ast.parameters(inspect)[0]);
     assert.equal(program.records.projectType.get(abi?.valueCarrier) === contractDefinition, true,
       "Readonly<View<Value>> uses the SAME named View declaration");
+    assert.equal(abi.parameterCarrier.kind === "reference" && abi.parameterCarrier.mutable === false &&
+      rustTargetTypeRefEquals(abi.parameterCarrier.referent, abi.valueCarrier), true,
+    "the physical parameter borrows that exact View carrier without a readonly wrapper");
     const openBox = program.projectTypes.openCarrier(definition);
     const related = program.records.projectRelationship.get(openBox, contractDefinition);
     assert.equal(related !== undefined, true, "the exact open Box to View relationship is admitted");
@@ -706,6 +709,9 @@ export function main(): string { return view(new Box<string>("value")).identity(
       "the native View field retains its exact declaration and storage slot");
     assert.deepEqual(rustTargetGenericReferences(fields[0].carrier).typeIdentities, definition.typeParameterIdentities,
       "the instantiated field uses the class binder");
+    const stored = program.records.projectClassFields.get(definition, openBox)?.find(field => field.declaration === boxField);
+    assert.equal(stored !== undefined && rustTargetTypeRefEquals(stored.carrier, fields[0].carrier), true,
+      "the actual Box.value storage and the interface field retain the identical instantiated carrier");
     const roots = program.records.projectRootEmission.get(openBox)?.contracts.filter(entry => entry.definition === contractDefinition);
     assert.equal(roots?.length, 1, "closed requests share ONE actual open native View implementation");
     assert.equal(rustTargetTypeRefEquals(roots[0].carrier, related), true, "the root contract retains the open relationship");

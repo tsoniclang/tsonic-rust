@@ -337,6 +337,14 @@ export function run(): string {
       assert.equal(related !== undefined && program.records.projectType.get(related) === view, true,
         `${label}: the exact native View relationship exists`);
       admitted(related, `${label} View`);
+      const sourceArguments = rustSourceTypeCarrierValue(carrier)?.genericArguments;
+      const targetArguments = rustSourceTypeCarrierValue(related)?.genericArguments;
+      assert.equal(sourceArguments?.length === 1 && targetArguments?.length === 1 &&
+        sourceArguments[0].kind === "type" && targetArguments[0].kind === "type", true,
+      `${label}: both real owners retain their explicit instantiated type argument`);
+      assert.equal(rustTargetTypeRefEquals(sourceArguments[0].type, targetArguments[0].type), true,
+        `${label}: the relationship preserves the actual open or closed generic binding`);
+      admitted(targetArguments[0].type, `${label} View argument`);
       const contracts = program.records.projectInstanceContracts.get(carrier)?.filter(entry => entry.definition === view);
       assert.equal(contracts?.length, 1, `${label}: one actual View contract is published`);
       assert.equal(rustTargetTypeRefEquals(contracts[0].carrier, related), true, `${label}: the actual contract uses the relationship carrier`);
