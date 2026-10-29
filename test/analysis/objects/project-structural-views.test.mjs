@@ -683,7 +683,7 @@ export function main(): string { return view(new Box<string>("value")).identity(
     assert.equal(contractDefinition?.declaration === view && contractDefinition.kind === "interface", true,
       "the canonical View owner is exact");
     assert.equal(program.records.nativeClass.get(box) !== undefined, true, "the real class has its sealed native output");
-    assert.equal(program.nativeDeclarations.get(view)?.definition === contractDefinition, true,
+    assert.equal(program.records.projectPolymorphicEmission.get(view)?.definition === contractDefinition, true,
       "the real interface has its sealed declaration output");
     const abi = program.records.sourceParameterAbi.get(ast.parameters(inspect)[0]);
     assert.equal(program.records.projectType.get(abi?.valueCarrier) === contractDefinition, true,

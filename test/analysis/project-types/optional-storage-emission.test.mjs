@@ -310,7 +310,7 @@ export function run(): string {
     const view = program.records.projectDeclaration.get(declaration("View"));
     assert.equal(box?.kind === "class" && view?.kind === "interface", true, "the exact authored native owners exist");
     assert.equal(program.records.nativeClass.get(box.declaration) !== undefined, true, "the original class has native output");
-    assert.equal(program.nativeDeclarations.get(view.declaration)?.definition === view, true,
+    assert.equal(program.records.projectPolymorphicEmission.get(view.declaration)?.definition === view, true,
       "the original interface has its exact native output");
     const inspect = declaration("inspect");
     const run = declaration("run");
