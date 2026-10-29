@@ -14,13 +14,110 @@ import { finalizeRustProviderOperationAbi } from "../../../dist/policy/operation
 import { rustBigIntTargetType } from "../../../dist/target-model/types/carriers/native.js";
 import { rustNativeStorageRoot, rustNativeStorageProjections } from "../../../dist/analysis/storage/native-paths.js";
 import { analyzeRustReadUses } from "../../../dist/analysis/ownership/uses.js";
+import { createRustRecordFixture, rustNativeFixtureNodes } from "../../helpers/records.mjs";
+import { analyzeRustBorrowEffects } from "../../../dist/analysis/ownership/effects.js";
+import { rustNativeWriteTargets } from "../../../dist/analysis/ownership/effect-paths.js";
+
+test("compound native writes retain both operand effects and the actual local target", () => {
+  const { program } = analyzeRust({ files: { "index.ts": `
+export function numeric(): number { let left = 1; let right = 0; left += (right = 2); return left + right; }
+export function text(): string { let left = "a"; let right = ""; left += (right = "b"); return left + right; }
+` } });
+  const ast = program.source.ast;
+  const nodes = rustNativeFixtureNodes(program);
+  const operations = nodes.filter(node => program.records.targetOperation.get(node)?.kind === "operator-token" &&
+    program.records.targetOperation.get(node).operator === "+=");
+  assert.equal(operations.length, 2, "both actual numeric Copy and String append contracts are checked");
+  for (const node of operations) {
+    const { Left: left, Right: right } = ast.as.AsBinaryExpression(node);
+    const preceding = [left];
+    const following = [right];
+    let reserved = 0;
+    const selected = rustNativeWriteTargets(node, { ast, records: program.records },
+      operand => operand === left ? preceding : operand === right ? following : undefined,
+      () => false, count => { reserved += count; return true; });
+    assert.equal(selected?.length, 3, "the single effect owner retains both input lists and the written binding");
+    assert.equal(selected[0] === left && selected[1] === right && selected[2] === left, true,
+      "each original checked effect target is preserved in source order");
+    assert.equal(reserved, 3, "the complete combined result is charged to the finite existing budget");
+    for (const missing of [left, right]) assert.equal(rustNativeWriteTargets(node, { ast, records: program.records },
+      operand => operand === missing ? undefined : [], () => false, () => true) === undefined, true,
+    "an unavailable operand effect never becomes purity");
+    assert.equal(rustNativeWriteTargets(node, { ast, records: program.records }, () => [], () => false,
+      () => false) === undefined, true, "resource accounting cannot be bypassed");
+  }
+});
+
+test("a completed shared formal borrows its source independently of Copy and owned String outputs", () => {
+  const { program } = analyzeRust({ files: { "index.ts": `
+type Tree = number | string | readonly Tree[];
+export function text(value: Tree): string { if (typeof value === "string") return value; return ""; }
+export function scalar(value: Tree): number { if (typeof value === "number") return value; return 0; }
+export function shared(value: string): string { return (((value))); }
+export function owned(value: string): string { value = "changed"; return value; }
+` } });
+  const ast = program.source.ast;
+  const observed = new Set();
+  for (const node of rustNativeFixtureNodes(program)) {
+    if (!ast.is.IsIdentifier(node) || ast.text(node) !== "value") continue;
+    const owner = sourceEnclosingCallable(node, ast);
+    const name = owner === undefined ? undefined : ast.name(owner);
+    const ownerName = name === undefined ? undefined : ast.text(name);
+    const read = program.records.readOwnership.get(node);
+    if (read === undefined) continue;
+    const flow = program.records.flowReadProjection.get(node);
+    if ((ownerName === "text" || ownerName === "scalar") && flow !== undefined) {
+      assert.equal(read.source.kind, "borrow", "a logical last use cannot move from the native shared formal");
+      assert.equal(read.value.kind, ownerName === "text" ? "clone" : "copy", "the narrowed output acquires its own actual native value");
+      assert.equal(program.records.valueProjection.get(node)?.resultForm, "value", "the final copied or owned value is not a reference");
+      observed.add(ownerName);
+    } else if (ownerName === "shared" && ast.is.IsParenthesizedExpression(ast.parent(node))) {
+      assert.equal(read.source.kind, "borrow", "the exact direct loan acquires its shared formal");
+      assert.equal(read.value.kind, "borrow", "the declaration-owned loan remains zero-copy");
+      observed.add(ownerName);
+    } else if (ownerName === "owned" && ast.is.IsReturnStatement(ast.parent(node))) {
+      assert.equal(read.source.kind, "move", "a genuinely overwritten owned parameter still transfers");
+      observed.add(ownerName);
+    }
+  }
+  assert.equal(observed.size, 4, "shared, owned, Copy and String output contracts are all checked");
+});
+
+test("physical formal acquisition rejects missing, foreign and incompatible completed input evidence", () => {
+  const { source: checked, program } = analyzeRust({ files: { "index.ts": `
+export function shared(value: string): string { return value; }
+export function other(value: number): number { return value; }
+` } });
+  const source = createTargetSourceProgram(checked);
+  const storage = createSourceStorageQuery(source, program.sourceFiles);
+  const nodes = rustNativeFixtureNodes(program);
+  const parameter = nodes.find(node => source.ast.is.IsParameterDeclaration(node) &&
+    source.ast.text(source.ast.name(sourceEnclosingCallable(node, source.ast))) === "shared");
+  assert.equal(parameter !== undefined, true, "the actual shared formal is retained");
+  const original = program.records.sourceParameterAbi.get(parameter);
+  for (const [label, abi] of [["missing", undefined], ["wrong referent", { ...original,
+    parameterCarrier: { ...original.parameterCarrier, referent: rustSourcePrimitiveTargetType("float64") } }],
+  ["wrong value", { ...original, valueCarrier: rustSourcePrimitiveTargetType("float64") }]]) {
+    const records = createRustRecordFixture({ sourceParameterAbi: { get: candidate =>
+      candidate === parameter ? abi : program.records.sourceParameterAbi.get(candidate) } }, program.records);
+    const borrowEffectsInput = readBorrowEffectsInput(source, program, nodes, records);
+    const effects = analyzeRustBorrowEffects(borrowEffectsInput, program.ownership.uses);
+    assert.equal(effects.kind, "resolved", `${label}: the source inventory and effect proof remain complete`);
+    const result = prepareRustReadOwnership({ storage, nativeNodes: nodes, records, uses: program.ownership.uses,
+      flow: { movingReads: new Set(nodes), captureTransfers: new Map() }, borrowEffects: effects.effects, borrowEffectsInput,
+      definitions: program.typeDefinitions, genericCallables: program.callableValues.generic,
+      capturesFor: () => undefined, invocationTransfersCapture: () => false });
+    assert.equal(result.kind, "rejected", `${label}: no owned or borrowed fallback is published`);
+    assert.equal(result.diagnostics[0]?.code, "RUST_VALUE_READ_OWNERSHIP_UNAVAILABLE", `${label}: the required input fails at its owner`);
+  }
+});
 
 function readBorrowEffectsInput(source, program, nodes, records) {
   const nativeNodes = new Set(nodes);
   return { ast: source.ast, sourceFacts: source.sourceFacts, nodes, records,
     isNativeNode: node => nativeNodes.has(node), navigation: program.sourceNavigation,
     projectTypes: program.projectTypes, objectRepresentations: program.objectRepresentations,
-    structuralShapes: program.structuralShapes };
+    structuralShapes: program.structuralShapes, lexicalFunctions: program.lexicalFunctions };
 }
 
 test("selected native indexed String leases retain shared acquisition without changing owned getter results", () => {
@@ -207,7 +304,7 @@ for (const projection of [false, true]) test(`owned native getter results remain
         kind: "void-expression", operationId: "ownership-read.discard", resultCarrier: rustUnitTargetType(),
       });
       const records = builder.seal([]);
-      const uses = analyzeRustReadUses(ast, storage.nodes, records, emptyRustTypeDefinitions, () => false, program.structuralShapes, () => false);
+      const uses = analyzeRustReadUses(ast, storage.nodes, records, emptyRustTypeDefinitions, () => false, program.structuralShapes, () => false, program.lexicalFunctions);
       const prepared = prepareRustReadOwnership({ storage, nativeNodes: storage.nodes, records, uses,
         flow: { movingReads: new Set(owned ? [element] : []), captureTransfers: new Map() },
         borrowEffects: { pureValues: new Set(), fieldWrites: new Map(), stableBindings: new Set(), nativeWrites: new Map() },
@@ -388,7 +485,7 @@ async function fixture() {
     storage,
     nativeNodes: storage.nodes,
     records,
-    uses: analyzeRustReadUses(source.ast, storage.nodes, records, emptyRustTypeDefinitions, () => false, program.structuralShapes, () => false),
+    uses: analyzeRustReadUses(source.ast, storage.nodes, records, emptyRustTypeDefinitions, () => false, program.structuralShapes, () => false, program.lexicalFunctions),
     flow: { movingReads: new Set(), captureTransfers: new Map() },
     borrowEffects: { pureValues: new Set(), fieldWrites: new Map(), stableBindings: new Set(), nativeWrites: new Map() },
     borrowEffectsInput: readBorrowEffectsInput(source, program, storage.nodes, records),
@@ -480,7 +577,7 @@ for (const projection of [false, true]) {
         });
       }
       const records = builder.seal([]);
-      const uses = analyzeRustReadUses(ast, storage.nodes, records, emptyRustTypeDefinitions, () => false, program.structuralShapes, () => false);
+      const uses = analyzeRustReadUses(ast, storage.nodes, records, emptyRustTypeDefinitions, () => false, program.structuralShapes, () => false, program.lexicalFunctions);
       const prepared = prepareRustReadOwnership({
         storage, nativeNodes: storage.nodes, records, uses,
         flow: { movingReads: new Set(), captureTransfers: new Map() },

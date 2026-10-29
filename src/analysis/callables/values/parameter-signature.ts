@@ -2,7 +2,7 @@ import { Node_Initializer, sourceCallableValueParameters } from "@tsonic/target-
 import type { Node } from "@tsonic/tsts";
 import type { RustFactWalk } from "../../program/walk.js";
 import { rustResolutionContext } from "../../program/walk.js";
-import { recordRustParameterAbiSelection, refuseRustParameterCarrier } from "./parameter-facts.js";
+import { recordRustParameterAbiSelection, refuseRustParameterCarrier, refuseRustParameterResource } from "./parameter-facts.js";
 import { requireDenseSourceNodes } from "../../source-evidence/dense-nodes.js";
 import { resolveRustTargetTypeRef } from "../../source-evidence/types/resolution/source.js";
 import { resolveRustContextualParameterAbi } from "../calls/source-callable-abi.js";
@@ -36,6 +36,10 @@ export function recordCallableParameterInputFacts(
     const selections = parameters.map(parameter => walk.sourceCallableAbi.resolveParameterAbi(
       parameter, rustResolutionContext(walk, parameter), walk.operationOptions));
     for (const [index, selection] of selections.entries()) {
+      if (selection?.kind === "resource-error") {
+        refuseRustParameterResource(walk, selection);
+        return undefined;
+      }
       if (selection?.kind === "rejected") refuseRustParameterCarrier(walk, parameters[index]!, selection.reason);
     }
     const declared = selections.map(selection => selection?.kind === "resolved" ? selection.abi : undefined);

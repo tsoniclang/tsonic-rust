@@ -13,6 +13,7 @@ import { rustProjectCallableTargetName } from "../../../names/source-member-name
 import type { RustOperationsProviderOptions } from "../model.js";
 import { selectedCallCalleeSymbol } from "../operators.js";
 import { rustCallableInvocationResult } from "../../../../policy/types/callables/return-contexts.js";
+import type { RustSourceParameterResourceError } from "../../../callables/calls/source-callable-abi.js";
 
 export function selectRustUnionMethods(
   request: RustCheckedCallSelectionInput,
@@ -53,8 +54,10 @@ export function resolveRustUnionMethodContracts(
   parameters: readonly RustTargetMember["parameters"][number][],
   context: RustOperationAnalysisContext,
   options: RustOperationsProviderOptions,
-): { readonly result: TargetTypeRef; readonly methods: readonly RustSelectedUnionMethod[] } | undefined {
-  const resolved = methods.map(method => {
+): { readonly result: TargetTypeRef; readonly methods: readonly RustSelectedUnionMethod[] } |
+  RustSourceParameterResourceError | undefined {
+  const resolved: (RustSelectedUnionMethodIdentity & { readonly returnType: TargetTypeRef })[] = [];
+  for (const method of methods) {
     const declarations = sourceCallableValueParameters(context.ast, method.declaration, context.semanticsFor(method.declaration),
       { kind: "declaration" });
     const normalizeGenerics = unionMethodGenericNormalization(method.declaration, selectedDeclaration, context);
@@ -63,9 +66,12 @@ export function resolveRustUnionMethodContracts(
       const owned = options.projectTypes.instantiateMemberCarrier(subject, method.carrier, carrier);
       return owned === undefined ? undefined : normalizeGenerics(owned);
     };
+    const selections = declarations.map(declaration =>
+      options.sourceCallableAbi.resolveParameterAbi(declaration, context, options));
+    const resourceFailure = selections.find(selection => selection?.kind === "resource-error");
+    if (resourceFailure?.kind === "resource-error") return resourceFailure;
     const valid = declarations.every((declaration, index) => {
-      if (declaration === undefined) return false;
-      const selection = options.sourceCallableAbi.resolveParameterAbi(declaration, context, options);
+      const selection = selections[index];
       const abi = selection?.kind === "resolved" ? selection.abi : undefined;
       const parameter = parameters[index]!;
       const selected = selectedParameters[index];
@@ -80,9 +86,9 @@ export function resolveRustUnionMethodContracts(
       selectRustPointerReturnCarrier(method.declaration, context, options) ??
       (annotation === undefined ? undefined : resolveRustTargetTypeRef(annotation, context, options));
     const instantiated = returnType === undefined ? undefined : instantiate(method.declaration, returnType);
-    return !valid || instantiated === undefined ? undefined : { ...method, returnType: instantiated };
-  });
-  if (resolved.some(method => method === undefined)) return undefined;
+    if (!valid || instantiated === undefined) return undefined;
+    resolved.push({ ...method, returnType: instantiated });
+  }
   const returns = resolved.map(method => method!.returnType);
   const common = returns.find(type => rustOptionElementCarrier(type) !== undefined) ?? returns[0];
   if (common === undefined) return undefined;

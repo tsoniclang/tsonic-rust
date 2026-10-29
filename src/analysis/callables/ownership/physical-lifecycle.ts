@@ -22,7 +22,7 @@ import type { RustTargetGenericBindings } from "../../../target-model/types/carr
 import type { RustGenericCallablePhysicalConstruction } from "../generics/generic-physical.js";
 import type { RustLexicalFunctionEnvironments } from "../../../target-model/records/callables/lexical-functions.js";
 import type { RustNativeStorageConstruction } from "../storage/native-storage.js";
-import type { RustNativeStorageSelection } from "../../../target-model/records/native/native-storage.js";
+import type { RustNativeReturnStorageSelection, RustNativeStorageSelection } from "../../../target-model/records/native/native-storage.js";
 import type { RustNativeCallableProducerConstruction } from "../native/native-producers.js";
 import type { RustNativeCallableProducerPlan } from "../../../target-model/records/native/native-producers.js";
 import { rustEmissionSourceIdentity } from "../emission/emission-contexts.js";
@@ -178,11 +178,11 @@ export function createRustPhysicalCallableLifecycle(input: RustPhysicalCallableL
     operands.set(node, selection);
     return selection;
   };
-  const returned = (node: Node): RustNativeStorageSelection => {
+  const returned = (node: Node): RustNativeReturnStorageSelection => {
     if (!storageReady && !requiresFamilyAdmission(records.sourceCallableReturn.get(node)?.returnCarrier)) return unpreparedStorage;
     return queries.prepareReturn(node);
   };
-  const requestStorage = (request: RustPhysicalCallableEmissionRequest): RustNativeStorageSelection | undefined => {
+  const requestStorage = (request: RustPhysicalCallableEmissionRequest): RustNativeReturnStorageSelection | undefined => {
     switch (request.kind) {
       case "value": return value(request.subject);
       case "operand": return operand(request.subject);
@@ -230,7 +230,7 @@ export function createRustPhysicalCallableLifecycle(input: RustPhysicalCallableL
           ? sourceEnclosingCallable(parent, ast) : ast.is.IsArrowFunction(parent) && ast.body(parent) === node ? parent : undefined;
         if (owner !== undefined) {
           const selected = prepared.returnFor(owner);
-          if (selected?.kind === "selected") destination = selected.carrier;
+          if (selected?.kind === "selected" || selected?.kind === "borrowed") destination = selected.carrier;
         } else if ((ast.is.IsCallExpression(parent) || ast.is.IsNewExpression(parent)) && ast.arguments(parent).includes(node)) {
           destination = queries.invocationArgumentWitnessFor(parent, node);
         }

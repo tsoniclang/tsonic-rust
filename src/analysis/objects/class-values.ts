@@ -21,6 +21,7 @@ import { selectRustCallableValueAdapter } from "../../policy/conversions/callabl
 import type { RustClassValueFact } from "../../target-model/records/objects/class-values.js";
 
 import type { RustClassValueView } from "../../target-model/records/objects/class-values.js";
+import { refuseRustParameterResource } from "../callables/values/parameter-facts.js";
 export function selectRustClassValue(
   walk: RustFactWalk,
   expression: Node,
@@ -101,12 +102,19 @@ export function selectRustClassValueView(
     ? undefined : selectRustClassValueCallablePlan(walk, declaration, sourceConstructs[0]!,
       targetConstructs[0]!, shape.construction.carrier, true, semantics, false, sourceCarrier);
   const constructionResult = shape.construction === undefined ? undefined : rustCallableProtocol(shape.construction.carrier)?.result;
-  const constructionAdapter = constructionPlan === undefined || constructionResult === undefined ? undefined
-    : selectRustCallableValueAdapter(constructionPlan.resultCarrier, constructionResult, walk.context.projectTypes, walk.context.typeDefinitions) ??
-      (sourceConstructs[0]?.returnType !== undefined && selectRustProjectStructuralView(walk, declaration,
-        constructionPlan.resultCarrier, constructionResult, semantics, sourceConstructs[0].returnType)
-        ? { kind: "project-structural-view" as const, sourceCarrier: constructionPlan.resultCarrier, targetCarrier: constructionResult, fallible: false as const }
-        : undefined);
+  let constructionAdapter = constructionPlan === undefined || constructionResult === undefined ? undefined
+    : selectRustCallableValueAdapter(constructionPlan.resultCarrier, constructionResult, walk.context.projectTypes, walk.context.typeDefinitions);
+  if (constructionAdapter === undefined && constructionPlan !== undefined && constructionResult !== undefined &&
+    sourceConstructs[0]?.returnType !== undefined) {
+    const selection = selectRustProjectStructuralView(walk, declaration,
+      constructionPlan.resultCarrier, constructionResult, semantics, sourceConstructs[0].returnType);
+    if (typeof selection === "object") {
+      refuseRustParameterResource(walk, selection);
+      return false;
+    }
+    if (selection === true) constructionAdapter = { kind: "project-structural-view", sourceCarrier: constructionPlan.resultCarrier,
+      targetCarrier: constructionResult, fallible: false };
+  }
   const construction = constructionPlan === undefined || constructionAdapter === undefined ? undefined
     : finalizeRustClassValueCallable(constructionPlan, constructionAdapter);
   if (shape.construction !== undefined && construction === undefined) { reject(); return false; }

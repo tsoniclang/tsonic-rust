@@ -123,9 +123,17 @@ export function analyzeRustLocalBindings(input: {
         carrier.kind !== "pointer" && carrier.kind !== "reference" && input.records.mutatedReferentBinding.get(node) !== undefined ||
         resource?.disposal.target.receiverMode === "mut-ref");
     const operation = initializer === undefined ? undefined : input.records.targetOperation.get(initializer);
+    const loan = initializer === undefined ? undefined : input.records.borrowedInitializer.get(initializer)?.loan;
+    if (loan !== undefined && (loan.declaration !== node || loan.initializer !== initializer ||
+      loan.resultCarrier.mutable || !rustTargetTypeRefEquals(loan.resultCarrier.referent, carrier) ||
+      physical.kind === "selected" && !rustTargetTypeRefEquals(physical.carrier, carrier) &&
+        !rustTargetTypeRefEquals(physical.carrier, loan.resultCarrier))) {
+      refuse(node, "rust.backend.value-destination", "The local initializer's selected data loan conflicts with its exact declaration or callable physical destination.", "RUST_MISSING_TARGET_FACT");
+      continue;
+    }
     input.producer.declaration(node, { kind: "value", name, initializer, carrier,
-      nativeCarrier: physical.kind === "selected" ? physical.carrier : carrier,
-      initializerCarrier: physical.kind === "selected" ? physical.carrier : undefined, storage, mutable,
+      nativeCarrier: loan?.resultCarrier ?? (physical.kind === "selected" ? physical.carrier : carrier),
+      initializerCarrier: loan?.resultCarrier ?? (physical.kind === "selected" ? physical.carrier : undefined), storage, mutable,
       selfTypedInitializer: storage === undefined &&
         (operation?.kind === "closure" && rustCallableProtocol(carrier) !== undefined &&
           rustTargetTypeRefEquals(operation.resultCarrier, carrier) ||

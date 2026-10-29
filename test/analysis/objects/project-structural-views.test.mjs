@@ -25,8 +25,71 @@ import { selectRustCallableValueAdapter } from "../../../dist/policy/conversions
 import { selectRustStructuralDispatchArguments } from "../../../dist/policy/types/objects/structural-generics.js";
 import { createRustProgramRecordBuilder } from "../../../dist/analysis/program/records/create.js";
 import { authoredObjectMethodEvidenceSource } from "../../../../tsonic/test/fixtures/generic-object-methods.mjs";
+import { analyzeRustOperations } from "../../helpers/rust-operation-analysis.mjs";
+import { createRustSourceCallableAbiResolver } from "../../../dist/analysis/callables/calls/source-callable-abi.js";
+import { selectRustProjectStructuralView } from "../../../dist/analysis/objects/project-structural-views.js";
+import { closeRustInheritedStructuralViews } from "../../../dist/analysis/objects/inherited-structural-views.js";
 
 const parameter = { kind: "type-parameter", identity: "source:Value", name: "Value" };
+
+test("structural view setter resource failure retains the exact parameter diagnostic and publishes no partial view", () => {
+  const { context, walk } = analyzeRustOperations(`
+class Box {
+  value = 1;
+  get current(): number { return this.value; }
+  set current(value: number) { this.value = value; }
+}
+class Child extends Box {}
+export function view(owner: Box): { current: number } { return owner; }
+`, { surfaces: [] });
+  const declaration = context.nativeNodes.find(node => context.ast.is.IsFunctionDeclaration(node) &&
+    context.ast.text(context.ast.name(node)) === "view");
+  const setter = context.nativeNodes.find(node => context.ast.is.IsSetAccessorDeclaration(node));
+  assert.equal(declaration !== undefined && setter !== undefined, true, "actual checked view and setter declarations exist");
+  const sourceParameter = context.ast.parameters(declaration)[0];
+  const setterParameter = context.ast.parameters(setter)[0];
+  const sourceCarrier = context.records.sourceParameterAbi.get(sourceParameter)?.valueCarrier;
+  const targetCarrier = context.records.sourceCallableReturn.get(declaration)?.returnCarrier;
+  const targetShape = walk.sourceTypes.structuralObjectForCarrier(targetCarrier);
+  const semantics = context.semanticsFor(sourceParameter);
+  const sourceType = semantics.declarations.declaredValueType(sourceParameter);
+  assert.equal(sourceCarrier !== undefined && targetShape !== undefined && sourceType !== undefined, true,
+    "the real checked pipeline supplies the source carrier and structural correspondence");
+  const inherited = createRustRecordFixture({ sourceParameterAbi: {
+    get: node => node === setterParameter ? undefined : context.records.sourceParameterAbi.get(node),
+  } }, context.records);
+  const records = createRustProgramRecordBuilder(context.typeDefinitions, inherited);
+  const sourceCallableAbi = createRustSourceCallableAbiResolver({
+    isNativeCallableExpression: walk.moduleBindings.isNativeCallableExpression,
+    parameterAbiFor: node => records.sourceParameterAbi.get(node), maximumParameterContractSteps: 1,
+  });
+  const current = { ...walk, context: { ...context, records, diagnostics: [] }, sourceCallableAbi,
+    operationOptions: { ...walk.operationOptions, sourceCallableAbi } };
+  const originalViews = [...context.classValues.instanceViewRequests()];
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const selected = selectRustProjectStructuralViewSources(current, sourceCarrier, targetShape, semantics, sourceType);
+    assert.equal(selected?.kind, "resource-error", "an incomplete setter component carries its exact failure instead of partial source members");
+    assert.equal(selected.parameter === setterParameter && selected.limit === 1, true,
+      "the failure retains the original setter subject and exhausted budget through selection");
+  }
+  const sourceDeclaration = context.projectTypes.definitionForCarrier(sourceCarrier)?.declaration;
+  const view = selectRustProjectStructuralView(current, sourceDeclaration, sourceCarrier, targetCarrier, semantics, sourceType);
+  assert.equal(typeof view === "object" && view.kind === "resource-error", true,
+    "the existing boolean-view boundary preserves the typed failure instead of accepting a truthy error object");
+  assert.equal(context.classValues.instanceViewRequests().length, originalViews.length, "no partial view is registered");
+  const base = context.projectTypes.definitionForDeclaration(sourceDeclaration);
+  assert.equal(originalViews.length > 0 && context.projectTypes.concreteClassesFor(base).some(owner => owner !== base), true,
+    "the original checked model has a real inherited structural-view consumer");
+  closeRustInheritedStructuralViews(current);
+  assert.equal(current.context.diagnostics.length, 1, "the sole admission owner records one resource failure");
+  const issue = current.context.diagnostics[0];
+  assert.equal(issue.code, "TSONIC_COMPILER_RESOURCE_LIMIT", "not a derivative structural or parameter ABI refusal");
+  assert.equal(issue.sourceNode === setterParameter, true, "the original setter parameter owns the failure");
+  assert.equal(issue.message.includes("limit: 1"), true, "the diagnostic retains the actual exhausted budget");
+  assert.equal(records.sourceParameterAbi.get(setterParameter) === undefined, true, "no partial setter ABI is admitted");
+  assert.equal(records.sourceParameterAbi.get(sourceParameter) === context.records.sourceParameterAbi.get(sourceParameter), true,
+    "independent completed input records retain their exact identity");
+});
 
 test("canonical structural publication retains source aliases and rejects missing, duplicate and sealed writes", () => {
   const { program } = analyzeRust({ surfaces: [], target: { id: "rust", options: { outputType: "bin" } }, files: {

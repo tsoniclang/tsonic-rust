@@ -19,6 +19,7 @@ export interface RustSourceArgumentEvaluation {
   readonly nodes: readonly Node[];
   readonly bindings: readonly RustStmt[];
   readonly borrowedInputs: ReadonlyMap<Node, RustExpr>;
+  readonly snapshotInputs: ReadonlySet<Node>;
   readonly elements: ReadonlyMap<number, ReadonlyMap<number, RustExpr>>;
 }
 
@@ -78,7 +79,7 @@ function shapeSourceInput(plan: RustSourceArgumentEvaluation, input: RustSourceC
       ?? failRustPlannerInvariant("An admitted spread input requires its selected native projection conversion.", node);
   }
   if (input.passing === "value" || input.passing === "identity" || plan.borrowedInputs.get(node) === value) return value;
-  return applyRustArgumentMode(context, projection !== undefined || plan.bindings.length !== 0
+  return applyRustArgumentMode(context, projection !== undefined || plan.bindings.length !== 0 || plan.snapshotInputs.has(node)
     ? { stage: "finalized", expression: value }
     : { stage: "source", expression: value, node }, input.passing);
 }
@@ -87,20 +88,32 @@ export function planRustSourceCallArgumentEvaluation(call: Node, context: RustPl
   const selected = context.input.program.records.sourceCallEvaluation.get(call)
     ?? failRustPlannerInvariant("An admitted source call requires its exact argument evaluation order and native destinations.", call);
   const borrowedInputs = new Map<Node, RustExpr>();
+  const snapshotInputs = new Set(selected.arguments.filter(argument => argument.snapshot === "owned-string").map(argument => argument.source));
   const planned = selected.arguments.map(argument => {
     const input = rustValueDestinationContext(argument.source, argument.destination, context);
-    const value = selected.spread ? planExpression(argument.expression, input)
+    const retained = argument.retainedOwner;
+    if (retained !== undefined && (retained.guard !== call || retained.argument !== argument.expression ||
+      input.expressionOverrides?.get(argument.expression)?.valueForm !== "storage" || argument.borrow !== "ref"))
+      failRustPlannerInvariant("An admitted retained argument requires its exact evaluated enclosing storage owner.", argument.expression);
+    const value = argument.borrow === "identity" ? planExpression(argument.expression, input, "value", "shared-reference")
+      : retained !== undefined ? planExpression(argument.expression, input, "value", "shared-place")
+      : selected.spread ? planExpression(argument.expression, input)
       : planRustSourceCallArgumentValue(argument.expression, input, borrowedInputs);
     if (value === undefined) failRustPlannerInvariant("An admitted source argument requires its exact native expression.", argument.expression);
-    return argument.borrow === "ref" || argument.borrow === "mut-ref"
+    const result = argument.borrow === "ref" || argument.borrow === "mut-ref"
       ? { kind: "reference" as const, expr: value, ...(argument.borrow === "mut-ref" ? { mutable: true } : {}) } : value;
+    if (argument.borrow !== "value") borrowedInputs.set(argument.source, result);
+    return result;
   });
   const nodes = selected.arguments.map(argument => argument.source);
-  if (!selected.spread) return { arguments: planned, nodes, bindings: [], borrowedInputs, elements: new Map() };
+  if (!selected.spread) return { arguments: planned, nodes, bindings: [], borrowedInputs, snapshotInputs, elements: new Map() };
   const names = context.syntheticNames ?? failRustPlannerInvariant("An admitted source spread requires its hygienic native evaluation scope.", call);
   const values = planned.map(() => allocateRustSyntheticName(names, "spread_argument"));
   const bindings: RustStmt[] = planned.map((value, index) => ({ kind: "let", name: values[index]!,
     mutable: selected.arguments[index]!.mutable, init: value }));
+  const arguments_: RustExpr[] = values.map(path => ({ kind: "path", path }));
+  for (const [index, argument] of selected.arguments.entries())
+    if (argument.borrow !== "value") borrowedInputs.set(argument.source, arguments_[index]!);
   const elements = new Map<number, ReadonlyMap<number, RustExpr>>();
   for (const [argumentIndex, argument] of selected.arguments.entries()) {
     if (argument.elements.length === 0) continue;
@@ -117,7 +130,7 @@ export function planRustSourceCallArgumentEvaluation(call: Node, context: RustPl
     bindings.push({ kind: "let-pattern", pattern, init: { kind: "path", path: values[argumentIndex]! } });
     elements.set(argumentIndex, new Map<number, RustExpr>([...selectedNames].map(([index, value]): [number, RustExpr] => [index, { kind: "path", path: value.name }])));
   }
-  return { arguments: values.map(path => ({ kind: "path", path })), nodes, bindings, borrowedInputs, elements };
+  return { arguments: arguments_, nodes, bindings, borrowedInputs, snapshotInputs, elements };
 }
 
 export function planRustSelectedSourceCallArguments(call: Node, context: RustPlanContext): {

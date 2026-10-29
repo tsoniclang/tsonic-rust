@@ -2,8 +2,10 @@ import type { AstReader, Node } from "@tsonic/tsts";
 import { BinaryExpression_Left, BinaryExpression_Right, Node_Expression, Node_Operand } from "@tsonic/target-api/source";
 
 import type { RustProgramRecords } from "../../target-model/records/program.js";
-import { rustBorrowPrimitiveCopyValue, rustBorrowPureCopyValue, rustBorrowPureProviderInputs, rustBorrowValueIsUnprojected } from "../storage/borrowed-element-purity.js";
+import { rustBorrowPrimitiveCopyValue, rustBorrowPureCopyValue, rustBorrowPureProviderInputs, rustBorrowValueIsUnprojected, rustBorrowedStringAppend } from "../storage/borrowed-element-purity.js";
 import { rustSourceValueWrapperContains } from "../../policy/ownership/source-value-wrappers.js";
+import { isRustAssignmentOperator } from "../../target-model/syntax/tokens.js";
+import { isRustNumericCarrier } from "../../target-model/types/index.js";
 
 export const rustNoNativeWrites: readonly Node[] = Object.freeze([]);
 
@@ -36,6 +38,21 @@ reserve: (count: number) => boolean): readonly Node[] | undefined {
     return target !== undefined && ast.is.IsIdentifier(target) &&
       records.sourceBinding.get(target)?.scope === "lexical" && writes !== undefined && reserve(writes.length + 1)
       ? Object.freeze([...writes, target]) : undefined;
+  }
+  if (ast.is.IsBinaryExpression(node) && operation?.kind === "operator-token" && operation.operator !== "=" &&
+    isRustAssignmentOperator(operation.operator)) {
+    const target = BinaryExpression_Left(ast, node);
+    const value = BinaryExpression_Right(ast, node);
+    const preceding = target === undefined ? undefined : targetsFor(target);
+    const following = value === undefined ? undefined : targetsFor(value);
+    const carrier = target === undefined ? undefined : records.runtimeCarrier.get(target)?.carrier;
+    if (target === undefined || value === undefined || !ast.is.IsIdentifier(target) ||
+      records.sourceBinding.get(target)?.scope !== "lexical" || operation.operandModes[0] !== "mut-ref" ||
+      operation.leftConversion !== undefined || operation.rightConversion !== undefined ||
+      !rustBorrowValueIsUnprojected(target, records) || !rustBorrowValueIsUnprojected(value, records) ||
+      !(isRustNumericCarrier(carrier) && rustBorrowPrimitiveCopyValue(target, records) || rustBorrowedStringAppend(node, ast, records)) ||
+      preceding === undefined || following === undefined || !reserve(preceding.length + following.length + 1)) return undefined;
+    return Object.freeze([...preceding, ...following, target]);
   }
   const providerInputs = rustBorrowPureProviderInputs(node, ast, records);
   if (providerInputs !== undefined) {

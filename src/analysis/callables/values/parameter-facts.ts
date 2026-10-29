@@ -6,7 +6,9 @@ import { appendRustDiagnostic, rustResolutionContext } from "../../program/walk.
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import { requireRustRecord } from "../../program/records/objects/required-records.js";
 import { closedMetadataEquals } from "../../../target-model/metadata/closed-data.js";
-import { resolveRustContextualParameterAbi } from "../calls/source-callable-abi.js";
+import { resolveRustContextualParameterAbi, type RustSourceParameterResourceError } from "../calls/source-callable-abi.js";
+import type { RustPolicyDiagnostic } from "../../../policy/model/contracts.js";
+import { rustPolicyTargetDiagnostic } from "../../program/policy-diagnostics.js";
 import type { RustSourceParameterAbiFact } from "../../../target-model/records/callables/callables-and-resources.js";
 import { setCarrierFact } from "../../operations/project-calls.js";
 import { recordBindingPatternFacts } from "../../control-flow/binding-patterns.js";
@@ -21,6 +23,10 @@ export function resolveParameterAbi(walk: RustFactWalk, parameter: Node) {
     rustResolutionContext(walk, parameter),
     walk.operationOptions,
   );
+  if (selection?.kind === "resource-error") {
+    refuseRustParameterResource(walk, selection);
+    return undefined;
+  }
   if (selection?.kind === "rejected") {
     refuseRustParameterCarrier(walk, parameter, selection.reason);
     return undefined;
@@ -32,6 +38,10 @@ export function recordParameterAbiFacts(walk: RustFactWalk, parameter: Node, sel
   const selection = selectedCarrier === undefined
     ? walk.sourceCallableAbi.resolveParameterAbi(parameter, rustResolutionContext(walk, parameter), walk.operationOptions)
     : resolveRustContextualParameterAbi(parameter, selectedCarrier, rustResolutionContext(walk, parameter), walk.operationOptions);
+  if (selection?.kind === "resource-error") {
+    refuseRustParameterResource(walk, selection);
+    return;
+  }
   if (selection?.kind === "rejected") {
     refuseRustParameterCarrier(walk, parameter, selection.reason);
     return;
@@ -42,6 +52,30 @@ export function recordParameterAbiFacts(walk: RustFactWalk, parameter: Node, sel
     return;
   }
   recordRustParameterAbiSelection(walk, parameter, parameterAbi);
+}
+
+export function rustParameterAbiResourceDiagnostic(failure: RustSourceParameterResourceError): RustPolicyDiagnostic {
+  return Object.freeze({ extensionId: "tsonic.rust.policy", extensionCode: "TSONIC_COMPILER_RESOURCE_LIMIT",
+    numericCode: 0, category: "error", nodeOrSpan: failure.parameter,
+    message: `${failure.reason} Dimension: ${failure.dimension}; limit: ${failure.limit}.`,
+    evidence: Object.freeze([{ message: "target.capability=rust.callable.parameter-carrier" },
+      { message: `compiler.resource.dimension=${failure.dimension}` },
+      { message: `compiler.resource.limit=${failure.limit}` }]) });
+}
+
+export function refuseRustParameterResource(walk: RustFactWalk, failure: RustSourceParameterResourceError): void {
+  if (walk.context.diagnostics.some(issue => issue.code === "TSONIC_COMPILER_RESOURCE_LIMIT" &&
+    issue.sourceNode === failure.parameter)) return;
+  walk.context.diagnostics.push(rustPolicyTargetDiagnostic(rustParameterAbiResourceDiagnostic(failure)));
+}
+
+export function rustParameterAbiUnavailableDiagnostic(parameter: Node): RustPolicyDiagnostic {
+  return Object.freeze({ extensionId: "tsonic.rust.policy", extensionCode: "RUST_MISSING_TARGET_FACT",
+    numericCode: 0, category: "error", nodeOrSpan: parameter,
+    message: "Compiler input-contract completion is missing for this callback parameter after its finite declaration-parameter dependency was requested. This is an incomplete compiler analysis stage, not an unsupported source form.",
+    evidence: Object.freeze([{ message: "target.capability=rust.callable.parameter-carrier" },
+      { message: "compiler.required-fact=source-parameter-abi" },
+      { message: "compiler.required-completion=finite-declaration-parameter-component" }]) });
 }
 
 export function refuseRustParameterCarrier(
@@ -63,10 +97,16 @@ export function refuseRustUnresolvedParameterCarriers(
 ): void {
   const parameters = sourceCallableValueParameters(walk.context.ast, declaration, walk.context.semanticsFor(declaration));
   if (parameters === undefined) return;
-  for (const parameter of parameters) {
-    if (parameter === undefined || walk.context.records.sourceParameterAbi.get(parameter) !== undefined) continue;
-    const selection = walk.sourceCallableAbi.resolveParameterAbi(
-      parameter, rustResolutionContext(walk, parameter), walk.operationOptions);
+  const missing = parameters.filter(parameter => walk.context.records.sourceParameterAbi.get(parameter) === undefined);
+  const selections = missing.map(parameter => walk.sourceCallableAbi.resolveParameterAbi(
+    parameter, rustResolutionContext(walk, parameter), walk.operationOptions));
+  const resourceFailure = selections.find(selection => selection?.kind === "resource-error");
+  if (resourceFailure?.kind === "resource-error") {
+    refuseRustParameterResource(walk, resourceFailure);
+    return;
+  }
+  for (const [index, parameter] of missing.entries()) {
+    const selection = selections[index];
     if (selection?.kind === "rejected") refuseRustParameterCarrier(walk, parameter, selection.reason);
     else if (selection === undefined) refuseRustParameterCarrier(walk, parameter, undefined, failure);
   }

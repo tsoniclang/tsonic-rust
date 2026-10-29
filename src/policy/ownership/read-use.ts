@@ -70,6 +70,9 @@ export function selectRustOperationReadUses(ast: AstReader, node: Node, input: {
     }
   } else if (operation?.kind === "reference-operation") {
     select(operation.operandExpression, operation.operation === "mutable-reference" || operation.operation === "store" ? "mutable" : "shared");
+  } else if (operation?.kind === "iteration") {
+    const lowering = operation.lowering;
+    if (operation.iterationKind === "for-of" && lowering.kind === "borrowed") select(Node_Expression(ast, node), "shared");
   } else if (operation?.kind === "flow-marker") {
     select(ast.arguments(node)[0], operation.state === "moved" ? "move" : operation.state === "borrowed-mut" ? "mutable" : "shared");
   } else if (operation?.kind === "project-type-test" || operation?.kind === "closed-type-test") {

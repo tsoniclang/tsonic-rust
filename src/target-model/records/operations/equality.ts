@@ -14,7 +14,9 @@ import type {
 
 export function rustSourceCallableReturnFactEquals(left: RustSourceCallableReturnFact, right: RustSourceCallableReturnFact): boolean {
   return rustTargetTypeRefEquals(left.returnCarrier, right.returnCarrier) &&
-    left.borrowedParameter === right.borrowedParameter && left.implementationCompletion === right.implementationCompletion &&
+    left.borrowedReturn?.parameter === right.borrowedReturn?.parameter &&
+    rustTargetTypeRefEquals(left.borrowedReturn?.carrier, right.borrowedReturn?.carrier) &&
+    left.implementationCompletion === right.implementationCompletion &&
     left.undefinedReturn === right.undefinedReturn && left.fallthroughUndefined === right.fallthroughUndefined &&
     left.canFallThrough === right.canFallThrough;
 }

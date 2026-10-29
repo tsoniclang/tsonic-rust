@@ -16,7 +16,7 @@ interface RustNativeControl extends RustLanguageCall {
 }
 
 export function readRustNativeControl(walk: RustFactWalk, expression: Node): RustNativeControl | undefined {
-  const call = readRustLanguageCall(walk, expression);
+  const call = readRustLanguageCall(walk.context, expression);
   if (call === undefined) return undefined;
   for (const operation of ["range", "propagate"] as const) {
     if (call.declaration.exportId === rustSourceOperationExportIds[operation] &&

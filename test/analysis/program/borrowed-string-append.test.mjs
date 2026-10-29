@@ -6,6 +6,19 @@ import { analyzeRust, artifactText, compileRust } from "../../helpers/rust-sessi
 
 import { analyzeRustBorrowedElementReads } from "../../../dist/analysis/storage/borrowed-element-reads.js";
 import { analyzeRustCountedLoopRepresentations } from "../../../dist/analysis/control-flow/counted-loop-representations.js";
+import { analyzeRustBorrowEffects } from "../../../dist/analysis/ownership/effects.js";
+
+function iterationEvidence(program, records, navigation) {
+  const nodes = rustNativeFixtureNodes(program);
+  const nativeNodes = new Set(nodes);
+  const input = { ast: program.source.ast, sourceFacts: program.source.sourceFacts, nodes, records, navigation,
+    isNativeNode: node => nativeNodes.has(node), projectTypes: program.projectTypes,
+    objectRepresentations: program.objectRepresentations, structuralShapes: program.structuralShapes,
+    lexicalFunctions: program.lexicalFunctions };
+  const selected = analyzeRustBorrowEffects(input, program.ownership.uses);
+  assert.equal(selected.kind, "resolved", "the fixture supplies its actual completed effects");
+  return { input, effects: selected.effects };
+}
 
 const sourceText = `
 import type { nativeUint } from "@tsonic/core/types.js";
@@ -126,7 +139,8 @@ test("a merely available borrowed operation cannot establish counted-loop purity
   const navigation = createTargetSourceProgram(source).navigation;
   const { loop, element } = selectedNodes(source, program, "combine");
   assert.ok(program.records.targetOperation.get(element).borrowedIndexOperation);
-  const reads = analyzeRustBorrowedElementReads(program.source.ast, rustNativeFixtureNodes(program), program.records, navigation);
+  const reads = analyzeRustBorrowedElementReads(program.source.ast, rustNativeFixtureNodes(program), program.records, navigation,
+    iterationEvidence(program, program.records, navigation));
   const counted = analyzeRustCountedLoopRepresentations({
     ast: program.source.ast, nativeNodes: rustNativeFixtureNodes(program), navigation, records: program.records,
     borrowedElementReads: { ...reads, forRead: () => undefined },
@@ -193,7 +207,8 @@ targetOperation: { get: (node) => {
 } }}, program.records);
     assert.equal(records.targetOperation.get(subject) === replacement, true,
       `selected fact mutation ${mutationIndex}`);
-    const reads = analyzeRustBorrowedElementReads(program.source.ast, rustNativeFixtureNodes(program), records, navigation);
+    const reads = analyzeRustBorrowedElementReads(program.source.ast, rustNativeFixtureNodes(program), records, navigation,
+      iterationEvidence(program, records, navigation));
     assert.equal(reads.forExpression(append) === undefined, true, `append mutation ${mutationIndex}`);
     assert.equal(reads.forRead(element) === undefined, true, `read mutation ${mutationIndex}`);
     const counted = analyzeRustCountedLoopRepresentations({ ast: program.source.ast, nativeNodes: rustNativeFixtureNodes(program),

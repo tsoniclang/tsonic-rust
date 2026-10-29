@@ -4,7 +4,7 @@ import { createRustSourceErrorEffectSelection, type RustSourceErrorEffectSelecti
 import type { RustStructuralShapePlanRegistry } from "../../objects/shapes/structural-shape-registry.js";
 import type { AstReader, Node } from "@tsonic/tsts";
 import type { SourceStorageBindings, SourceStorageBindingsSelection, SourceStorageQueries, SourceStorageSubject, SourceStorageSubjectsSelection, SourceStorageProducersSelection } from "@tsonic/target-api/analysis";
-import { isSourceCallableBodyBoundary, sourceEnclosingCallable, sourceCallableValueParameters } from "@tsonic/target-api/source";
+import { isSourceCallableBodyBoundary, sourceEnclosingCallable } from "@tsonic/target-api/source";
 import type { RustProgramRecords } from "../../../target-model/records/program.js";
 import type { RustOperationAttempt } from "../../program/operation-attempts.js";
 
@@ -48,7 +48,7 @@ import { selectRustSourceCallableInvocationBindings } from "./native-storage-gen
 import type { RustTargetGenericBindings } from "../../../target-model/types/carriers/generic-inference.js";
 import type { RustProjectTypePolicy } from "../../../target-model/types/project-types.js";
 
-import type { RustCallableJoinWrite } from "../../../target-model/records/native/native-storage.js";
+import type { RustCallableJoinWrite, RustNativeReturnStorageSelection } from "../../../target-model/records/native/native-storage.js";
 
 export type RustNativeInvocationBindingsSelection =
   | { readonly kind: "resolved"; readonly storageBindings: SourceStorageBindings;
@@ -63,7 +63,7 @@ export interface RustNativeStoragePlan {
   boundInvocationFor(declaration: Node, invocation: Node, callerBindings: SourceStorageBindings): RustNativeInvocationBindingsSelection;
   futureEnvironmentFor(declaration: Node): RustNativeFutureEnvironmentSelection;
   readonly parameterFor: (parameter: Node) => RustNativeStorageSelection;
-  returnFor(declaration: Node): RustNativeStorageSelection;
+  returnFor(declaration: Node): RustNativeReturnStorageSelection;
   valueFor(node: Node): RustNativeStorageSelection;
   operandFor(node: Node): RustNativeStorageSelection;
   invocationCallableFor(node: Node): RustNativeStorageSelection;
@@ -81,7 +81,7 @@ export interface RustNativeStoragePlan {
 
 export interface RustNativeStorageConstruction extends RustNativeStoragePlan {
   readonly sourceErrors: RustSourceErrorEffectSelection;
-  prepareReturn(declaration: Node): RustNativeStorageSelection;
+  prepareReturn(declaration: Node): RustNativeReturnStorageSelection;
 }
 
 export type RustNativeStorageQueries = Omit<RustNativeStorageConstruction, "parameterFor">;
@@ -116,7 +116,7 @@ export function createRustNativeStorageQueries(input: {
   const conversions = selectRustNativeConversionBoundaries(input);
   const unresolved = (reason: string): Extract<RustNativeStorageSelection, { readonly kind: "unresolved" }> =>
     Object.freeze({ kind: "unresolved", reason });
-  const returns = new Map<Node, RustNativeStorageSelection>();
+  const returns = new Map<Node, RustNativeReturnStorageSelection>();
   const parameters = new Map<Node, { readonly carrier: TargetTypeRef; readonly selection: RustNativeStorageSelection }>();
   const unpreparedReturn = unresolved("Native callable return requires its prepared physical source selection.");
   const bindingsFor = (owner: Node | undefined): SourceStorageBindings | undefined => owner === undefined
@@ -184,19 +184,10 @@ export function createRustNativeStorageQueries(input: {
       return bindings?.complete(carrier, queries);
     } });
   const select = selection.select;
-  const selectReturn = (declaration: Node): RustNativeStorageSelection => {
+  const selectReturn = (declaration: Node): RustNativeReturnStorageSelection => {
     const result = input.records.sourceCallableReturn.get(declaration);
-    const parameter = result?.borrowedParameter;
-    if (parameter !== undefined) {
-      const abi = input.records.sourceParameterAbi.get(parameter);
-      if (input.ast.parent(parameter) !== declaration || sourceCallableValueParameters(input.ast, declaration,
-        input.storage.source.semantics.forNode(declaration))?.includes(parameter) !== true ||
-        abi?.parameterCarrier.kind !== "reference" || abi.parameterCarrier.mutable ||
-        !rustTargetTypeRefEquals(abi.valueCarrier, result?.returnCarrier))
-        return unresolved("Native paired return requires its exact source parameter and shared input ABI.");
-      const subject = input.storage.subject(parameter, "input");
-      return subject.kind === "unresolved" ? subject : select(subject.subject, abi.parameterCarrier, bindingsFor(declaration), declaration);
-    }
+    if (result?.borrowedReturn !== undefined) return Object.freeze({ kind: "borrowed",
+      parameter: result.borrowedReturn.parameter, carrier: result.borrowedReturn.carrier });
     const carrier = result?.returnCarrier;
     if (carrier === undefined) return unresolved("Native callable return has no finalized logical carrier.");
     const subject = input.storage.subject(declaration, "return");
@@ -231,7 +222,7 @@ export function createRustNativeStorageQueries(input: {
     },
     futureEnvironmentFor: futures.forDeclaration,
     returnFor: (declaration: Node) => returns.get(declaration) ?? unpreparedReturn,
-    prepareReturn(declaration: Node): RustNativeStorageSelection {
+    prepareReturn(declaration: Node): RustNativeReturnStorageSelection {
       if (!nodes.has(declaration)) return unresolved("Native callable return requires an owned declaration.");
       const existing = returns.get(declaration);
       if (existing !== undefined) return existing;

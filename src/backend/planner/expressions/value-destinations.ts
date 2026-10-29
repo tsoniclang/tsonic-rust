@@ -23,6 +23,6 @@ export function rustReturnValueContext(expression: Node, context: RustPlanContex
 export function planRustReturnValueExpression(expression: Node, context: RustPlanContext, planValue: typeof planExpression): RustExpr | undefined {
   const selected = rustReturnValueContext(expression, context);
   const declaration = context.callableDeclaration;
-  const borrowed = declaration !== undefined && context.input.program.records.sourceCallableReturn.get(declaration)?.borrowedParameter !== undefined;
+  const borrowed = declaration !== undefined && context.input.program.records.sourceCallableReturn.get(declaration)?.borrowedReturn !== undefined;
   return planValue(expression, selected, "value", borrowed ? "shared-reference" : "value");
 }

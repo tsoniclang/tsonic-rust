@@ -24,6 +24,7 @@ import { rustUnparenthesizedExpression } from "../../target-model/syntax/express
 import { rustUnionEntryTransferIssue } from "../../policy/conversions/union-injection.js";
 import type { RustValueReadOwnership } from "../../target-model/records/storage/ownership.js";
 import type { RustProviderReadSelection } from "../operations/provider-forms.js";
+import { rustSourceCallBorrowedReturn } from "../callables/ownership/source-input-lifetimes.js";
 
 export function analyzeRustValueReads(program: Omit<RustAnalysisProgram, "reachability">, nodes: readonly Node[],
   providerReads: readonly RustProviderReadSelection[], producer: RustValueReadProducer,
@@ -103,12 +104,6 @@ export function analyzeRustValueReads(program: Omit<RustAnalysisProgram, "reacha
   for (const view of program.classValues.constructorViewImplementations)
     for (const callable of [view.construction, ...view.fields.map(field => field.callable)])
       if (callable !== undefined) for (const value of rustCallableAdapterValues(callable)) adapter(view.declaration, value);
-  // The planner binds an optional chain guard as `Some(optional_receiver)` and reads it with the chain's present carrier.
-  const presentGuards = new Map<Node, TargetTypeRef>();
-  for (const node of nodes) {
-    const chain = program.records.optionalChainEmission.get(node);
-    if (chain !== undefined) presentGuards.set(chain.fact.guard, chain.structuralGuard?.selectedStorageCarrier ?? chain.fact.selectedGuardCarrier);
-  }
   for (const node of nodes) {
     if (rustProgramNodeIsOutsideNativeCode(program, node)) continue;
     const source = program.records.runtimeCarrier.get(node)?.carrier;
@@ -144,39 +139,15 @@ export function analyzeRustValueReads(program: Omit<RustAnalysisProgram, "reacha
       if (!rustTargetTypeRefEquals(contract.target, contextual!.targetCarrier))
         refuse(node, "rust.backend.contextual-value-conversion", "Contextual Rust value conversion has no exact finalized target carrier.");
     }
-    const transitions = [
-      ...(flow === undefined ? [] : [{ input: flow.sourceCarrier, output: physicalView ?? flow.selectedCarrier, kind: "flow" as const }]),
-      ...(cast === undefined && downcast === undefined ? [] : [{ input: (cast ?? downcast)!.sourceCarrier, output: (cast ?? downcast)!.targetCarrier, kind: "cast" as const }]),
-      ...(lifetime === undefined ? [] : [{ input: lifetime.sourceCarrier, output: lifetime.selectedCarrier, kind: "lifetime" as const }]),
-      ...(object === undefined ? [] : [{ input: object.sourceCarrier, output: object.targetCarrier, kind: "object" as const }]),
-      ...(contextual === undefined ? [] : [{ input: contextual.sourceCarrier, output: contextual.targetCarrier, kind: "contextual" as const }]),
-      ...(optional === undefined ? [] : [{ input: optional.sourceCarrier, output: optional.resultCarrier, kind: "option" as const }]),
-    ];
-    const input = transitions[0]?.input ?? source;
-    const fused = flow?.kind === "union-map" && contextual?.conversion.kind === "project-union-map" && rustTargetTypeRefEquals(flow.selectedCarrier, contextual.sourceCarrier) &&
-      cast === undefined && downcast === undefined && lifetime === undefined && object === undefined ? flow : undefined;
-    const ownership = program.records.readOwnership.get(node);
     const operation = program.records.targetOperation.get(node);
-    let resultNode = rustUnparenthesizedExpression(program.source.ast, node);
-    let resultOperation = program.records.targetOperation.get(resultNode);
-    let forwardsRead = resultNode !== node;
-    while (resultOperation?.kind === "identity-expression" || resultOperation?.kind === "non-null-expression" &&
-      rustTargetTypeRefEquals(resultOperation.sourceCarrier, resultOperation.resultCarrier) ||
-      resultOperation?.kind === "source-conversion" && resultOperation.conversion === undefined &&
-      program.records.projectUpcast.get(resultNode) === undefined && program.records.projectDowncast.get(resultNode) === undefined) {
-      forwardsRead = true;
-      const operand = program.source.ast.is.IsPrefixUnaryExpression(resultNode)
-        ? Node_Operand(program.source.ast, resultNode) : Node_Expression(program.source.ast, resultNode);
-      if (operand === undefined)
-        failTargetAnalysisInvariant("tsonic-rust", "An admitted identity result requires its exact source operand.", resultNode);
-      resultNode = rustUnparenthesizedExpression(program.source.ast, operand);
-      resultOperation = program.records.targetOperation.get(resultNode);
-    }
+    const forwarded = rustForwardedValueSource(program, node);
+    const resultOperation = forwarded.operation;
     const sourceConversion = resultOperation?.kind === "source-conversion" ? resultOperation : undefined;
-    forwardsRead ||= sourceConversion !== undefined;
+    const forwardsRead = forwarded.forwardsRead || sourceConversion !== undefined;
     const resultContract = sourceConversion?.conversion === undefined ? undefined
       : admitRustConversionEmission(conversions, sourceConversion.conversion, program.typeDefinitions);
     const ownsResult = resultContract?.sourceMode === "value" && resultContract.lowering !== "identity";
+    const ownership = program.records.readOwnership.get(node);
     const entrySource = contextual?.sourceCarrier ?? contextualInput;
     const entryRead = ownsResult ? "move" : providerClones.has(node) && ownership !== undefined && ownership.source.kind !== "borrow"
       ? "clone" : ownership?.source.kind;
@@ -190,6 +161,102 @@ export function analyzeRustValueReads(program: Omit<RustAnalysisProgram, "reacha
       convertedEntry(BinaryExpression_Left(program.source.ast, node) ?? Node_Operand(program.source.ast, node), operation.leftConversion);
       convertedEntry(BinaryExpression_Right(program.source.ast, node), operation.rightConversion);
     }
+  }
+  for (const occurrence of program.physicalEmissionContexts.sourceOccurrences) {
+    for (const { input, slot } of occurrence.inputs) {
+      if (input.conversion.kind === "semantic") convertedEntry(slot.node, input.conversion.conversion);
+      else if (input.conversion.kind === "sequence") for (const step of input.conversion.steps) convertedEntry(slot.node, step.conversion);
+    }
+    const { result } = occurrence.operation.abi;
+    if (result.kind === "sync") {
+      if (result.conversion.kind === "semantic") convertedEntry(occurrence.node, result.conversion.conversion);
+      else if (result.conversion.kind === "sequence") for (const step of result.conversion.steps) convertedEntry(occurrence.node, step.conversion);
+      else if (providerClones.has(occurrence.node) && program.records.readOwnership.get(occurrence.node)?.source.kind !== "borrow")
+        entry(occurrence.node, result.rawCarrier, result.carrier, "clone");
+    }
+  }
+  return Object.freeze(issues);
+}
+
+
+export function analyzeRustValueProjections(program: Omit<RustAnalysisProgram, "reachability">, nodes: readonly Node[],
+  projections: RustValueProjectionProducer, conversions: RustConversionEmissionProducer): readonly TargetDiagnostic[] {
+  const issues: TargetDiagnostic[] = [];
+  const refuse = (node: Node, capability: string, message: string): void => {
+    issues.push({ code: "RUST_MISSING_TARGET_FACT", category: "error", source: "tsonic-rust", sourceNode: node,
+      message: `${message} Node kind: ${program.source.ast.kindName(node)}.`, evidence: [`target.capability=${capability}`] });
+  };
+  // The planner binds an optional chain guard as `Some(optional_receiver)` and reads it with the chain's present carrier.
+  const presentGuards = new Map<Node, TargetTypeRef>();
+  for (const node of nodes) {
+    const chain = program.records.optionalChainEmission.get(node);
+    if (chain !== undefined) presentGuards.set(chain.fact.guard, chain.structuralGuard?.selectedStorageCarrier ?? chain.fact.selectedGuardCarrier);
+  }
+  for (const node of nodes) {
+    if (rustProgramNodeIsOutsideNativeCode(program, node)) continue;
+    const read = program.records.valueRead.get(node);
+    if (read === undefined) continue;
+    const { source, referenceReborrow } = read;
+    const flow = program.records.flowReadProjection.get(node);
+    const conversion = program.records.conversion.get(node);
+    const cast = program.records.projectUpcast.get(node);
+    const downcast = program.records.projectDowncast.get(node);
+    const lifetime = program.records.callScopedLifetimeReconciliation.get(node);
+    const object = program.records.objectReferenceView.get(node);
+    const indexed = program.records.indexedFieldKeyArgument.get(node);
+    const contextual = program.records.contextualValueConversion.get(node);
+    const optional = program.records.optionProjection.get(node);
+    const physicalView = rustCaughtErrorPhysicalView(program.source.ast, program.records, node);
+    const runtime = contextual === undefined ? undefined : rustContextualRuntimeConversionContract(contextual.conversion, program.typeDefinitions);
+    const transitions = [
+      ...(flow === undefined ? [] : [{ input: flow.sourceCarrier, output: physicalView ?? flow.selectedCarrier, kind: "flow" as const }]),
+      ...(cast === undefined && downcast === undefined ? [] : [{ input: (cast ?? downcast)!.sourceCarrier, output: (cast ?? downcast)!.targetCarrier, kind: "cast" as const }]),
+      ...(lifetime === undefined ? [] : [{ input: lifetime.sourceCarrier, output: lifetime.selectedCarrier, kind: "lifetime" as const }]),
+      ...(object === undefined ? [] : [{ input: object.sourceCarrier, output: object.targetCarrier, kind: "object" as const }]),
+      ...(contextual === undefined ? [] : [{ input: contextual.sourceCarrier, output: contextual.targetCarrier, kind: "contextual" as const }]),
+      ...(optional === undefined ? [] : [{ input: optional.sourceCarrier, output: optional.resultCarrier, kind: "option" as const }]),
+    ];
+    const input = transitions[0]?.input ?? source;
+    const fused = flow?.kind === "union-map" && contextual?.conversion.kind === "project-union-map" && rustTargetTypeRefEquals(flow.selectedCarrier, contextual.sourceCarrier) &&
+      cast === undefined && downcast === undefined && lifetime === undefined && object === undefined ? flow : undefined;
+    const ownership = program.records.readOwnership.get(node);
+    const flowEmission = flow === undefined ? undefined : program.records.flowReadEmission.get(flow);
+    if (flow !== undefined && flowEmission === undefined) {
+      refuse(node, "rust.backend.flow-read-result-form", "A native flow result requires its completed physical emission input.");
+      continue;
+    }
+    if ((flow?.kind === "source-union" || flow?.kind === "runtime-union") && (flowEmission?.kind !== "union" ||
+      !rustTargetTypeRefEquals(flowEmission.projection.dispatchCarrier, flow.dispatchCarrier) ||
+      !rustTargetTypeRefEquals(flowEmission.projection.carrier, flow.project?.sourceCarrier ?? flow.selectedCarrier)) ||
+      (flow?.kind === "option-value" || flow?.kind === "option-reference") && (flowEmission?.kind !== "option" ||
+        flowEmission.reborrow !== (flow.kind === "option-reference"))) {
+      refuse(node, "rust.backend.flow-read-result-form", "A native flow result conflicts with its completed physical projection carrier or reference mode.");
+      continue;
+    }
+    const borrowedFlowResult = ownership?.value.kind === "borrow" && !ownership.value.mutable &&
+      (flowEmission?.kind === "union" && (flow?.kind === "source-union" || flow?.kind === "runtime-union") &&
+        flow.project === undefined && !flowEmission.projection.targetOptional &&
+        rustTargetTypeRefEquals(flowEmission.projection.dispatchCarrier, flow.dispatchCarrier) &&
+        rustTargetTypeRefEquals(flowEmission.projection.carrier, flow.selectedCarrier) ||
+      flowEmission?.kind === "option" && !flowEmission.custom && !flowEmission.reborrow && flow?.kind === "option-value");
+    const forwarded = rustForwardedValueSource(program, node);
+    const resultNode = forwarded.node;
+    const resultOperation = forwarded.operation;
+    const sourceConversion = resultOperation?.kind === "source-conversion" ? resultOperation : undefined;
+    const resultContract = sourceConversion?.conversion === undefined ? undefined
+      : admitRustConversionEmission(conversions, sourceConversion.conversion, program.typeDefinitions);
+    const ownsResult = resultContract?.sourceMode === "value" && resultContract.lowering !== "identity";
+    const resultLoan = program.records.optionalChainEmission.get(resultNode)?.loan;
+    const sourceCall = resultOperation?.kind === "source-call" ? program.records.sourceCall.get(resultNode) : undefined;
+    const callLoan = resultOperation?.kind === "source-call" ? rustSourceCallBorrowedReturn(resultNode, program.source.ast, program.records) : undefined;
+    const resultRead = program.records.readOwnership.get(resultNode);
+    if (resultOperation?.kind === "source-call" && sourceCall === undefined) {
+      refuse(node, "rust.backend.value-result-form", "A source-call value result requires its completed exact emission contract.");
+      continue;
+    }
+    const borrowedCallResult = sourceCall?.resultMaterialization === "direct" && callLoan?.carrier.kind === "reference" &&
+      resultRead?.value.kind === "borrow" && !resultRead.value.mutable &&
+      rustTargetTypeRefEquals(resultRead.carrier, callLoan.carrier.referent);
     const borrowable = ownership?.value.kind !== "move" && flow !== undefined && ((flow.kind === "source-union" || flow.kind === "runtime-union") && flow.project === undefined ||
       flow.kind === "option-value" && rustOptionalStorageValue(flow.sourceCarrier) === undefined) && rustOptionElementCarrier(flow.selectedCarrier) === undefined &&
       cast === undefined && downcast === undefined && lifetime === undefined && optional === undefined && object === undefined;
@@ -218,7 +285,18 @@ export function analyzeRustValueReads(program: Omit<RustAnalysisProgram, "reacha
         }
       }
       if (failed) continue;
-      plans.push({ carrier, value: Object.freeze({ exits: program.records.expressionExit.get(node) !== undefined || isRustNeverCarrier(source), flow: applied.has("flow") ? flow : undefined, upcast: applied.has("cast") ? cast : undefined,
+      let sharedResult = !ownsResult && (resultLoan !== undefined && rustTargetTypeRefEquals(source, resultLoan.carrier.referent) || borrowedCallResult);
+      for (const transition of transitions) {
+        if (!applied.has(transition.kind)) continue;
+        if (transition.kind === "flow") sharedResult = borrowedFlowResult;
+        else sharedResult &&= rustTargetTypeRefEquals(transition.input, transition.output) &&
+          (transition.kind === "lifetime" || transition.kind === "contextual" &&
+            runtime?.sourceMode === "ref" && runtime.lowering === "identity");
+      }
+      sharedResult &&= program.records.callableJoinWrite.get(node) === undefined;
+      plans.push({ carrier, value: Object.freeze({ exits: program.records.expressionExit.get(node) !== undefined || isRustNeverCarrier(source),
+        resultForm: sharedResult ? "shared-reference" as const : "value" as const,
+        flow: applied.has("flow") ? flow : undefined, upcast: applied.has("cast") ? cast : undefined,
         downcast: applied.has("cast") ? downcast : undefined, object: applied.has("object") ? object : undefined,
         contextual: applied.has("contextual") ? contextual : undefined, option: applied.has("option") ? optional : undefined,
         fused: applied.has("flow") && applied.has("contextual") ? fused : undefined, borrowable: borrowable && applied.has("flow"),
@@ -231,20 +309,26 @@ export function analyzeRustValueReads(program: Omit<RustAnalysisProgram, "reacha
     }
     projections.publish(node, Object.freeze(plans), transitions.length === 0);
   }
-  for (const occurrence of program.physicalEmissionContexts.sourceOccurrences) {
-    for (const { input, slot } of occurrence.inputs) {
-      if (input.conversion.kind === "semantic") convertedEntry(slot.node, input.conversion.conversion);
-      else if (input.conversion.kind === "sequence") for (const step of input.conversion.steps) convertedEntry(slot.node, step.conversion);
-    }
-    const { result } = occurrence.operation.abi;
-    if (result.kind === "sync") {
-      if (result.conversion.kind === "semantic") convertedEntry(occurrence.node, result.conversion.conversion);
-      else if (result.conversion.kind === "sequence") for (const step of result.conversion.steps) convertedEntry(occurrence.node, step.conversion);
-      else if (providerClones.has(occurrence.node) && program.records.readOwnership.get(occurrence.node)?.source.kind !== "borrow")
-        entry(occurrence.node, result.rawCarrier, result.carrier, "clone");
-    }
-  }
   return Object.freeze(issues);
+}
+
+function rustForwardedValueSource(program: Omit<RustAnalysisProgram, "reachability">, node: Node) {
+  let resultNode = rustUnparenthesizedExpression(program.source.ast, node);
+  let resultOperation = program.records.targetOperation.get(resultNode);
+  let forwardsRead = resultNode !== node;
+  while (resultOperation?.kind === "identity-expression" || resultOperation?.kind === "non-null-expression" &&
+    rustTargetTypeRefEquals(resultOperation.sourceCarrier, resultOperation.resultCarrier) ||
+    resultOperation?.kind === "source-conversion" && resultOperation.conversion === undefined &&
+    program.records.projectUpcast.get(resultNode) === undefined && program.records.projectDowncast.get(resultNode) === undefined) {
+    forwardsRead = true;
+    const operand = program.source.ast.is.IsPrefixUnaryExpression(resultNode)
+      ? Node_Operand(program.source.ast, resultNode) : Node_Expression(program.source.ast, resultNode);
+    if (operand === undefined)
+      failTargetAnalysisInvariant("tsonic-rust", "An admitted identity result requires its exact source operand.", resultNode);
+    resultNode = rustUnparenthesizedExpression(program.source.ast, operand);
+    resultOperation = program.records.targetOperation.get(resultNode);
+  }
+  return { node: resultNode, operation: resultOperation, forwardsRead };
 }
 
 const projectionDiagnostics = {

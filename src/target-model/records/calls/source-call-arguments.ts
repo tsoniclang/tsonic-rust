@@ -23,6 +23,9 @@ export type RustSourceParameterEmission = {
 export interface RustSourceCallEvaluationEmission {
   readonly arguments: readonly { readonly source: Node; readonly expression: Node; readonly destination: TargetTypeRef | undefined;
     readonly mutable: boolean; readonly borrow: "value" | "identity" | "ref" | "mut-ref";
+    readonly snapshot: "owned-string" | undefined;
+    readonly retainedOwner: { readonly declaration: Node; readonly initializer: Node; readonly guard: Node;
+      readonly argument: Node; readonly parameter: Node } | undefined;
     readonly elements: readonly { readonly index: number; readonly mode: "value" | "ref" | "mut-ref" }[] }[];
   readonly spread: boolean;
 }

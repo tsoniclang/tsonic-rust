@@ -2,9 +2,100 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRustOperations } from "../../helpers/rust-operation-analysis.mjs";
 import { selectRustCheckedCall, finalizeRustPreparedCheckedCall } from "../../../dist/analysis/operations/selected-calls.js";
-import { rustOperationContext } from "../../../dist/analysis/program/walk.js";
+import { rustOperationContext, selectExpressionOperation } from "../../../dist/analysis/program/walk.js";
 import { createRustCarrierProbe } from "../../../dist/analysis/program/carrier-probe.js";
 import { admitRustOperationSelection } from "../../../dist/analysis/operations/operation-admission.js";
+import { createRustProgramRecordBuilder } from "../../../dist/analysis/program/records/create.js";
+import { createRustRecordFixture } from "../../helpers/records.mjs";
+import { createRustSourceCallableAbiResolver } from "../../../dist/analysis/callables/calls/source-callable-abi.js";
+import { finalizeRustCallableParameterAbis } from "../../../dist/analysis/callables/calls/signature-query.js";
+import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
+
+function callbackAdmissionFixture(owned = false, maximumParameterContractSteps) {
+  const { context, walk, requestFor } = analyzeRustOperations(`
+export function order(values: string[]): void {
+  values.sort((left, right) => { ${owned ? 'left = "changed";' : ""} return left.length < right.length ? -1 : left.length > right.length ? 1 : 0; });
+}`);
+  const nodes = context.sourceStorage.nodes;
+  const call = nodes.find(node => context.ast.is.IsCallExpression(node));
+  const callback = nodes.find(node => context.ast.is.IsArrowFunction(node));
+  assert.equal(call !== undefined && callback !== undefined, true, "the original checked provider callback exists");
+  const parameters = context.ast.parameters(callback);
+  assert.equal(parameters.length, 2, "both exact native callback inputs are retained");
+  const inherited = createRustRecordFixture({
+    sourceParameterAbi: { get: node => parameters.includes(node) ? undefined : context.records.sourceParameterAbi.get(node) },
+    selectedCall: { get: node => node === call ? undefined : context.records.selectedCall.get(node) },
+    selectedOperation: { get: node => node === call ? undefined : context.records.selectedOperation.get(node) },
+    targetOperation: { get: node => node === call ? undefined : context.records.targetOperation.get(node) },
+  }, context.records);
+  const probe = createRustCarrierProbe({ ...walk, context: { ...context,
+    records: createRustProgramRecordBuilder(context.typeDefinitions, inherited) } });
+  const resolver = createRustSourceCallableAbiResolver({
+    isNativeCallableExpression: probe.moduleBindings.isNativeCallableExpression,
+    parameterAbiFor: parameter => probe.context.records.sourceParameterAbi.get(parameter),
+    ...(maximumParameterContractSteps === undefined ? {} : { maximumParameterContractSteps }),
+  });
+  probe.sourceCallableAbi = resolver;
+  probe.operationOptions = { ...probe.operationOptions, sourceCallableAbi: resolver };
+  return { context, probe, resolver, parameters, callback, call, request: requestFor(call) };
+}
+
+for (const owned of [false, true]) test(`inline callback admission completes its ${owned ? "owned" : "shared"} declaration ABI once`, () => {
+  const { probe, resolver, parameters, callback, call, request } = callbackAdmissionFixture(owned);
+  const result = selectRustCheckedCall(request, rustOperationContext(probe, call), probe.operationOptions);
+  assert.equal(result.kind, "accept", "a supported callback completes rather than falling back from an absent contract");
+  assert.equal(result.value.kind, "deferred-callback", "the existing callback admission transport is unchanged");
+  const carrier = result.value.parameterCarriers[result.value.callback.sourceArgumentIndex];
+  assert.equal(carrier.kind, "closure", "the selected checked callback carrier is retained");
+  assert.equal(carrier.args.every(argument => argument.kind === "reference" && !argument.mutable), !owned,
+    "only completed shared inputs select the borrowed provider form");
+  const parameter = parameters[0];
+  const before = resolver.resolveParameterAbi(parameter, rustOperationContext(probe, parameter), probe.operationOptions);
+  assert.equal(before?.kind, "resolved", "the exact declaration component is complete");
+  assert.equal(resolver.canUseSharedBorrow(parameter), !owned, "the Boolean query only reads completed ABI evidence");
+  const published = finalizeRustCallableParameterAbis(probe, callback);
+  assert.equal(published?.length, 2, "the existing parameter owner publishes the complete component");
+  const after = resolver.resolveParameterAbi(parameter, rustOperationContext(probe, parameter), probe.operationOptions);
+  assert.equal(after?.abi === probe.context.records.sourceParameterAbi.get(parameter), true,
+    "the completed resolver reads the one canonical published record");
+  assert.equal(after.abi.mode, before.abi.mode, "publication never re-decides the parameter mode");
+  assert.equal(rustTargetTypeRefEquals(after.abi.parameterCarrier, before.abi.parameterCarrier), true, "publication retains the selected physical carrier");
+  assert.equal(finalizeRustCallableParameterAbis(probe, callback)?.[0] === published[0], true,
+    "the one completed parameter publisher does not replay its selection");
+});
+
+for (const failure of ["unavailable", "resource"]) test(`inline callback ${failure} fails parameter admission without partial success`, () => {
+  const { context, probe, resolver, parameters, call, request } = callbackAdmissionFixture(false, failure === "resource" ? 1 : undefined);
+  if (failure === "unavailable") {
+    const unavailable = { resolveParameterAbi: () => undefined,
+      canUseSharedBorrow() { throw new Error("unavailable completion must not become a default Boolean"); } };
+    probe.sourceCallableAbi = unavailable;
+    probe.operationOptions = { ...probe.operationOptions, sourceCallableAbi: unavailable };
+  }
+  const code = failure === "resource" ? "TSONIC_COMPILER_RESOURCE_LIMIT" : "RUST_MISSING_TARGET_FACT";
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const result = selectRustCheckedCall(request, rustOperationContext(probe, call), probe.operationOptions);
+    assert.equal(result.kind, "reject", "failed required completion never selects an owned callback");
+    assert.equal(result.diagnostic.extensionCode, code, "the precise compiler failure survives the existing reject transport");
+    assert.equal(result.diagnostic.nodeOrSpan === parameters[0], true, "the original callback parameter owns the cause");
+    assert.equal(result.diagnostic.message.includes(failure === "resource" ? "limit: 1" : "Compiler input-contract completion is missing"), true,
+      "the real resource limit or compiler completion obligation is explicit");
+    assert.equal(probe.operationAttempts.has(call), false, "no successful attempt is cached");
+    for (const family of ["targetOperation", "selectedOperation", "selectedCall"])
+      assert.equal(probe.context.records[family].get(call) === undefined, true, `${family}: no partial provider selection is published`);
+    assert.equal(parameters.every(parameter => probe.context.records.sourceParameterAbi.get(parameter) === undefined), true,
+      "a failed component publishes no parameter ABI");
+  }
+  const sourceFile = context.ast.getSourceFile(call);
+  assert.equal(sourceFile !== undefined, true, "the checked call has its exact source file");
+  selectExpressionOperation(probe, call, sourceFile);
+  assert.equal(probe.context.diagnostics.length, 1, "the existing walk records one precise parameter diagnostic");
+  assert.equal(probe.context.diagnostics[0].code, code, "no derivative callback-unsupported diagnostic is introduced");
+  assert.equal(probe.rejectedExpressions.has(call), true, "the actual call is terminal alongside its parameter failure");
+  assert.equal(probe.operationAttempts.get(call)?.kind === "checked-call", false, "a terminal error is not successful admission");
+  if (failure === "resource") assert.equal(resolver.canUseSharedBorrow(parameters[0]), false,
+    "resource failure leaves no successful ABI in the completed cache");
+});
 
 const forbidden = new Proxy({}, { get() { throw new Error("a completed request re-entered native resolution"); } });
 

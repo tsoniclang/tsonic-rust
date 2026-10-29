@@ -9,6 +9,7 @@ import { selectRustStructuralFieldProjection } from "../../policy/types/objects/
 import { selectRustProjectStructuralView } from "../objects/project-structural-views.js";
 import { rustClassConstructorInstance } from "../../target-model/types/carriers/class-constructors.js";
 import { selectRustClassValueView } from "../objects/class-values.js";
+import { refuseRustParameterResource } from "../callables/values/parameter-facts.js";
 
 export function selectRustObjectReferenceView(
   walk: RustFactWalk, expression: Node, sourceCarrier: TargetTypeRef, targetCarrier: TargetTypeRef,
@@ -33,7 +34,12 @@ export function selectRustObjectReferenceView(
   const sourceType = semantics.types.expressionType(expression);
   if (sourceType === undefined) return undefined;
   if (project !== undefined) {
-    if (!selectRustProjectStructuralView(walk, project.declaration, sourceCarrier, targetCarrier, semantics, sourceType)) return undefined;
+    const selection = selectRustProjectStructuralView(walk, project.declaration, sourceCarrier, targetCarrier, semantics, sourceType);
+    if (typeof selection === "object") {
+      refuseRustParameterResource(walk, selection);
+      return undefined;
+    }
+    if (selection !== true) return undefined;
     return Object.freeze({
       kind: "project", declaration: project.declaration, sourceCarrier, targetCarrier,
     });

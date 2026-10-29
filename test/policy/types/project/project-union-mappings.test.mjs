@@ -29,7 +29,7 @@ import { analyzeRustProjectEmission } from "../../../../dist/analysis/project-ty
 import { createRustProjectEmissionProducer } from "../../../../dist/analysis/program/records/program/project-emission.js";
 import { analyzeRustTypeEmission } from "../../../../dist/analysis/source-evidence/types/emission.js";
 import { createRustTypeEmissionProducer } from "../../../../dist/analysis/program/records/types/type-emission.js";
-import { analyzeRustValueReads } from "../../../../dist/analysis/conversions/value-reads.js";
+import { analyzeRustValueReads, analyzeRustValueProjections } from "../../../../dist/analysis/conversions/value-reads.js";
 import { createRustValueReadProducer } from "../../../../dist/analysis/program/records/storage/value-read.js";
 import { createRustValueProjectionProducer } from "../../../../dist/analysis/program/records/objects/value-projection.js";
 import { createRustConversionEmissionProducer } from "../../../../dist/analysis/program/records/operations/conversion-emission.js";
@@ -349,7 +349,9 @@ export function probe(): void {}
     const reads = createRustValueReadProducer(() => {});
     const projections = createRustValueProjectionProducer(() => {});
     const conversions = createRustConversionEmissionProducer(() => {});
-    const issues = analyzeRustValueReads(admitted, [node], [], reads, projections, conversions);
+    const issues = [...analyzeRustValueReads(admitted, [node], [], reads, projections, conversions),
+      ...analyzeRustValueProjections({ ...admitted, records: { ...admitted.records, ...reads.records } },
+        [node], projections, conversions)];
     assert.equal(issues.length, 0, "the actual pre-seal owner admits the ordered source-to-contextual composition");
     const mappings = createRustProjectUnionMappingProducer(() => {});
     const mappingIssues = analyzeRustProjectUnionMappings(admitted, [node], mappings);

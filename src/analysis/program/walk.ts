@@ -233,6 +233,7 @@ export function selectExpressionOperation(
     };
     const selection = selectRustCheckedCall(request, context, walk.operationOptions);
     if (selection.kind === "reject") {
+      if (selection.diagnostic.category === "error") recordTerminalExpressionFailure(walk, expression);
       recordPolicyRejection(walk, selection);
     } else if (selection.value.kind === "deferred-callback") {
       walk.deferredCallbackCalls.set(expression, {

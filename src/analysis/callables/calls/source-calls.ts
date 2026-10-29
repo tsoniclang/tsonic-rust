@@ -4,7 +4,7 @@ import { rustFrameCallableValue } from "../../../target-model/types/carriers/fra
 import { selectRustFrameInvocationErrors } from "../../errors/regions.js";
 import { normalizeRustErrorType } from "../../errors/error-types.js";
 import { rustUninhabitedError } from "../../../policy/conversions/callable-physical.js";
-import { Node_Expression, sourceEnclosingCallable } from "@tsonic/target-api/source";
+import { BinaryExpression_Left, BinaryExpression_Right, Node_Expression, sourceEnclosingCallable } from "@tsonic/target-api/source";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { RustAnalysisProgram } from "../../program/model.js";
@@ -14,7 +14,7 @@ import type { RustSourceCallEffectsFact } from "../../../target-model/records/ob
 import type { RustTargetOperationFact } from "../../../target-model/records/operations/operations.js";
 import type { RustNativeCallableCall } from "../../../target-model/records/native/native-protocols.js";
 import type { RustTypeDefinitions } from "../../../target-model/types/source-union-definitions.js";
-import { rustCallableProtocol, rustCallableInputProtocol, isRustNeverCarrier, rustOptionElementCarrier, rustTargetGenericTypeArguments } from "../../../target-model/types/index.js";
+import { rustCallableProtocol, rustCallableInputProtocol, isRustNeverCarrier, isRustStringCarrier, rustOptionElementCarrier, rustTargetGenericTypeArguments } from "../../../target-model/types/index.js";
 import { rustGenericCallableProtocol, rustGenericCallableValue } from "../../../target-model/types/carriers/generic-callables.js";
 import { rustNativeCallableCompletion } from "../../../policy/types/callables/native-completion.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
@@ -28,6 +28,8 @@ import { rustNodeIsOutsideNativeCode } from "../../control-flow/compile-time-sta
 import { substituteRustTargetGenerics } from "../../../target-model/types/carriers/substitution.js";
 import type { RustProjectMethodDispatchVariant } from "../../../target-model/records/operations/method-dispatch.js";
 import type { RustStructuralMethodPlan } from "../../../target-model/records/objects/structural-shapes.js";
+import { rustSourceCallBorrowedReturn } from "../ownership/source-input-lifetimes.js";
+import type { RustSourceCallEmission } from "../../../target-model/records/calls/source-calls.js";
 
 export function sourceCallEffectsMatch(fact: Extract<RustTargetOperationFact, { readonly kind: "source-call" }>,
   effects: RustSourceCallEffectsFact | undefined, definitions: RustTypeDefinitions, native?: RustNativeCallableCall,
@@ -173,6 +175,30 @@ export function analyzeRustSourceCalls(program: Omit<RustAnalysisProgram, "reach
     const pinned = owner === undefined ? undefined : program.promiseBodies.pinnedInvocations.get(owner);
     const lexicalParameters = (lexical?.genericParameters ?? []).flatMap((parameter): readonly Extract<TargetTypeRef, { readonly kind: "type-parameter" }>[] =>
       parameter.kind !== "type" ? [] : [{ kind: "type-parameter", identity: parameter.identity, name: parameter.targetName }]);
+    const borrowedReturn = declaration === undefined ? undefined : program.records.sourceCallableReturn.get(declaration)?.borrowedReturn;
+    const loan = rustSourceCallBorrowedReturn(node, program.source.ast, program.records);
+    const read = program.records.readOwnership.get(node);
+    let resultMaterialization: RustSourceCallEmission["resultMaterialization"] = "direct";
+    if (borrowedReturn !== undefined || loan !== undefined) {
+      if (borrowedReturn === undefined || loan === undefined || read === undefined ||
+        loan.declaration !== declaration || loan.parameter !== borrowedReturn.parameter ||
+        loan.carrier.kind !== "reference" || loan.carrier.mutable ||
+        !rustTargetTypeRefEquals(loan.carrier.referent, fact.resultCarrier) ||
+        !rustTargetTypeRefEquals(read.carrier, fact.resultCarrier)) {
+        refuse(node, "rust.backend.source-call-return-loan", "A declared return loan requires its completed exact parameter, actual argument, physical carrier and caller read contract.");
+        continue;
+      }
+      if (isRustStringCarrier(fact.resultCarrier) && read.value.kind !== "borrow") resultMaterialization = "owned-string";
+      else if (program.records.carrierRead.get(fact.resultCarrier)?.copy === true) {
+        const parent = program.source.ast.parent(node);
+        const operation = parent === undefined ? undefined : program.records.targetOperation.get(parent);
+        const side = parent === undefined ? undefined : BinaryExpression_Left(program.source.ast, parent) === node ? 0
+          : BinaryExpression_Right(program.source.ast, parent) === node ? 1 : undefined;
+        const valueOperand = side !== undefined && (operation?.kind === "operator-token" || operation?.kind === "operator-call") &&
+          operation.operandModes[side] === "value" && (side === 0 ? operation.leftConversion : operation.rightConversion) === undefined;
+        if (read.value.kind !== "borrow" || valueOperand) resultMaterialization = "copy-from-borrowed";
+      }
+    }
     producer.publish(node, { declaration, lexical: lexical !== undefined, lexicalParameters: Object.freeze(lexicalParameters),
       optionalStorage: declaration !== undefined && fact.target.form !== "constructor" && !specialized &&
         program.declarationGenericRequirements.contractFor(declaration, fact.asyncBody === undefined ? undefined : true) !== undefined,
@@ -180,6 +206,7 @@ export function analyzeRustSourceCalls(program: Omit<RustAnalysisProgram, "reach
       constructor: constructor === undefined ? undefined : Object.freeze({ name: constructor.targetName }),
       constructorOwner: fact.target.form === "constructor" ? program.projectTypes.definitionForCarrier(fact.target.typeCarrier)?.declaration : undefined,
       dispatch, specializedDispatch: Object.freeze(specializedDispatch), callable, callableCarrier: carrier, eliminateInfallible,
+      resultMaterialization,
       ...(fact.target.form === "callable" && native === undefined && generic === undefined && error !== undefined && !eliminateInfallible
         ? { physicalCallableError: error } : {}),
       never: isRustNeverCarrier(fact.resultCarrier),

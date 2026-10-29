@@ -10,7 +10,8 @@ export function planSourceConversion(node: Node, context: RustPlanContext, acces
   const selected = context.input.program.records.sourceAssertion.get(node);
   if (selected === undefined) failRustPlannerInvariant("An admitted source assertion requires its exact native operand selection.", node);
   const value = planExpression(selected.operand, context, "value", selected.borrowed ? "shared-reference"
-    : selected.conversion === undefined && access !== "value" ? "shared-place" : "value");
+    : selected.conversion === undefined && context.input.program.records.valueProjection.get(node)?.resultForm === "shared-reference"
+      ? "shared-reference" : selected.conversion === undefined && access !== "value" ? "shared-place" : "value");
   if (value === undefined) failRustPlannerInvariant("An admitted source assertion requires its native input.", selected.operand);
   return selected.conversion === undefined ? value : applyRustValueConversion(context,
     { stage: "source", expression: value, node: selected.operand }, selected.conversion, selected.operand, selected.borrowed);

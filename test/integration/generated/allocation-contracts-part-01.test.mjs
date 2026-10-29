@@ -154,7 +154,7 @@ main();
   assertNoTargetDiagnostics(result.diagnostics);
   const output = artifactText(result, "src/index.rs");
   assert.match(output, /select\(&direct, direct\.clone\(\)\)/u);
-  assert.match(output, /select\(&nested, identity\(nested\.clone\(\)\)\)/u);
+  assert.match(output, /select\(&nested, String::from\(identity\(&nested\)\)\)/u);
   assert.match(output, /afterLength\(length\(&completed\), completed\)/u);
   assert.match(output, /owned\(copies\.clone\(\), copies\)/u);
   validateGeneratedProject("overlapping-argument-borrows", result.artifacts, { run: true });

@@ -58,7 +58,8 @@ export type RustPhysicalEmissionSourceOrigins = {
 
 export type RustEmissionReturnDestination =
   | { readonly kind: "none" }
-  | { readonly kind: "value"; readonly carrier: TargetTypeRef; readonly borrowedParameter: Node | undefined };
+  | { readonly kind: "value"; readonly carrier: TargetTypeRef;
+      readonly borrowedReturn: { readonly parameter: Node; readonly carrier: TargetTypeRef } | undefined };
 
 export type RustEmissionErrorContext =
   | { readonly kind: "none" }

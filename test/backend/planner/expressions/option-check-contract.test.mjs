@@ -9,6 +9,7 @@ import { createRustSyntheticNameState } from "../../../../dist/backend/planner/n
 import { analyzeRustBinaryEmission } from "../../../../dist/analysis/operations/binary-emission.js";
 import { createRustBinaryEmissionProducer } from "../../../../dist/analysis/program/records/operations/expression-binary.js";
 import { analyzeRustOptionalChainEmission } from "../../../../dist/analysis/operations/optional-chains.js";
+import { selectRustProviderReads } from "../../../../dist/analysis/operations/provider-forms.js";
 import { createRustOptionalChainEmissionProducer } from "../../../../dist/analysis/program/records/operations/optional-chain-emission.js";
 import { analyzeRustNullishCoalescing } from "../../../../dist/analysis/operations/nullish-coalescing.js";
 import { createRustNullishCoalescingProducer } from "../../../../dist/analysis/program/records/operations/nullish-coalescing.js";
@@ -83,7 +84,7 @@ export function read(values: (string | undefined)[]): void {
 optionalChain: { get: (subject) => subject === node
     ? { ...fact, guardDepth } : program.records.optionalChain.get(subject) }}, program.records);
     const producer = createRustOptionalChainEmissionProducer(() => {});
-    const issues = analyzeRustOptionalChainEmission({ ...program, records }, [node], producer, []);
+    const issues = analyzeRustOptionalChainEmission({ ...program, records }, [node], producer, [], selectRustProviderReads(program, [node]).reads);
     assert.equal(issues.length, 1);
     assert.equal(issues[0].code, "RUST_MISSING_TARGET_FACT");
     assert.ok(issues[0].evidence.includes("target.capability=rust.backend.optional-chain-contract"));

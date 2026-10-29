@@ -19,6 +19,7 @@ import { readRustLanguageCall } from "./native-language-call.js";
 import { type TargetTypeRef } from "../../target-model/types/model.js";
 import { type RustTargetOperationFact } from "../../target-model/records/operations/operations.js";
 import type { RustReferenceOperationRecipe } from "../../target-model/records/operations/reference-operations.js";
+import type { RustSourcePolicyContext } from "../../policy/model/context.js";
 
 export function analyzeRustReferenceOperations(program: Omit<RustAnalysisProgram, "reachability">,
   nodes: readonly Node[], producer: RustReferenceOperationProducer): readonly TargetDiagnostic[] {
@@ -151,10 +152,10 @@ const referenceOperationBySignature = new Map<string, {
 ]);
 
 export function readRustReferenceOperation(
-  walk: RustFactWalk,
+  context: Pick<RustSourcePolicyContext, "source" | "semanticsFor" | "ast">,
   expression: Node,
 ): RustSourceReferenceOperation | undefined {
-  const selected = readRustLanguageCall(walk, expression);
+  const selected = readRustLanguageCall(context, expression);
   if (selected === undefined) return undefined;
   const { selection, declaration } = selected;
   const operation = declaration.signatureId !== undefined
@@ -173,7 +174,7 @@ export function readRustReferenceOperation(
     selectedDeclaration: declaration,
   };
   if (operation.kind === "shared-reference" || operation.kind === "mutable-reference") {
-    const typeArguments = walk.context.ast.typeArguments(expression);
+    const typeArguments = context.ast.typeArguments(expression);
     const lifetimeTypeNode = typeArguments.length === 2 ? typeArguments[1] : undefined;
     return {
       ...base,

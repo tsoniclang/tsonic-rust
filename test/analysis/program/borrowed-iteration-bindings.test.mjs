@@ -7,6 +7,7 @@ import { selectRustBorrowedIterationBinding } from "../../../dist/analysis/stora
 import { finalizeRustProviderOperationAbi } from "../../../dist/policy/operations/members/abi/finalize.js";
 import { validateRustFinalizedOperationAbi } from "../../../dist/policy/operations/members/abi/validation.js";
 import { rustStringToBorrowedStrValueConversion } from "../../../dist/target-model/conversions/model.js";
+import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 
 import { rustBorrowedStrTargetType, rustStringTargetType, rustVecTargetType } from "../../../dist/target-model/types/index.js";
 
@@ -16,7 +17,7 @@ function fixture() {
   const destination = { kind: "KindVariableDeclaration", parent: callable };
   const name = { kind: "KindIdentifier", parent: declaration };
   declaration.name = name;
-  const input = { kind: "KindIdentifier" };
+  const input = { kind: "KindIdentifier", declaration: { kind: "KindParameter", parent: callable } };
   const reference = { kind: "KindIdentifier" };
   const left = { kind: "KindIdentifier", declaration: destination };
   const append = { kind: "KindBinaryExpression", left, right: reference };
@@ -66,10 +67,21 @@ function fixture() {
 } },
 conversion: { get: () => undefined },
 runtimeCarrier: { get: (node) => { return { carrier: node === input ? inputCarrier : string }; } }});
+  const sourceRecords = createRustRecordFixture({ sourceBinding: { get: node => {
+    const selected = node === input ? input.declaration : node === reference ? declaration : node.declaration;
+    return selected === undefined ? undefined : { scope: "lexical", sourceDeclaration: selected };
+  } } }, records);
   const navigation = { declarationUseSummary: () => summary,
     sourceReferenceFor: node => ({ declaration: node === reference ? declaration : node.declaration }) };
-  return { ast, records, navigation, loop, body, append, reference, declaration, input, string,
-    select: () => selectRustBorrowedIterationBinding(loop, ast, records, navigation),
+  const effects = { pureValues: new Set(), fieldWrites: new Map(), stableBindings: new Set(),
+    nativeWrites: new Map([[append, [left]], [reference, []], [input, []], [left, []]]) };
+  const evidence = { input: { ast, records: sourceRecords, navigation }, effects };
+  return { ast, records: sourceRecords, navigation, loop, body, append, reference, declaration, input, string, effects, evidence,
+    select: () => {
+      const expression = body.statements[0]?.expression;
+      if (expression?.operation?.kind === "provider-operation") effects.nativeWrites.set(expression, []);
+      return selectRustBorrowedIterationBinding(loop, ast, sourceRecords, navigation, evidence);
+    },
     setCarrier: carrier => { inputCarrier = carrier; },
     setIteration: value => { iteration = value; },
     setOperation: value => { operation = value; },
@@ -135,9 +147,7 @@ test("borrowed loop selection consumes exact readonly native slices and checked 
 
 test("borrowed loop selection rejects ownership, alias escapes and observable operations without changing owned iteration", () => {
   const mutations = [
-    input => input.setCarrier(rustVecTargetType(input.string)),
     input => input.setCarrier({ kind: "reference", mutable: true, referent: { kind: "slice", element: input.string } }),
-    input => input.setCarrier({ kind: "reference", mutable: false, referent: rustVecTargetType(input.string) }),
     input => input.setCarrier({ kind: "reference", mutable: false, referent: { kind: "slice", element: { kind: "source-primitive", name: "int32" } } }),
     input => input.setIteration({ kind: "iteration", iterationKind: "for-await-of", elementCarrier: input.string,
       lowering: { kind: "borrowed", style: "cloned", input: "reference" } }),
@@ -157,6 +167,60 @@ test("borrowed loop selection rejects ownership, alias escapes and observable op
     mutate(input);
     assert.equal(input.select(), undefined);
   }
+});
+
+test("matching Vec and shared Vec iteration retain the same checked native element", () => {
+  for (const carrier of [rustVecTargetType(rustStringTargetType()),
+    { kind: "reference", mutable: false, referent: rustVecTargetType(rustStringTargetType()) }]) {
+    const input = fixture();
+    input.setCarrier(carrier);
+    assert.equal(input.select()?.declaration === input.declaration, true, "complete immutable native collection remains borrowable");
+  }
+});
+
+test("a native iteration lease requires its own complete interval effect evidence", () => {
+  for (const [label, mutate] of [
+    ["missing write targets", input => input.effects.nativeWrites.delete(input.append)],
+    ["write to the original collection", input => input.effects.nativeWrites.set(input.append, [input.input])],
+    ["foreign checked input", input => { input.evidence.input = { ...input.evidence.input, records: {} }; }],
+  ]) {
+    const input = fixture();
+    assert.equal(input.select() !== undefined, true, `${label}: the original proof is complete`);
+    mutate(input);
+    assert.equal(input.select() === undefined, true, `${label}: no missing or conflicting proof is treated as stable`);
+  }
+});
+
+test("generic native iteration lends the same non-Clone elements through completed shared calls", { timeout: 300_000 }, () => {
+  const { result } = compileRust({ target: { id: "rust", options: { outputType: "lib", crateName: "borrowed_generic_iteration" } },
+    files: { "index.ts": `
+export function keep<Value>(value: Value): Value { return value; }
+export function visit<Value>(values: readonly Value[]): number {
+  let result = 0;
+  for (const value of values) { keep(value); result += 1; }
+  return result;
+}
+` } });
+  assert.equal(result.diagnostics.length, 0, result.diagnostics.map(diagnostic => `${diagnostic.code}: ${diagnostic.message}`).join("\n"));
+  const output = artifactText(result, "src/index.rs");
+  assert.match(output, /\.iter\(\)/u, "the existing native borrowed-iteration consumer renders one shared traversal");
+  assert.doesNotMatch(output, /iter_cloned|\.clone\(/u, "no native child copy or allocation is introduced");
+  const harness = `
+#[cfg(test)]
+mod borrowed_elements {
+    use super::*;
+    struct NoClone(u32);
+    #[test]
+    fn original_non_clone_elements_are_lent_without_copying() {
+        let values = vec![NoClone(7), NoClone(9)];
+        assert_eq!(visit(&values), 2.0);
+        assert!(std::ptr::eq(keep(&values[0]), &values[0]));
+        assert_eq!(values[0].0 + values[1].0, 16);
+    }
+}
+`;
+  validateGeneratedProject("borrowed-generic-element-identity", result.artifacts.map(artifact =>
+    artifact.path === "src/index.rs" ? { ...artifact, text: artifact.text + harness } : artifact));
 });
 
 test("borrowed loop provider uses require exact compiler-selected pure shared-reference inputs", () => {

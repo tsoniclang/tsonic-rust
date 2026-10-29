@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRust } from "../../../helpers/rust-session.mjs";
 import { analyzeRustOptionalChainEmission } from "../../../../dist/analysis/operations/optional-chains.js";
+import { selectRustProviderReads } from "../../../../dist/analysis/operations/provider-forms.js";
 import { analyzeRustErrorFieldBorrows } from "../../../../dist/analysis/operations/error-field-borrows.js";
 import { admitRustOperationSelection } from "../../../../dist/analysis/operations/operation-admission.js";
 import { createRustProgramRecordBuilder } from "../../../../dist/analysis/program/records/create.js";
@@ -131,7 +132,7 @@ function analysisFailure(node, message) {
 
 function assertOptionalAdmissionRejected(program, records, node) {
   const producer = createRustOptionalChainEmissionProducer(() => {});
-  const issues = analyzeRustOptionalChainEmission({ ...program, records }, [node], producer, []);
+  const issues = analyzeRustOptionalChainEmission({ ...program, records }, [node], producer, [], selectRustProviderReads(program, [node]).reads);
   assert.equal(issues.length, 1, "malformed optional correspondence is rejected once before publication");
   assert.equal(issues[0].code, "RUST_MISSING_TARGET_FACT");
   assert.equal(issues[0].source, "tsonic-rust");
@@ -153,7 +154,7 @@ function assertErrorAdmissionRejected(program, records, node) {
 function assertFinalObservationRequired(program, node, context) {
   const writer = createRustProgramRecordBuilder(program.typeDefinitions, program.records);
   const required = [];
-  assert.equal(analyzeRustOptionalChainEmission(program, [node], writer.optionalChainEmissionPlans, required).length, 0);
+  assert.equal(analyzeRustOptionalChainEmission(program, [node], writer.optionalChainEmissionPlans, required, selectRustProviderReads(program, [node]).reads).length, 0);
   assert.equal(analyzeRustErrorFieldBorrows(program, [node], writer.errorFieldPlans, required).length, 0);
   for (const [family, construct, producer] of [
     ["optionalChainEmission", "optional-chain", "analysis/operations/optional-chains.ts"],

@@ -6,7 +6,7 @@ import { KindFunctionExpression, KindFunctionDeclaration, KindNonNullExpression,
 import { rustSourceOptionalTargetType, rustCallableProtocol, rustClosureProtocol } from "../../../target-model/types/index.js";
 import { rustResolutionContext } from "../../program/walk.js";
 import { isDenseDataArray } from "../../../target-model/metadata/closed-data.js";
-import { recordRustParameterAbiSelection, refuseRustParameterCarrier } from "../values/parameter-facts.js";
+import { recordRustParameterAbiSelection, refuseRustParameterCarrier, refuseRustParameterResource } from "../values/parameter-facts.js";
 import { requireDenseSourceNodes } from "../../source-evidence/dense-nodes.js";
 import { resolveRustContextualParameterAbi } from "./source-callable-abi.js";
 import { resolveRustTargetTypeRef } from "../../source-evidence/types/resolution/source.js";
@@ -285,6 +285,10 @@ function recordCallableValueSignatureFacts(
             contextualAbi.valueCarrier,
           )
         : contextualSelection;
+    if (parameterSelection?.kind === "resource-error") {
+      refuseRustParameterResource(walk, parameterSelection);
+      return;
+    }
     if (parameterSelection?.kind === "rejected") {
       refuseRustParameterCarrier(walk, parameter, parameterSelection.reason);
       return;

@@ -1,6 +1,6 @@
 import type { Node, ProviderDeclarationIdentity } from "@tsonic/tsts";
 import type { ResolvedSourceCallInfo } from "@tsonic/target-api/source";
-import type { RustFactWalk } from "../program/walk.js";
+import type { RustSourcePolicyContext } from "../../policy/model/context.js";
 import { resolveProviderTypeIdentity } from "../../policy/identities/provider-types.js";
 import { rustLangModule, rustSourceProviderVersion, rustSourceVirtualModulesProviderId } from "../../target-model/identities/source.js";
 
@@ -9,8 +9,9 @@ export interface RustLanguageCall {
   readonly declaration: ProviderDeclarationIdentity;
 }
 
-export function readRustLanguageCall(walk: RustFactWalk, expression: Node): RustLanguageCall | undefined {
-  const semantics = walk.context.semanticsFor(expression);
+export function readRustLanguageCall(context: Pick<RustSourcePolicyContext, "source" | "semanticsFor">,
+  expression: Node): RustLanguageCall | undefined {
+  const semantics = context.semanticsFor(expression);
   const selection = semantics.operations.call(expression);
   if (selection?.outcome !== "applicable" || selection.call !== expression ||
     selection.sourceSelectedSignatureKind !== "resolved") return undefined;
@@ -18,7 +19,7 @@ export function readRustLanguageCall(walk: RustFactWalk, expression: Node): Rust
   const declaration = resolveProviderTypeIdentity([
     selection.selectedSignature,
     ...(signature === undefined ? [] : [signature]),
-  ], walk.context);
+  ], context);
   return declaration?.providerId === rustSourceVirtualModulesProviderId &&
       declaration.providerVersion === rustSourceProviderVersion &&
       declaration.providerModuleId === rustLangModule &&

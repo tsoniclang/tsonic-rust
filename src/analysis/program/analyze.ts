@@ -440,13 +440,17 @@ export function analyzeRustProgram(context: RustAnalysisContext, outputType: "bi
       const kind = ast.kindName(statement);
       if (kind === KindFunctionDeclaration) {
         const signature = finalizeRustCallableSignature(walk, statement);
+        if (context.diagnostics.some(issue => issue.code === "TSONIC_COMPILER_RESOURCE_LIMIT")) return;
         if (signature.kind === "unresolved") refuseRustUnresolvedParameterCarriers(walk, statement, signature);
       } else if (kind === "KindClassDeclaration" || kind === "KindClassExpression") {
         recordClassSignatureFacts(walk, statement);
       }
+      if (context.diagnostics.some(issue => issue.code === "TSONIC_COMPILER_RESOURCE_LIMIT")) return;
     }
     recordNestedCallableTypeSignatureFacts(walk, sourceFile);
+    if (context.diagnostics.some(issue => issue.code === "TSONIC_COMPILER_RESOURCE_LIMIT")) return;
     recordTopLevelCallableValueSignatureFacts(walk, sourceFile);
+    if (context.diagnostics.some(issue => issue.code === "TSONIC_COMPILER_RESOURCE_LIMIT")) return;
   }
   if (context.diagnostics.length !== signatureDiagnosticCount) {
     return;
@@ -457,6 +461,10 @@ export function analyzeRustProgram(context: RustAnalysisContext, outputType: "bi
   }
   // Pass 2: finalize bodies and expressions against the closed declaration
   // ABI from pass 1.
+  const bodyDiagnosticCount = context.diagnostics.length;
+  const failedParameterAdmission = (): boolean => context.diagnostics.slice(bodyDiagnosticCount).some(issue =>
+    issue.category === "error" && issue.evidence?.includes("target.capability=rust.callable.parameter-carrier") &&
+    (issue.code === "TSONIC_COMPILER_RESOURCE_LIMIT" || issue.evidence.includes("compiler.required-fact=source-parameter-abi")));
   for (const sourceFile of projectSourceFiles) {
     for (const statement of ast.statements(sourceFile) as readonly Node[]) {
       const kind = ast.kindName(statement);
@@ -476,11 +484,13 @@ export function analyzeRustProgram(context: RustAnalysisContext, outputType: "bi
         kind !== "KindEndOfFile") {
         recordStatementFacts(walk, statement, sourceFile, undefined);
       }
+      if (failedParameterAdmission()) return;
     }
     for (const definition of context.projectTypes.definitions) {
       if (definition.sourceFile === sourceFile && definition.kind === "class" &&
         ast.parent(definition.declaration) !== sourceFile) {
         recordClassBodyFacts(walk, definition.declaration, sourceFile);
+        if (failedParameterAdmission()) return;
       }
     }
   }

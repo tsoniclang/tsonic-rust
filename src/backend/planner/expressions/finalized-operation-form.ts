@@ -217,6 +217,9 @@ export function planRustFinalizedOperationForm(
       if (options.resultUse === "storage") {
         return place;
       }
+      if (selected.read === "ref" || selected.read === "mut-ref") {
+        return { kind: "reference", expr: place, ...(selected.read === "mut-ref" ? { mutable: true } : {}) };
+      }
       if (selected.read === "copy") {
         return place;
       }
