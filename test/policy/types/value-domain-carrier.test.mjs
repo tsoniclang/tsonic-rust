@@ -63,7 +63,6 @@ function projected(input, carrier, projection, root = "first", selected = "selec
   const host = {
     sourceStorage: { ...input.storage },
     semantics: file => input.source.semantics.forFile(file),
-    types: { resolveNode() { assert.fail("the original physical carrier is supplied; never resolve a field source type"); } },
   };
   return { host, carrier, source: { subject: origin.subject, bindings: scope.bindings }, bindings: scope.bindings };
 }

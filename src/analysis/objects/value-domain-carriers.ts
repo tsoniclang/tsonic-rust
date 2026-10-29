@@ -10,9 +10,6 @@ export interface RustValueDomainCarrierHost {
   readonly sourceStorage?: SourceStorageQueries;
   readonly sourceTypes: Pick<RustTargetTypeResolutionOptions["sourceTypes"], "structuralFieldProjectionForDeclaration">;
   readonly projectFieldProjection: RustTargetTypeResolutionOptions["projectFieldProjection"];
-  readonly types: {
-    resolveNode(node: Node, sourceFile: SourceFile): TargetTypeRef | undefined;
-  };
   semantics(sourceFile: SourceFile): SourceFileSemantics;
 }
 

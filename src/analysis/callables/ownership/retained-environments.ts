@@ -191,7 +191,6 @@ export function rustRetainedCallLifetimes(
     if (previous?.has(bindings)) return previous.get(bindings);
     const carrier = rustSourceStorageProjectedCarrier({ sourceStorage: storage, sourceTypes: walk.sourceTypes,
       projectFieldProjection: walk.operationOptions.projectFieldProjection, semantics: walk.context.semantics,
-      types: { resolveNode: node => records.runtimeCarrier.get(node)?.carrier },
     }, { subject, bindings }, root);
     const entries = previous ?? new Map<SourceStorageBindings, TargetTypeRef | undefined>();
     entries.set(bindings, carrier);

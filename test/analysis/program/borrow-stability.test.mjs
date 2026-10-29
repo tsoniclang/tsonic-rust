@@ -332,7 +332,7 @@ for (const surfaces of [[], ["js"]]) {
       assert.equal(selected.location, "captured-field");
       assert.equal(program.objectRepresentations.receiverCaptures.isCaptured(selected.field.declaration), true);
       assert.equal(program.ownership.reads.get(selected.value).pure, true);
-      assert.equal(selected.fallible, profile === "js");
+      assert.equal(selected.fallible, false, "ordinary native scalar writes have no runtime freeze failure");
     }
     assert.equal(program.ownership.writes.get({}) === undefined, true, "foreign source node");
   });
