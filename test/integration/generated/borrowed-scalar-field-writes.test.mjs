@@ -51,7 +51,7 @@ for (const surfaces of [[], ["js"]]) {
         const body = functionText(output, name);
         assert.doesNotMatch(body, /\.clone\(\)|Rc::new|Box::new|ObjectHandle::new/u, name);
         assert.match(body, /\.with_mut\(/u, name);
-        if (surfaces.length !== 0) assert.match(body, /validate_data_write/u, name + " freeze guard");
+        if (surfaces.length !== 0) assert.doesNotMatch(body, /validate_data_write/u, name + " has no runtime freeze guard");
       }
       for (const name of ["reentrant", "accessor"]) assert.match(functionText(output, name), /\.clone\(\)/u, name);
       assert.equal(validateGeneratedProject(`borrowed-scalar-writes-${profile}`, result.artifacts, { run: true }).status, 0);

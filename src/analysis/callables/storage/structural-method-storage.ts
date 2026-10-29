@@ -91,7 +91,6 @@ export function createRustStructuralMethodStorage(input: {
   readonly genericCallables: RustGenericCallablePlan;
   readonly projectTypes: RustProjectTypePolicy;
   readonly objectRepresentations: RustObjectRepresentationPlan;
-  readonly frozenDataWrites: Pick<import("../../../target-model/records/storage/frozen-data.js").RustFrozenDataWritePlan, "capturesFieldIdentity">;
 }): {
   prepareConstructors(components: RustSourcePackageComponentClassifications,
     effectsFor: (declaration: Node) => RustErrorEffectsFact | undefined,
@@ -734,9 +733,7 @@ export function createRustStructuralMethodStorage(input: {
         const factoryReceiver = selectRustStructuralFactoryReceiver({ factory, usesThis,
           capturedValues: payload.captures.length + payload.receiverFields.length + payload.receivers.length });
         fields.set(index, Object.freeze({ carrier: existing === undefined ? normalize(field.methodPlan.carrier) : existing.carrier,
-          constructions: existing?.constructions ?? Object.freeze([]), nativeBody: Object.freeze({ declaration, payload, factoryReceiver,
-            receiverFieldIdentities: Object.freeze(payload.receiverFields.map(capture =>
-              input.frozenDataWrites.capturesFieldIdentity(capture.declaration, capture.reference))) }) }));
+          constructions: existing?.constructions ?? Object.freeze([]), nativeBody: Object.freeze({ declaration, payload, factoryReceiver }) }));
       }
       structuralShapes.finalizeMethodStorage(selections, errorForFile);
       for (const expression of new Set([...selections.values()].flatMap(fields =>

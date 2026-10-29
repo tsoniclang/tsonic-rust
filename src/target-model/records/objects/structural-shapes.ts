@@ -58,7 +58,7 @@ export interface RustStructuralMethodStorageSelection {
   readonly carrier: TargetTypeRef;
   readonly constructions: readonly RustStructuralMethodConstruction[];
   readonly nativeBody: { readonly declaration: Node; readonly payload: RustStructuralMethodPayload;
-    readonly receiverFieldIdentities: readonly boolean[]; readonly factoryReceiver: "value" | "shared" } | undefined;
+    readonly factoryReceiver: "value" | "shared" } | undefined;
 }
 
 export interface RustStructuralShapeDefinition<MethodPlan = RustStructuralMethodPlan> {

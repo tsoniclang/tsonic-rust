@@ -314,7 +314,7 @@ function planConstructor(
   if (frame !== undefined && frameLayout === undefined) failRustPlannerInvariant("An admitted native class requires its complete syntax and native storage plan.", classDeclaration);
   const construction = planRustConstructionBody(constructionPlan, fields,
     classType,
-    (values, identity, frameCounter, retainedFrame) => {
+    (values, frameCounter, retainedFrame) => {
       return createRustProjectObject(className, stateName,
       fields.filter(field => frameLayout?.ownsField(field.declaration) !== true)
         .map(field => ({ name: field.targetName, value: values.get(field.declaration)! })).concat(
@@ -325,7 +325,7 @@ function planConstructor(
           name: environment.instanceFieldName, value: { kind: "path" as const, path: environment.parameterName },
         }]),
       representation, !environment?.instancesUseEnvironment || representation.kind === "value"
-        ? undefined : { kind: "path", path: environment.parameterName }, identity);
+        ? undefined : { kind: "path", path: environment.parameterName });
     },
     constructorContext);
   if (construction === undefined) failRustPlannerInvariant("An admitted native class requires its complete syntax and native storage plan.", classDeclaration);

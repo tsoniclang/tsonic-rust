@@ -9,7 +9,6 @@ export function selectRustProjectFieldDispatch(input: {
   readonly accessorRead: boolean;
   readonly accessorWrite: boolean;
   readonly mutableContent: boolean;
-  readonly frozenWrite: boolean;
 }): RustProjectFieldDispatchPlan {
   return Object.freeze({
     declaration: input.declaration,
@@ -22,7 +21,7 @@ export function selectRustProjectFieldDispatch(input: {
     }),
     ...(input.readonly ? {} : { write: Object.freeze({
       selfMode: input.accessorWrite ? "rc" as const : "ref" as const,
-      fallible: input.accessorWrite || input.frozenWrite,
+      fallible: input.accessorWrite,
     }) }),
   });
 }

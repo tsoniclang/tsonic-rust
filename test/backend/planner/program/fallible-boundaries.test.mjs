@@ -8,7 +8,6 @@ import { planRustNativeErrorJoin } from "../../../../dist/backend/planner/types/
 import { applyRustErrorBoundary, applyRustLocalErrorBoundary, rustTargetRuntimeErrorType } from "../../../../dist/backend/planner/types/error-boundary.js";
 import { applyRustFallibleResultExpression } from "../../../../dist/backend/planner/types/fallible-shape.js";
 import { printRustExpr } from "../../../../dist/print/source/expressions/core.js";
-import { checkRustDataWrite } from "../../../../dist/backend/planner/objects/data-writes.js";
 import { readRustProjectDispatchedField, writeRustProjectDispatchedField } from "../../../../dist/backend/planner/objects/project-objects.js";
 import { analyzeRustSourcePackageErrorBoundaries } from "../../../../dist/analysis/errors/source-packages.js";
 import { createRustSourcePackageEmissionProducer } from "../../../../dist/analysis/program/records/program/source-packages.js";
@@ -148,22 +147,6 @@ test("native channels remain distinct when actual error types coincide, includin
   }
   assert.equal(printRustExpr(rustPropagateLocalError(region, local.errorType, call("callback"))),
     `callback().map_err(${equalJoinPath}::Local)?`);
-});
-
-test("runtime data-write guards enter the selected local channel and fail closed without one", () => {
-  const concrete = rustPackageFallibleBoundary(owner);
-  const region = rustNativeFallibleBoundary(join([local, callback]), { owner, source: local });
-  const nativeOnly = rustNativeFallibleBoundary(join([callback]));
-  const receiver = path("receiver");
-  const effect = call("write");
-  const checked = checkRustDataWrite("receiver", receiver, effect, region);
-  assert.equal(checked.value === effect, true);
-  assert.equal(printRustExpr(checked.effect), `receiver.validate_data_write().map_err(rt::TsonicError::from).map_err(${localJoinPath}::Local)?`);
-  const previous = checkRustDataWrite("receiver", receiver, effect, concrete);
-  assert.equal(previous.effect.expr.receiver === receiver, true);
-  assert.equal(previous.effect.operandErrorType === rustTargetRuntimeErrorType, true);
-  assert.equal(previous.effect.resultErrorType === concrete.errorType, true);
-  assert.equal(checkRustDataWrite("receiver", receiver, effect, nativeOnly) === undefined, true);
 });
 
 test("field dispatch preserves pure access and routes fallible reads and writes through the real local owner", () => {

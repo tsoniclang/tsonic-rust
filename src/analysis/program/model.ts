@@ -82,7 +82,6 @@ export interface RustAnalysisProgram {
   readonly ownership: import("../../target-model/records/storage/ownership.js").RustOwnershipRecords;
   readonly retainedCallableInputs: import("../../target-model/records/callables/retained-inputs.js").RustRetainedCallableInputPlan;
   readonly structuralShapes: RustStructuralShapePlan;
-  readonly frozenDataWrites: import("../../target-model/records/storage/frozen-data.js").RustFrozenDataWritePlan;
   readonly classValues: import("../../target-model/records/objects/class-values.js").RustClassValuePlan;
   readonly runtimeReferences: RustRuntimeReferencePlan;
   readonly dispatchContexts: import("../project/dispatch-contexts.js").RustDispatchContextDeclarations;

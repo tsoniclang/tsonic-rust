@@ -16,7 +16,6 @@ import { planRustFrameCallableEntry, publishRustFrameCallable } from "../express
 
 import { rustBindingStorageOperations, rustInlineBindingStoragePath, rustInlineBindingStorageType } from "../expressions/binding-storage.js";
 import { projectRustFrameOwnerData, rustFrameOwnerReference, type RustLiveFrameOwner } from "../program/frame-owners.js";
-import { checkRustDataWrite } from "../objects/data-writes.js";
 import { initializeOrWriteRustDeferredStorage, initializeRustDeferredStorage } from "./deferred-storage.js";
 import { planRustProjectedObjectLocation } from "../expressions/object-field-locations.js";
 
@@ -167,16 +166,11 @@ export function rustFrameBindingLocation(
         const { cell, operations } = select(data);
         return project(operations?.borrowedRead(cell) ?? cell);
       }) } : {}),
-    write: (value, writeContext) => {
+    write: value => {
       const mutable = binding.storage === "value" && owner.data.kind === "object" && owner.data.mutable;
       const effect = projectRustFrameOwnerData(owner, data => writeRustFrameBindingPayload(binding,
         { kind: "field", receiver: data, name: binding.fieldName }, value, context, mutable), mutable);
-      const selected = writeContext.input.program.records.frameBinding.get(binding);
-      if (selected === undefined) failRustPlannerInvariant("An admitted frame write requires its sealed native storage decision.", binding.declaration);
-      const checked = owner.data.kind === "object" && selected.checkedWrite;
-      const region = checked ? writeContext.fallibleBoundary : undefined;
-      return effect === undefined || checked && region === undefined ? undefined
-        : region === undefined ? effect : checkRustDataWrite("receiver", owner.expression, effect, region);
+      return effect;
     },
     ...(binding.initialization !== "deferred" ? {} : { initialize: (value: RustExpr) => projectRustFrameOwnerData(owner,
       data => initializeRustFrameBindingValue(binding, select(data).field, value)) }),

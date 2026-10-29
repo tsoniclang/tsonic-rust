@@ -1,7 +1,7 @@
 import type { Node } from "@tsonic/tsts";
 import type { TargetTypeRef } from "../../types/model.js";
 import type { RustStructuralShapeField } from "../objects/structural-shapes.js";
-import type { RustFrozenWriteReceiver, RustProjectFieldDispatchPlan } from "./field-writes.js";
+import type { RustProjectFieldDispatchPlan } from "./field-writes.js";
 import type { RustTargetOperationFact } from "../operations/operations.js";
 
 export type RustValueFieldProjectionStep =
@@ -15,7 +15,6 @@ export interface RustValueFieldProjection {
 }
 
 export interface RustStoredFieldEmission {
-  readonly check: RustFrozenWriteReceiver | undefined;
   readonly declaration: Node | undefined;
   readonly path: readonly string[] | undefined;
   readonly borrowedRead: boolean;

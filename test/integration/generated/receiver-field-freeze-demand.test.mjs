@@ -10,7 +10,7 @@ import { Node_Initializer } from "@tsonic/target-api/source";
 
 
 for (const { name, declarations, invocation } of retainedFieldFreezeOrigins)
-  test(`retained direct writes observe ${name} freeze without guarding reads`, { timeout: 300_000 }, () => {
+  test(`retained direct writes preserve native mutation after ${name} freeze`, { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces: ["js"], target: { id: "rust", options: { outputType: "bin" } },
       files: { "index.ts": retainedFieldFreezeOriginSource(declarations, invocation) +
         '\nexport function main(): void { if (!run()) throw new Error("retained freeze origin"); }\nmain();\n' } });
@@ -18,7 +18,7 @@ for (const { name, declarations, invocation } of retainedFieldFreezeOrigins)
     validateGeneratedProject(`retained-field-freeze-origin-${name}`, result.artifacts, { run: true });
   });
 
-test("generic inherited field captures observe freeze through the exact structural instantiation", { timeout: 300_000 }, () => {
+test("generic inherited field captures retain exact native storage through readonly identity", { timeout: 300_000 }, () => {
   const { result } = compileRust({ surfaces: ["js"], target: { id: "rust", options: { outputType: "bin" } },
     files: { "index.ts": retainedFieldGenericFreezeSource +
       '\nexport function main(): void { if (!run()) throw new Error("generic inherited freeze"); }\nmain();\n' } });
@@ -62,11 +62,11 @@ export function createShallow(): Shallow { return new Shallow(); }
 ` } };
   const { program } = analyzeRust(options);
   for (const [name, expectedCaptures] of [
-    ["ReadOnly", [["read", "value", "cell", false]]],
-    ["Immutable", [["read", "value", "copy", false]]],
-    ["Mixed", [["read", "value", "cell", false], ["change", "value", "cell", true]]],
-    ["Unselected", [["change", "value", "cell", false]]],
-    ["Shallow", [["change", "child", "borrow-cell", false]]],
+    ["ReadOnly", [["read", "value", "cell"]]],
+    ["Immutable", [["read", "value", "copy"]]],
+    ["Mixed", [["read", "value", "cell"], ["change", "value", "cell"]]],
+    ["Unselected", [["change", "value", "cell"]]],
+    ["Shallow", [["change", "child", "borrow-cell"]]],
   ]) {
     const representation = program.objectRepresentations.representations.find(value => value.definition.sourceName === name);
     assert.equal(representation !== undefined, true, `exact ${name} owner`);
@@ -74,7 +74,7 @@ export function createShallow(): Shallow { return new Shallow(); }
     assert.equal(program.projectTypes.isPolymorphic(representation.definition), false, `${name} is internally closed`);
     const ast = program.source.ast;
     const members = ast.members(representation.definition.declaration).filter(member => member !== undefined);
-    for (const [callbackName, fieldName, storageKind, retainsIdentity] of expectedCaptures) {
+    for (const [callbackName, fieldName, storageKind] of expectedCaptures) {
       const member = members.find(selected => ast.text(ast.name(selected)) === callbackName);
       const field = members.find(selected => ast.text(ast.name(selected)) === fieldName);
       assert.equal(member !== undefined && field !== undefined, true, `${name}.${callbackName} exact declarations`);
@@ -89,8 +89,7 @@ export function createShallow(): Shallow { return new Shallow(); }
       assert.equal(storage !== undefined, true, `${name}.${fieldName} sealed physical storage`);
       assert.equal(storage.storage.kind, storageKind, `${name}.${fieldName} native storage kind`);
       assert.equal(storage.storage.initialization, "ready", `${name}.${fieldName} initialized field`);
-      assert.equal(program.frozenDataWrites.capturesFieldIdentity(field, captures[0].reference), retainsIdentity,
-        `${name}.${callbackName} exact freeze-identity retention`);
+      assert.equal(program.frozenDataWrites === undefined, true, `${name}.${callbackName} has no freeze-only identity transport`);
     }
   }
   const { result } = compileRust(options);
@@ -166,15 +165,15 @@ mod capture_costs {
         let (observed, read_cost) = measure(|| reader.call(()));
         assert_eq!(observed.expect("read-only field read"), 1.0);
         assert_eq!(read_cost, Cost::default());
-        let (_, freeze_cost) = measure(|| { tsonic_rust_runtime::freeze_object(&generated); });
-        let (_, native_freeze_cost) = measure(|| { tsonic_rust_runtime::freeze_object(&native); });
+        let (_, freeze_cost) = measure(|| { core::convert::identity(&generated); });
+        let (_, native_freeze_cost) = measure(|| { core::convert::identity(&native); });
         assert_eq!(freeze_cost, native_freeze_cost);
-        assert_eq!(freeze_cost.allocations, 1);
+        assert_eq!(freeze_cost, Cost::default());
         assert_eq!(freeze_cost.reallocations, 0);
         let (_, outer_drop) = measure(|| drop(generated));
         let (_, native_outer_drop) = measure(|| drop(native));
         assert_eq!(outer_drop, native_outer_drop);
-        assert_eq!(outer_drop.deallocations, 2);
+        assert_eq!(outer_drop.deallocations, 1);
         assert_eq!(reader.call(()).expect("escaped read-only field read"), 1.0);
         let (_, last_drop) = measure(|| drop(reader));
         let (_, native_last_drop) = measure(|| drop(native_reader));
@@ -189,47 +188,44 @@ mod capture_costs {
     }
 
     fn native_mixed() -> rt::ObjectRef<NativeMixedState> {
-        let identity = rt::ObjectIdentity::new();
         let value = Rc::new(Cell::new(1.0));
         let read_value = value.clone();
         let read = rt::Callable::new(move |()| Ok(read_value.get()));
         let write_value = value.clone();
-        let write_identity = identity.clone();
         let change = rt::Callable::new(move |()| {
-            write_identity.validate_data_write()?;
             write_value.set(2.0);
             Ok(())
         });
-        rt::ObjectRef::with_context_and_identity(NativeMixedState { value, read, change }, (), identity)
+        rt::ObjectRef::new(NativeMixedState { value, read, change })
     }
 
     #[test]
-    fn only_the_writer_retains_the_mixed_field_identity() {
+    fn mixed_readers_and_writers_share_only_the_native_field_owner() {
         let (value, generated_cost) = measure(Mixed::new);
         let (native, native_cost) = measure(native_mixed);
         assert_eq!(generated_cost, native_cost);
-        assert_eq!(generated_cost.allocations, 5);
+        assert_eq!(generated_cost.allocations, 4);
         assert_eq!(native.with(|state| state.value.get()), 1.0);
         let reader = value.state.with(|state| state.read.clone());
         let writer = value.state.with(|state| state.change.clone());
         let native_reader = native.with(|state| state.read.clone());
         let native_writer = native.with(|state| state.change.clone());
-        let (_, freeze_cost) = measure(|| { tsonic_rust_runtime::freeze_object(&value); });
-        let (_, native_freeze_cost) = measure(|| { tsonic_rust_runtime::freeze_object(&native); });
+        let (_, freeze_cost) = measure(|| { core::convert::identity(&value); });
+        let (_, native_freeze_cost) = measure(|| { core::convert::identity(&native); });
         assert_eq!(freeze_cost, Cost::default());
         assert_eq!(freeze_cost, native_freeze_cost);
         let (_, outer_drop) = measure(|| drop(value));
         let (_, native_outer_drop) = measure(|| drop(native));
         assert_eq!(outer_drop, native_outer_drop);
         assert_eq!(outer_drop.deallocations, 1);
-        assert_eq!(reader.call(()).expect("frozen field read"), 1.0);
-        assert!(writer.call(()).is_err());
-        assert!(native_writer.call(()).is_err());
+        assert_eq!(reader.call(()).expect("readonly field read"), 1.0);
+        writer.call(()).expect("native mutable alias write");
+        native_writer.call(()).expect("handwritten native mutable alias write");
         let (_, writer_drop) = measure(|| drop(writer));
         let (_, native_writer_drop) = measure(|| drop(native_writer));
         assert_eq!(writer_drop, native_writer_drop);
-        assert_eq!(writer_drop.deallocations, 2);
-        assert_eq!(reader.call(()).expect("read after writer release"), 1.0);
+        assert_eq!(writer_drop.deallocations, 1);
+        assert_eq!(reader.call(()).expect("read after writer release"), 2.0);
         let (_, reader_drop) = measure(|| drop(reader));
         let (_, native_reader_drop) = measure(|| drop(native_reader));
         assert_eq!(reader_drop, native_reader_drop);
@@ -285,7 +281,6 @@ mod capture_costs {
         let captured = child.clone();
         let change = rt::Callable::new(move |()| {
             let selected = captured.borrow();
-            selected.validate_data_write()?;
             selected.with_mut(|state| state.value = 2.0);
             Ok(())
         });
@@ -302,10 +297,10 @@ mod capture_costs {
         assert_eq!(native.with(|state| state.child.borrow().with(|child| child.value)), 2.0);
         let change = generated.state.with(|state| state.change.clone());
         let native_change = native.with(|state| state.change.clone());
-        let (_, freeze_cost) = measure(|| { tsonic_rust_runtime::freeze_object(&generated); });
-        let (_, native_freeze_cost) = measure(|| { tsonic_rust_runtime::freeze_object(&native); });
+        let (_, freeze_cost) = measure(|| { core::convert::identity(&generated); });
+        let (_, native_freeze_cost) = measure(|| { core::convert::identity(&native); });
         assert_eq!(freeze_cost, native_freeze_cost);
-        assert_eq!(freeze_cost.allocations, 1);
+        assert_eq!(freeze_cost, Cost::default());
         let (outcome, write_cost) = measure(|| change.call(()));
         outcome.expect("shallow native child write");
         assert_eq!(write_cost, Cost::default());
@@ -313,7 +308,7 @@ mod capture_costs {
         let (_, outer_drop) = measure(|| drop(generated));
         let (_, native_outer_drop) = measure(|| drop(native));
         assert_eq!(outer_drop, native_outer_drop);
-        assert_eq!(outer_drop.deallocations, 2);
+        assert_eq!(outer_drop.deallocations, 1);
         change.call(()).expect("escaped child writer");
         let (_, last_drop) = measure(|| drop(change));
         let (_, native_last_drop) = measure(|| drop(native_change));

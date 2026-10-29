@@ -64,7 +64,6 @@ export function rustTargetOperationIsFallible(
   fact: RustTargetOperationFact | undefined,
   structuralStorage: RustStructuralStorageLookup,
   projectFieldDispatch: RustProjectFieldDispatchLookup,
-  frozenDataWrites: import("../../../target-model/records/storage/frozen-data.js").RustFrozenDataWritePlan,
   definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
 ): boolean {
   if (fact === undefined) {
@@ -74,7 +73,7 @@ export function rustTargetOperationIsFallible(
     return true;
   }
   if (fact.kind === "union-property") return fact.variants.some(variant => variant.operation !== undefined &&
-    rustTargetOperationIsFallible(variant.operation, structuralStorage, projectFieldDispatch, frozenDataWrites, definitions));
+    rustTargetOperationIsFallible(variant.operation, structuralStorage, projectFieldDispatch, definitions));
   if (fact.kind === "typed-location") {
     return fact.operation === "load" || fact.operation === "store";
   }
@@ -88,12 +87,8 @@ export function rustTargetOperationIsFallible(
     return false;
   }
   if (fact.kind === "source-indexed-field") return true;
-  if (fact.kind === "source-method-property") {
-    return fact.accessMode !== "read" && frozenDataWrites.receiverForDeclaration(fact.declaration) !== undefined;
-  }
+  if (fact.kind === "source-method-property") return false;
   if (fact.kind === "source-field") {
-    if (fact.accessMode !== "read" && fact.valueSemantics.kind === "stored" &&
-      frozenDataWrites.receiverFor(fact.storage, fact.receiverCarrier, fact.storageIndex) !== undefined) return true;
     const projectDispatch = fact.dispatch === undefined
       ? undefined
       : fact.declaration === undefined
@@ -116,12 +111,11 @@ export function rustTargetOperationIsFallible(
       return variant !== undefined && field !== undefined && rustTargetOperationIsFallible({
         kind: "source-field", operationId: fact.operationId, accessMode: fact.accessMode,
         receiverCarrier: variant.carrier, resultCarrier: fact.resultCarrier, ...field,
-      }, structuralStorage, projectFieldDispatch, frozenDataWrites, definitions);
+      }, structuralStorage, projectFieldDispatch, definitions);
     });
   }
   if (fact.kind === "object-shape-projection") {
     if (fact.projection === "assign") return fact.assignmentFields?.some(field =>
-      frozenDataWrites.receiverFor(fact.storage, fact.sourceValueCarrier, field.targetStorageIndex) !== undefined ||
       fact.storage === "structural-object" && (rustStructuralFieldIsFallible(structuralStorage.field(
         fact.sourceValueCarrier, field.targetStorageIndex)) || fact.assignmentSourceCarrier !== undefined &&
         rustStructuralFieldIsFallible(structuralStorage.field(fact.assignmentSourceCarrier, field.sourceStorageIndex)))) === true;

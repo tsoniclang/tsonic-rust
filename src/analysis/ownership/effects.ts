@@ -29,7 +29,6 @@ export interface RustBorrowEffectsInput {
   readonly records: RustProgramRecords;
   readonly projectTypes: RustAnalysisProgram["projectTypes"];
   readonly objectRepresentations: RustAnalysisProgram["objectRepresentations"];
-  readonly frozenDataWrites: RustAnalysisProgram["frozenDataWrites"];
   readonly structuralShapes: RustAnalysisProgram["structuralShapes"];
   readonly navigation: RustAnalysisProgram["sourceNavigation"];
 }
@@ -257,7 +256,7 @@ function selectBorrowedWrite(
   }
   return Object.freeze({ target, value, receiver, owner, field,
     location: captured ? "captured-field" : "stored-field",
-    fallible: input.frozenDataWrites.receiverFor(stored.storage, stored.receiverCarrier, stored.storageIndex) !== undefined });
+    fallible: false });
 }
 
 // An element read (`values[0]`) borrows its receiver; it neither consumes nor replaces the binding (an element write

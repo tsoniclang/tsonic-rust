@@ -1,8 +1,7 @@
 import type { Node, SourceFile } from "@tsonic/tsts";
-import type { SourceStorageBindings, SourceStorageProducer, SourceStorageQueries } from "@tsonic/target-api/analysis";
+import type { SourceStorageProducer, SourceStorageQueries } from "@tsonic/target-api/analysis";
 import type { SourceFileSemantics } from "@tsonic/target-api/source";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
-import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustJsArrayLikeElementTargetType } from "../../target-model/types/carriers/js.js";
 import { rustFixedArrayCarrierValue } from "../../target-model/types/carriers/native.js";
 import type { RustTargetTypeResolutionOptions } from "../source-evidence/types/resolution/model.js";
@@ -15,41 +14,6 @@ export interface RustValueDomainCarrierHost {
     resolveNode(node: Node, sourceFile: SourceFile): TargetTypeRef | undefined;
   };
   semantics(sourceFile: SourceFile): SourceFileSemantics;
-}
-
-export function rustValueDomainHasTargetType(
-  host: RustValueDomainCarrierHost,
-  node: Node,
-  expected: TargetTypeRef,
-  bindings: SourceStorageBindings,
-): boolean {
-  const storage = host.sourceStorage;
-  if (storage === undefined || bindings === undefined || storage.failureReason() !== undefined) return false;
-  const selected = storage.subjectFor(node);
-  if (selected.kind !== "resolved") return false;
-  const origins = storage.storageProducersFor(selected.subject, bindings);
-  if (origins.kind !== "complete" || origins.producers.length === 0) return false;
-  const sourceFile = storage.source.ast.getSourceFile(node);
-  if (sourceFile === undefined || !storage.source.semantics.includes(sourceFile)) return false;
-  const queries = host.semantics(sourceFile);
-  const selectedType = queries.types.expressionType(node);
-  if (selectedType === undefined) return false;
-  const selectedMembers = queries.types.isUnion(selectedType)
-    ? queries.types.unionOrIntersectionTypes(selectedType) : [selectedType];
-  const admitsAbsence = selectedMembers.some(type => queries.types.isNullish(type));
-  let present = false;
-  for (const origin of origins.producers) {
-    if (host.semantics(origin.sourceFile).types.isNullish(origin.type)) {
-      if (admitsAbsence) return false;
-      continue;
-    }
-    if (origin.subject.kind !== "value") return false;
-    const carrier = rustSourceStorageProjectedCarrier(host, origin,
-      host.types.resolveNode(origin.subject.node, origin.sourceFile));
-    if (carrier === undefined || !rustTargetTypeRefEquals(carrier, expected)) return false;
-    present = true;
-  }
-  return present && storage.failureReason() === undefined;
 }
 
 export function rustSourceStorageProjectedCarrier(

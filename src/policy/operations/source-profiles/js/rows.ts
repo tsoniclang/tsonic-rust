@@ -1,5 +1,5 @@
 import { rustInt32ToFloat64ValueConversion, rustStringToBorrowedStrValueConversion } from "../../../../target-model/conversions/model.js";
-import { rustJsValueTargetType, rustJsValueTargetId, rustTsValueTargetId, rustJsArrayConcatItemTargetType, rustJsArrayTargetType, rustJsArrayTargetId, rustSourcePrimitiveTargetType } from "../../../../target-model/types/index.js";
+import { rustJsValueTargetType, rustJsArrayConcatItemTargetType, rustJsArrayTargetType, rustJsArrayTargetId, rustSourcePrimitiveTargetType } from "../../../../target-model/types/index.js";
 import { defineJsOperationRows } from "./model.js";
 import { exactJsStringOperationRows } from "./exact-string-rows.js";
 import { jsCapabilityOperationRows } from "./capability-rows.js";
@@ -319,25 +319,7 @@ export const jsOperationRows = defineJsOperationRows([
   ...stringConstructionRows,
   { owner: "ObjectConstructor", member: "keys", operationKind: "call", lane: "object", firstArgCarrierId: rustJsArrayTargetId, shape: { op: "operation", operationKind: "method", target: { form: "call", path: "js_abi::JsArray::object_keys", argModes: ["ref"] }, result: { ref: "string-array" }, params: [{ ref: "argument", index: 0 }] } },
   { owner: "ObjectConstructor", member: "is", operationKind: "call", lane: "object", variadic: true, shape: { op: "operation", operationKind: "method", target: { form: "call-value-array", path: "js_abi::object_is", leadingArguments: [], elementCarrier: rustJsValueTargetType() }, result: { ref: "bool" } } },
-  { owner: "ObjectConstructor", member: "freeze", operationKind: "call", lane: "object", requirements: [{ carrier: { ref: "argument", index: 0 }, capability: "freezable-object" }], shape: { op: "operation", operationKind: "method", target: { form: "call", path: "tsonic_rust_runtime::freeze_object", argModes: ["ref"] }, result: { ref: "argument", index: 0 }, params: [{ ref: "argument", index: 0 }] } },
-  { owner: "ObjectConstructor", member: "isFrozen", operationKind: "call", lane: "object", requirements: [{ carrier: { ref: "argument", index: 0 }, capability: "object-identity" }], shape: { op: "operation", operationKind: "method", target: { form: "call", path: "tsonic_rust_runtime::object_is_frozen", argModes: ["ref"] }, result: { ref: "bool" }, params: [{ ref: "argument", index: 0 }] } },
-  ...([
-    { id: rustTsValueTargetId, path: "tsonic_rust_runtime::TsValue", variant: "native-value" },
-    { id: rustJsValueTargetId, path: "js_abi::JsValue", variant: "js-value" },
-  ] as const).flatMap(({ id, path, variant }): readonly JsOperationRowData[] => [
-    { owner: "ObjectConstructor", member: "freeze", operationKind: "call", lane: "object", variant,
-      firstArgCarrierId: id,
-      requirements: [{ carrier: { ref: "argument", index: 0 }, capability: "empty-object-domain" }],
-      shape: { op: "operation", operationKind: "method",
-        target: { form: "call", path: `${path}::freeze_object_state`, argModes: ["ref"] },
-        result: { ref: "argument", index: 0 }, params: [{ ref: "argument", index: 0 }] } },
-    { owner: "ObjectConstructor", member: "isFrozen", operationKind: "call", lane: "object", variant,
-      firstArgCarrierId: id,
-      requirements: [{ carrier: { ref: "argument", index: 0 }, capability: "empty-object-domain" }],
-      shape: { op: "operation", operationKind: "method",
-        target: { form: "call", path: `${path}::object_state_is_frozen`, argModes: ["ref"] },
-        result: { ref: "bool" }, params: [{ ref: "argument", index: 0 }] } },
-  ]),
+  { owner: "ObjectConstructor", member: "freeze", operationKind: "call", lane: "object", shape: { op: "operation", operationKind: "method", target: { form: "call", path: "core::convert::identity", argModes: ["value"] }, evaluation: "pure", result: { ref: "argument", index: 0 }, params: [{ ref: "argument", index: 0 }] } },
   ...sharedArrayOperationRows,
   { owner: "ArrayConstructor", member: "from", operationKind: "call", lane: "js-array", variant: "string", shape: { op: "operation", operationKind: "method", target: { form: "call", path: "js_abi::array_from_string", argModes: ["value"] }, result: { ref: "string-array" }, params: [{ ref: "borrowed-str" }] } },
   { owner: "ArrayConstructor", member: "from", operationKind: "call", lane: "js-array", variant: "native-array", selectedMethodTypeArgumentArity: 1, requirements: [{ carrier: { ref: "selected-method-type-argument", index: 0 }, capability: "clone", source: { kind: "argument", sourceIndex: 0, projection: [0] } }], shape: { op: "operation", operationKind: "method", target: { form: "call", path: "js_abi::array_from_vec", argModes: ["ref"] }, result: { ref: "selected-method-output-array", index: 0 }, params: [{ ref: "selected-method-input-array", index: 0 }] } },

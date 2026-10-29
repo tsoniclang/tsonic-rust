@@ -61,8 +61,6 @@ export function value(limit: number): number {
       reader("RustNativeDeclarationForms.get", nodes, node => program.nativeDeclarations.get(node), () => program.nativeDeclarations.get(foreign)),
       reader("RustClassValuePlan.forDeclaration", nodes, node => program.classValues.forDeclaration(node), () => program.classValues.forDeclaration(foreign)),
       reader("RustClassValuePlan.viewFor", nodes, node => program.classValues.viewFor(node, itemCarrier, itemCarrier), () => program.classValues.viewFor(foreign, itemCarrier, itemCarrier)),
-      reader("RustFrozenDataWritePlan.capturesFieldIdentity", nodes, node => program.frozenDataWrites.capturesFieldIdentity(node), () => program.frozenDataWrites.capturesFieldIdentity(foreign), "false"),
-      reader("RustFrozenDataWritePlan.receiverForDeclaration", nodes, node => program.frozenDataWrites.receiverForDeclaration(node), () => program.frozenDataWrites.receiverForDeclaration(foreign)),
       reader("RustBorrowedElementReads.forExpression", nodes, node => program.borrowedElementReads.forExpression(node), () => program.borrowedElementReads.forExpression(foreign)),
       reader("RustBorrowedElementReads.forIteration", nodes, node => program.borrowedElementReads.forIteration(node), () => program.borrowedElementReads.forIteration(foreign)),
       reader("RustBorrowedElementReads.forStatement", nodes, node => program.borrowedElementReads.forStatement(node), () => program.borrowedElementReads.forStatement(foreign)),
@@ -99,10 +97,10 @@ export function value(limit: number): number {
       reader("RustLifetimeIndex.allContracts", [undefined], () => program.sourceLifetimes.allContracts(), () => program.sourceLifetimes.allContracts(), "collection"),
     ];
     const declared = new Set(keelOwnedTargets["tsonic-rust"].recordReaders.map(entry => entry.symbol));
-    assert.equal(readers.length, 39);
+    assert.equal(readers.length, 37);
     assert.equal(readers.every(current => declared.has(current.symbol)), true,
       "all and only the exact audited contracts must be registered");
-    assert.equal(new Set(readers.map(current => current.symbol)).size, 39);
+    assert.equal(new Set(readers.map(current => current.symbol)).size, 37);
     assert.equal(nodes.length > 40, true, "the fixture contains actual checked source subjects");
     gate.closed = true;
     let positiveObjects = 0;

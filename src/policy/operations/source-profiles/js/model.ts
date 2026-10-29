@@ -46,7 +46,6 @@ export interface JsOperationRequest {
     callback: RustCallbackOperationTemplate,
   ) => TargetTypeRef | undefined;
   readonly carrierSupportsProjectIdentity?: (carrier: TargetTypeRef) => boolean;
-  readonly argumentValueDomainHasTargetType?: (index: number, expected: TargetTypeRef) => boolean;
   readonly canRequireClone?: (carrier: TargetTypeRef) => boolean;
   readonly numericParameterArgument?: (index: number, carrier: TargetTypeRef, domain: "numeric" | "number") => boolean;
   readonly resultUse?: "consumed" | "discarded";
@@ -205,7 +204,7 @@ export type JsCarrierRef =
   | { readonly ref: "argument"; readonly index: number }
   | { readonly ref: "numeric-argument"; readonly index: number };
 
-type JsCarrierCapability = "numeric" | "integer" | "numeric-parameter" | "number-parameter" | "optional-number" | "clone" | "stringifiable" | "js-equality" | "project-identity-equality" | "object-identity" | "freezable-object" | "empty-object-domain";
+type JsCarrierCapability = "numeric" | "integer" | "numeric-parameter" | "number-parameter" | "optional-number" | "clone" | "stringifiable" | "js-equality" | "project-identity-equality" | "object-identity";
 
 type JsCarrierRequirement = { readonly carrier: JsCarrierRef } & (
   | {

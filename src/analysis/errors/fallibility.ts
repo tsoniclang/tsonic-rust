@@ -253,7 +253,7 @@ function collectFallibilityFacts(
       operation,
       walk.context.structuralShapes,
       walk.context.projectFieldDispatch,
-      walk.context.frozenDataWrites, walk.context.typeDefinitions,
+      walk.context.typeDefinitions,
     ) ||
       (operation?.kind === "provider-operation" || operation?.kind === "runtime-set") &&
         rustOperationAbiConversionsAreFallible(operation.abi) ||

@@ -48,7 +48,6 @@ export interface RustFrameEmissionRecords {
 
 export interface RustFrameBindingEmission {
   readonly copy: boolean;
-  readonly checkedWrite: boolean;
 }
 
 export interface RustFrameInputAdmission {

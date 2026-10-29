@@ -18,7 +18,7 @@ export function rustCallablePayloadTypes(
   const types = [...payload.captures.map(capture => rustCallableCaptureStorageType(capture, capture.storageCarrier, context)),
     ...payload.receiverFields.map(capture => {
       const type = rustTypeFromCarrierInContext(capture.storageCarrier, context);
-      return type === undefined ? undefined : rustCapturedReceiverFieldType(capture, type, context);
+      return type === undefined ? undefined : rustCapturedReceiverFieldType(capture, type);
     }), ...payload.receivers.map(capture => rustTypeFromCarrierInContext(capture.storageCarrier, context))];
   return types.some(type => type === undefined) ? undefined : types as readonly RustType[];
 }

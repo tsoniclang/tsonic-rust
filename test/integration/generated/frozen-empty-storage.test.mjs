@@ -29,15 +29,15 @@ const positiveSources = frozenEmptyStorageSources;
 for (const [name, source] of positiveSources) {
   test(`broad empty freeze preserves native identity through ${name}`, { timeout: 300_000 }, () => {
     const { result, text } = compile(source);
-    assert.match(text, /JsValue::(?:freeze_object_state|object_state_is_frozen)/u);
+    assert.doesNotMatch(text, /freeze_object|object_is_frozen|freeze_object_state|object_state_is_frozen|validate_data_write/u);
     const root = writeGeneratedProject(`frozen-empty-${name}`, result.artifacts);
     const index = join(root, "src/index.rs");
-    writeFileSync(index, `${readFileSync(index, "utf8")}\n#[test]\nfn original_authored_identity_and_state() { ${nativeInitialization(result)} assert!(run()); }\n`);
+    writeFileSync(index, `${readFileSync(index, "utf8")}\n#[test]\nfn original_authored_identity() { ${nativeInitialization(result)} assert!(run()); }\n`);
     runCargo(root, ["test", "--offline", "--", "--test-threads=1"]);
   });
 }
 
-test("cross-file object signatures retain exact closed EmptyObject origins", { timeout: 300_000 }, () => {
+test("cross-file object signatures preserve the declared native identity", { timeout: 300_000 }, () => {
   const { result } = compileRust({ surfaces: ["js"], files: frozenEmptyStorageCrossFileSources });
   assert.equal(result.diagnostics.length, 0,
     result.diagnostics.slice(0, 4).map(diagnostic => diagnostic.message.slice(0, 256)).join("\n"));
@@ -54,16 +54,15 @@ test("repeated broad freeze has exactly the handwritten native allocation and by
       const first: object = {};
       const alias = retain(first);
       const frozen = Object.freeze(first);
-      return frozen === alias && first === alias && Object.isFrozen(first) && Object.isFrozen(alias);
+      return frozen === alias && first === alias;
     }
     export function run(): boolean {
       const value: object = {};
-      let frozen = false;
+      let same = false;
       for (let iteration = 0; iteration < 20000; iteration += 1) {
-        Object.freeze(value);
-        frozen = Object.isFrozen(value);
+        same = Object.freeze(value) === value;
       }
-      return frozen;
+      return same;
     }
   `);
   const root = writeGeneratedProject("frozen-empty-allocation", result.artifacts);
@@ -76,18 +75,17 @@ mod freeze_costs {
     ${nativeOwnershipCostSupport(root)}
     fn handwritten() -> bool {
         let value = rt::EmptyObject::new();
-        let mut frozen = false;
+        let mut same = false;
         for _iteration in 0..20000 {
-            rt::freeze_object(&value);
-            frozen = rt::object_is_frozen(&value);
+            same = core::convert::identity(&value) == &value;
         }
-        frozen
+        same
     }
     fn handwritten_aliases() -> bool {
         let first = rt::EmptyObject::new();
         let alias = first.clone();
-        let frozen = rt::freeze_object(&first);
-        frozen == alias && first == alias && rt::object_is_frozen(&first) && rt::object_is_frozen(&alias)
+        let frozen = core::convert::identity(first.clone());
+        frozen == alias && first == alias
     }
     #[test]
     fn original_broad_carrier_adds_no_allocation_or_bytes() {
@@ -120,11 +118,22 @@ mod freeze_costs {
 });
 
 const openSources = frozenEmptyStorageOpenSources;
+const nativeIdentityCases = new Set([
+  "private erased record", "exported opaque object", "exported opaque object with local empty call",
+  "exported alias", "mixed allocation origins", "exported generic unknown with local empty call",
+  "escaping private callable",
+]);
 
 for (const [name, source] of openSources) {
-  test(`open empty freeze domain rejects ${name} before publication`, () => {
+  test(`${nativeIdentityCases.has(name) ? "native readonly identity supports" : "isFrozen rejects"} ${name} before publication`, () => {
     const { result } = compileRust({ surfaces: ["js"], files: { "index.ts": source } });
-    assert.equal(result.diagnostics.some(diagnostic => diagnostic.code === "RUST_SELECTED_OPERATION_UNSUPPORTED"), true,
+    if (nativeIdentityCases.has(name)) {
+      assert.equal(result.diagnostics.length, 0,
+        result.diagnostics.slice(0, 4).map(row => `${row.code}: ${row.message.slice(0, 256)}`).join("\n"));
+      assert.equal(result.artifacts.length > 0, true, "the declared native form publishes");
+      return;
+    }
+    assert.equal(result.diagnostics.some(diagnostic => diagnostic.code === "TSONIC_IS_FROZEN_UNSUPPORTED"), true,
       `exact operation owner rejection: ${result.diagnostics.slice(0, 3).map(diagnostic => diagnostic.code).join(",")}`);
     assert.equal(result.artifacts.length, 0, "rejected source publishes no artifacts");
   });

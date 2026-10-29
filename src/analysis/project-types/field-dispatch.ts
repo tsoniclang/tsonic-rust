@@ -11,7 +11,6 @@ import type {
   RustProjectTypePolicy,
 } from "./index.js";
 import { rustProjectMemberIsPrivate } from "./member-privacy.js";
-import type { RustFrozenDataWritePlan } from "../../target-model/records/storage/frozen-data.js";
 import type { RustReceiverFieldAliasQueries } from "./receiver-field-aliases.js";
 
 import type { RustProjectFieldDispatchPlan } from "../../target-model/records/storage/field-writes.js";
@@ -35,7 +34,6 @@ export interface RustProjectFieldDispatchPlanRegistry
   initialize(input: {
     readonly ast: AstReader;
     readonly projectTypes: RustProjectTypePolicy;
-    readonly frozenDataWrites: RustFrozenDataWritePlan;
     readonly mutableContentFields: ReadonlySet<Node>;
     readonly receiverFieldAliases: RustReceiverFieldAliasQueries;
     semanticsFor(node: Node): SourceFileSemantics;
@@ -139,7 +137,6 @@ export function createRustProjectFieldDispatchPlanRegistry(): RustProjectFieldDi
             declaration: field.declaration, readonly,
             receiverAlias, receiverAliasRead, accessorRead, accessorWrite,
             mutableContent: input.mutableContentFields.has(field.declaration),
-            frozenWrite: input.frozenDataWrites.receiverForDeclaration(field.declaration) !== undefined,
           }));
         }
       }

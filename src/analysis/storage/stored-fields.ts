@@ -106,7 +106,7 @@ export function analyzeRustStoredFields(program: Omit<RustAnalysisProgram, "reac
       });
       producer.structural(carrier, fields, value);
       for (const [fieldIndex, field] of fields.entries()) {
-        producer.field("structural-object", carrier, fieldIndex, { check: program.frozenDataWrites.receiverFor("structural-object", carrier, fieldIndex),
+        producer.field("structural-object", carrier, fieldIndex, {
           declaration: undefined, path: field.field.storage === "stored" ? [field.field.targetName] : undefined,
           dispatch: undefined, borrowedRead: field.borrowedRead });
         pending.push(field.field.carrier);
@@ -125,7 +125,7 @@ export function analyzeRustStoredFields(program: Omit<RustAnalysisProgram, "reac
       const read = plan === undefined ? undefined : program.projectTypes.memberSlotName(field.declaration, "read");
       const write = plan === undefined ? undefined : program.projectTypes.memberSlotName(field.declaration, "write");
       producer.field("project-object", carrier, field.index, { declaration: field.external ? undefined : field.declaration,
-        check: program.frozenDataWrites.receiverFor("project-object", carrier, field.index), path: name === undefined ? undefined : Object.freeze([name]),
+        path: name === undefined ? undefined : Object.freeze([name]),
         borrowedRead: name !== undefined, dispatch: plan === undefined || read === undefined || write === undefined ? undefined : Object.freeze({ plan, read, write }) });
     }
   }

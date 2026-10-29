@@ -39,7 +39,7 @@ function planImplementation(implementation: RustSuspendedCallableImplementation,
     rustCallableCaptureStorageType(capture, selected.captures[index]!, scoped)),
     ...implementation.receiverFields.map((capture, index) => {
       const type = rustTypeFromCarrierInContext(implementation.storage[implementation.captures.length + index]!, scoped);
-      return type === undefined ? undefined : rustCapturedReceiverFieldType(capture, type, scoped);
+      return type === undefined ? undefined : rustCapturedReceiverFieldType(capture, type);
     }), ...implementation.receivers.map((_capture, index) => rustTypeFromCarrierInContext(
       implementation.storage[implementation.captures.length + implementation.receiverFields.length + index]!, scoped))];
   if (argumentsType === undefined || resultType === undefined || target === undefined || storage.some(type => type === undefined))

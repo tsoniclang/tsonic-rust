@@ -579,16 +579,10 @@ export function analyzeRustProgram(context: RustAnalysisContext, outputType: "bi
     walk.context.records.receiverIndependentMethods.finalize(walk, projectSourceFiles,
       fileName => sourcePackageIdentities.componentIdForFile(fileName)!),
   );
-  context.frozenDataWrites.initialize({ jsEnabled: walk.jsEnabled, ast, projectTypes,
-    representations: context.objectRepresentations, structuralShapes: context.structuralShapes,
-    isNativeNode: context.isNativeNode,
-    sourceFiles: projectSourceFiles, records: context.records, views: context.classValues.instanceViewRequests(),
-    typeDefinitions: context.typeDefinitions });
   context.projectFieldDispatch.initialize({
     ast,
     projectTypes,
     semanticsFor: context.semanticsFor,
-    frozenDataWrites: context.frozenDataWrites,
     mutableContentFields: mutableStorageDeclarations.declarations,
     receiverFieldAliases: context.objectRepresentations,
   });
@@ -628,7 +622,6 @@ export function analyzeRustProgram(context: RustAnalysisContext, outputType: "bi
     frameBindingCarriers, sourceStorage: context.sourceStorage,
     sourceTypes: walk.sourceTypes,
     projectTypes: context.projectTypes, objectRepresentations: context.objectRepresentations,
-    frozenDataWrites: context.frozenDataWrites,
     typeDefinitions: context.typeDefinitions, lexicalFunctions: lexical, structuralShapes: context.structuralShapes,
     retainedEnvironments: context.retainedEnvironments, nativeTasks: context.nativeTaskGraph,
     normalizeTypeFamily: rustTypeFamilyNormalizer(context.typeFamilies),

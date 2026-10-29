@@ -7,14 +7,12 @@ import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import {
   emptyRustGenerics, type RustExpr, type RustImplFunction, type RustItem, type RustStructField, type RustType,
 } from "../../../target-ast/syntax/nodes.js";
-import { rustCurrentErrorBoundary, type RustPlanContext } from "../../program/plan-context.js";
-import { rustPackageFallibleBoundary } from "../../program/fallible-boundaries.js";
+import type { RustPlanContext } from "../../program/plan-context.js";
 import { allocateRustSyntheticTypeName, type RustSyntheticNameState } from "../../names/synthetic.js";
 import { rustSelfParameter } from "../../declarations/callables/self-parameter.js";
 import { rustTypeFromCarrierInContext } from "../../types/render.js";
 import { rustStructuralDispatchType } from "../project-structural-types.js";
 import { rustStructuralShapeGenerics, rustStructuralShapeContext } from "../structural-generics.js";
-import { checkRustDataWrite } from "../data-writes.js";
 import type { RustStructuralObjectFieldInitializer } from "../project-storage.js";
 import { createRustStructuralObjectFromCarrier } from "../project-storage.js";
 import { planNativeModuleFunction } from "../../declarations/callables/functions.js";
@@ -151,17 +149,10 @@ export function createStructuralLiteralImplementation(
       if (!store(field.targetName, storageIndex, "value", field.carrier)) failRustPlannerInvariant("An admitted structural literal requires its exact native storage and accessor emission.", expression);
       getter = { kind: "call", path: "Ok", args: [read(field.targetName, selectedField.copy)] };
       if (property.setterTargetName !== undefined) {
-        let write: RustExpr = { kind: "method-call", receiver: { kind: "path", path: "self" }, method: "with_mut", args: [{
+        const write: RustExpr = { kind: "method-call", receiver: { kind: "path", path: "self" }, method: "with_mut", args: [{
           kind: "closure-block", params: [{ name: "state", mutable: false }], move: false, async: false,
           body: { statements: [{ kind: "assign", target: selected(field.targetName), operator: "=", value: { kind: "path", path: "value" } }] },
         }] };
-        if (selectedField.frozen) {
-          const owner = rustCurrentErrorBoundary(context);
-          const checked = owner === undefined ? undefined
-            : checkRustDataWrite("receiver", { kind: "path", path: "self" }, write, rustPackageFallibleBoundary(owner));
-          if (checked === undefined) failRustPlannerInvariant("An admitted structural literal requires its exact native storage and accessor emission.", expression);
-          write = checked;
-        }
         setter = { kind: "evaluate-then", effect: write, discard: "unit", value: { kind: "call", path: "Ok", args: [{ kind: "tuple-literal", elements: [] }] } };
       }
     }

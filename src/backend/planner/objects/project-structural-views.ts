@@ -18,7 +18,6 @@ import { rustStructuralViewInstance, rustStructuralViewIntoRoot, rustStructuralV
   rustStructuralViewImplementationContext, rustStructuralViewImplementationGenerics } from "./project-structural-roots.js";
 import { rustDirectProjectFieldStoragePath } from "./project-storage.js";
 import { readRustCapturedField, rustCapturedFieldStorage, writeRustCapturedFieldFromStorage } from "./captured-fields.js";
-import { checkRustDataWrite } from "./data-writes.js";
 import { planRustSourceAccessorCall } from "../expressions/properties.js";
 import { applyFallibleShape, applyRustFallibleResultExpression } from "../types/fallible-shape.js";
 import { rustStructuralDispatchType } from "./project-structural-types.js";
@@ -186,11 +185,6 @@ export function planRustProjectStructuralImplementations(declaration: Node, cont
               kind: "closure-block", params: [{ name: "state", mutable: false }], move: false, async: false,
               body: { statements: [{ kind: "assign", target: selected, operator: "=", value: { kind: "path", path: "value" } }] },
             }] };
-          }
-          if (context.input.program.records.frozenDataReceiver.get(member.declaration) !== undefined) {
-            const checked = checkRustDataWrite("receiver", { kind: "path", path: "self" }, write, rustPackageFallibleBoundary(boundary));
-            if (checked === undefined) failRustPlannerInvariant("A frozen structural field requires its admitted native error ABI.", member.declaration);
-            write = checked;
           }
           functions.push({ kind: "function", name: field.property.setterTargetName, visibility: "private", generics: emptyRustGenerics,
             selfParam: rustSelfParameter(field.property.selfMode), params: [{ name: "value", type }], returnType: { kind: "unit" }, errorType: rustErrorType(boundary),

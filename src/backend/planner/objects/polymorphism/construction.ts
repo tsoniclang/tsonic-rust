@@ -62,7 +62,7 @@ export function planProjectClassConstructor(
     functionAbsenceReturnCarrier: undefined,
     fallibleBoundary: boundary === undefined ? undefined : rustPackageFallibleBoundary(boundary),
   };
-  const materialize = (values: ReadonlyMap<Node, RustExpr>, retainedIdentity?: RustExpr): RustExpr => {
+  const materialize = (values: ReadonlyMap<Node, RustExpr>): RustExpr => {
     let state: RustExpr | undefined;
     for (const layer of layers) {
       const nativeState = rustProjectStateType(layer.carrier, constructorContext);
@@ -75,7 +75,7 @@ export function planProjectClassConstructor(
     if (state === undefined) failRustPlannerInvariant("Sealed construction lost its physical state lineage.", definition.declaration);
     return { kind: "block", body: { statements: [
       { kind: "let", name: "identity", mutable: false,
-        init: retainedIdentity === undefined ? { kind: "call", path: "rt::ObjectIdentity::new", args: [] } : cloneExpression(retainedIdentity) },
+        init: { kind: "call", path: "rt::ObjectIdentity::new", args: [] } },
       { kind: "tail", expr: { kind: "struct-literal", path: wrapperType.path, fields: [
         { name: rustProjectObjectIdentityField, value: cloneExpression({ kind: "path", path: "identity" }) },
         { name: rustProjectObjectDispatchField, value: { kind: "call", path: "alloc::rc::Rc::new", args: [{

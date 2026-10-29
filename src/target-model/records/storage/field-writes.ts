@@ -3,8 +3,6 @@ import type { RustObjectRepresentation } from "../objects/object-representation.
 import type { RustBorrowedFieldWrite } from "./ownership.js";
 import type { RustRecordFamily } from "../program.js";
 
-export type RustFrozenWriteReceiver = "receiver" | "state" | "identity";
-
 export interface RustProjectFieldDispatchRole {
   readonly selfMode: "ref" | "rc";
   readonly fallible: boolean;
@@ -25,12 +23,10 @@ export type RustProjectFieldImplementation =
 
 export interface RustMethodWriteReceiver {
   readonly representation: RustObjectRepresentation;
-  readonly check: RustFrozenWriteReceiver | undefined;
 }
 
 export interface RustFieldWriteRecords {
   readonly accessorReceiver: RustRecordFamily<RustAccessorReceiver>;
-  readonly frozenDataReceiver: RustRecordFamily<RustFrozenWriteReceiver>;
   readonly borrowedFieldWrite: RustRecordFamily<RustBorrowedFieldWrite>;
   readonly projectFieldDispatch: RustRecordFamily<RustProjectFieldDispatchPlan>;
   readonly methodWriteReceiver: RustRecordFamily<RustMethodWriteReceiver>;

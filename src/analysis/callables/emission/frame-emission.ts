@@ -43,7 +43,6 @@ export function analyzeRustFrameEmission(input: {
     for (const binding of definition.bindings) input.producer.binding(binding, {
       copy: binding.entry?.copy === true || binding.entry === undefined && isRustCopyCarrier(binding.carrier,
         selected => program.callableValues.generic.definitionFor(selected)?.copy === true),
-      checkedWrite: program.frozenDataWrites.receiverForDeclaration(binding.declaration) !== undefined,
     });
     const implementations = definition.entries.flatMap(entry => entry.implementations);
     for (const implementation of implementations) implementationDeclarations.add(implementation.declaration);
@@ -91,8 +90,7 @@ export function analyzeRustFrameEmission(input: {
     if (carrier === undefined) failTargetAnalysisInvariant("tsonic-rust", "An admitted frame field requires its exact instantiated native carrier.", declaration);
     const selected = rustTargetTypeRefEquals(carrier, binding.carrier) ? binding : Object.freeze({ ...binding, carrier });
     if (selected !== binding) input.producer.binding(selected, { copy: selected.entry?.copy === true || selected.entry === undefined &&
-      isRustCopyCarrier(carrier, callable => program.callableValues.generic.definitionFor(callable)?.copy === true),
-      checkedWrite: program.frozenDataWrites.receiverForDeclaration(declaration) !== undefined });
+      isRustCopyCarrier(carrier, callable => program.callableValues.generic.definitionFor(callable)?.copy === true) });
     input.producer.classField(declaration, receiver, { binding: selected, frame });
   };
   for (const node of input.nodes) {

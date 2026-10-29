@@ -84,8 +84,6 @@ export interface RustAdmittedConstruction {
   /** Fields whose initializer value is always overwritten before it can be observed (evaluated for its effects). */
   readonly unobservedInitializers: ReadonlySet<Node>;
   readonly physicalDeclarations: ReadonlyMap<Node, Node>;
-  readonly retainedFieldIdentities: ReadonlySet<Node>;
-  readonly retainedReferenceIdentities: ReadonlySet<Node>;
   readonly completesNormally: boolean;
   readonly publishesReceiver: boolean;
   readonly mutableReceiver: boolean;

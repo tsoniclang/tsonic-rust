@@ -147,7 +147,6 @@ export interface RustPlanContext {
   readonly bindingLocations?: ReadonlyMap<Node, import("../objects/value-fields.js").RustValueFieldLocation>;
   readonly frameOwners?: ReadonlyMap<import("../../../target-model/records/callables/frame-callables.js").RustFrameCallableDefinition, RustFrameOwner>;
   readonly capturedFieldOwners?: ReadonlyMap<Node, RustExpr>;
-  readonly capturedFieldIdentities?: ReadonlyMap<Node, RustExpr>;
   readonly flowReadOverrides?: ReadonlyMap<Node, RustFlowReadOverride>;
   readonly capturedBindings?: readonly RustCapturedBinding[];
   readonly classEnvironment?: { readonly declaration: Node; readonly expression: RustExpr; readonly borrowed?: boolean };

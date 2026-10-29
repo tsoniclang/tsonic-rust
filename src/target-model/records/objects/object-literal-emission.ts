@@ -11,7 +11,6 @@ export type RustRecordLiteralFact = Extract<RustTargetOperationFact, { readonly 
 export interface RustStructuralLiteralFieldEmission {
   readonly field: RustStructuralShapeField;
   readonly copy: boolean;
-  readonly frozen: boolean;
   readonly method: ({ readonly parameters: readonly TargetTypeRef[]; readonly result: TargetTypeRef; readonly storage: TargetTypeRef } & (
     | { readonly kind: "fixed"; readonly declaration: Node; readonly payload: RustStructuralMethodPayload }
     | { readonly kind: "stored" }

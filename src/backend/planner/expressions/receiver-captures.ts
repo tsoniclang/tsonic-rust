@@ -9,8 +9,6 @@ import { requireRustCarrierRequirements } from "../types/generic-requirements.js
 import { failRustPlannerInvariant } from "../diagnostics.js";
 import { substituteRustTargetGenerics } from "../../../target-model/types/index.js";
 import { planExpression } from "./entry.js";
-import { checkRustDataWrite } from "../objects/data-writes.js";
-import { rustValueBlock } from "../../target-ast/syntax/value-block.js";
 import { planRustReceiverAlias } from "../objects/polymorphism/receiver-aliases.js";
 import { cloneRustExpression } from "../../target-ast/syntax/expressions.js";
 
@@ -91,11 +89,9 @@ export function rustCapturedReceiverContext(
 }
 
 export function rustCapturedReceiverFieldType(
-  capture: RustClosureCaptureFact["receiverFields"][number], type: RustType, context: RustPlanContext,
+  capture: RustClosureCaptureFact["receiverFields"][number], type: RustType,
 ): RustType {
-  const owner = rustCapturedFieldType(capture.storage, type);
-  return capturedFieldIdentity(capture.declaration, capture.reference, context)
-    ? { kind: "tuple", elements: [{ kind: "named", path: "rt::ObjectIdentity" }, owner] } : owner;
+  return rustCapturedFieldType(capture.storage, type);
 }
 
 export function planRustCapturedReceiverFields(
@@ -129,18 +125,7 @@ export function planRustReceiverFieldOwners(
       failRustPlannerInvariant("An admitted live receiver field requires its exact initialized native owner.", capture.reference);
     }
     const name = allocateRustSyntheticName(creation.syntheticNames, "captured_field");
-    const guarded = capturedFieldIdentity(capture.declaration, capture.reference, creation);
-    const receiver = guarded && creation.capturedFieldIdentities?.get(capture.reference) === undefined
-      ? planExpression(capture.receiver, creation) : undefined;
-    const identity = creation.capturedFieldIdentities?.get(capture.reference) ?? (receiver === undefined ? undefined
-      : { kind: "call" as const, path: "rt::ObjectIdentityCarrier::object_identity",
-        args: [{ kind: "reference" as const, expr: receiver }] });
-    if (guarded && identity === undefined) {
-      failRustPlannerInvariant("An admitted frozen retained field requires its exact live object identity owner.", capture.reference);
-    }
-    bindings.push({ name, value: guarded ? { kind: "tuple-literal", elements: [
-      { kind: "method-call", receiver: identity!, method: "clone", args: [] }, owner,
-    ] } : owner });
+    bindings.push({ name, value: owner });
     retained.push({ kind: "path", path: name });
   }
   return { bindings, context: rustCapturedReceiverFieldContext(fields, invocation, index => retained[index]!) };
@@ -152,32 +137,14 @@ export function rustCapturedReceiverFieldContext(
 ): RustPlanContext {
   const locations = new Map(context.valueFieldLocations ?? []);
   const owners = new Map(context.capturedFieldOwners ?? []);
-  const identities = new Map(context.capturedFieldIdentities ?? []);
   for (const [index, capture] of fields.entries()) {
-    const retained = ownerFor(index);
-    const guarded = capturedFieldIdentity(capture.declaration, capture.reference, context);
-    const identity: RustExpr = { kind: "field", receiver: retained, name: "0" };
-    const owner: RustExpr = guarded ? { kind: "field", receiver: retained, name: "1" } : retained;
+    const owner = ownerFor(index);
     const carrier = substituteRustTargetGenerics(capture.carrier, context.typeParameterSubstitutions ?? new Map(),
       context.lifetimeSubstitutions ?? new Map());
     for (const reference of capture.references) {
       owners.set(reference, owner);
-      const location = rustCapturedFieldLocation(capture.storage, owner, carrier, context);
-      if (guarded) identities.set(reference, identity);
-      locations.set(reference, !guarded ? location : { ...location, write: (value, writeContext) => {
-        const region = writeContext.fallibleBoundary;
-        if (region === undefined || writeContext.syntheticNames === undefined) return undefined;
-        const name = allocateRustSyntheticName(writeContext.syntheticNames, "field_value");
-        const effect = location.write({ kind: "path", path: name }, writeContext);
-        const checked = effect === undefined ? undefined : checkRustDataWrite("receiver", identity, effect, region);
-        return checked === undefined ? undefined : rustValueBlock([{ name, value }], checked);
-      } });
+      locations.set(reference, rustCapturedFieldLocation(capture.storage, owner, carrier, context));
     }
   }
-  return { ...context, valueFieldLocations: locations, capturedFieldOwners: owners, capturedFieldIdentities: identities };
-}
-
-function capturedFieldIdentity(declaration: Node, reference: Node, context: RustPlanContext): boolean {
-  return context.input.program.records.capturedFieldIdentity.get(declaration, reference)
-    ?? failRustPlannerInvariant("An admitted retained field requires its selected native identity capture.", reference);
+  return { ...context, valueFieldLocations: locations, capturedFieldOwners: owners };
 }

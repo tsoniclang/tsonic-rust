@@ -266,6 +266,10 @@ export function resolveRustCheckedCall(
     if (!options.jsEnabled) {
       return rejectSelectedOperation(request.source.call, context, "RUST_JS_SURFACE_REQUIRED", "The selected call belongs to the explicit JavaScript source profile, which is not active.");
     }
+    if (selectedSourceMember.ownerName === "ObjectConstructor" && selectedSourceMember.memberName === "isFrozen") {
+      return rejectSelectedOperation(request.source.call, context, "TSONIC_IS_FROZEN_UNSUPPORTED",
+        "Object.isFrozen has no native equivalent; immutability is a compile-time property. Use readonly declarations instead.");
+    }
     if (checkedCallIsConstruction(request, context)) {
       const typeArgumentCarriers = (request.source.sourceSelectedMethodTypeArguments ?? []).map((argument) =>
         resolveRustTargetTypeRef(argument.explicitTypeNode ?? argument.selectedType,

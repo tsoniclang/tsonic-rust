@@ -19,7 +19,6 @@ import { applyRustFallibleResultExpression } from "../../types/fallible-shape.js
 import { failRustPlannerInvariant } from "../../diagnostics.js";
 import { emptyRustGenerics } from "../../../target-ast/syntax/nodes.js";
 import { rustSelfParameter } from "../../declarations/callables/self-parameter.js";
-import { checkRustDataWrite } from "../data-writes.js";
 import { planCheckedProjectProjectionImplementation } from "../checked-project-projections.js";
 
 export function planContractImplementation(
@@ -143,12 +142,6 @@ export function planContractImplementation(
                 ],
               }],
             };
-      const check = stateField === undefined ? undefined
-        : context.input.program.records.frozenDataReceiver.get(field.declaration);
-      if (writeValue !== undefined && check !== undefined) {
-        if (fieldErrorBoundary === undefined) failRustPlannerInvariant("An admitted native object literal requires its exact sealed contract implementation.", contract.definition.declaration);
-        writeValue = checkRustDataWrite(check, { kind: "path", path: "self" }, writeValue, rustPackageFallibleBoundary(fieldErrorBoundary));
-      }
       if (writeValue === undefined || !dispatch.write.fallible && accessor !== undefined) {
         failRustPlannerInvariant("An admitted native object literal requires its exact sealed contract implementation.", contract.definition.declaration);
       }

@@ -637,11 +637,11 @@ export function createRustStructuralShapeConstruction(
                 return Object.freeze({ ...capture, storageCarrier: argument.type });
               })),
             });
-            if (captureIndex !== physical.genericArguments.length || body.receiverFieldIdentities.length !== payload.receiverFields.length)
+            if (captureIndex !== physical.genericArguments.length)
               failTargetAnalysisInvariant("tsonic-rust", "A fixed structural method requires its complete physical capture argument inventory.", methodPlan.declaration);
             return Object.freeze({ ...field, carrier: rustTargetTypeRefEquals(field.carrier, nativeField.type) ? field.carrier : nativeField.type,
               methodPlan: Object.freeze({ ...methodPlan, carrier: selection.carrier,
-              payload, context: selectRustStructuralMethodContextCarrier(payload, body.receiverFieldIdentities),
+              payload, context: selectRustStructuralMethodContextCarrier(payload),
               factoryReceiver: body.factoryReceiver, constructions }),
             });
           }));

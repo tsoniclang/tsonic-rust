@@ -31,7 +31,6 @@ import type { RustSourceCallableSpecializationPlanRegistry } from "../callables/
 import { createRustCallableValuePlanRegistry, type RustCallableValuePlanRegistry } from "../callables/values/value-plan.js";
 import { createRustStructuralShapePlanRegistry } from "../objects/shapes/structural-shape-registry.js";
 import type { RustStructuralShapePlanRegistry } from "../objects/shapes/structural-shape-registry.js";
-import { createRustFrozenDataWriteRegistry, type RustFrozenDataWriteRegistry } from "../objects/frozen-data-writes.js";
 import { createRustSafetyApplicationFactIndex } from "../safety/application-index.js";
 import type { RustSafetyApplicationFactIndex } from "../safety/application-index.js";
 import { createRustObjectRepresentationPlanRegistry, type RustObjectRepresentationPlanRegistry } from "../project-types/object-representation.js";
@@ -94,7 +93,6 @@ export interface RustAnalysisContext extends RustSourcePolicyContext {
   readonly callableValues: RustCallableValuePlanRegistry;
   readonly sourceLifetimes: RustLifetimeIndex;
   readonly structuralShapes: RustStructuralShapePlanRegistry;
-  readonly frozenDataWrites: RustFrozenDataWriteRegistry;
   readonly classValues: RustClassValueRegistry;
   readonly providerSemantics: RustProviderSemantics;
   readonly dispatchContexts: import("../project/dispatch-contexts.js").RustDispatchContextCatalog;
@@ -243,7 +241,6 @@ export function createRustAnalysisContext(
     callableValues: createRustCallableValuePlanRegistry(),
     sourceLifetimes: lifetimes.index ?? emptyRustLifetimeIndex,
     structuralShapes: createRustStructuralShapePlanRegistry(),
-    frozenDataWrites: createRustFrozenDataWriteRegistry(),
     classValues: createRustClassValueRegistry(),
     providerSemantics,
     dispatchContexts,

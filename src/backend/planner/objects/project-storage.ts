@@ -10,7 +10,6 @@ import type { RustAssignmentOperator } from "../../../target-model/syntax/tokens
 import type { RustExpr, RustCallGenericArgument } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { rustPropagateLocalError } from "../program/fallible-boundaries.js";
-import { checkRustDataWrite } from "./data-writes.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { requireRustCarrierRead } from "../types/carrier-reads.js";
 import { failRustPlannerInvariant } from "../diagnostics.js";
@@ -332,37 +331,6 @@ export function writeRustStoredObjectField(
   projection: readonly string[] = [],
   receiverIsBorrowed = false,
 ): RustExpr | undefined {
-  const check = projection.length === 0
-    ? context.input.program.records.storedField.get(storage, receiverCarrier, storageIndex)?.check
-    : undefined;
-  if (storage === "structural-object" && context.input.program.records.structuralFieldStorage.get(receiverCarrier, storageIndex)?.field?.storage === "property") {
-    return writeRustStoredObjectFieldStorage(storage, receiverCarrier, receiver, storageIndex, operator, value, context, projection, receiverIsBorrowed);
-  }
-  if (check === undefined) return writeRustStoredObjectFieldStorage(storage, receiverCarrier, receiver, storageIndex, operator, value, context, projection, receiverIsBorrowed);
-  const region = context.fallibleBoundary;
-  if (region === undefined || context.syntheticNames === undefined) failRustPlannerInvariant("An admitted stored field requires its exact sealed storage, access role and native emission context.", context.sourceFile);
-  const receiverName = allocateRustSyntheticName(context.syntheticNames, "field_owner");
-  const valueName = allocateRustSyntheticName(context.syntheticNames, "field_value");
-  const selected: RustExpr = { kind: "path", path: receiverName };
-  const effect = writeRustStoredObjectFieldStorage(storage, receiverCarrier, selected, storageIndex, operator,
-    { kind: "path", path: valueName }, context, projection, receiverIsBorrowed);
-  const checked = effect === undefined ? undefined : checkRustDataWrite(check, selected, effect, region);
-  return checked === undefined ? failRustPlannerInvariant("An admitted frozen field write requires its exact native error propagation.", context.sourceFile) : rustValueBlock([
-    { name: receiverName, value: receiverIsBorrowed ? receiver : cloneExpression(receiver) }, { name: valueName, value },
-  ], checked);
-}
-
-function writeRustStoredObjectFieldStorage(
-  storage: "project-object" | "structural-object",
-  receiverCarrier: TargetTypeRef,
-  receiver: RustExpr,
-  storageIndex: number,
-  operator: RustAssignmentOperator,
-  value: RustExpr,
-  context: RustPlanContext,
-  projection: readonly string[] = [],
-  receiverIsBorrowed = false,
-): RustExpr | undefined {
   if (storage === "structural-object") {
     const field = context.input.program.records.structuralFieldStorage.get(receiverCarrier, storageIndex)?.field;
     if (field === undefined) {
@@ -429,30 +397,6 @@ function writeRustStoredObjectFieldStorage(
 }
 
 export function mutateRustStoredObjectField(
-  storage: "project-object" | "structural-object",
-  receiverCarrier: TargetTypeRef,
-  receiver: RustExpr,
-  storageIndex: number,
-  mutation: (field: RustExpr) => RustExpr | undefined,
-  context: RustPlanContext,
-  access: "property" | "content" = "property",
-): RustExpr | undefined {
-  if (access === "content") return mutateRustStoredObjectFieldStorage(storage, receiverCarrier, receiver, storageIndex, mutation, context, access);
-  const check = context.input.program.records.storedField.get(storage, receiverCarrier, storageIndex)?.check;
-  if (storage === "structural-object" && context.input.program.records.structuralFieldStorage.get(receiverCarrier, storageIndex)?.field?.storage === "property") {
-    return mutateRustStoredObjectFieldStorage(storage, receiverCarrier, receiver, storageIndex, mutation, context);
-  }
-  if (check === undefined) return mutateRustStoredObjectFieldStorage(storage, receiverCarrier, receiver, storageIndex, mutation, context);
-  const region = context.fallibleBoundary;
-  if (region === undefined || context.syntheticNames === undefined) failRustPlannerInvariant("An admitted stored field requires its exact sealed storage, access role and native emission context.", context.sourceFile);
-  const receiverName = allocateRustSyntheticName(context.syntheticNames, "field_owner");
-  const selected: RustExpr = { kind: "path", path: receiverName };
-  const effect = mutateRustStoredObjectFieldStorage(storage, receiverCarrier, selected, storageIndex, mutation, context);
-  const checked = effect === undefined ? undefined : checkRustDataWrite(check, selected, effect, region);
-  return checked === undefined ? undefined : rustValueBlock([{ name: receiverName, value: cloneExpression(receiver) }], checked);
-}
-
-function mutateRustStoredObjectFieldStorage(
   storage: "project-object" | "structural-object",
   receiverCarrier: TargetTypeRef,
   receiver: RustExpr,

@@ -43,7 +43,7 @@ export function planRustConstructionBody(
   plan: RustAdmittedConstruction,
   fields: readonly RustConstructionStorageField[],
   type: RustType,
-  materialize: (values: ReadonlyMap<Node, RustExpr>, identity?: RustExpr, frameCounter?: RustExpr, retainedFrame?: RustExpr) => RustExpr,
+  materialize: (values: ReadonlyMap<Node, RustExpr>, frameCounter?: RustExpr, retainedFrame?: RustExpr) => RustExpr,
   context: RustPlanContext,
 ): RustConstructionBody | undefined {
   if (context.syntheticNames === undefined) failRustPlannerInvariant("An admitted construction requires its hygienic name owner.", plan.definition.declaration);
@@ -58,11 +58,6 @@ export function planRustConstructionBody(
     declarations.push({ kind: "let", name: frameCounter.path, mutable: false,
       init: { kind: "call", path: "rt::FrameEntryCounter::new", args: [] } });
   }
-  const retainedIdentity = fields.some(field => plan.retainedFieldIdentities.has(field.declaration));
-  const identity: RustExpr | undefined = !retainedIdentity ? undefined : { kind: "path",
-    path: allocateRustSyntheticName(context.syntheticNames, "object_identity") };
-  if (identity?.kind === "path") declarations.push({ kind: "let", name: identity.path, mutable: false,
-    init: { kind: "call", path: "rt::ObjectIdentity::new", args: [] } });
   const values = new Map<Node, RustExpr>();
   const declarationAtInitialization = plan.localFieldDeclarations;
   for (const planned of plan.fields) {
@@ -97,7 +92,7 @@ export function planRustConstructionBody(
       : rustFrameBindingLocation(binding, retainedOwner, selectedContext);
   };
   if (plan.publishesReceiver) declarations.push({ kind: "let", name: rootName, mutable: plan.mutableReceiver, type });
-  const publication = (): readonly RustStmt[] => [{ kind: "assign", target: root, operator: "=", value: materialize(values, identity, frameCounter, retainedFrame) }];
+  const publication = (): readonly RustStmt[] => [{ kind: "assign", target: root, operator: "=", value: materialize(values, frameCounter, retainedFrame) }];
   const overrideNodes = new Set(plan.expressions.flatMap(expression => expression.receiver === undefined
     ? [expression.node] : [expression.node, expression.receiver]));
   const prepare: RustConstructionBody["prepare"] = (node, selectedContext) => {
@@ -116,7 +111,6 @@ export function planRustConstructionBody(
     const overrides = new Map(selectedContext.expressionOverrides ?? []);
     const locations = new Map(selectedContext.valueFieldLocations ?? []);
     const capturedFieldOwners = new Map(selectedContext.capturedFieldOwners ?? []);
-    const capturedFieldIdentities = new Map(selectedContext.capturedFieldIdentities ?? []);
     for (const overridden of overrideNodes) overrides.delete(overridden);
     for (const projection of admitted.projections) {
       const expression = projection.expression;
@@ -135,8 +129,6 @@ export function planRustConstructionBody(
           const initialized = selectedPoint.initializedFields.includes(slot.declaration);
           const possiblyInitialized = selectedPoint.possiblyInitializedFields.includes(slot.declaration);
           if (storage.retainedFieldOwner) capturedFieldOwners.set(expression.node, slot.expression);
-          if (identity !== undefined && plan.retainedReferenceIdentities.has(expression.node))
-            capturedFieldIdentities.set(expression.node, identity);
           locations.set(expression.node, initialized ? location : { ...location,
             write: value => possiblyInitialized ? storage.initializeOrWrite(slot.expression, value)
               : storage.initialize(slot.expression, value),
@@ -158,7 +150,7 @@ export function planRustConstructionBody(
       ? undefined : createRustClassFrameValue(frame, values, frameCounter, selectedContext);
     if (exposure?.expression === node && retainedFrame !== undefined && allocated === undefined)
       failRustPlannerInvariant("Retained construction syntax requires its admitted exact physical storage fields.", node);
-    return { context: { ...selectedContext, expressionOverrides: overrides, valueFieldLocations: locations, capturedFieldOwners, capturedFieldIdentities },
+    return { context: { ...selectedContext, expressionOverrides: overrides, valueFieldLocations: locations, capturedFieldOwners },
       before: [...(allocated === undefined || retainedFrame?.kind !== "path" || frameType === undefined ? [] : [{ kind: "let" as const,
         name: retainedFrame.path, mutable: false, init: allocated,
         type: { kind: "named" as const, path: "alloc::rc::Rc", genericArguments: [{ kind: "type" as const, type: frameType }] } }]),
@@ -247,6 +239,6 @@ export function planRustConstructionBody(
     },
     finish: () => !plan.emission.canFallThrough ? []
       : plan.publishesReceiver ? [...(final?.published ? [] : publication()), { kind: "tail", expr: completion(root) }]
-      : [{ kind: "tail", expr: completion(materialize(values, identity, frameCounter, retainedFrame)) }],
+      : [{ kind: "tail", expr: completion(materialize(values, frameCounter, retainedFrame)) }],
   };
 }

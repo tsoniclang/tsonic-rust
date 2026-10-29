@@ -4,7 +4,7 @@ import { isRustSourceNumberConvertibleCarrier } from "../../js-values/carrier-pr
 import { rustOptionElementCarrier } from "../../../../target-model/types/carriers/optional.js";
 import { selectRustNumericRestCarrier } from "./numeric-rest.js";
 
-import { rustEmptyObjectTargetType, rustObjectIdentityTargetType, rustStructuralObjectCarrierValue, isRustIntegerCarrier, rustJsArrayLikeElementTargetType, rustJsErrorTargetType, rustStringTargetId, isRustNumericCarrier, rustFutureOutputCarrier, isRustCallableCarrier, rustCallableProtocol, rustClosureProtocol, rustAbsenceTargetType, rustSourceOptionalTargetType, rustUnitTargetType } from "../../../../target-model/types/index.js";
+import { isRustIntegerCarrier, rustJsArrayLikeElementTargetType, rustJsErrorTargetType, rustStringTargetId, isRustNumericCarrier, rustFutureOutputCarrier, isRustCallableCarrier, rustCallableProtocol, rustClosureProtocol, rustAbsenceTargetType, rustSourceOptionalTargetType, rustUnitTargetType } from "../../../../target-model/types/index.js";
 import { rustCarrierSupportsJsEquality, rustCarrierSupportsObjectIdentity, isRustSourceStringConvertibleCarrier } from "../../js-values/carrier-protocols.js";
 import { rustCarrierSupportsClone } from "../../../constraints/native-traits.js";
 import { selectJsArrayConstruction } from "./array-construction.js";
@@ -380,16 +380,6 @@ function carrierRequirementsMatch(
       case "object-identity":
         return rustCarrierSupportsObjectIdentity(carrier) ||
           (carrier !== undefined && request.carrierSupportsProjectIdentity?.(carrier) === true);
-      case "empty-object-domain":
-        return requirement.carrier.ref === "argument" && carrier !== undefined &&
-          request.argumentValueDomainHasTargetType?.(requirement.carrier.index, rustEmptyObjectTargetType()) === true;
-      case "freezable-object": {
-        const shape = rustStructuralObjectCarrierValue(carrier);
-        return rustTargetTypeRefEquals(carrier, rustEmptyObjectTargetType()) ||
-          rustTargetTypeRefEquals(carrier, rustObjectIdentityTargetType()) ||
-          (carrier !== undefined && request.carrierSupportsProjectIdentity?.(carrier) === true) ||
-          shape?.representation === "reference" && shape.fields.every(field => field.bound !== true);
-      }
     }
   }) ?? true;
 }

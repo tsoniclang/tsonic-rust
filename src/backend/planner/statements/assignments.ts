@@ -10,7 +10,6 @@ import {
   writeRustProjectMethodOverride,
 } from "../objects/project-objects.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
-import { checkRustDataWrite } from "../objects/data-writes.js";
 import {
   KindIdentifier,
   Node_Expression,
@@ -97,7 +96,7 @@ export function planRustSourceMethodPropertyAssignment(
   const replacement: RustExpr = { kind: "path", path: valueName };
   const dispatched = context.input.program.records.methodWriteDispatch.get(left);
   if (dispatched === undefined) failRustPlannerInvariant("An admitted method replacement requires its sealed dispatch form.", left);
-  let write = dispatched
+  const write = dispatched
     ? {
         kind: "method-call" as const,
         receiver: {
@@ -118,13 +117,6 @@ export function planRustSourceMethodPropertyAssignment(
         );
   if (write === undefined) {
     failRustPlannerInvariant("An admitted method replacement requires its native storage route.", left);
-  }
-  const check = selectedReceiver?.check;
-  if (check !== undefined) {
-    const region = context.fallibleBoundary;
-    const checked = region === undefined ? undefined : checkRustDataWrite(check, receiver, write, region);
-    if (checked === undefined) failRustPlannerInvariant("An admitted method replacement requires its native checked-write region.", left);
-    write = checked;
   }
   return [{
     kind: "expr",

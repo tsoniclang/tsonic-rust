@@ -85,10 +85,6 @@ export function analyzeRustReceiverCaptureEmission(program: Omit<RustAnalysisPro
       fixed.references.length !== field.references.length || !fixed.references.every((reference, index) => reference === field.references[index] &&
         rustTargetTypeRefEquals(program.records.runtimeCarrier.get(reference)?.carrier, field.carrier))))
       refuse(node, "rust.backend.fixed-field-self", "A fixed field self differs from its sealed origin, source references or exact callable carrier.");
-    for (const field of capture.receiverFields) {
-      if (producer.records.capturedFieldIdentity.get(field.declaration, field.reference) !== undefined) continue;
-      producer.publish(field.declaration, field.reference, program.frozenDataWrites.capturesFieldIdentity(field.declaration, field.reference));
-    }
   }
   return Object.freeze(issues);
 }

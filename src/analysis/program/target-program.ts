@@ -202,7 +202,7 @@ export function analyzeRustAnalysisProgram(
       return records.sourceCallEffects.get(node)?.invocation === "fallible" ||
         accessor?.read === "fallible" || accessor?.write === "fallible" ||
         rustTargetOperationIsFallible(records.targetOperation.get(node), context.structuralShapes.completed,
-          context.projectFieldDispatch, context.frozenDataWrites, context.typeDefinitions);
+          context.projectFieldDispatch, context.typeDefinitions);
     },
   });
   const dispatchContextDemand = analyzeRustDispatchContextDemand(
@@ -301,7 +301,7 @@ export function analyzeRustAnalysisProgram(
     isNativeNode: context.isNativeNode,
     sourceFacts: context.source.sourceFacts,
     ast: context.ast, nodes: context.nativeNodes, records, navigation: context.source.navigation,
-    projectTypes: context.projectTypes, objectRepresentations, frozenDataWrites: context.frozenDataWrites,
+    projectTypes: context.projectTypes, objectRepresentations,
     structuralShapes: context.structuralShapes.completed,
   };
   const borrowEffects = analyzeRustBorrowEffects(borrowEffectsInput, readUses);
@@ -455,7 +455,7 @@ export function analyzeRustAnalysisProgram(
     safetyApplications: context.safetyApplications,
     components: sourcePackageComponents,
     ownership: ownership.ownership, projectTypes, projectFieldDispatch: context.projectFieldDispatch,
-    structuralShapes: context.structuralShapes.completed, frozenDataWrites: context.frozenDataWrites,
+    structuralShapes: context.structuralShapes.completed,
     countedLoops: analyzeRustCountedLoopRepresentations({ ast: context.ast, nativeNodes: context.nativeNodes,
       navigation: context.source.navigation, records: finalRecords, borrowedElementReads }) });
   if (statementCompletions.kind === "rejected") return rejectedTargetStage(statementCompletions.diagnostics);
@@ -503,7 +503,6 @@ export function analyzeRustAnalysisProgram(
     ownership: ownership.ownership,
     retainedCallableInputs: retainedCallableInputs.value,
     structuralShapes: context.structuralShapes.completed,
-    frozenDataWrites: context.frozenDataWrites.seal(),
     classValues,
     runtimeReferences: runtimeReferences.plan,
     dispatchContexts: dispatchContexts.plan.declarations,

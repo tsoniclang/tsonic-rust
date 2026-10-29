@@ -125,7 +125,6 @@ export function analyzeRustObjectLiteralEmission(program: Omit<RustAnalysisProgr
         field.property.setterTargetName !== undefined && field.presence !== "required")))
         failTargetAnalysisInvariant("tsonic-rust", "An admitted structural literal property requires its exact native accessor ABI.", node);
       return Object.freeze({ field, copy: isRustCopyCarrier(field.carrier),
-        frozen: program.frozenDataWrites.receiverFor("structural-object", carrier, storageIndex) !== undefined,
         method: protocol === undefined || storage === undefined ? undefined : field.methodPlan?.kind === "fixed"
           ? Object.freeze({ kind: "fixed", declaration: field.methodPlan.declaration, payload: field.methodPlan.payload,
               parameters: protocol.parameters, result: protocol.result, storage })

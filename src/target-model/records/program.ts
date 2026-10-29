@@ -115,7 +115,6 @@ export interface RustProgramRecords extends RustStatementExitRecords, RustStatem
   readonly unaryEmission: RustRecordFamily<import("./operations/expression-unary.js").RustUnaryEmission>;
   readonly flowReadEmission: import("./operations/flow-read-emission.js").RustFlowReadEmissionRecords["flowReadEmission"];
   readonly projectUnionMapping: import("./types/project-union-mappings.js").RustProjectUnionMappingRecords["projectUnionMapping"];
-  readonly capturedFieldIdentity: import("./callables/receiver-captures.js").RustReceiverCaptureEmissionRecords["capturedFieldIdentity"];
   readonly captureEnvironment: import("./callables/receiver-captures.js").RustReceiverCaptureEmissionRecords["captureEnvironment"];
   readonly sourceCallableEmission: import("./callables/source-callable-value.js").RustSourceCallableEmissionRecords["sourceCallableEmission"];
   readonly referenceOperation: RustRecordFamily<import("./operations/reference-operations.js").RustReferenceOperationEmission>;

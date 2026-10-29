@@ -2,7 +2,6 @@ import type { RustOperationAnalysisContext } from "../../../program/operation-co
 import { resolveSelectedSourceProfileMember } from "../../../../policy/identities/selected-source.js";
 import { resolveRustTargetTypeRef } from "../../../source-evidence/types/resolution/source.js";
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
-import { rustValueDomainHasTargetType } from "../../../objects/value-domain-carriers.js";
 import { selectedCallArgumentCarriers, selectedCallArgumentNodes } from "../operators.js";
 import { selectedArgumentMatchScore } from "../result.js";
 import { selectedCallReceiverValueCarrier } from "./instantiation.js";
@@ -79,19 +78,6 @@ export function createRustJsCallRequest(
         : undefined;
     },
     carrierSupportsProjectIdentity: options.projectCarrierSupportsObjectIdentity,
-    argumentValueDomainHasTargetType: (index, expected) => {
-      const argument = selectedCallArgumentNodes(request)[index];
-      const source = context.sourceStorageResolution;
-      return argument !== undefined && source.kind === "resolved" && rustValueDomainHasTargetType({
-        sourceStorage: context.sourceStorage,
-        sourceTypes: options.sourceTypes,
-        projectFieldProjection: options.projectFieldProjection,
-        semantics: sourceFile => context.semantics(sourceFile),
-        types: { resolveNode: (node, sourceFile) => resolveRustTargetTypeRef(node, {
-          ...context, currentSourceFile: sourceFile, currentSemantics: context.semantics(sourceFile),
-        }, options) },
-      }, argument, expected, source.bindings);
-    },
     canRequireClone: carrier => canRequireSourceClone(carrier, request.source.call, context, options.sourceTypes.typeFamilies),
     numericParameterArgument: (index, carrier, domain) => {
       const argument = selectedCallArgumentNodes(request)[index];

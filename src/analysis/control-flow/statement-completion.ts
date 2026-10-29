@@ -55,7 +55,6 @@ import { rustUninhabitedError } from "../../policy/conversions/callable-physical
 
 export interface RustStatementCompletionInput {
   readonly structuralShapes: Parameters<typeof analyzeRustOptionalChainBodyFallibility>[0]["structural"];
-  readonly frozenDataWrites: Parameters<typeof analyzeRustOptionalChainBodyFallibility>[0]["frozen"];
   readonly source: TargetSourceProgram;
   readonly sourceFiles: readonly SourceFile[];
   readonly isNativeNode: (node: Node) => boolean;
@@ -494,7 +493,7 @@ export function analyzeRustStatementCompletions(input: RustStatementCompletionIn
     const optional = records.optionalChain.get(node);
     if (optional !== undefined) {
       const fallible = analyzeRustOptionalChainBodyFallibility({ ast, records, structural: input.structuralShapes,
-        dispatch: input.projectFieldDispatch, frozen: input.frozenDataWrites, definitions: input.typeDefinitions }, node, optional.guard);
+        dispatch: input.projectFieldDispatch, definitions: input.typeDefinitions }, node, optional.guard);
       if (fallible && !frame(node).fallible) diagnostics.push({ code: "RUST_UNSUPPORTED_AST", category: "error", source: "tsonic-rust", sourceNode: node,
         message: `Fallible optional-chain operations require a finalized fallible lowering context. Node kind: ${ast.kindName(node)}.`,
         evidence: ["target.capability=rust.error.optional-chain"] });

@@ -4,7 +4,7 @@ import { emptyRustGenerics } from "../../../target-ast/syntax/nodes.js";
 import { failRustPlannerInvariant } from "../../diagnostics.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import { rustErrorBoundaryForProjectMember } from "../../program/plan-context.js";
-import { rustErrorType, rustPackageFallibleBoundary } from "../../program/fallible-boundaries.js";
+import { rustErrorType } from "../../program/fallible-boundaries.js";
 import { applyRustFallibleResultExpression } from "../../types/fallible-shape.js";
 import { rustSelfParameter } from "../../declarations/callables/self-parameter.js";
 import type { RustProjectTypeDefinition } from "../../../../target-model/types/project-types.js";
@@ -25,7 +25,6 @@ import {
 } from "../project-objects.js";
 import { rustProjectDispatchTraitType, rustProjectRepresentationGenerics } from "./names.js";
 import { rustCapturedFieldStorage } from "../captured-fields.js";
-import { checkRustDataWrite } from "../data-writes.js";
 import { checkedProjectProjectionTypes, planCheckedProjectProjectionImplementation } from "../checked-project-projections.js";
 import { rustArrayFieldMutationName, rustArrayFieldMutationType } from "./array-fields.js";
 import { rustProjectObjectIdentityImplementation } from "../project-identity.js";
@@ -174,12 +173,7 @@ function planRootContractFunctions(
               ? writeRustProjectPrivateField({ kind: "path", path: "self" }, storagePath, write!, { kind: "path", path: "value" }, representation)
               : writeRustProjectObjectField({ kind: "path", path: "self" }, storagePath, "=", { kind: "path", path: "value" },
                 representation, rustCapturedFieldStorage(implementation.declaration, context));
-            const check = context.input.program.records.frozenDataReceiver.get(implementation.declaration);
-            if (check !== undefined && fieldErrorBoundary === undefined)
-              failRustPlannerInvariant("An admitted checked root field write requires its native error boundary.", field.declaration);
-            const checked = expression === undefined ? undefined : check === undefined ? expression
-              : checkRustDataWrite(check, { kind: "path", path: "self" }, expression, rustPackageFallibleBoundary(fieldErrorBoundary!));
-            return checked === undefined ? undefined : { expression: checked };
+            return expression === undefined ? undefined : { expression };
           })()
         : implementation.kind !== "accessor" || implementation.setter === undefined ? undefined
           : planProjectFieldAccessorCall(rootType, accessorImplementationFor(implementation.setter, "write"), { kind: "path", path: "value" });

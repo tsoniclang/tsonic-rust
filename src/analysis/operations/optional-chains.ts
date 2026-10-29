@@ -75,7 +75,7 @@ export function analyzeRustOptionalChainEmission(program: Omit<RustAnalysisProgr
   // suspends, yields or carries error effects. Error effects are recorded on the calls and awaits that carry them.
   function presentBranchIsPure(root: Node, guard: Node): boolean {
     if (analyzeRustOptionalChainBodyFallibility({ ast, records: program.records, structural: program.structuralShapes,
-      dispatch: program.projectFieldDispatch, frozen: program.frozenDataWrites, definitions: program.typeDefinitions }, root, guard)) return false;
+      dispatch: program.projectFieldDispatch, definitions: program.typeDefinitions }, root, guard)) return false;
     const pending = [root];
     for (let index = 0; index < pending.length; index++) {
       if (index > 4096) return false;

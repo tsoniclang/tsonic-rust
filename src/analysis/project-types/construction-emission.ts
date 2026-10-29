@@ -89,7 +89,6 @@ export function analyzeRustConstructionEmission(input: {
       }
     }
     const preparations = new Map<Node, RustConstructionPreparationSelection>();
-    const retainedReferences = new Set<Node>();
     // An abstract class is never constructed on its own: its constructor runs only as a layer of a concrete
     // subclass's construction, which prepares those points with its own physical layer contexts.
     const constructible = !program.source.ast.hasModifierKind(definition.declaration, "abstract");
@@ -99,8 +98,6 @@ export function analyzeRustConstructionEmission(input: {
       const physical = contexts.get(selected.layer);
       if (physical === undefined) failTargetAnalysisInvariant("tsonic-rust", "An admitted construction point requires its physical source-layer context.", point.node);
       const projections: RustConstructionProjection[] = selected.projections.map(projection => {
-        if (projection.kind === "local" && program.frozenDataWrites.capturesFieldIdentity(projection.declaration, projection.expression.node))
-          retainedReferences.add(projection.expression.node);
         if (projection.kind !== "receiver") return projection;
         const carrier = program.physicalEmissionContexts.carrierFor(physical.use, projection.carrier);
         if (carrier === undefined) failTargetAnalysisInvariant("tsonic-rust", "An admitted construction receiver requires its physical carrier application.", projection.node);
@@ -157,8 +154,6 @@ export function analyzeRustConstructionEmission(input: {
       unobservedInitializers: new Set(plan.fields.filter(field => (field.initializer !== undefined || field.externallyInitialized) &&
         !plan.observesInitialValue(field.declaration)).map(field => field.declaration)),
       physicalDeclarations: new Map(declarations.map(declaration => [declaration, program.objectRepresentations.receiverCaptures.storageDeclaration(declaration)])),
-      retainedFieldIdentities: new Set(plan.fields.filter(field => program.frozenDataWrites.capturesFieldIdentity(field.declaration)).map(field => field.declaration)),
-      retainedReferenceIdentities: retainedReferences,
       completesNormally: plan.completesNormally, publishesReceiver: plan.publishesReceiver,
       mutableReceiver: constructionReceiverNeedsMutableBinding(program, plan, preparations),
       emission: Object.freeze({ frame: plan.emission.frame, exposure: plan.emission.exposure, preparations, canFallThrough }) });

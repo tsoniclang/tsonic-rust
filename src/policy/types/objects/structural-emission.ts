@@ -12,14 +12,14 @@ import { rustTargetGenericReferences } from "../../../target-model/types/carrier
 import { rustLifetimeKey } from "../../../target-model/lifetimes/index.js";
 
 export function selectRustStructuralMethodContextCarrier(
-  payload: RustStructuralMethodPayload, receiverFieldIdentities: readonly boolean[],
+  payload: RustStructuralMethodPayload,
 ): TargetTypeRef {
   const named = (path: string, carrier: TargetTypeRef): TargetTypeRef => rustNamedTargetType(path, path, rustTypeGenericArguments([carrier]));
   return Object.freeze({ kind: "tuple", elements: Object.freeze([
     ...payload.captures.map(capture => capture.storage === "value" ? capture.storageCarrier
       : capture.storage === "location" ? rustLocationTargetType(capture.storageCarrier)
         : named(capture.storage === "cell" ? "core::cell::Cell" : "core::cell::RefCell", capture.storageCarrier)),
-    ...payload.receiverFields.map((capture, index) => {
+    ...payload.receiverFields.map(capture => {
       const storage = capture.storage;
       let carrier = capture.storageCarrier;
       if (storage !== undefined && storage.kind !== "copy") {
@@ -27,8 +27,7 @@ export function selectRustStructuralMethodContextCarrier(
         if (storage.initialization === "deferred") carrier = named("core::cell::OnceCell", carrier);
         carrier = named("alloc::rc::Rc", carrier);
       }
-      return !receiverFieldIdentities[index] ? carrier : Object.freeze({ kind: "tuple" as const,
-        elements: Object.freeze([rustNamedTargetType("rust.runtime.ObjectIdentity", "rt::ObjectIdentity"), carrier]) });
+      return carrier;
     }),
     ...payload.receivers.map(capture => capture.storageCarrier),
   ]) });

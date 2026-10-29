@@ -8,7 +8,6 @@ import { rustValueBlock } from "../../target-ast/syntax/value-block.js";
 import { cloneRustExpression as cloneExpression } from "../../target-ast/syntax/expressions.js";
 import { rustPropagateLocalError } from "../program/fallible-boundaries.js";
 import { rustTargetRuntimeErrorType } from "../types/error-boundary.js";
-import { checkRustDataWrite } from "./data-writes.js";
 import { readRustStructuralObjectField, writeRustStructuralObjectField } from "./project-objects.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { failRustPlannerInvariant } from "../diagnostics.js";
@@ -169,18 +168,12 @@ export function writeRustStructuralObjectProperty(
   if (setterCall === undefined) {
     failRustPlannerInvariant("An admitted structural property requires its exact sealed accessors, storage and native error context.", context.sourceFile);
   }
-  let storedWrite = writeRustStructuralObjectField(
+  const storedWrite = writeRustStructuralObjectField(
     receiverPath,
     field.targetName,
     "=",
     { kind: "call", path: "Some", args: [selectedValue] },
   );
-  if (context.input.program.records.storedField.get("structural-object", receiverCarrier, storageIndex)?.check !== undefined) {
-    const region = context.fallibleBoundary;
-    const checked = region === undefined ? undefined : checkRustDataWrite("receiver", receiverPath, storedWrite, region);
-    if (checked === undefined) failRustPlannerInvariant("An admitted structural property requires its exact sealed accessors, storage and native error context.", context.sourceFile);
-    storedWrite = checked;
-  }
   const write: RustExpr = {
     kind: "match",
     expression: readRustStructuralObjectField(

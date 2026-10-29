@@ -24,7 +24,7 @@ export const rustRuntimeExportFoundations: Readonly<Record<string, RustFoundatio
   AsyncGenerator: "alloc", BorrowedAsyncGenerator: "alloc", BorrowedGenerator: "alloc", Generator: "alloc",
   GeneratorController: "alloc", GeneratorResume: "alloc", IteratorResult: "alloc", IteratorValue: "alloc", YieldPoint: "alloc",
   Location: "alloc", ModuleCell: "alloc", EmptyObjectState: "alloc", ObjectHandle: "alloc", ObjectHandleState: "alloc", ObjectState: "alloc",
-  freeze_object: "alloc", object_is_frozen: "alloc", ObjectIdentity: "alloc", ObjectIdentityCarrier: "alloc", WeakObjectIdentity: "alloc",
+  ObjectIdentity: "alloc", ObjectIdentityCarrier: "alloc", WeakObjectIdentity: "alloc",
   ObjectRef: "alloc", ObjectRefState: "alloc", RecordField: "alloc", RetainedError: "alloc", RetainedErrorObject: "alloc",
   WritableRetainedError: "alloc", WritableRetainedErrorObject: "alloc", source_string_greater_than: "alloc",
   source_string_greater_than_or_equal: "alloc", source_string_less_than: "alloc", source_string_less_than_or_equal: "alloc",
