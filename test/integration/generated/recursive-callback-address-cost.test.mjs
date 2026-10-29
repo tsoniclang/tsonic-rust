@@ -44,7 +44,7 @@ const lexicalProof = `
     }
 `;
 
-const classProof = profile => `
+const classProof = () => `
     #[test]
     fn projected_pointer_matches_native_cost_and_retains_exactly_one_activation() {
         fn native_pointer(owner: &rt::ObjectHandle<f64>) -> rt::Location<f64, rt::TsonicError> {
@@ -60,7 +60,7 @@ const classProof = profile => `
         let (_, native_warmed) = measure(|| drop(native_pointer(&native)));
         drop(native_first);
         for _ in 0..16 {
-            let (callback, created) = measure(|| create(3.0)${profile === "js" ? ".unwrap()" : ""});
+            let (callback, created) = measure(|| create(3.0));
             assert_eq!(created.allocations, 1, "only the native shared class activation");
             assert_eq!(created.deallocations, 0);
             assert_eq!(created.reallocations, 0);
@@ -102,7 +102,7 @@ for (const [name, selectedProof] of [["addressed-lexical-frame", () => lexicalPr
       const { result } = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } }, files: { "index.ts": source + "\nmain();\n" } });
       assert.equal(result.diagnostics.length, 0, result.diagnostics.slice(0, 4).map(row => row.message.slice(0, 256)).join("\n"));
       const directory = writeGeneratedProject(`recursive-address-cost-${name}-${profile}`, result.artifacts);
-      const proof = selectedProof(profile);
+      const proof = selectedProof();
       runCargo(directory, ["generate-lockfile", "--offline"]);
       runCargo(directory, ["fmt", "--check"]);
       appendFileSync(join(directory, "src/index.rs"), `\n#[cfg(test)]\nmod address_cost {\nuse super::*;\n${nativeOwnershipCostSupport(directory)}\n${proof}\n}\n`);

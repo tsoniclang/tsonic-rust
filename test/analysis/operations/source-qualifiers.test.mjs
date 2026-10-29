@@ -25,8 +25,9 @@ export function main(): void {
   check((globalThis.String).fromCodePoint(128512) === "😀");
   check(globalThis["String"].fromCharCode(...codes) === "AB");
   check(globalThis.Math.max(...[3, 7]) === 7);
-  const frozen = globalThis.Object.freeze({});
-  check(globalThis.Object.isFrozen(frozen));
+  const original = {};
+  const frozen = globalThis.Object.freeze(original);
+  check(frozen === original);
   check(local({ String: { fromCharCode: value => value + 1 } }) === 8);
 }
 main();
@@ -34,6 +35,18 @@ main();
   });
   assert.deepEqual(result.diagnostics, []);
   validateGeneratedProject("qualified-source-builtins", result.artifacts, { run: true });
+});
+
+test("qualified selected isFrozen is refused precisely before publication", () => {
+  const { result } = compileRust({ surfaces: ["js"], files: {
+    "index.ts": "export function run(value: object): boolean { return globalThis.Object.isFrozen(value); }",
+  } });
+  assert.equal(result.diagnostics.length, 1, "one selected qualified-query rejection");
+  assert.equal(result.diagnostics[0]?.code, "TSONIC_IS_FROZEN_UNSUPPORTED", "the canonical source diagnostic");
+  assert.equal(result.diagnostics[0]?.message,
+    "Object.isFrozen has no native equivalent; immutability is a compile-time property. Use readonly declarations instead.",
+    "the precise supported readonly rewrite");
+  assert.equal(result.artifacts.length, 0, "rejected source publishes no artifacts");
 });
 
 test("source qualifiers require exact intrinsic, declaration, profile and read evidence", () => {

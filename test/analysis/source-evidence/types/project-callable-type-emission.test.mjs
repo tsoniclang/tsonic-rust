@@ -5,7 +5,14 @@ import { analyzeRust } from "../../../helpers/rust-session.mjs";
 test("project callable return and native error types are closed before publication", () => {
   const { source, program } = analyzeRust({ surfaces: ["js"], files: { "index.ts": `
     import type { int32 } from "@tsonic/core/types.js";
-    export class Counter { value: int32 = 0; add(delta: int32): int32 { this.value += delta; return this.value; } }
+    export class Counter {
+      value: int32 = 0;
+      add(delta: int32): int32 { this.value += delta; return this.value; }
+      checked(delta: int32): int32 {
+        if (delta < 0) throw new Error("negative delta");
+        return this.add(delta);
+      }
+    }
   ` } });
   const nodes = [];
   const visit = node => { nodes.push(node); source.ast.forEachChild(node, child => { if (child !== undefined) visit(child); }); };

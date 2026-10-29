@@ -14,9 +14,9 @@ for (const surfaces of [[], ["js"]]) for (const example of receiverFieldStorageC
   });
 }
 
-test("freezing an identity-preserving direct view rejects live field replacement", { timeout: 300_000 }, () => {
+test("readonly identity retains live writes through a mutable alias", { timeout: 300_000 }, () => {
   const { result } = compileRust({ surfaces: ["js"], target: { id: "rust", options: { outputType: "bin" } },
-    files: { "index.ts": receiverFieldStorageFreezeSource + '\nexport function main(): void { if (!run()) throw new Error("retained structural freeze"); }\nmain();\n' } });
+    files: { "index.ts": receiverFieldStorageFreezeSource + '\nexport function main(): void { if (!run()) throw new Error("retained structural mutable alias"); }\nmain();\n' } });
   assert.equal(result.diagnostics.length, 0, result.diagnostics.slice(0, 6).map(row => row.message.slice(0, 256)).join("\n"));
-  validateGeneratedProject("receiver-field-storage-freeze", result.artifacts, { run: true });
+  validateGeneratedProject("receiver-field-storage-readonly-alias", result.artifacts, { run: true });
 });
