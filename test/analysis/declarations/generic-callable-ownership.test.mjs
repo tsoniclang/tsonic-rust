@@ -125,7 +125,7 @@ closureCapture: { get: (node) => {
   });
   const navigation = { expressionValueFlow: node => ({ escapes: node === closures[1], identityCompared: false,
     hasUnclassifiedUse: false, captured: false }) };
-  const source = fakeCompileInput({ sourceFiles: files }).source;
+  const source = fakeCompileInput({ sourceFiles: files, ast }).source;
   const signatures = new Map(closures.map(declaration => [declaration, Object.freeze({ declaration })]));
   const semanticsForFile = file => ({ ...source.semantics.forFile(file), declarations: {
     declarationSignature(declaration) {
@@ -154,6 +154,9 @@ closureCapture: { get: (node) => {
         return undefined;
       } } };
   const materialize = () => {
+    const finalizedSource = fakeCompileInput({ sourceFiles: files, ast }).source;
+    currentSource.navigation = { ...finalizedSource.navigation, ...navigation };
+    planInput.navigation = currentSource.navigation;
     const sourceStorage = createSourceStorageQuery(currentSource, files);
     const builder = createRustProgramRecordBuilder();
     participationRecords = builder.nativeParticipations.records;
