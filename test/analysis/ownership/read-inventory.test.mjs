@@ -20,7 +20,7 @@ function readBorrowEffectsInput(source, program, nodes, records) {
   return { ast: source.ast, sourceFacts: source.sourceFacts, nodes, records,
     isNativeNode: node => nativeNodes.has(node), navigation: program.sourceNavigation,
     projectTypes: program.projectTypes, objectRepresentations: program.objectRepresentations,
-    structuralShapes: program.structuralShapes, frozenDataWrites: program.frozenDataWrites };
+    structuralShapes: program.structuralShapes };
 }
 
 test("selected native indexed String leases retain shared acquisition without changing owned getter results", () => {

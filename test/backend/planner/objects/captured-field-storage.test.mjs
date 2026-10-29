@@ -146,7 +146,7 @@ test("borrowed structural reads require exact plain stored fields, not dispatch 
           field: (candidate, index) => candidate === carrier && index === 0 ? physical : undefined },
         projectTypes: { definitions: [], definitionForCarrier: () => undefined },
         classValues: { instanceViewImplementations: [], constructorViewImplementations: [] },
-        records: createRustRecordFixture(), frozenDataWrites: { receiverFor: () => undefined },
+        records: createRustRecordFixture(),
       };
       analyzeRustStoredFields(program, [], builder.storedFieldPlans);
     }

@@ -3,11 +3,12 @@ import test from "node:test";
 import { createCompilerSessionFromFiles } from "@tsonic/tsts";
 import { createTargetSourceProgram, Node_Initializer } from "@tsonic/target-api/source";
 import { createSourceStorageQuery } from "@tsonic/target-api/analysis";
-import { rustValueDomainHasTargetType } from "../../../dist/analysis/objects/value-domain-carriers.js";
+import { rustSourceStorageProjectedCarrier } from "../../../dist/analysis/objects/value-domain-carriers.js";
 import { createRustSourceTypeRegistry } from "../../../dist/analysis/project-types/source-type-registry.js";
 import { rustEmptyObjectTargetType, rustJsValueTargetType, rustOptionTargetType, rustStructuralObjectTargetType,
   rustSourceTypeCarrier } from "../../../dist/target-model/types/index.js";
 import { substituteRustTargetTypeParameters } from "../../../dist/target-model/types/carriers/substitution.js";
+import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 
 function fixture() {
   const checked = createCompilerSessionFromFiles({ currentDirectory: "/src",
@@ -50,7 +51,7 @@ function fixture() {
   return { source, file, storage, nodes, queries, members, firstType: firstType.type };
 }
 
-function domain(input, carrier, projection, root = "first", selected = "selected") {
+function projected(input, carrier, projection, root = "first", selected = "selected") {
   const node = input.nodes.get(root);
   const origin = input.storage.subject(node, "value", projection);
   assert.equal(origin.kind, "resolved", "exact projection is interned by shared storage");
@@ -60,20 +61,11 @@ function domain(input, carrier, projection, root = "first", selected = "selected
   const scope = input.storage.bindingsForLexicalOwner(expression);
   assert.equal(scope.kind, "resolved", "the original use owns its checked storage binding");
   const host = {
-    sourceStorage: { ...input.storage,
-      storageProducersFor: (subject, bindings) => {
-        assert.equal(bindings === scope.bindings, true, "the domain query consumes the original use's binding");
-        return { kind: "complete", producers: [{ subject: origin.subject, type: typed.type,
-          sourceFile: typed.sourceFile, bindings }] };
-      },
-    },
+    sourceStorage: { ...input.storage },
     semantics: file => input.source.semantics.forFile(file),
-    types: { resolveNode(selectedNode, file) {
-      assert.equal(selectedNode === node && file === input.file, true, "retain original physical owner, never resolve field source type");
-      return carrier;
-    } },
+    types: { resolveNode() { assert.fail("the original physical carrier is supplied; never resolve a field source type"); } },
   };
-  return { host, expression, origin: origin.subject, bindings: scope.bindings };
+  return { host, carrier, source: { subject: origin.subject, bindings: scope.bindings }, bindings: scope.bindings };
 }
 
 const member = input => ({ kind: "member", declaration: input.members.get("value").declarations[0] });
@@ -97,17 +89,19 @@ test("member origins use exact physical declarations, not equal source types or 
   const exact = rustEmptyObjectTargetType();
   for (const actual of [exact, rustJsValueTargetType()]) {
     const shape = structural(input, actual);
-    const selected = domain(input, shape.carrier, [member(input)]);
+    const selected = projected(input, shape.carrier, [member(input)]);
     Object.assign(selected.host, { sourceTypes: shape.registry,
       projectFieldProjection: () => { assert.fail("registered physical fields do not use source-only substitution"); } });
-    assert.equal(rustValueDomainHasTargetType(selected.host, selected.expression, exact, selected.bindings), actual === exact);
+    assert.equal(rustTargetTypeRefEquals(rustSourceStorageProjectedCarrier(selected.host, selected.source, selected.carrier), exact),
+      actual === exact, "the exact physical field carrier, not the checked field's wider source type");
   }
   const shape = structural(input, exact, "value", { declarations: [input.members.get("other").declarations[0]], symbols: [] });
-  const selected = domain(input, shape.carrier, [member(input)]);
+  const selected = projected(input, shape.carrier, [member(input)]);
   Object.assign(selected.host, { sourceTypes: shape.registry, projectFieldProjection: () => undefined });
-  assert.equal(rustValueDomainHasTargetType(selected.host, selected.expression, exact, selected.bindings), false, "same spelling cannot replace declaration identity");
-  assert.equal(rustValueDomainHasTargetType(selected.host, selected.expression, exact), false,
-    "the removed unbound call cannot trigger an implicit global domain query");
+  assert.equal(rustSourceStorageProjectedCarrier(selected.host, selected.source, selected.carrier) === undefined, true,
+    "same spelling cannot replace declaration identity");
+  assert.equal(rustSourceStorageProjectedCarrier(selected.host, { ...selected.source, bindings: undefined }, selected.carrier) === undefined,
+    true, "a missing original use binding cannot trigger an implicit global query");
 });
 
 test("member projection composes with exact array and tuple physical owners", () => {
@@ -118,9 +112,9 @@ test("member projection composes with exact array and tuple physical owners", ()
     ["records", { kind: "array", element: shape.carrier }, { kind: "array-element" }],
     ["pair", { kind: "tuple", elements: [shape.carrier] }, { kind: "tuple-element", index: 0 }],
   ]) {
-    const selected = domain(input, carrier, [prefix, member(input)], root);
+    const selected = projected(input, carrier, [prefix, member(input)], root);
     Object.assign(selected.host, { sourceTypes: shape.registry, projectFieldProjection: () => undefined });
-    assert.equal(rustValueDomainHasTargetType(selected.host, selected.expression, exact, selected.bindings), true, root);
+    assert.equal(rustTargetTypeRefEquals(rustSourceStorageProjectedCarrier(selected.host, selected.source, selected.carrier), exact), true, root);
   }
 });
 
@@ -130,10 +124,11 @@ test("optional physical fields retain their native absence carrier", () => {
   const absent = rustOptionTargetType(exact);
   const shape = structural(input, absent, "optional");
   const projection = [{ kind: "member", declaration: input.members.get("optional").declarations[0] }];
-  const selected = domain(input, shape.carrier, projection, "first", "optional");
+  const selected = projected(input, shape.carrier, projection, "first", "optional");
   Object.assign(selected.host, { sourceTypes: shape.registry, projectFieldProjection: () => undefined });
-  assert.equal(rustValueDomainHasTargetType(selected.host, selected.expression, exact, selected.bindings), false, "no erasure of optional field storage");
-  assert.equal(rustValueDomainHasTargetType(selected.host, selected.expression, absent, selected.bindings), true);
+  const actual = rustSourceStorageProjectedCarrier(selected.host, selected.source, selected.carrier);
+  assert.equal(rustTargetTypeRefEquals(actual, exact), false, "no erasure of optional field storage");
+  assert.equal(rustTargetTypeRefEquals(actual, absent), true, "the native absence carrier is retained");
 });
 
 test("nominal generic fields use the physical instantiation and exact checked property", () => {
@@ -145,7 +140,7 @@ test("nominal generic fields use the physical instantiation and exact checked pr
       const owner = rustSourceTypeCarrier("/src/owner.ts", "Holder", [{ kind: "type", type: physical }]);
       const carrier = root === "records" ? { kind: "array", element: owner }
         : root === "pair" ? { kind: "tuple", elements: [owner] } : owner;
-      const selected = domain(input, carrier, [...prefix, member(input)], root);
+      const selected = projected(input, carrier, [...prefix, member(input)], root);
       let calls = 0;
       Object.assign(selected.host, { sourceTypes: createRustSourceTypeRegistry(),
         projectFieldProjection(property, actualOwner, ownerType, source) {
@@ -157,7 +152,8 @@ test("nominal generic fields use the physical instantiation and exact checked pr
           assert.equal(source.bindings === selected.bindings, true, "the exact original use binding reaches the field owner");
           return { output: substituteRustTargetTypeParameters(parameter, new Map([[parameter.identity, physical]])), field: {} };
         } });
-      assert.equal(rustValueDomainHasTargetType(selected.host, selected.expression, exact, selected.bindings), physical === exact);
+      assert.equal(rustTargetTypeRefEquals(rustSourceStorageProjectedCarrier(selected.host, selected.source, selected.carrier), exact),
+        physical === exact, "the exact physical generic instance, never a second source-type projection");
       assert.equal(calls, 1, "one nominal projection, not a second type resolver");
     }
   }
@@ -166,15 +162,14 @@ test("nominal generic fields use the physical instantiation and exact checked pr
 test("member proofs fail closed for unavailable, accessor and exhausted evidence", () => {
   const input = fixture();
   const exact = rustEmptyObjectTargetType();
-  for (const control of ["missing", "accessor", "method", "budget", "open", "prefix"]) {
+  for (const control of ["missing", "accessor", "method", "budget", "prefix"]) {
     const shape = structural(input, exact, "value", control === "accessor"
       ? { accessor: { getter: true, setter: false } } : control === "method" ? { method: true } : {});
-    const selected = domain(input, shape.carrier, [member(input)]);
+    const selected = projected(input, shape.carrier, [member(input)]);
     Object.assign(selected.host, { sourceTypes: shape.registry, projectFieldProjection: () => undefined });
     if (control === "missing" || control === "prefix") selected.host.sourceTypes = createRustSourceTypeRegistry();
     if (control === "prefix") selected.host.sourceStorage.typeFor = () => ({ kind: "unresolved", reason: "missing prefix" });
     if (control === "budget") selected.host.sourceStorage.failureReason = () => "bounded failure";
-    if (control === "open") selected.host.sourceStorage.storageProducersFor = () => ({ kind: "open", producers: [] });
-    assert.equal(rustValueDomainHasTargetType(selected.host, selected.expression, exact, selected.bindings), false, control);
+    assert.equal(rustSourceStorageProjectedCarrier(selected.host, selected.source, selected.carrier) === undefined, true, control);
   }
 });

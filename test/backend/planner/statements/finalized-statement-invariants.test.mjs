@@ -112,7 +112,7 @@ function admitStatements(program) {
     producer: createRustStatementCompletionProducer(() => {}), required: [],
     safetyApplications: program.safetyApplications, components: program.sourcePackageComponents,
     ownership: program.ownership, projectTypes: program.projectTypes, projectFieldDispatch: program.projectFieldDispatch,
-    structuralShapes: program.structuralShapes, frozenDataWrites: program.frozenDataWrites,
+    structuralShapes: program.structuralShapes,
     countedLoops: analyzeRustCountedLoopRepresentations({ ast: program.source.ast, nativeNodes: ordered,
       navigation: program.source.navigation, records: program.records, borrowedElementReads: program.borrowedElementReads }) });
 }

@@ -88,7 +88,7 @@ function select(program, records = program.records) {
     producer: createRustStatementCompletionProducer(() => undefined), required: [], countedLoops,
     safetyApplications: program.safetyApplications, components: program.sourcePackageComponents,
     ownership: program.ownership, projectTypes: program.projectTypes, projectFieldDispatch: program.projectFieldDispatch,
-    structuralShapes: program.structuralShapes, frozenDataWrites: program.frozenDataWrites });
+    structuralShapes: program.structuralShapes });
   return selected.kind === "resolved" ? { ...selected, plan: statementIndex(selected.plan) } : selected;
 }
 

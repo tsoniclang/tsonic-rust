@@ -46,7 +46,6 @@ function admit(capture, selected) {
     projectTypes: { definitionForCarrier: () => undefined },
     lexicalFunctions: { forDeclaration: () => undefined },
     names: { callableValueNameForDeclaration: () => undefined },
-    frozenDataWrites: { capturesFieldIdentity: () => false },
     objectRepresentations: { representationFor: () => undefined,
       receiverCaptures: { ...program.objectRepresentations.receiverCaptures,
         receiversFor: () => [], capturesFor: () => [] } },
@@ -139,7 +138,6 @@ function construction(expression, projection, issues = []) {
     projectConstructions: { forDefinition: candidate => candidate === definition ? plan : undefined },
     physicalEmissionContexts: { contexts: [{ use: { role: "constructor-layer", subject: layer } }] },
     objectRepresentations: { receiverCaptures: { storageDeclaration: node => node } },
-    frozenDataWrites: { capturesFieldIdentity: () => false },
   }, producer }));
   const admitted = producer.records.get(classNode);
   const type = { kind: "named", path: "Callable" };

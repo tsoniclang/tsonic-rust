@@ -141,7 +141,7 @@ function analysisInput(program, sourceFacts, records = program.records) {
   return { ast: program.source.ast, nodes, isNativeNode: node => nativeNodes.has(node), sourceFacts, records, navigation: program.sourceNavigation,
     readUses: program.ownership.uses,
     projectTypes: program.projectTypes, objectRepresentations: program.objectRepresentations,
-    structuralShapes: program.structuralShapes, frozenDataWrites: program.frozenDataWrites };
+    structuralShapes: program.structuralShapes };
 }
 
 test("source method receiver stability consumes the completed native read use and preserves exposure refusals", () => {

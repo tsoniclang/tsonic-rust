@@ -61,7 +61,7 @@ export function choose(value: string | undefined, candidate: string | undefined)
         projectFlowReadSelections: program.projectFlowReadSelections, producer, required: [], countedLoops: new Map(),
         safetyApplications: program.safetyApplications, components: program.sourcePackageComponents,
         ownership: program.ownership, projectTypes: program.projectTypes, projectFieldDispatch: program.projectFieldDispatch,
-        structuralShapes: program.structuralShapes, frozenDataWrites: program.frozenDataWrites });
+        structuralShapes: program.structuralShapes });
       assert.equal(selected.kind, "rejected", `switch inverse ${index}: refuse before native publication`);
       assert.equal(selected.diagnostics.some(issue => ["RUST_SWITCH_SELECTION_NOT_PROVEN", "RUST_SWITCH_CLAUSE_NOT_PROVEN"].includes(issue.code)),
         true, `switch inverse ${index}: precise existing admission owner`);

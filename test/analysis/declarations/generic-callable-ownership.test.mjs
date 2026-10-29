@@ -204,7 +204,7 @@ closureCapture: { get: (node) => {
     return { ...planInput, sourceStorage, nativeNodes: participation.nodes,
       isNativeNode, lexicalFunctions, typeDefinitions, sourceTypes, projectTypes, objectRepresentations,
       structuralShapes, carrierHost, retainedEnvironments, nativeTasks,
-      frozenDataWrites: { capturesFieldIdentity() { assert.fail("logical callable fixtures have no captured native class-field identities"); } } };
+    };
   };
   return { closures, planInput, materialize,
     create: (closed = new Set()) => {

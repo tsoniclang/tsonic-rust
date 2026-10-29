@@ -36,7 +36,7 @@ test("canonical block planning retains empty native bodies and rejects every mis
       projectFlowReadSelections: program.projectFlowReadSelections, producer, required: [], countedLoops: new Map(),
       safetyApplications: program.safetyApplications, components: program.sourcePackageComponents,
       ownership: program.ownership, projectTypes: program.projectTypes, projectFieldDispatch: program.projectFieldDispatch,
-      structuralShapes: program.structuralShapes, frozenDataWrites: program.frozenDataWrites });
+      structuralShapes: program.structuralShapes });
     assert.equal(selected.kind, "rejected", "each original dense/sparse missing slot rejects before publication");
     const count = children.length === 2 ? 2 : 1;
     assert.equal(selected.diagnostics.length, count);
