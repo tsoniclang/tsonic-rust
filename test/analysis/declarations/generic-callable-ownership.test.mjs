@@ -50,13 +50,13 @@ function input() {
   const baseAst = fakeAstReader(files);
   const ast = {
     ...baseAst,
-    is: { ...baseAst.is,
+    is: Object.assign(Object.create(baseAst.is), {
       IsCallSignatureDeclaration: node => node.kindName === "KindCallSignature",
       IsConstructSignatureDeclaration: node => node.kindName === "KindConstructSignature",
       IsPropertySignatureDeclaration: node => node.kindName === "KindPropertySignature",
       IsVariableDeclarationList: node => node.kindName === "KindVariableDeclarationList",
       IsEnumMember: node => node.kindName === "KindEnumMember",
-    },
+    }),
     typeParameters: node => node.typeParameters ?? [],
     forEachChild: (node, visit) => { for (const child of node.nodes ?? []) visit(child); },
     getSourceFile: node => node.file ?? node,
