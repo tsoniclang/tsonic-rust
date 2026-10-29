@@ -245,6 +245,54 @@ test("required metadata elaboration does not invent a runtime value or operand r
   assert.equal(result.value.nativeStorage.operandFor(current.metadata).kind, "unresolved", "unrequested runtime operand stays absent");
 });
 
+test("ordinary data-loan returns retain their native parameter and pure sealed lookup without callable origins", () => {
+  const checked = checkedSource("export function owner(value: string): string { return value; }");
+  const { context, input } = checked;
+  const owner = context.nativeNodes.find(node => context.ast.is.IsFunctionDeclaration(node));
+  const sourceReturn = context.records.sourceCallableReturn.get(owner);
+  const parameter = context.ast.parameters(owner)[0];
+  assert.equal(sourceReturn?.borrowedReturn?.parameter === parameter, true, "the declaration publishes its actual input loan");
+  const expected = sourceReturn.borrowedReturn.carrier;
+  assert.equal(expected.kind === "reference" && expected.lifetime !== undefined, true,
+    "the physical result carries the exact declared native input lifetime");
+  const revocableAst = Proxy.revocable(context.ast, {});
+  const revocableRecords = Proxy.revocable(context.records, {});
+  const revocableStorage = Proxy.revocable(context.sourceStorage, {});
+  const construction = physicalConstruction({ ...checked, context: { ...context,
+    ast: revocableAst.proxy, records: revocableRecords.proxy, sourceStorage: revocableStorage.proxy } });
+  const bindings = Object.freeze({ types: new Map(), lifetimes: new Map(), consts: new Map() });
+  const request = Object.freeze({ kind: "return", subject: owner, owner: context.ast.getSourceFile(owner), bindings,
+    context: targetUseSiteRef(owner, "physical-return", rustEmissionSourceIdentity(context.ast, context.ast.getSourceFile(owner))) });
+  const lifecycle = createRustPhysicalCallableLifecycle({ ast: revocableAst.proxy, records: revocableRecords.proxy,
+    sourceStorage: revocableStorage.proxy, requests: Object.freeze([request]), sourceOccurrences: construction.sourceOccurrences,
+    typeDefinitions: context.typeDefinitions, lexicalFunctions: input.lexicalFunctions, structuralShapes: context.structuralShapes,
+    adapterFlows: Object.freeze([]), nativeStorage: construction.storage, nativeProducers: construction.producers });
+  construction.physical.closeAdmission();
+  const result = lifecycle.complete(construction.physical);
+  assert.equal(result.kind, "resolved", "the actual physical lifecycle admits the data return");
+  const selected = result.value.nativeStorage.returnFor(owner);
+  assert.equal(selected.kind, "borrowed", "ordinary data references do not fabricate callable producer selections");
+  assert.equal(selected.parameter === parameter && selected.carrier === expected, true, "exact parameter and selected carrier identities");
+  assert.equal(Object.hasOwn(selected, "sources"), false, "no fake empty callable provenance is introduced");
+  assert.equal(Object.isFrozen(selected), true, "the published loan is immutable");
+  revocableAst.revoke();
+  revocableRecords.revoke();
+  revocableStorage.revoke();
+  assert.equal(lifecycle.prepared.returnFor(owner) === selected, true, "one prepared selection is reused at publication");
+  assert.equal(result.value.nativeStorage.returnFor(owner) === selected, true, "repeated reads preserve the same completed selection");
+  const { program } = analyzeRust({ surfaces: [], files: { "index.ts": "export function owner(value: string): string { return value; }" } });
+  const nativeOwner = program.sourceFiles.flatMap(file => program.source.ast.statements(file))
+    .find(node => program.source.ast.is.IsFunctionDeclaration(node));
+  const published = program.records.sourceCallableReturn.get(nativeOwner)?.borrowedReturn;
+  assert.equal(published !== undefined, true, "the actual emitted owner retains its declared input loan");
+  const contexts = program.physicalEmissionContexts.contexts.filter(current => current.declaration === nativeOwner && current.use.role === "native-body");
+  assert.equal(contexts.length > 0, true, "the actual return body has an admitted physical context");
+  assert.equal(contexts.every(current => current.returnDestination.kind === "value" &&
+    current.returnDestination.borrowedReturn?.parameter === published.parameter &&
+    rustTargetTypeRefEquals(current.returnDestination.carrier, published.carrier)), true,
+    "the real return expression inherits the same borrowed destination before planning");
+});
+
 test("all four required runtime roles materialize the exact original checked subjects once", () => {
   const current = fixture();
   const requests = [current.request("value", current.declaration), current.request("operand", current.operand),

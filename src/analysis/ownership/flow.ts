@@ -134,7 +134,7 @@ export function analyzeRustOwnershipFlow(input: RustOwnershipFlowInput):
   }
   for (let index = input.nativeNodes.length - 1; index >= 0; index -= 1) {
     const node = input.nativeNodes[index]!;
-    if (ast.is.IsCallExpression(node) || ast.is.IsNewExpression(node) || input.isOwnedOperationResult(node)) movingReads.add(node);
+    if (input.isOwnedOperationResult(node)) movingReads.add(node);
     const operand = sourceTransparentExpressionOperand(ast, node);
     if (operand !== undefined && movingReads.has(operand)) movingReads.add(node);
     if (input.canMoveStoredField(node)) {

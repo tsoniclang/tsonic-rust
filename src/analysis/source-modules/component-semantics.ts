@@ -10,7 +10,7 @@ import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustClosedErrorTransportDemand } from "../errors/closed-errors.js";
 
-import type { RustNativeStorageSelection } from "../../target-model/records/native/native-storage.js";
+import type { RustNativeReturnStorageSelection } from "../../target-model/records/native/native-storage.js";
 import type { RustErrorEffectsFact } from "../../target-model/records/errors/error-effects.js";
 import { IsTypeSyntaxNode } from "@tsonic/target-api/source";
 
@@ -301,7 +301,7 @@ export function validateRustGenericSourcePackageComponents(
       rustTargetTypeChildren(carrier).forEach(inspect);
     };
     const inspectStorage = (node: import("@tsonic/tsts").Node, carrier: TargetTypeRef | undefined,
-      select: () => RustNativeStorageSelection): void => {
+      select: () => RustNativeReturnStorageSelection): void => {
       if (carrier === undefined) return;
       if (!containsGeneric(carrier)) { inspect(carrier); return; }
       const selected = select();

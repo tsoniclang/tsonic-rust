@@ -68,7 +68,7 @@ export function createRustEmissionSourceOriginPreparation(input: RustEmissionSou
       : demand.kind === "operand" ? input.nativeStorage.operandFor(demand.subject)
       : demand.kind === "return" ? input.nativeStorage.returnFor(demand.subject)
       : input.nativeStorage.invocationCallableFor(demand.subject);
-    if (selected.kind === "unresolved") continue;
+    if (selected.kind === "unresolved" || selected.kind === "borrowed") continue;
     if (!Array.isArray(selected.sources)) failTargetAnalysisInvariant("tsonic-rust", "Physical source origins require the complete original selection source vector.");
     for (const source of selected.sources) {
       if (seenSources.has(source)) continue;

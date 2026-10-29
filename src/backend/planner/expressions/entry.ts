@@ -102,12 +102,18 @@ function planProjectedExpression(node: Node, context: RustPlanContext, resultUse
     value = selected.preserveAbsenceEffect ? { kind: "evaluate-then", effect: value, discard: selected.absenceDiscard, value: absent } : absent;
   } else if (selected.option?.kind === "some" && !borrowedOptionIdentity) value = planRustPresentValue(selected.option.resultCarrier, value, context);
   if (access === "shared-receiver") return value;
-  if (access === "shared-place") return borrowFlow ? { kind: "dereference", pointer: value } : value;
   // A contextual conversion to a shared reference (`AsRef::<str>::as_ref(&owned)`) already yields the shared reference;
   // borrowing it again is clippy::needless_borrow.
   const sharedResult = selected.option === undefined && selected.contextual?.targetCarrier.kind === "reference" &&
     selected.contextual.targetCarrier.mutable !== true;
-  return access !== "shared-reference" || borrowFlow || selected.option === undefined && selected.referenceReborrow || sharedResult
+  const unprojectedOverride = override?.valueForm === "shared-reference" && selected.flow === undefined &&
+    selected.upcast === undefined && selected.downcast === undefined && selected.object === undefined &&
+    selected.contextual === undefined && selected.option === undefined;
+  const physicalReference = borrowFlow || sharedResult || selected.option === undefined && selected.referenceReborrow ||
+    (override === undefined ? selected.resultForm === "shared-reference" : unprojectedOverride);
+  if (access === "shared-place") return physicalReference ? { kind: "dereference", pointer: value } : value;
+  if (access === "shared-reference" && !physicalReference && override !== undefined) return { kind: "reference", expr: value };
+  return access !== "shared-reference" || physicalReference
     ? value : createRustSharedReferenceArgument(context, { stage: "source", expression: value, node });
 }
 

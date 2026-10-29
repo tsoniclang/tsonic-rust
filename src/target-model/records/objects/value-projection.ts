@@ -6,6 +6,7 @@ import type { RustObjectReferenceView } from "./object-reference-views.js";
 
 export interface RustValueProjection {
   readonly exits: boolean;
+  readonly resultForm: "value" | "shared-reference";
   readonly flow: RustFlowReadProjectionFact | undefined;
   readonly upcast: RustProjectUpcastFact | undefined;
   readonly downcast: RustProjectDowncastFact | undefined;

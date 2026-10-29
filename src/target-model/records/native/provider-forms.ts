@@ -5,7 +5,7 @@ import type { RustErrorRegionSelection } from "../errors/error-regions.js";
 import type { RustValueConversionContract } from "../../conversions/contracts.js";
 
 export interface RustProviderFormEmission {
-  readonly read: "copy" | "clone" | "storage";
+  readonly read: "copy" | "clone" | "storage" | "ref" | "mut-ref";
   readonly worker: { readonly fileName: string; readonly argumentIndex: number; readonly mode: "ref" | "value" } | undefined;
   readonly nativeResult: RustSourceErrorRegionEmission | undefined;
   readonly callbackBody: {

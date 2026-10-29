@@ -52,7 +52,7 @@ function rustParameterReturnInitialization(program: RustParameterEmissionProgram
   const carrier = program.records.runtimeCarrier.get(returned)?.carrier;
   if (selectedReturn === undefined || sourceReturn === undefined || read === undefined || carrier === undefined)
     failTargetAnalysisInvariant("tsonic-rust", "An admitted parameter return requires its complete native return and read contracts.", returned);
-  if (selectedReturn.destination.kind !== "identity" || sourceReturn.borrowedParameter !== undefined ||
+  if (selectedReturn.destination.kind !== "identity" || sourceReturn.borrowedReturn !== undefined ||
     !rustTargetTypeRefEquals(carrier, abi.valueCarrier) || !rustTargetTypeRefEquals(sourceReturn.returnCarrier, abi.valueCarrier) ||
     read.value.kind !== "copy" && read.value.kind !== "move") return binding;
   const dropFree = (carrier: RustSourceParameterAbiFact["parameterCarrier"]): boolean =>

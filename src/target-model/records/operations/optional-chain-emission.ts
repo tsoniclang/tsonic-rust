@@ -2,6 +2,7 @@ import type { Node } from "@tsonic/tsts";
 import type { RustOptionalChainFact } from "../../operations/model.js";
 import type { TargetTypeRef } from "../../types/model.js";
 import type { RustRecordFamily } from "../program.js";
+import type { RustFinalizedOperationAbi } from "./finalized-operation.js";
 
 export interface RustOptionalChainEmission {
   readonly fact: RustOptionalChainFact;
@@ -11,6 +12,13 @@ export interface RustOptionalChainEmission {
    * mapped result, Option::and_then when the present branch already yields the Option. Undefined selects the match form.
    */
   readonly closure: "map" | "and_then" | undefined;
+  readonly loan: {
+    readonly parameter: Node;
+    readonly owner: Node;
+    readonly carrier: Extract<TargetTypeRef, { readonly kind: "reference" }>;
+    readonly abi: RustFinalizedOperationAbi;
+    readonly bodies: readonly (true | undefined)[];
+  } | undefined;
   readonly structuralGuard: {
     readonly receiverNode: Node;
     readonly receiverCarrier: TargetTypeRef;

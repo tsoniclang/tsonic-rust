@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createTargetSourceProgram, Node_Expression } from "@tsonic/target-api/source";
+import { createTargetSourceProgram, Node_Expression, sourceEnclosingCallable } from "@tsonic/target-api/source";
 import { checkedSource } from "../../../../tsonic/test/fixtures/source-navigation.mjs";
 import { analyzeRust, compileRust, acmePlatformPackage } from "../../helpers/rust-session.mjs";
 import { analyzeRustReadUses, rustNativeArgumentBorrowsRead } from "../../../dist/analysis/ownership/uses.js";
@@ -10,9 +10,38 @@ import { rustStringTargetType } from "../../../dist/target-model/types/index.js"
 import { createRustRecordFixture } from "../../helpers/records.mjs";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 import { getRustTypeofRuntimeKind } from "../../../dist/policy/operations/syntax/runtime-kind.js";
+import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
+import { rustLifetimesEqual } from "../../../dist/target-model/lifetimes/index.js";
 import { rustNativeIndexStorageProjection, rustNativeStoragePathsDisjoint, rustNativeStorageProjections,
   rustNativeStorageRoot } from "../../../dist/analysis/storage/native-paths.js";
 import { interfaceRepresentationAliasNativeValueFiles, interfaceRepresentationAliasJsProofSource, interfaceRepresentationAliasSource } from "../../../../tsonic/test/fixtures/interface-representation-aliases.mjs";
+
+test("iteration input reads consume the exact completed borrowed lowering rather than syntax alone", async () => {
+  const source = createTargetSourceProgram(await checkedSource("ownership-native-iteration-input", {
+    "src/index.ts": "export function scan(values: readonly string[]): void { for (const value of values) void value; }",
+  }));
+  const ast = source.ast;
+  let loop;
+  const visit = node => {
+    if (ast.is.IsForOfStatement(node)) loop = node;
+    ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+  };
+  source.sourceFiles.forEach(visit);
+  assert.equal(loop !== undefined, true, "the policy consumes an actual checked loop identity");
+  const operand = Node_Expression(ast, loop);
+  for (const [label, lowering, expected] of [
+    ["borrowed reference", { kind: "borrowed", input: "reference", style: "cloned" }, "shared"],
+    ["borrowed direct slice", { kind: "borrowed", input: "direct", style: "copied" }, "shared"],
+    ...["owned", "owned-call", "receiver-method", "fallible-owned", "js-array", "sync-generator", "async-generator"]
+      .map(kind => [kind, { kind }, undefined]),
+  ]) {
+    const selected = selectRustOperationReadUses(ast, loop, { operation: { kind: "iteration", iterationKind: "for-of", lowering },
+      computedMember: undefined, arguments: [], nativeInputs: [], argumentModes: [], address: undefined,
+      location: undefined, guard: undefined, callableMode: undefined, structuralReceiverMode: "shared" });
+    assert.equal(selected.get(operand)?.mode, expected, `${label}: only the completed native borrowed collection is shared`);
+    assert.equal(selected.size, expected === undefined ? 0 : 1, `${label}: the exact checked operand is selected once`);
+  }
+});
 
 test("borrowed converted comparisons retain the actual owning source demand", () => {
   for (const [expected, options] of [
@@ -96,14 +125,14 @@ export function inspect(value: Counter): int32 {
       const records = createRustRecordFixture({ targetOperation: program.records.targetOperation,
         selfMode: { get: () => mode === undefined ? undefined : { mode } } });
       const inverse = analyzeRustReadUses(ast, [node], records, program.typeDefinitions,
-        () => false, program.structuralShapes, () => false);
+        () => false, program.structuralShapes, () => false, program.lexicalFunctions);
       assert.equal(inverse.has(receiver), false, "missing and mutable native self contracts never become shared by default");
     }
     if (operation.accessMode === "read-write") {
       const records = createRustRecordFixture({ targetOperation: program.records.targetOperation,
         selfMode: { get: declaration => ({ mode: declaration === operation.read.declaration ? "ref" : "mut-ref" }) } });
       const inverse = analyzeRustReadUses(ast, [node], records, program.typeDefinitions,
-        () => false, program.structuralShapes, () => false);
+        () => false, program.structuralShapes, () => false, program.lexicalFunctions);
       assert.equal(inverse.has(receiver), false, "a borrowed getter cannot override a mutable setter in one read-modify-write");
     }
   }
@@ -177,7 +206,7 @@ function run(values: number[]): void {
       operator: index === 2 ? "=" : "+=", resultCarrier: integer, operandModes: ["value", "value"] });
   }
   const records = createRustRecordFixture({ targetOperation: { get: node => operations.get(node) } });
-  const uses = analyzeRustReadUses(ast, nodes, records, {}, () => false, { field: () => undefined }, () => false);
+  const uses = analyzeRustReadUses(ast, nodes, records, {}, () => false, { field: () => undefined }, () => false, { forDeclaration: () => undefined });
   for (const [index, assignment] of assignments.entries()) {
     const binary = ast.as.AsBinaryExpression(assignment);
     let left = binary.Left;
@@ -299,7 +328,7 @@ export function fixed(values: FixedArray<string, 2>): boolean { return ((values)
     program.sourceFiles.forEach(visit);
     assert.equal(receivers, 2, "both actual tuple and fixed-array projection receivers remain covered");
   });
-  test(`owned native projections retain exact final receiver transfer on ${surfaces[0] ?? "native"}`, () => {
+  test(`native parameter projections retain their exact declaration-owned loan on ${surfaces[0] ?? "native"}`, () => {
     const { program } = analyzeRust({ surfaces, files: { "index.ts": `
 import type { FixedArray } from "@tsonic/core/types.js";
 export function tuple(values: [string, string]): string { return ((values))[0]; }
@@ -312,14 +341,28 @@ export function fixed(values: FixedArray<string, 2>): string { return ((values))
       if (operation?.kind === "tuple-index" || operation?.kind === "fixed-index") {
         const receiver = Node_Expression(ast, node);
         const read = program.records.readOwnership.get(receiver);
-        assert.equal(read?.source.kind, "move", "an owned final projection transfers its owner without cloning it");
-        assert.equal(read.value.kind, "move", "the selected owned field does not acquire a shared-observer override");
+        const declaration = sourceEnclosingCallable(node, ast);
+        const parameter = ast.parameters(declaration)[0];
+        const abi = program.records.sourceParameterAbi.get(parameter);
+        const returned = program.records.sourceCallableReturn.get(declaration)?.borrowedReturn;
+        assert.equal(abi?.mode, "ref", "the exact declaration parameter has a completed shared ABI");
+        assert.equal(abi.inputLifetime !== undefined, true, "the parameter publishes its native input lifetime");
+        assert.equal(abi.parameterCarrier.kind, "reference", "the parameter's physical storage is a native reference");
+        assert.equal(abi.parameterCarrier.mutable, false, "the declaration does not acquire a mutable loan");
+        assert.equal(returned?.parameter === parameter, true, "the projected return loan names that same formal parameter");
+        assert.equal(returned.carrier.kind, "reference", "the projected result is an actual physical reference");
+        assert.equal(rustLifetimesEqual(returned.carrier.lifetime, abi.inputLifetime), true,
+          "the result retains the completed parameter lifetime");
+        assert.equal(rustTargetTypeRefEquals(returned.carrier.referent, program.records.runtimeCarrier.get(node)?.carrier), true,
+          "the physical reference lends the exact selected projected native carrier");
+        assert.equal(read?.source.kind, "borrow", "the parameter receiver is borrowed rather than moved or cloned");
+        assert.equal(read.value.kind, "borrow", "the receiver value retains the declaration-owned loan");
         receivers += 1;
       }
       ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
     };
     program.sourceFiles.forEach(visit);
-    assert.equal(receivers, 2, "both actual tuple and fixed-array owned projections remain covered");
+    assert.equal(receivers, 2, "both original tuple and fixed-array parameter projections remain covered");
   });
 }
 
@@ -471,7 +514,7 @@ function run(value: number): void {
   }
   assert.equal(operations.size, 8, "all direct, wrapped, repeated, effectful-target and reference-creation occurrences are covered");
   const records = createRustRecordFixture({ targetOperation: { get: node => operations.get(node) } });
-  const uses = analyzeRustReadUses(ast, nodes, records, {}, () => false, { field: () => undefined }, () => false);
+  const uses = analyzeRustReadUses(ast, nodes, records, {}, () => false, { field: () => undefined }, () => false, { forDeclaration: () => undefined });
   for (const [node, operation] of operations) {
     let operand = operation.operandExpression;
     const mode = operation.operation === "store" || operation.operation === "mutable-reference" ? "mutable" : "shared";
@@ -947,7 +990,7 @@ export function read(value: Value, key: "value"): number { return value[key]; }
   // The published records omit the memory location families; this source has no raw addresses or typed locations.
   const computedOnly = analyzeRustReadUses(ast, [computed, fact.key], { ...program.records,
     rawAddressPlan: { get: () => undefined }, typedLocationPlan: { get: () => undefined },
-    targetOperation: { get: () => undefined } }, program.typeDefinitions, () => false, program.structuralShapes, () => false);
+    targetOperation: { get: () => undefined } }, program.typeDefinitions, () => false, program.structuralShapes, () => false, program.lexicalFunctions);
   assert.equal(computedOnly.get(fact.key)?.mode, "shared", "computed-only evidence reaches the same policy with no operation fallback");
   const read = program.ownership.reads.get(fact.key);
   assert.equal(read?.source.kind, "borrow", "the producer selects a nonconsuming source read before rendering");

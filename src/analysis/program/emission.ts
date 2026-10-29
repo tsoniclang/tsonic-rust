@@ -29,7 +29,7 @@ import { analyzeRustSafetyEmission } from "../safety/emission.js";
 import { analyzeRustArrayLiterals } from "../operations/array-literals.js";
 import { analyzeRustPropertyValueProjection } from "../conversions/property-value-projection.js";
 import { analyzeRustOptionalChainEmission } from "../operations/optional-chains.js";
-import { analyzeRustValueReads } from "../conversions/value-reads.js";
+import { analyzeRustValueReads, analyzeRustValueProjections } from "../conversions/value-reads.js";
 import { analyzeRustLiteralEmission } from "../operations/literals.js";
 import { analyzeRustTemplateStrings } from "../operations/template-strings.js";
 import { analyzeRustNativeComparisons } from "../operations/native-comparisons.js";
@@ -281,9 +281,11 @@ export function finalizeRustNativeEmission(
   if (arrayLiteralIssues.length !== 0) return rejectedTargetStage(arrayLiteralIssues);
   const propertyProjectionIssues = analyzeRustPropertyValueProjection(program, context.nativeNodes, context.records.propertyValueProjectionPlans);
   if (propertyProjectionIssues.length !== 0) return rejectedTargetStage(propertyProjectionIssues);
-  const optionalChainIssues = analyzeRustOptionalChainEmission(program, context.nativeNodes, context.records.optionalChainEmissionPlans, context.requiredRecords);
+  const optionalChainIssues = analyzeRustOptionalChainEmission(program, context.nativeNodes, context.records.optionalChainEmissionPlans, context.requiredRecords, providerReads.reads);
   if (optionalChainIssues.length !== 0) return rejectedTargetStage(optionalChainIssues);
   analyzeRustCompletionBindings(program, context.nativeNodes, context.records.completionBindingPlans);
+  const flowReadEmissionIssues = analyzeRustFlowReadEmission(program, context.nativeNodes, context.records.flowReadEmissionPlans);
+  if (flowReadEmissionIssues.length !== 0) return rejectedTargetStage(flowReadEmissionIssues);
   const valueReadIssues = analyzeRustValueReads(program, context.nativeNodes, providerReads.reads, context.records.valueReadPlans,
     context.records.valueProjectionPlans, context.records.conversionEmissionPlans);
   if (valueReadIssues.length !== 0) return rejectedTargetStage(valueReadIssues);
@@ -300,6 +302,9 @@ export function finalizeRustNativeEmission(
   if (recordFieldIssues.length !== 0) return rejectedTargetStage(recordFieldIssues);
   const sourceCallIssues = analyzeRustSourceCalls(program, context.nativeNodes, context.records.sourceCallPlans);
   if (sourceCallIssues.length !== 0) return rejectedTargetStage(sourceCallIssues);
+  const valueProjectionIssues = analyzeRustValueProjections(program, context.nativeNodes,
+    context.records.valueProjectionPlans, context.records.conversionEmissionPlans);
+  if (valueProjectionIssues.length !== 0) return rejectedTargetStage(valueProjectionIssues);
   const callAdmissionIssues = admitRustCalls(program, context.nativeNodes);
   if (callAdmissionIssues.length !== 0) return rejectedTargetStage(callAdmissionIssues);
   const expressionSyntaxIssues = analyzeRustExpressionSyntax(program, context.nativeNodes, context.records.expressionSyntaxPlans);
@@ -312,8 +317,6 @@ export function finalizeRustNativeEmission(
   if (referenceOperationIssues.length !== 0) return rejectedTargetStage(referenceOperationIssues);
   const nullishCoalescingIssues = analyzeRustNullishCoalescing(program, context.nativeNodes, context.records.nullishCoalescingPlans);
   if (nullishCoalescingIssues.length !== 0) return rejectedTargetStage(nullishCoalescingIssues);
-  const flowReadEmissionIssues = analyzeRustFlowReadEmission(program, context.nativeNodes, context.records.flowReadEmissionPlans);
-  if (flowReadEmissionIssues.length !== 0) return rejectedTargetStage(flowReadEmissionIssues);
   const projectUnionMappingIssues = analyzeRustProjectUnionMappings(program, context.nativeNodes, context.records.projectUnionMappingPlans);
   if (projectUnionMappingIssues.length !== 0) return rejectedTargetStage(projectUnionMappingIssues);
   const receiverCaptureIssues = analyzeRustReceiverCaptureEmission(program, context.nativeNodes, context.records.receiverCaptureEmissionPlans);

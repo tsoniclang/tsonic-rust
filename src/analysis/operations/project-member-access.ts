@@ -18,6 +18,7 @@ import type { RustOperationsProviderOptions } from "./members/model.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
+import { rustParameterAbiResourceDiagnostic } from "../callables/values/parameter-facts.js";
 
 export function selectExternalProjectFieldAccess(
   request: RustCheckedPropertySelectionInput,
@@ -152,6 +153,9 @@ export function selectProjectSourceMethodProperty(
   const parameterSelections = parameters.map((parameter) => parameter === undefined
     ? undefined
     : options.sourceCallableAbi.resolveParameterAbi(parameter, context, options));
+  const resourceFailure = parameterSelections.find(selection => selection?.kind === "resource-error");
+  if (resourceFailure?.kind === "resource-error") return { kind: "reject",
+    diagnostic: rustParameterAbiResourceDiagnostic(resourceFailure) };
   const rejectedParameter = parameterSelections.find(selection => selection?.kind === "rejected");
   if (rejectedParameter?.kind === "rejected") return rejectSelectedOperation(request.expression, context,
     "RUST_FORMAL_MEMBER_WRITE_DEMAND_NOT_PROVEN", rejectedParameter.reason);
@@ -287,6 +291,8 @@ export function selectProjectSourceAccessor(
     readDeclaration, writeDeclaration, sourceReceiverType: request.sourceReceiverType,
     sourceReadType: request.sourceReadType, sourceWriteType: request.sourceWriteType,
   }, selectedReceiverCarrier, context, options);
+  if (selected?.kind === "resource-error") return { kind: "reject",
+    diagnostic: rustParameterAbiResourceDiagnostic(selected) };
   if (selected === undefined) return rejectSelectedOperation(request.expression, context,
     "RUST_PROJECT_ACCESSOR_CARRIER_MISSING",
     "Selected accessor declarations require exact receiver, native carrier and slot contracts.");

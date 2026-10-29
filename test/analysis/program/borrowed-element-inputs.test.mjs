@@ -3,6 +3,19 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRust, artifactText, compileRust } from "../../helpers/rust-session.mjs";
 import { analyzeRustBorrowedElementReads } from "../../../dist/analysis/storage/borrowed-element-reads.js";
+import { analyzeRustBorrowEffects } from "../../../dist/analysis/ownership/effects.js";
+
+function iterationEvidence(program, records) {
+  const nodes = rustNativeFixtureNodes(program);
+  const nativeNodes = new Set(nodes);
+  const input = { ast: program.source.ast, sourceFacts: program.source.sourceFacts, nodes, records, navigation: program.sourceNavigation,
+    isNativeNode: node => nativeNodes.has(node), projectTypes: program.projectTypes,
+    objectRepresentations: program.objectRepresentations, structuralShapes: program.structuralShapes,
+    lexicalFunctions: program.lexicalFunctions };
+  const selected = analyzeRustBorrowEffects(input, program.ownership.uses);
+  assert.equal(selected.kind, "resolved", "the fixture supplies its actual completed effects");
+  return { input, effects: selected.effects };
+}
 
 
 for (const expression of ["values[0]", "values[0]!"]) {
@@ -34,7 +47,8 @@ export function read(values: string[]): number { return parseInt(${expression}, 
 targetOperation: { get: (node) => {
     return node === call ? replacement : program.records.targetOperation.get(node);
 } }}, program.records);
-      const reads = analyzeRustBorrowedElementReads(ast, rustNativeFixtureNodes(program), records, program.sourceNavigation);
+      const reads = analyzeRustBorrowedElementReads(ast, rustNativeFixtureNodes(program), records, program.sourceNavigation,
+        iterationEvidence(program, records));
       assert.equal(reads.forExpression(call) === undefined, true, `invalid native input contract ${index}`);
     }
     const { result } = compileRust(options);

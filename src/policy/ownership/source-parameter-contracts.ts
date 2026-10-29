@@ -1,6 +1,6 @@
 import type { RustSourceParameterAbiFact } from "../../target-model/records/callables/callables-and-resources.js";
 
-import { inferRustTargetGenericBindings, rustTargetGenericReferences, substituteRustTargetGenerics, isRustVecCarrier, isRustStringCarrier, rustFixedArrayCarrierValue, rustSourceOptionalTargetType, rustSliceElementCarrier, rustSliceRefTargetType, rustStructuralObjectCarrierValue, rustSourceTypeCarrierValue } from "../../target-model/types/index.js";
+import { inferRustTargetGenericBindings, rustTargetGenericReferences, substituteRustTargetGenerics, isRustVecCarrier, isRustStringCarrier, rustFixedArrayCarrierValue, rustSourceOptionalTargetType, rustOptionElementCarrier, rustSourceUnionCarrierValue, rustSliceElementCarrier, rustSliceRefTargetType, rustStructuralObjectCarrierValue, rustSourceTypeCarrierValue } from "../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import type { RustArgumentMode } from "../../target-model/operations/model.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
@@ -79,7 +79,8 @@ export function selectRustSourceParameterBorrowCarrier(
   return rustTargetTypeRefEquals(parameterLaneCarrier, base) &&
     (isRustStringCarrier(base) || rustFixedArrayCarrierValue(base) !== undefined && !isRustCopyCarrier(base) ||
       rustStructuralObjectCarrierValue(base)?.representation === "reference" ||
-      rustSourceTypeCarrierValue(base)?.shape === "object")
+      rustSourceTypeCarrierValue(base)?.shape === "object" ||
+      rustSourceUnionCarrierValue(rustOptionElementCarrier(base) ?? base) !== undefined)
     ? { kind: "reference", referent: base, mutable: false } : undefined;
 }
 

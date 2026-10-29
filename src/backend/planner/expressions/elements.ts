@@ -19,8 +19,9 @@ import { planRustIndexedFieldRead } from "./indexed-locations.js";
 
 export function planElementAccess(node: Node, context: RustPlanContext, access: RustExpressionAccess = "value"): RustExpr | undefined {
   if (context.input.program.records.selectedOperation.get(node)?.operationKind === "property") return planPropertyAccess(node, context);
+  const innerAccess = context.input.program.records.optionalChainEmission.get(node)?.loan === undefined ? access : "value";
   return planOptionalChainExpression(node, context, innerContext => planRustComputedMemberExpression(node, innerContext,
-    selectedContext => planElementAccessInner(node, selectedContext, access)));
+    selectedContext => planElementAccessInner(node, selectedContext, innerAccess)));
 }
 
 function planElementAccessInner(node: Node, context: RustPlanContext, access: RustExpressionAccess): RustExpr | undefined {

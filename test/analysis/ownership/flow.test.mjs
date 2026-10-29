@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createTargetSourceProgram, sourceEnclosingCallable } from "@tsonic/target-api/source";
+import { createTargetSourceProgram, Node_Expression, sourceEnclosingCallable } from "@tsonic/target-api/source";
 import { createSourceStorageQuery } from "@tsonic/target-api/analysis";
 import { checkedSource } from "../../../../tsonic/test/fixtures/source-navigation.mjs";
 import { analyzeRustOwnershipFlow } from "../../../dist/analysis/ownership/flow.js";
@@ -12,6 +12,32 @@ import { createRustRuntimeValueUsePlan } from "../../../dist/analysis/program/ru
 import { createRustSourceCallableQueries } from "../../../dist/analysis/callables/ownership/borrowed-returns.js";
 import { rustStringTargetType } from "../../../dist/target-model/types/carriers/native.js";
 import { analyzeRust } from "../../helpers/rust-session.mjs";
+import { rustSourceCallBorrowedReturn } from "../../../dist/analysis/callables/ownership/source-input-lifetimes.js";
+
+test("native call-result reads consume the selected declaration loan instead of call syntax", () => {
+  const { source: checked, program } = analyzeRust({ surfaces: [], files: { "index.ts": `
+function read(value: string): string { return value; }
+function owned(): string { return "fresh"; }
+export function run(value: string): boolean { return ((read(value))) === value && owned() === "fresh"; }
+` } });
+  const source = createTargetSourceProgram(checked);
+  const { ast } = source;
+  const storage = createSourceStorageQuery(source, program.sourceFiles);
+  const read = storage.nodes.find(node => ast.is.IsFunctionDeclaration(node) && ast.text(ast.name(node)) === "read");
+  const calls = storage.nodes.filter(node => ast.is.IsCallExpression(node));
+  const borrowed = calls.find(node => ast.text(Node_Expression(ast, node)) === "read");
+  const owned = calls.find(node => ast.text(Node_Expression(ast, node)) === "owned");
+  assert.equal(read !== undefined && borrowed !== undefined && owned !== undefined, true, "actual native declarations and calls exist");
+  const selected = rustSourceCallBorrowedReturn(borrowed, ast, program.records);
+  assert.equal(selected?.parameter === ast.parameters(read)[0] && selected.argument === ast.arguments(borrowed)[0], true,
+    "the completed callee loan maps to its exact actual argument without a callee body walk");
+  assert.equal(program.ownership.reads.get(borrowed)?.value.kind, "borrow", "a borrowed call result keeps its admitted shared native read");
+  assert.equal(program.ownership.reads.get(owned)?.value.kind, "move", "an admitted genuinely owned temporary keeps its native move");
+  assert.equal(rustSourceCallBorrowedReturn(owned, ast, program.records) === undefined, true, "ownership is not an all-calls-borrowed rule");
+  for (let wrapper = ast.parent(borrowed); wrapper !== undefined && ast.is.IsParenthesizedExpression(wrapper); wrapper = ast.parent(wrapper)) {
+    assert.equal(program.ownership.reads.get(wrapper)?.value.kind, "borrow", "transparent wrappers preserve the declared loan classification");
+  }
+});
 
 let sequence = 0;
 async function fixture(text, options = {}) {
@@ -44,7 +70,7 @@ export function run(value: bigint, other: bigint): bigint {
       if (operation !== undefined) builder.targetOperations.source(node, operation);
     }
     const uses = analyzeRustReadUses(source.ast, storage.nodes, builder.readers, program.typeDefinitions,
-      () => false, program.structuralShapes, () => false);
+      () => false, program.structuralShapes, () => false, program.lexicalFunctions);
     const reads = references(source, storage, "value");
     const others = references(source, storage, "other");
     assert.equal(reads.length, 2, "both original reads of the same native value remain in checked liveness");
@@ -73,7 +99,7 @@ async function nativeLexicalFixture(text, options = {}) {
   const runtimeValueUses = createRustRuntimeValueUsePlan({ ast: source.ast, navigation: source.navigation,
     safetyApplications: { isCompileTimeApplicationReference: () => false } });
   const lexicalFunctions = createRustLexicalFunctionEnvironmentPlan(source, storage.nodes, records, runtimeValueUses,
-    createRustSourceCallableQueries(storage, new Set(), () => undefined));
+    createRustSourceCallableQueries(source, storage.nodes, new Set(), () => undefined));
   const sourceCallableFor = invocation => {
     const semantics = source.semantics.forNode(invocation);
     const call = semantics.operations.call(invocation);

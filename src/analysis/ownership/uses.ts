@@ -1,5 +1,5 @@
 import type { AstReader, Node } from "@tsonic/tsts";
-import { BinaryExpression_Left, BinaryExpression_Right, ConditionalExpression_Condition, ElementAccessExpression_ArgumentExpression, ForStatement_Condition, Node_Expression, sourceTransparentExpressionOperand } from "@tsonic/target-api/source";
+import { asSourceNode, BinaryExpression_Left, BinaryExpression_Right, ConditionalExpression_Condition, ElementAccessExpression_ArgumentExpression, ForStatement_Condition, Node_Expression, Node_Initializer, sourceEnclosingCallable, sourceTransparentExpressionOperand } from "@tsonic/target-api/source";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { RustAnalysisRecords } from "../../target-model/records/analysis.js";
 import { rustFinalizedSourceInputs } from "../../target-model/operations/finalized-inputs.js";
@@ -7,7 +7,7 @@ import { rustBorrowedOperationArguments } from "../storage/provider-borrows.js";
 import { rustProviderInputBorrowMode } from "../../policy/operations/members/input-borrows.js";
 import { selectRustOperationReadUses } from "../../policy/ownership/read-use.js";
 import { type RustReadUse } from "../../target-model/records/storage/ownership.js";
-import { rustCallableProtocol } from "../../target-model/types/index.js";
+import { rustCallableProtocol, rustOptionElementCarrier, rustSourceUnionCarrierValue } from "../../target-model/types/index.js";
 import { rustCallArgumentMode } from "../callables/values/parameter-passing.js";
 import { rustContextualRuntimeConversionContract } from "../../policy/conversions/contextual.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
@@ -18,6 +18,9 @@ import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import { isRustAssignmentOperator } from "../../target-model/syntax/tokens.js";
 import { rustRuntimeSetSourceInputs } from "../control-flow/statement-completion.js";
 import { rustTargetOperationIsDirectLocation } from "../../policy/operations/members/native-contracts.js";
+import type { RustLexicalFunctionQueries } from "../../target-model/records/callables/lexical-functions.js";
+import { rustSourceCallBorrowedReturn } from "../callables/ownership/source-input-lifetimes.js";
+import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 
 export function rustNativeArgumentBorrowsRead(argument: Node, reference: Node,
   ast: AstReader, records: RustProgramRecords): boolean {
@@ -62,7 +65,8 @@ export function rustNativeArgumentBorrowsRead(argument: Node, reference: Node,
 export function analyzeRustReadUses(ast: AstReader, nodes: readonly Node[], records: RustAnalysisRecords,
   definitions: RustTypeDefinitions, ownsExternalArgument: (argument: Node) => boolean,
   structuralShapes: Pick<RustStructuralShapePlan, "field">,
-  isDirectValueField: (node: Node) => boolean): ReadonlyMap<Node, RustReadUse> {
+  isDirectValueField: (node: Node) => boolean,
+  lexicalFunctions: Pick<RustLexicalFunctionQueries, "forDeclaration">): ReadonlyMap<Node, RustReadUse> {
   const uses = new Map<Node, RustReadUse>();
   const consumesSource = (node: Node | undefined): boolean => {
     const conversion = node === undefined ? undefined : records.contextualValueConversion.get(node)?.conversion;
@@ -120,12 +124,18 @@ export function analyzeRustReadUses(ast: AstReader, nodes: readonly Node[], reco
       (assignment.operator !== "=" || operation?.kind === "source-accessor" && operation.accessMode !== "read") &&
       isRustAssignmentOperator(assignment.operator)) ? BinaryExpression_Right(ast, parent) : undefined;
     const receiver = Node_Expression(ast, node);
+    const sourceDeclaration = operation?.kind === "source-call"
+      ? asSourceNode(records.selectedCall.get(node)?.sourceDeclaration, ast) : undefined;
+    const captures = sourceDeclaration === undefined ? undefined : lexicalFunctions.forDeclaration(sourceDeclaration);
     const extendedUse = (subject: Node, use: RustReadUse): RustReadUse => subject !== receiver || assignmentRight === undefined ? use
       : Object.freeze({ ...use, later: Object.freeze([...use.later, assignmentRight]) });
     for (const [subject, use] of selected) {
       const sourceUse = (use.mode === "shared" || use.mode === "mutable") && consumesSource(subject)
         ? Object.freeze({ ...use, mode: "value" as const, stableAcrossEffects: false }) : use;
-      uses.set(subject, extendedUse(subject, sourceUse));
+      const invocationUse = sourceUse.mode === "shared" && operation?.kind === "source-call" &&
+        captures !== undefined && argumentsList?.includes(subject)
+        ? Object.freeze({ ...sourceUse, later: Object.freeze([...sourceUse.later, node]) }) : sourceUse;
+      uses.set(subject, extendedUse(subject, invocationUse));
     }
     if (operation?.kind === "source-accessor" && operation.receiver.kind === "instance") {
       const accessors = operation.accessMode === "read" ? [operation.read]
@@ -137,6 +147,50 @@ export function analyzeRustReadUses(ast: AstReader, nodes: readonly Node[], reco
         uses.set(receiver, extendedUse(receiver, Object.freeze({ mode: "shared", later: Object.freeze(key === undefined ? [] : [key]), laterStart: 0,
           stableAcrossEffects: true })));
     }
+  }
+  for (const node of nodes) {
+    const owner = ast.is.IsReturnStatement(node) ? sourceEnclosingCallable(node, ast) : node;
+    if (owner === undefined || records.sourceCallableReturn.get(owner)?.borrowedReturn === undefined) continue;
+    const body = ast.body(owner);
+    const returned = ast.is.IsReturnStatement(node) ? Node_Expression(ast, node)
+      : body !== undefined && !ast.is.IsBlock(body) ? body : undefined;
+    if (returned !== undefined) uses.set(returned, Object.freeze({ mode: "shared",
+      later: Object.freeze([]), laterStart: 0, stableAcrossEffects: true }));
+  }
+  const localReferences = new Map<Node, Node[]>();
+  for (const node of nodes) {
+    const binding = records.sourceBinding.get(node);
+    if (binding?.scope !== "lexical" || !ast.is.IsVariableDeclaration(binding.sourceDeclaration)) continue;
+    const references = localReferences.get(binding.sourceDeclaration) ?? [];
+    references.push(node);
+    localReferences.set(binding.sourceDeclaration, references);
+  }
+  for (const [declaration, references] of localReferences) {
+    const initializer = Node_Initializer(ast, declaration);
+    if (initializer === undefined || ast.variableDeclarationKind(declaration) !== "const" || references.length === 0 ||
+      references.some(reference => uses.get(reference)?.mode !== "shared" ||
+        sourceEnclosingCallable(reference, ast) !== sourceEnclosingCallable(declaration, ast))) continue;
+    let expression = initializer;
+    for (let inner = sourceTransparentExpressionOperand(ast, expression); inner !== undefined;
+      inner = sourceTransparentExpressionOperand(ast, expression)) expression = inner;
+    const optional = records.optionalChain.get(expression);
+    const call = optional?.guard ?? expression;
+    const called = rustSourceCallBorrowedReturn(call, ast, records);
+    const owner = sourceEnclosingCallable(declaration, ast);
+    const returned = owner === undefined ? undefined : records.sourceCallableReturn.get(owner)?.borrowedReturn;
+    const directParameter = records.sourceBinding.get(expression)?.sourceDeclaration;
+    const directLoan = optional === undefined && returned !== undefined && returned.parameter === directParameter
+      ? records.sourceParameterAbi.get(returned.parameter)?.parameterCarrier : undefined;
+    const loan = called ?? (directLoan?.kind === "reference" ? { carrier: directLoan } : undefined);
+    const operation = records.targetOperation.get(expression);
+    if (loan?.carrier.kind !== "reference" || loan.carrier.mutable ||
+      optional !== undefined && (optional.guardDepth !== 1 || operation?.kind !== "provider-operation" ||
+        operation.abi.target.form !== "index" || !rustTargetTypeRefEquals(optional.sourceGuardCarrier, optional.resultCarrier) ||
+        !rustTargetTypeRefEquals(loan.carrier.referent, optional.sourceGuardCarrier))) continue;
+    const carrier = records.runtimeCarrier.get(expression)?.carrier;
+    if (carrier === undefined || !rustTargetTypeRefEquals(carrier, loan.carrier.referent) ||
+      directLoan === undefined && rustOptionElementCarrier(carrier) === undefined && rustSourceUnionCarrierValue(carrier) === undefined) continue;
+    uses.set(initializer, Object.freeze({ mode: "shared", later: Object.freeze([]), laterStart: 0, stableAcrossEffects: true }));
   }
   for (const node of nodes) {
     const use = uses.get(node);

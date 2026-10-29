@@ -11,6 +11,10 @@ import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equali
 import { rustTargetGenericReferences } from "../../../dist/target-model/types/carriers/generic-references.js";
 import { createRustProviderPackage } from "../../../dist/public/provider.js";
 import { runCargo, writeGeneratedProject } from "../../helpers/cargo-projects.mjs";
+import { Node_Initializer } from "@tsonic/target-api/source";
+import { recursiveOptionalCollectionUnionFiles } from "../../../../tsonic/test/fixtures/recursive-source-unions.mjs";
+import { analyzeRustSourceCallArguments } from "../../../dist/analysis/callables/calls/source-call-arguments.js";
+import { createRustSourceCallArgumentProducer } from "../../../dist/analysis/program/records/calls/source-call-arguments.js";
 
 const owningSource = `
 import { owner } from "@borrowed-initializer/proof";
@@ -19,6 +23,92 @@ export function retainOwner(): number {
   return ownedView.value;
 }
 `;
+
+test("a physical local argument requires its exact retained declaration, referent and lifetime", () => {
+  const { program } = analyzeRust({ surfaces: [], files: recursiveOptionalCollectionUnionFiles });
+  const { ast } = program.source;
+  const nodes = [];
+  const visit = node => { nodes.push(node); ast.forEachChild(node, child => { if (child !== undefined) visit(child); }); };
+  program.sourceFiles.forEach(visit);
+  const declaration = nodes.find(node => ast.is.IsVariableDeclaration(node) && ast.text(ast.name(node)) === "present");
+  assert.equal(declaration !== undefined, true, "the actual retained native optional result exists");
+  const local = program.records.localBinding.get(declaration);
+  assert.equal(local?.kind, "value", "the result has a completed local native binding");
+  const initializer = Node_Initializer(ast, declaration);
+  const retained = program.records.borrowedInitializer.get(initializer);
+  assert.equal(retained?.loan !== undefined, true, "the same initializer owns its physical loan");
+  const argument = nodes.find(node => ast.is.IsIdentifier(node) && program.records.sourceBinding.get(node)?.sourceDeclaration === declaration &&
+    ast.is.IsCallExpression(ast.parent(node)));
+  assert.equal(argument !== undefined, true, "the original count call consumes the exact local result");
+  const call = ast.parent(argument);
+  const selected = createRustSourceCallArgumentProducer(() => {});
+  const issues = analyzeRustSourceCallArguments(program, [call], selected, program.source);
+  assert.equal(issues.length, 0, "the completed physical reference enters the matching shared parameter unchanged");
+  const fact = program.records.targetOperation.get(call);
+  assert.equal(selected.records.sourceCallParameters.get(fact)?.[0]?.inputs[0]?.passing, "identity",
+    "the already-borrowed local is not borrowed a second time");
+  for (const label of ["foreign declaration", "missing loan", "wrong referent", "wrong lifetime"]) {
+    const physical = label === "wrong referent" ? { ...local.nativeCarrier, referent: { kind: "source-primitive", name: "bool" } }
+      : label === "wrong lifetime" ? { ...local.nativeCarrier, lifetime: { kind: "static" } } : local.nativeCarrier;
+    const records = createRustRecordFixture({ localBinding: { get: node => node === declaration ? { ...local, nativeCarrier: physical }
+      : program.records.localBinding.get(node) }, borrowedInitializer: { get: node => node !== initializer
+      ? program.records.borrowedInitializer.get(node) : label === "missing loan" ? undefined
+      : label === "foreign declaration" ? { ...retained, loan: { ...retained.loan, declaration: call } } : retained } }, program.records);
+    const refused = createRustSourceCallArgumentProducer(() => {});
+    const failures = analyzeRustSourceCallArguments({ ...program, records }, [call], refused, program.source);
+    assert.equal(failures.length, 1, `${label}: the physical input mismatch is rejected once`);
+    assert.equal(failures[0].code, "RUST_MISSING_TARGET_FACT", `${label}: invalid evidence does not manufacture reference identity`);
+  }
+});
+
+test("declaration-owned optional results retain each exact temporary through their local binding", () => {
+  const { program } = analyzeRust({ surfaces: [], files: recursiveOptionalCollectionUnionFiles });
+  const { ast } = program.source;
+  const declarations = [];
+  const visit = node => {
+    if (ast.is.IsVariableDeclaration(node) && ["absent", "present"].includes(ast.text(ast.name(node)))) declarations.push(node);
+    ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+  };
+  program.sourceFiles.forEach(visit);
+  assert.equal(declarations.length, 2, "both original guarded caller initializers are present");
+  for (const declaration of declarations) {
+    const initializer = Node_Initializer(ast, declaration);
+    const selected = program.records.borrowedInitializer.get(initializer);
+    const optional = program.records.optionalChainEmission.get(initializer);
+    const local = program.records.localBinding.get(declaration);
+    const label = ast.text(ast.name(declaration));
+    assert.equal(selected?.loan !== undefined, true, `${label}: the original declaration loan is retained`);
+    assert.equal(selected.loan.declaration === declaration && selected.loan.initializer === initializer, true,
+      `${label}: physical storage belongs to this exact initializer and declaration`);
+    assert.equal(selected.loan.guard === program.records.optionalChain.get(initializer).guard, true,
+      `${label}: the physical owner is associated with this exact evaluated guard`);
+    assert.equal(selected.retained.length, 1, `${label}: one temporary owner is retained, not a recursive payload copy`);
+    assert.equal(selected.retained[0].expression === selected.receiver, true, `${label}: the retained owner is the actual input argument`);
+    const evaluation = program.records.sourceCallEvaluation.get(selected.loan.guard);
+    const argument = evaluation?.arguments.find(value => value.expression === selected.receiver);
+    assert.equal(argument?.borrow, "ref", `${label}: the exact native stored owner is borrowed before any value snapshot`);
+    assert.equal(argument.retainedOwner?.initializer === initializer, true, `${label}: evaluation retains the same initializer association`);
+    assert.equal(argument.retainedOwner?.declaration === declaration, true, `${label}: evaluation retains the enclosing declaration`);
+    assert.equal(argument.retainedOwner?.guard === selected.loan.guard, true, `${label}: evaluation belongs to the same checked call`);
+    assert.equal(argument.retainedOwner?.parameter === selected.loan.parameter, true, `${label}: the original declared loan parameter is unchanged`);
+    assert.equal(optional?.loan?.owner === selected.receiver, true, `${label}: optional emission consumes that same native owner`);
+    assert.equal(program.records.valueProjection.get(initializer)?.resultForm, "shared-reference",
+      `${label}: the final expression result is the sealed reference, not a place that needs another borrow`);
+    assert.equal(local?.kind, "value", `${label}: a concrete local native value is published`);
+    assert.equal(rustTargetTypeRefEquals(local.nativeCarrier, selected.loan.resultCarrier), true,
+      `${label}: the local binding retains the exact physical reference rather than the logical value carrier`);
+    assert.equal(rustTargetTypeRefEquals(local.carrier, selected.loan.resultCarrier.referent), true,
+      `${label}: logical type and physical borrowed storage remain distinct`);
+    assert.equal(Object.isFrozen(selected.retained), true, `${label}: retained evaluation order is immutable`);
+    const records = createRustRecordFixture({ selectedCall: {
+      get: node => node === selected.loan.guard ? undefined : program.records.selectedCall.get(node),
+    } }, program.records);
+    const producer = createRustBorrowedInitializerProducer(() => {});
+    analyzeRustBorrowedInitializers(ast, [declaration], records, program.ownership.reads, producer);
+    assert.equal(producer.records.get(initializer) === undefined, true,
+      `${label}: a missing exact selected declaration cannot create a temporary-owner loan`);
+  }
+});
 
 function owningProvider() {
   const moduleSpecifier = "@borrowed-initializer/proof";

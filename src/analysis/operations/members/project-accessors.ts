@@ -8,16 +8,29 @@ import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
 import { instantiateRustSelectedMemberCarrier } from "./member-carriers.js";
 import type { RustOperationsProviderOptions } from "./model.js";
+import type { RustSourceParameterResourceError } from "../../callables/calls/source-callable-abi.js";
+
+interface RustProjectAccessorInput {
+  readonly readDeclaration?: Node;
+  readonly writeDeclaration?: Node;
+  readonly sourceReceiverType?: Type;
+  readonly sourceReadType?: Type;
+  readonly sourceWriteType?: Type;
+}
 
 export function resolveRustProjectAccessor(
-  selection: {
-    readonly readDeclaration?: Node;
-    readonly writeDeclaration?: Node;
-    readonly sourceReceiverType?: Type;
-    readonly sourceReadType?: Type;
-    readonly sourceWriteType?: Type;
-  }, receiverCarrier: TargetTypeRef | undefined, context: RustOperationAnalysisContext, options: RustOperationsProviderOptions,
-): RustProjectAccessorSelection | undefined {
+  selection: RustProjectAccessorInput & { readonly writeDeclaration?: undefined },
+  receiverCarrier: TargetTypeRef | undefined, context: RustOperationAnalysisContext, options: RustOperationsProviderOptions,
+): RustProjectAccessorSelection | undefined;
+export function resolveRustProjectAccessor(
+  selection: RustProjectAccessorInput, receiverCarrier: TargetTypeRef | undefined,
+  context: RustOperationAnalysisContext, options: RustOperationsProviderOptions,
+): RustProjectAccessorSelection | RustSourceParameterResourceError | undefined;
+
+export function resolveRustProjectAccessor(
+  selection: RustProjectAccessorInput, receiverCarrier: TargetTypeRef | undefined,
+  context: RustOperationAnalysisContext, options: RustOperationsProviderOptions,
+): RustProjectAccessorSelection | RustSourceParameterResourceError | undefined {
   const { readDeclaration, writeDeclaration } = selection;
   const declarations = [readDeclaration, writeDeclaration].filter(declaration => declaration !== undefined);
   const owner = declarations[0] === undefined ? undefined : options.projectTypes.definitionContainingDeclaration(declarations[0]);
@@ -38,6 +51,7 @@ export function resolveRustProjectAccessor(
   const parameters = writeDeclaration === undefined ? [] : context.ast.parameters(writeDeclaration);
   const writeParameter = writeDeclaration === undefined || parameters.length !== 1 ? undefined
     : options.sourceCallableAbi.resolveParameterAbi(parameters[0]!, context, options);
+  if (writeParameter?.kind === "resource-error") return writeParameter;
   if (writeParameter?.kind === "rejected") return undefined;
   const writeCarrier = writeDeclaration === undefined || writeParameter === undefined ? undefined
     : instantiate(writeDeclaration, writeParameter.abi.valueCarrier);

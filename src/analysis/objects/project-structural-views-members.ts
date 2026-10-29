@@ -17,6 +17,8 @@ import type { RustSourceObjectShape } from "../../target-model/records/types/sou
 import { instantiateRustSelectedMemberCarrier } from "../operations/members/member-carriers.js";
 import { rustSourceStorageScope, rustSourceStorageSubjectContext } from "../source-evidence/types/resolution/source-storage-projection.js";
 import type { RustProjectStructuralView } from "../../target-model/records/objects/project-structural-views.js";
+import { refuseRustParameterResource } from "../callables/values/parameter-facts.js";
+import type { RustSourceParameterResourceError } from "../callables/calls/source-callable-abi.js";
 
 export type RustProjectStructuralViewSource = {
   readonly declaration: Node;
@@ -33,7 +35,7 @@ export type RustProjectStructuralViewSource = {
 export function selectRustProjectStructuralViewSources(
   walk: RustFactWalk, sourceCarrier: TargetTypeRef, target: RustSourceObjectShape,
   semantics: SourceFileSemantics, sourceType: Type,
-): readonly RustProjectStructuralViewSource[] | undefined {
+): readonly RustProjectStructuralViewSource[] | RustSourceParameterResourceError | undefined {
   const correspondence = semantics.types.structuralMembers(sourceType, target.sourceType, "read");
   if (correspondence.kind !== "available" || correspondence.destination.calls.length !== 0 ||
     correspondence.destination.constructs.length !== 0 || correspondence.destination.indexes.length !== 0 ||
@@ -81,6 +83,10 @@ export function selectRustProjectStructuralViewSources(
       const accessor = resolveRustProjectAccessor({ readDeclaration: pair.source.getters[0],
         ...(!field.readonly ? { writeDeclaration: pair.source.setters[0] } : {}), sourceReceiverType: sourceType,
         sourceReadType: pair.source.property.type, sourceWriteType: pair.source.property.type }, sourceCarrier, context, walk.operationOptions);
+      if (accessor?.kind === "resource-error") {
+        refuseRustParameterResource(walk, accessor);
+        return accessor;
+      }
       if (accessor?.read === undefined) return undefined;
       sources.push({ kind: "accessor", declaration: member, storageIndex: field.storageIndex,
         carrier: accessor.read.resultCarrier, accessor });

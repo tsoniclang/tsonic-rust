@@ -87,19 +87,25 @@ for (const surface of ["native", "js"]) {
         }
         assert.equal(/clone\(|Callable|RefCell|Rc<|Box</u.test(generated), false, "identity observation stays allocation/copy free");
       } else if (name === "owned") {
-        assert.match(generated, /fn read\(input: String\) -> String/u);
+        assert.equal(/fn read<'input>\(input: &'input str\) -> &'input str/u.test(generated), true,
+          "escaping callers do not change the declaration-owned native input/output loan");
         // The parameter's passed value is overwritten before any read (rustc unused_assignments), so it carries the
         // checked-evaluation-order expectation.
         assert.match(generated, /fn mutate\(\s*#\[expect\(unused_assignments, reason = "checked source evaluation order"\)\] mut input: String,?\s*\) -> String/u);
-        assert.doesNotMatch(generated, /fn (?:read|mutate)<'input>/u);
+        assert.doesNotMatch(generated, /fn mutate<'input>/u);
+        assert.equal(/escaped = String::from\(read\(/u.test(generated), true,
+          "the escaping caller owns the string result before its input local dies");
       } else {
-        assert.match(generated, /fn capturedRead\(input: String,/u);
-        assert.match(generated, /fn comparedRead\(input: String\) -> String/u);
-        assert.doesNotMatch(generated, /fn (?:capturedRead|comparedRead)<'input>/u);
+        for (const functionName of ["capturedRead", "comparedRead"]) {
+          assert.equal(new RegExp(`fn ${functionName}<'input>\\([^)]*: &'input str[^)]*\\) -> &'input str`, "u").test(generated),
+            true, `${functionName} keeps its declaration-owned native input/output loan`);
+        }
         assert.equal(/change\(&mut calls, &mut compared\)/u.test(generated), true,
           "the mutable lexical capture borrows the original owner, not an owned snapshot");
-        assert.equal(/comparedRead\(compared\.clone\(\)\)/u.test(generated), true,
-          "the earlier comparison operand still owns its required pre-mutation snapshot");
+        assert.equal(/captured\.clone\(\)/u.test(generated), true,
+          "the caller snapshots the captured string before the body mutates its original owner");
+        assert.equal(/String::from\(comparedRead\(/u.test(generated), true,
+          "the left string value is owned before the right operand mutates its original owner");
       }
       validateGeneratedProject(`lexical-${name}-return-${surface}`, result.artifacts, { run: true });
     });

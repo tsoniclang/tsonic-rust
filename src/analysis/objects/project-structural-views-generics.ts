@@ -15,6 +15,7 @@ import type { RustProjectStructuralView } from "../../target-model/records/objec
 import { selectRustProjectStructuralViewFields, selectRustProjectStructuralViewSources,
   type RustProjectStructuralViewSource } from "./project-structural-views-members.js";
 import { rustProjectViewMatches } from "../../policy/types/objects/project-view-bindings.js";
+import type { RustSourceParameterResourceError } from "../callables/calls/source-callable-abi.js";
 
 interface RustStructuralViewBindings extends RustTargetGenericBindings {
   readonly types: Map<string, TargetTypeRef>;
@@ -25,7 +26,7 @@ interface RustStructuralViewBindings extends RustTargetGenericBindings {
 export function generalizeRustProjectStructuralView(
   view: RustProjectStructuralView, target: RustSourceObjectShape, walk: RustFactWalk,
   selectedSources: readonly RustProjectStructuralViewSource[],
-): RustProjectStructuralView | undefined {
+): RustProjectStructuralView | RustSourceParameterResourceError | undefined {
   const projectTypes = walk.context.projectTypes;
   const definition = projectTypes.definitionForDeclaration(view.declaration);
   if (definition === undefined || !rustTargetTypeRefEquals(view.targetCarrier, target.carrier)) return undefined;
@@ -50,6 +51,7 @@ export function generalizeRustProjectStructuralView(
   if (template === undefined || shape === undefined ||
     sourceType === undefined || shape.fields.length !== view.fields.length) return undefined;
   const sources = selectRustProjectStructuralViewSources(walk, sourceCarrier, target, semantics, sourceType);
+  if (sources !== undefined && "kind" in sources) return sources;
   if (sources === undefined || sources.length !== view.fields.length) return undefined;
   const closedFields = selectRustProjectStructuralViewFields(selectedSources, target, walk);
   if (closedFields === undefined || closedFields.length !== view.fields.length ||

@@ -141,7 +141,7 @@ function analysisInput(program, sourceFacts, records = program.records) {
   return { ast: program.source.ast, nodes, isNativeNode: node => nativeNodes.has(node), sourceFacts, records, navigation: program.sourceNavigation,
     readUses: program.ownership.uses,
     projectTypes: program.projectTypes, objectRepresentations: program.objectRepresentations,
-    structuralShapes: program.structuralShapes };
+    structuralShapes: program.structuralShapes, lexicalFunctions: program.lexicalFunctions };
 }
 
 test("source method receiver stability consumes the completed native read use and preserves exposure refusals", () => {
@@ -210,6 +210,7 @@ function indexedBindingFixture({ uses = 1_100, bindingWritten = false, scope = "
   const input = {
     sourceFiles: [root],
     readUses: new Map(),
+    lexicalFunctions: { forDeclaration: () => undefined },
     ast: { ...reader, is: { ...reader.is,
       IsIdentifier: node => receivers.includes(node) || useNodes.includes(node),
       IsPostfixUnaryExpression: node => updates.includes(node),
@@ -482,6 +483,7 @@ test("borrow stability budgets are finite, bounded and reject cycles without AST
   const input = {
     isNativeNode: node => nativeNodes.has(node),
     readUses: new Map(),
+    lexicalFunctions: { forDeclaration: () => undefined },
     nodes: [root, ...root.children], ast: { ...fakeAstReader(), is: { ...fakeAstReader().is,
       IsPrefixUnaryExpression: () => false, IsPostfixUnaryExpression: () => false },
       forEachChild: (node, visit) => node.children.forEach(visit) },

@@ -1,6 +1,6 @@
 import type { RustBorrowEffects } from "../../target-model/records/storage/ownership-effects.js";
 import type { AstReader, Node, ReadonlySourceFactResolver } from "@tsonic/tsts";
-import { BinaryExpression_Left, BinaryExpression_Right, Node_Expression, Node_Operand, sourceBindingHasMutableExposure, sourceEnclosingCallable, sourceTransparentExpressionOperand } from "@tsonic/target-api/source";
+import { asSourceNode, BinaryExpression_Left, BinaryExpression_Right, Node_Expression, Node_Operand, sourceBindingHasMutableExposure, sourceEnclosingCallable, sourceTransparentExpressionOperand } from "@tsonic/target-api/source";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 
 import type { RustTargetOperationFact } from "../../target-model/records/operations/operations.js";
@@ -16,6 +16,7 @@ import { rustNativeWriteTargets, rustNoNativeWrites } from "./effect-paths.js";
 
 import { rustSourceValueWrapperContains } from "../../policy/ownership/source-value-wrappers.js";
 import { rustCallArgumentMode } from "../callables/values/parameter-passing.js";
+import { rustSourceCallBorrowedReturn } from "../callables/ownership/source-input-lifetimes.js";
 
 type StoredField = Extract<RustTargetOperationFact, { readonly kind: "source-field" }>;
 
@@ -31,6 +32,7 @@ export interface RustBorrowEffectsInput {
   readonly objectRepresentations: RustAnalysisProgram["objectRepresentations"];
   readonly structuralShapes: RustAnalysisProgram["structuralShapes"];
   readonly navigation: RustAnalysisProgram["sourceNavigation"];
+  readonly lexicalFunctions: Pick<RustAnalysisProgram["lexicalFunctions"], "forDeclaration">;
 }
 
 export type AnalyzeRustBorrowEffectsResult =
@@ -135,7 +137,27 @@ export function analyzeRustBorrowEffects(
     const selected = selectBorrowedWrite(node, pure, input);
     if (selected !== undefined) writes.set(node, selected);
     if (!pure.has(node)) {
-      const targets = aliasReceiver === undefined ? rustNativeWriteTargets(node, input,
+      const declaration = field?.kind === "source-call"
+        ? asSourceNode(input.records.selectedCall.get(node)?.sourceDeclaration, input.ast) : undefined;
+      const captures = declaration === undefined ? undefined : input.lexicalFunctions.forDeclaration(declaration);
+      const sourceArguments = field?.kind === "source-call" ? input.ast.arguments(node) : [];
+      if (sourceArguments.some(argument => argument === undefined))
+        return rejected("Rust borrow effects require the complete admitted source-argument identities.");
+      const argumentsList = sourceArguments.filter((argument): argument is Node => argument !== undefined);
+      const callee = field?.kind === "source-call" ? Node_Expression(input.ast, node) : undefined;
+      const evaluated = [...(callee === undefined ? [] : [callee]), ...argumentsList];
+      const mutableArguments = field?.kind !== "source-call" ? [] : field.parameters.flatMap(parameter =>
+        parameter.mode !== "mut-ref" ? [] : parameter.inputs.flatMap(argument =>
+          argumentsList[argument.sourceArgumentIndex] === undefined ? [] : [argumentsList[argument.sourceArgumentIndex]!]));
+      const captureWrites = captures?.kind !== "resolved" ? undefined
+        : captures.captures.filter(capture => capture.mutable).map(capture => capture.reference);
+      const invocationWrites = captureWrites === undefined || evaluated.some(child =>
+        !pure.has(child) && nativeWrites.get(child) === undefined) ? undefined
+        : [...captureWrites, ...mutableArguments, ...evaluated.flatMap(child =>
+          pure.has(child) ? [] : nativeWrites.get(child)!)];
+      const targets = invocationWrites !== undefined
+        ? reserveTargets(invocationWrites.length) ? Object.freeze(invocationWrites) : undefined
+        : aliasReceiver === undefined ? rustNativeWriteTargets(node, input,
         child => pure.has(child) ? rustNoNativeWrites : nativeWrites.get(child), directField, reserveTargets)
         : pure.has(aliasReceiver) ? rustNoNativeWrites : nativeWrites.get(aliasReceiver);
       if (targets !== undefined) nativeWrites.set(node, targets);
@@ -148,11 +170,19 @@ export function analyzeRustBorrowEffects(
 export function selectRustBorrowRelationship(source: Node, later: Node,
   input: RustBorrowEffectsInput, effects: RustBorrowEffects): boolean {
   const visitedValues = new Set<Node>();
+  let returnedInput = false;
   while (!visitedValues.has(source)) {
     visitedValues.add(source);
     const inner = Node_Expression(input.ast, source);
     if (inner !== undefined && rustSourceValueWrapperContains(source, inner, input.ast)) {
       source = inner;
+      continue;
+    }
+    const loan = rustSourceCallBorrowedReturn(source, input.ast, input.records);
+    if (loan !== undefined) {
+      if (returnedInput) return false;
+      returnedInput = true;
+      source = loan.argument;
       continue;
     }
     const sequence = input.records.targetOperation.get(source);

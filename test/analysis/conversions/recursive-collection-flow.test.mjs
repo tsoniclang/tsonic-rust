@@ -8,6 +8,9 @@ import { rustSourceOptionalElementCarrier } from "../../../dist/target-model/typ
 import { rustIterableTargetPolicy } from "../../../dist/policy/operations/iteration/index.js";
 import { analyzeRustFlowReadEmission } from "../../../dist/analysis/control-flow/flow-read-emission.js";
 import { analyzeRustOptionalChainEmission } from "../../../dist/analysis/operations/optional-chains.js";
+import { selectRustProviderReads } from "../../../dist/analysis/operations/provider-forms.js";
+import { analyzeRustAnalysisProgram } from "../../../dist/analysis/program/target-program.js";
+import { createRustOptionalChainEmissionProducer } from "../../../dist/analysis/program/records/operations/optional-chain-emission.js";
 import { createRustFlowReadEmissionProducer } from "../../../dist/analysis/program/records/operations/flow-read-emission.js";
 import { rustSourcePrimitiveTargetType } from "../../../dist/target-model/types/index.js";
 
@@ -36,14 +39,21 @@ function descendants(context, predicate) {
 }
 
 function admittedOptionalGuard(surface) {
-  const { context, result } = inspectCheckedSource(`
+  let program;
+  const { result } = compileRust({ surfaces: surface === "native" ? [] : ["js"], files: { "index.ts": `
 export type Children = readonly Children[] | null | undefined;
 export function first(children: Children): Children { return children?.[0]; }
-`, surface);
+` }, compileTarget(request) {
+    const analyzed = analyzeRustAnalysisProgram(request);
+    if (analyzed.kind === "rejected") return analyzed;
+    program = analyzed.value;
+    return { kind: "resolved", value: { artifacts: [] }, diagnostics: [] };
+  } });
   assert.equal(result.diagnostics.length, 0, "the original optional element read is checked without rejection");
-  const nodes = descendants(context, () => true);
-  const program = { ...context, records: context.records.readers };
-  const issues = analyzeRustOptionalChainEmission(program, nodes, context.records.optionalChainEmissionPlans, []);
+  const nodes = descendants({ ast: program.source.ast, sourceFiles: program.sourceFiles }, () => true);
+  const providerReads = selectRustProviderReads(program, nodes);
+  const producer = createRustOptionalChainEmissionProducer(() => {});
+  const issues = analyzeRustOptionalChainEmission(program, nodes, producer, [], providerReads.reads);
   assert.equal(issues.length, 0, "the exact optional guard contract is admitted before flow emission");
   const chains = nodes.filter(node => program.records.optionalChainEmission.get(node) !== undefined);
   assert.equal(chains.length, 1, "one optional operation owns the present-stage receiver");

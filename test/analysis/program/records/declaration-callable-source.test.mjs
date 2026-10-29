@@ -127,7 +127,7 @@ for (const surfaces of [[], ["js"]]) {
     assert.equal(declaration !== undefined, true);
     const fact = program.records.sourceCallableReturn.get(declaration);
     const parameter = ast.parameters(declaration)[0];
-    assert.equal(fact?.borrowedParameter === undefined, true, "an exported explicit native contract is not a local call-site loan optimization");
+    assert.equal(fact?.borrowedReturn === undefined, true, "an exported explicit native contract is not a local call-site loan optimization");
     assert.equal(fact.returnCarrier.kind, "reference");
     assert.equal(fact.returnCarrier.lifetime.name, "Region");
     assert.equal(rustTargetTypeRefEquals(fact.returnCarrier, program.records.sourceParameterAbi.get(parameter)?.valueCarrier), true);

@@ -35,6 +35,7 @@ import { selectRustSourceCallResult } from "../source-evidence/types/resolution/
 import { resolveRustTypeComponentEvidence } from "../source-evidence/types/resolution/source-evidence.js";
 import { bindRustSelectedCallTypeArguments } from "../source-evidence/types/resolution/generic-arguments.js";
 import { bindRustSelectedReceiverContext } from "./members/member-carriers.js";
+import { rustParameterAbiResourceDiagnostic } from "../callables/values/parameter-facts.js";
 
 export function acceptProjectSourceCall(
   request: RustCheckedCallSelectionInput,
@@ -225,6 +226,9 @@ export function acceptProjectSourceCall(
     "RUST_SOURCE_CALL_BINDINGS_MISSING", "A selected source call requires exact checked value-parameter declarations.");
   const parameterSelections = nativeParameters.map(parameter =>
     options.sourceCallableAbi.resolveParameterAbi(parameter, context, options));
+  const resourceFailure = parameterSelections.find(selection => selection?.kind === "resource-error");
+  if (resourceFailure?.kind === "resource-error") return { kind: "reject",
+    diagnostic: rustParameterAbiResourceDiagnostic(resourceFailure) };
   const rejectedParameter = parameterSelections.find(selection => selection?.kind === "rejected");
   if (rejectedParameter?.kind === "rejected") return rejectSelectedOperation(request.source.call, context,
     "RUST_FORMAL_MEMBER_WRITE_DEMAND_NOT_PROVEN", rejectedParameter.reason);
@@ -291,6 +295,8 @@ export function acceptProjectSourceCall(
     unionMethods, callableDeclaration, request.source.sourceSelectedSignatureParameters,
     parameters as RustTargetMember["parameters"], context, options,
   );
+  if (unionContract !== undefined && "kind" in unionContract) return { kind: "reject",
+    diagnostic: rustParameterAbiResourceDiagnostic(unionContract) };
   if (unionMethods !== undefined && unionContract === undefined) {
     return rejectSelectedOperation(request.source.call, context, "RUST_UNION_METHOD_ABI_UNSUPPORTED",
       "The selected union methods require exact native parameter contracts and a lossless closed common result.");

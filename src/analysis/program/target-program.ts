@@ -237,7 +237,7 @@ export function analyzeRustAnalysisProgram(
         : objectRepresentations.representationFor(context.projectTypes.definitionForCarrier(field.receiverCarrier))?.kind === "value") &&
         (field.declaration === undefined || context.callableValues.frames.bindingFor(field.declaration) === undefined &&
           records.capturedFieldStorage.get(field.declaration) === undefined);
-    });
+    }, lexicalFunctions);
   const ownershipFlow = analyzeRustOwnershipFlow({
     source: context.source,
     storage: context.sourceStorage,
@@ -263,6 +263,13 @@ export function analyzeRustAnalysisProgram(
     },
     isOwnedOperationResult: (expression) => {
       const operation = records.targetOperation.get(expression);
+      if (operation?.kind === "source-call") {
+        const declaration = asSourceNode(records.selectedCall.get(expression)?.sourceDeclaration, context.ast);
+        const returned = declaration === undefined ? undefined : records.sourceCallableReturn.get(declaration);
+        if (returned !== undefined) return returned.borrowedReturn === undefined;
+        return (operation.target.form === "constructor" || operation.target.form === "constructor-value") &&
+          operation.resultCarrier.kind !== "reference";
+      }
       return operation?.kind === "source-field" && operation.valueSemantics.kind === "accessor" && operation.accessMode === "read" ||
         operation?.kind === "provider-operation" &&
         (operation.abi.target.form === "method" || operation.abi.target.form === "call" ||
@@ -295,9 +302,8 @@ export function analyzeRustAnalysisProgram(
     names: context.names, callables: context.callableValues.selected });
   if (errorRegions.kind === "rejected") return errorRegions;
   context.callableValues.finalizeStructuralStorage(errorRegions.value);
-  const borrowedElementReads = analyzeRustBorrowedElementReads(context.ast, context.nativeNodes, records, context.source.navigation);
-  context.records.borrowedElements.publish(context.nativeNodes, borrowedElementReads);
   const borrowEffectsInput = {
+    lexicalFunctions,
     isNativeNode: context.isNativeNode,
     sourceFacts: context.source.sourceFacts,
     ast: context.ast, nodes: context.nativeNodes, records, navigation: context.source.navigation,
@@ -306,6 +312,9 @@ export function analyzeRustAnalysisProgram(
   };
   const borrowEffects = analyzeRustBorrowEffects(borrowEffectsInput, readUses);
   if (borrowEffects.kind === "rejected") return rejectedTargetStage(borrowEffects.diagnostics);
+  const borrowedElementReads = analyzeRustBorrowedElementReads(context.ast, context.nativeNodes, records, context.source.navigation,
+    { input: borrowEffectsInput, effects: borrowEffects.effects });
+  context.records.borrowedElements.publish(context.nativeNodes, borrowedElementReads);
   const preparedOwnership = prepareRustReadOwnership({ storage: context.sourceStorage, nativeNodes: context.nativeNodes, records, uses: readUses,
     flow: ownershipFlow.flow, borrowEffects: borrowEffects.effects, borrowEffectsInput, definitions: context.typeDefinitions,
     genericCallables: context.callableValues.generic,

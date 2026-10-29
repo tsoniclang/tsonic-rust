@@ -13,7 +13,8 @@ import { acceptProjectSourceCall } from "../../project-call-signatures.js";
 import { selectRustArrayTypeTest } from "../type-tests.js";
 import { isRustArrayTypeTestMember } from "../../source-profiles/js/type-tests.js";
 
-import { acceptRustPolicy } from "../../../../policy/model/contracts.js";
+import { acceptRustPolicy, rejectRustPolicy } from "../../../../policy/model/contracts.js";
+import { rustParameterAbiResourceDiagnostic, rustParameterAbiUnavailableDiagnostic } from "../../../callables/values/parameter-facts.js";
 import { acceptSelectedCall, checkedCallIsConstruction, instantiateSelectedCallTemplate, selectedCallReceiverValueCarrier, selectedProjectConstructor } from "./instantiation.js";
 
 import { selectedImplicitSuperConstructorClass } from "./implicit-super.js";
@@ -331,14 +332,19 @@ export function resolveRustCheckedCall(
     }
     if (selection.callback !== undefined) {
       const specialized = selectBorrowedCallbackParameters(request, selection, context, options);
-      return specialized.fact.kind !== "provider-operation" || specialized.callback === undefined
+      if (specialized.kind === "resource-error") return rejectRustPolicy(rustParameterAbiResourceDiagnostic(specialized));
+      if (specialized.kind === "unavailable") return rejectRustPolicy(rustParameterAbiUnavailableDiagnostic(specialized.parameter));
+      if (specialized.kind === "rejected") return rejectSelectedOperation(specialized.parameter, context,
+        "RUST_FORMAL_MEMBER_WRITE_DEMAND_NOT_PROVEN", specialized.reason);
+      const selected = specialized.selection;
+      return selected.fact.kind !== "provider-operation" || selected.callback === undefined
         ? rejectSelectedOperation(request.source.call, context, "RUST_SELECTED_CALLBACK_CARRIER_MISSING", `Selected JavaScript call '${selectedSourceMember.ownerName}.${selectedSourceMember.memberName}' has no provider operation template.`)
         : acceptRustPolicy({
             kind: "deferred-callback",
-            callback: specialized.callback,
+            callback: selected.callback,
             sourceName: selectedSourceMember.memberName,
-            template: specialized.fact,
-            parameterCarriers: specialized.parameterCarriers ?? [],
+            template: selected.fact,
+            parameterCarriers: selected.parameterCarriers ?? [],
           });
     }
     return acceptSelectedCall(request, selection.fact, selection.parameterCarriers, context, options, {

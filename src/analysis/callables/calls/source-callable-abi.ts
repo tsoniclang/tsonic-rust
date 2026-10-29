@@ -3,7 +3,7 @@ import type { RustSourceParameterAbiFact } from "../../../target-model/records/c
 import { flowStateFactKey } from "@tsonic/tsts";
 import { selectRustParameterEntryConversion } from "../../../policy/ownership/parameter-entry-conversion.js";
 import type { Node, Type } from "@tsonic/tsts";
-import { isRustVecCarrier, isRustStringCarrier, isRustUnitCarrier, isRustNeverCarrier, rustUnitTargetType, rustOptionElementCarrier, rustSourceOptionalTargetType, isRustJsValueCarrier, rustProgramErrorTargetType, rustTsValueTargetType, rustEmptyObjectTargetType, rustObjectIdentityTargetType, rustCallableInputProtocol, rustStructuralObjectCarrierValue } from "../../../target-model/types/index.js";
+import { isRustStringCarrier, isRustUnitCarrier, isRustNeverCarrier, rustUnitTargetType, rustOptionElementCarrier, rustSourceOptionalTargetType, isRustJsValueCarrier, rustProgramErrorTargetType, rustTsValueTargetType, rustEmptyObjectTargetType, rustObjectIdentityTargetType, rustCallableInputProtocol, rustStructuralObjectCarrierValue, isRustCallableCarrier, rustNativeCallableProtocol } from "../../../target-model/types/index.js";
 import { isRustCopyCarrier } from "../../../policy/constraints/native-traits.js";
 import { rustTargetTypeRefEquals, rustTargetTypeRefEqualsWithinLifetimeBinders } from "../../../target-model/types/equality.js";
 
@@ -47,6 +47,18 @@ import type { RustProgramRecords } from "../../../target-model/records/program.j
 import type { RustLifetimeIndex } from "../../../target-model/lifetimes/index.js";
 import type { SourceCallableNativeContract, SourceCallableSourceContract } from "../../../target-model/records/callables/source-callable-contract.js";
 import type { RustImplicitConstructorParameter } from "../../../target-model/records/objects/construction.js";
+import { targetStronglyConnectedComponents } from "@tsonic/target-api/analysis";
+import { readRustReferenceOperation } from "../../operations/reference-operations.js";
+import { rustOwnedStorageChildren } from "../../../policy/types/storage/owned-storage.js";
+import { rustGenericCallableProtocol } from "../../../target-model/types/carriers/generic-callables.js";
+import { resolveExpressionCarrier } from "../../source-evidence/types/resolution/expression-carriers.js";
+import { rustUnparenthesizedExpression } from "../../../target-model/syntax/expressions.js";
+import { resolveRustExternalProjectBase } from "../../../policy/types/project/external-project-types.js";
+
+function rustSourceDataLoanCarrier(carrier: TargetTypeRef): boolean {
+  return !isRustCallableCarrier(carrier) && rustNativeCallableProtocol(carrier) === undefined &&
+    rustGenericCallableProtocol(carrier) === undefined && rustOwnedStorageChildren(carrier).every(rustSourceDataLoanCarrier);
+}
 
 export function createRustSourceCallableContract(input: {
   readonly source: TargetSourceProgram;
@@ -133,6 +145,54 @@ export function selectRustSourceCallableReturn(
   const parameterCarriers = parameters.map(parameter =>
     parameter === undefined ? undefined : walk.context.records.sourceParameterAbi.get(parameter)?.parameterCarrier);
   if (parameterCarriers.some(parameter => parameter === undefined)) return undefined;
+  const candidate = walk.context.sourceCallables.borrowedReturn(declaration);
+  let physicalBorrow = false;
+  if (candidate !== undefined) {
+    const previousCallable = walk.currentCallableDeclaration;
+    walk.currentCallableDeclaration = declaration;
+    try {
+      const borrowedResult = (expression: Node): boolean | undefined => {
+        const sourceFile = walk.context.ast.getSourceFile(expression);
+        if (sourceFile === undefined || resolveExpressionCarrier(walk, expression, sourceFile, rawCarrier) === undefined) return undefined;
+        const node = rustUnparenthesizedExpression(walk.context.ast, expression);
+        const operation = walk.context.records.targetOperation.get(node);
+        if (walk.context.ast.is.IsIdentifier(node)) {
+          const binding = walk.context.source.navigation.sourceReferenceFor(node)?.declaration;
+          if (binding === candidate.parameter) return true;
+          const initializer = binding === undefined ? undefined : Node_Initializer(walk.context.ast, binding);
+          return initializer === undefined ? undefined : borrowedResult(initializer);
+        }
+        if (operation?.kind === "identity-expression" || operation?.kind === "non-null-expression" &&
+          rustTargetTypeRefEquals(operation.sourceCarrier, operation.resultCarrier) || operation?.kind === "source-conversion" &&
+          operation.conversion === undefined && walk.context.records.projectUpcast.get(node) === undefined &&
+          walk.context.records.projectDowncast.get(node) === undefined) {
+          const operand = Node_Expression(walk.context.ast, node);
+          return operand === undefined ? undefined : borrowedResult(operand);
+        }
+        if (operation === undefined) return undefined;
+        if (operation.kind === "provider-operation") {
+          const { abi } = operation;
+          if (abi.target.form !== "field" && abi.target.form !== "index" || abi.result.kind !== "sync" ||
+            abi.result.conversion.kind !== "identity" || !rustTargetTypeRefEquals(abi.result.rawCarrier, abi.result.carrier) ||
+            abi.targetReceiver.kind !== "input" || abi.targetReceiver.input.source.kind !== "receiver" ||
+            abi.targetReceiver.input.mode !== "ref" || abi.targetReceiver.input.conversion.kind !== "identity" ||
+            abi.targetReceiver.input.parameterCarrier.kind !== "reference" || abi.targetReceiver.input.parameterCarrier.mutable) return false;
+          const optional = walk.context.records.optionalChain.get(node);
+          if (optional !== undefined && (optional.guardDepth !== 1 ||
+            !rustTargetTypeRefEquals(optional.sourceGuardCarrier, optional.resultCarrier) ||
+            !rustTargetTypeRefEquals(optional.innerResultCarrier, abi.result.carrier))) return false;
+        } else if (operation.kind !== "source-field" && operation.kind !== "source-indexed-field" &&
+          operation.kind !== "tuple-index" && operation.kind !== "fixed-index") return false;
+        const receiver = Node_Expression(walk.context.ast, node);
+        return receiver === undefined ? undefined : borrowedResult(receiver);
+      };
+      const returns = candidate.returns.map(borrowedResult);
+      if (returns.some(selected => selected === undefined)) return undefined;
+      physicalBorrow = returns.every(selected => selected === true);
+    } finally {
+      walk.currentCallableDeclaration = previousCallable;
+    }
+  }
   const nativeReturn = rawCarrier === undefined || asynchronous !== undefined || generator !== undefined ? undefined
     : selectRustRetainedReturn(walk, declaration, rawCarrier);
   if (nativeReturn?.kind === "pending") return undefined;
@@ -153,7 +213,7 @@ export function selectRustSourceCallableReturn(
     }
     if (inputRetention.kind === "selected") retainedEnvironment = inputRetention.environment;
   }
-  const borrowedParameter = walk.context.sourceCallables.borrowedReturnParameter(declaration);
+  const borrowedParameter = walk.context.sourceCallables.borrowedReturn(declaration)?.parameter;
   const borrowedAbi = borrowedParameter === undefined ? undefined
     : walk.context.records.sourceParameterAbi.get(borrowedParameter);
   const completion = walk.context.semanticsFor(declaration).operations.callableCompletion(declaration);
@@ -164,8 +224,12 @@ export function selectRustSourceCallableReturn(
   return {
     fact: {
       returnCarrier: carrier,
-      ...(borrowedParameter !== undefined && borrowedAbi?.mode === "ref" && borrowedAbi.inputLifetime !== undefined &&
-        rustTargetTypeRefEquals(borrowedAbi.valueCarrier, carrier) ? { borrowedParameter } : {}),
+      ...(physicalBorrow && borrowedParameter !== undefined && borrowedAbi?.mode === "ref" && borrowedAbi.inputLifetime !== undefined &&
+        !isRustCopyCarrier(carrier) && rustSourceDataLoanCarrier(carrier)
+        ? { borrowedReturn: Object.freeze({ parameter: borrowedParameter,
+          carrier: rustTargetTypeRefEquals(borrowedAbi.valueCarrier, carrier) ? borrowedAbi.parameterCarrier
+            : Object.freeze({ kind: "reference" as const, referent: carrier, mutable: false,
+              lifetime: borrowedAbi.inputLifetime }) }) } : {}),
       ...(isRustUnitCarrier(implementationResult) ? { implementationCompletion: "absence" as const }
         : isRustNeverCarrier(implementationResult) ? { implementationCompletion: "diverging" as const } : {}),
       ...(completion === undefined ? {} : { canFallThrough: completion.canFallThrough }),
@@ -189,16 +253,23 @@ export function recordRustSourceCallableReturn(walk: RustFactWalk, declaration: 
   return true;
 }
 
-export type RustSourceParameterAbiSelection =
+export type RustContextualParameterAbiSelection =
   | { readonly kind: "resolved"; readonly abi: RustSourceParameterAbiFact }
   | { readonly kind: "rejected"; readonly reason: string };
 
+export interface RustSourceParameterResourceError {
+  readonly kind: "resource-error";
+  readonly parameter: Node;
+  readonly declaration: Node;
+  readonly dimension: "parameter-contract-steps";
+  readonly limit: number;
+  readonly reason: string;
+}
+
+export type RustSourceParameterAbiSelection = RustContextualParameterAbiSelection | RustSourceParameterResourceError;
+
 export interface RustSourceCallableAbiResolver {
-  canUseSharedBorrow(
-    parameter: Node,
-    context: RustTargetTypeResolutionContext,
-    options: RustTargetTypeResolutionOptions,
-  ): boolean;
+  canUseSharedBorrow(parameter: Node): boolean;
   resolveParameterAbi(
     parameter: Node,
     context: RustTargetTypeResolutionContext,
@@ -210,14 +281,18 @@ export interface RustSourceCallableAbiResolver {
 export function createRustSourceCallableAbiResolver(input: {
   readonly isNativeCallableExpression: (expression: Node) => boolean;
   readonly parameterAbiFor: (parameter: Node) => RustSourceParameterAbiFact | undefined;
+  readonly maximumParameterContractSteps?: number;
 }): RustSourceCallableAbiResolver {
+  const maximumSteps = input.maximumParameterContractSteps ?? 4_194_304;
+  if (!Number.isSafeInteger(maximumSteps) || maximumSteps <= 0) {
+    throw new TypeError("Parameter contract analysis requires a positive finite work budget.");
+  }
   const cache = new WeakMap<Node, RustSourceParameterAbiFact>();
-
-  return {
-    canUseSharedBorrow(parameter, context, options) {
-      return parameterCanUseSharedBorrow(parameter, context, options, input.isNativeCallableExpression);
-    },
-    resolveParameterAbi(parameter, context, options, contextualValueCarrier) {
+  const resourceFailures = new WeakMap<Node, RustSourceParameterResourceError>();
+  const requirements = new WeakMap<Node, RustParameterBorrowRequirements>();
+  const active = new Set<Node>();
+  const complete = (parameter: Node, context: RustTargetTypeResolutionContext,
+    options: RustTargetTypeResolutionOptions, contextualValueCarrier?: TargetTypeRef): RustSourceParameterAbiSelection | undefined => {
       const finalized = input.parameterAbiFor(parameter);
       if (finalized !== undefined) return contextualValueCarrier === undefined ||
         rustTargetTypeRefEquals(finalized.valueCarrier, contextualValueCarrier)
@@ -225,60 +300,138 @@ export function createRustSourceCallableAbiResolver(input: {
       const owner = context.ast.parent(parameter);
       if (owner === undefined || sourceCallableValueParameters(context.ast, owner,
         context.currentSemantics, { kind: "declaration" })?.includes(parameter) !== true) return undefined;
-      const cached = contextualValueCarrier === undefined ? cache.get(parameter) : undefined;
+      const resourceFailure = resourceFailures.get(parameter);
+      if (resourceFailure !== undefined) return resourceFailure;
+      const cached = cache.get(parameter);
       if (cached !== undefined) {
-        return Object.freeze({ kind: "resolved" as const, abi: cached });
+        return contextualValueCarrier === undefined || rustTargetTypeRefEquals(cached.valueCarrier, contextualValueCarrier)
+          ? Object.freeze({ kind: "resolved" as const, abi: cached }) : undefined;
       }
-      const typeNode = Node_Type(context.ast, parameter);
-      let base = contextualValueCarrier ?? (typeNode === undefined
-        ? resolveRustTargetTypeRef(parameter, context, options)
-        : resolveRustTargetTypeRef(typeNode, context, options));
-      if (base === undefined) {
-        return undefined;
+      if (active.has(parameter)) return undefined;
+      const candidates = new Map<Node, RustSourceParameterCandidate>();
+      const pending = [parameter];
+      const entered = new Set<Node>();
+      let steps = 0;
+      const account = (): boolean => ++steps <= maximumSteps;
+      const exhausted = (): RustSourceParameterResourceError => {
+        const failure: RustSourceParameterResourceError = Object.freeze({ kind: "resource-error", parameter,
+          declaration: owner, dimension: "parameter-contract-steps", limit: maximumSteps,
+          reason: "Declared parameter contract analysis exceeds its finite work budget." });
+        resourceFailures.set(parameter, failure);
+        return failure;
+      };
+      try {
+        while (pending.length !== 0) {
+          if (!account()) return exhausted();
+          const current = pending.pop()!;
+          if (candidates.has(current) || input.parameterAbiFor(current) !== undefined || cache.has(current)) continue;
+          if (active.has(current)) return undefined;
+          active.add(current);
+          entered.add(current);
+          const sourceFile = context.ast.getSourceFile(current);
+          if (sourceFile === undefined) return undefined;
+          const currentContext = { ...context, currentSourceFile: sourceFile, currentSemantics: context.semanticsFor(current) };
+          const selected = selectRustSourceParameterCandidate(current, currentContext, options,
+            current === parameter ? contextualValueCarrier : undefined);
+          if (selected === undefined || selected.kind === "rejected") return selected;
+          let local = requirements.get(current);
+          if (local === undefined) {
+            local = selected.borrowCarrier === undefined || isRustCopyCarrier(selected.abi.valueCarrier)
+              ? { shared: false, dependencies: Object.freeze([]) }
+              : selectRustParameterBorrowRequirements(current, currentContext, options, input.isNativeCallableExpression);
+            if (local === undefined) return undefined;
+            requirements.set(current, local);
+          }
+          candidates.set(current, { ...selected, context: currentContext, requirements: local });
+          for (const dependency of local.dependencies) {
+            if (!account()) return exhausted();
+            pending.push(dependency);
+          }
+        }
+        const components = targetStronglyConnectedComponents(new Set(candidates.keys()),
+          current => candidates.get(current)!.requirements.dependencies, account);
+        if (components.kind === "unresolved") return exhausted();
+        const completed = new Map<Node, RustSourceParameterAbiFact>();
+        for (const component of components.components) {
+          const members = new Set(component);
+          const borrowed = component.every(current => {
+            const candidate = candidates.get(current)!;
+            return candidate.borrowCarrier !== undefined && candidate.requirements.shared &&
+              candidate.requirements.dependencies.every(dependency => {
+                if (members.has(dependency)) return true;
+                const abi = completed.get(dependency) ?? input.parameterAbiFor(dependency) ?? cache.get(dependency);
+                return abi?.parameterCarrier.kind === "reference" && !abi.parameterCarrier.mutable;
+              });
+          });
+          const selections = component.map(current => {
+            const candidate = candidates.get(current)!;
+            const selected = borrowed ? selectRustSourceParameterAbi(candidate.abi.form,
+              candidate.abi.valueCarrier, candidate.borrowCarrier) : candidate.abi;
+            return selected === undefined ? undefined
+              : finalizeRustSourceParameterStorage(current, selected, candidate.context, options);
+          });
+          if (selections.some(selection => selection === undefined)) return undefined;
+          component.forEach((current, index) => completed.set(current, selections[index]!));
+        }
+        for (const [current, abi] of completed) cache.set(current, abi);
+        const result = completed.get(parameter);
+        return result === undefined ? undefined : Object.freeze({ kind: "resolved" as const, abi: result });
+      } finally {
+        for (const current of entered) active.delete(current);
       }
-      const declaration = context.ast.as.AsParameterDeclaration(parameter);
-      if (declaration === undefined) {
-        return undefined;
-      }
-      const form = declaration.DotDotDotToken !== undefined
-        ? "rest" as const
-        : Node_Initializer(context.ast, parameter) !== undefined
-          ? "default" as const
-          : context.ast.questionToken(parameter) !== undefined
-            ? "optional" as const
-            : "required" as const;
-      if (form === "required" &&
-        (isRustJsValueCarrier(base) || rustTargetTypeRefEquals(base, rustTsValueTargetType()) ||
-          rustTargetTypeRefEquals(base, rustEmptyObjectTargetType()) ||
-          rustTargetTypeRefEquals(base, rustObjectIdentityTargetType())) &&
-        parameterOnlyForwardsThrownValue(parameter, context)) {
-        base = rustProgramErrorTargetType();
-      }
-      const native = validateRustSourceParameterMemberWrites(parameter, base, context, options);
-      if (native === undefined || native.kind === "rejected") return native;
-      const requiresOwnedValue = parameterUsesFlowState(
-        parameter,
-        "moved",
-        context,
-      ) || (isRustVecCarrier(base) || isRustStringCarrier(base)) && parameterRetainsWholeValue(parameter, context);
-      const parameterLaneCarrier = form === "required"
-        ? requiresOwnedValue || typeNode === undefined
-          ? base
-          : rustParameterLaneTargetType(base, typeNode, context, options)
-        : undefined;
-      const borrowCarrier = requiresOwnedValue ? undefined : selectRustSourceParameterBorrowCarrier(base, parameterLaneCarrier);
-      const selectedParameterCarrier = borrowCarrier !== undefined &&
-        parameterCanUseSharedBorrow(parameter, context, options, input.isNativeCallableExpression)
-        ? borrowCarrier : parameterLaneCarrier;
-      const abi = selectRustSourceParameterAbi(form, base, selectedParameterCarrier);
-      if (abi === undefined) {
-        return undefined;
-      }
-      const named = finalizeRustSourceParameterStorage(parameter, abi, context, options);
-      if (named !== undefined && contextualValueCarrier === undefined) cache.set(parameter, named);
-      return named === undefined ? undefined : Object.freeze({ kind: "resolved" as const, abi: named });
-    },
   };
+  return {
+    canUseSharedBorrow(parameter) {
+      const abi = input.parameterAbiFor(parameter) ?? cache.get(parameter);
+      return abi?.parameterCarrier.kind === "reference" && !abi.parameterCarrier.mutable;
+    },
+    resolveParameterAbi: complete,
+  };
+}
+
+interface RustParameterBorrowRequirements {
+  readonly shared: boolean;
+  readonly dependencies: readonly Node[];
+}
+
+interface RustSourceParameterCandidate {
+  readonly kind: "candidate";
+  readonly abi: RustSourceParameterAbiFact;
+  readonly borrowCarrier: TargetTypeRef | undefined;
+  readonly context: RustTargetTypeResolutionContext;
+  readonly requirements: RustParameterBorrowRequirements;
+}
+
+function selectRustSourceParameterCandidate(parameter: Node, context: RustTargetTypeResolutionContext,
+  options: RustTargetTypeResolutionOptions, contextualValueCarrier?: TargetTypeRef):
+  Omit<RustSourceParameterCandidate, "context" | "requirements"> |
+  Extract<RustSourceParameterAbiSelection, { readonly kind: "rejected" }> | undefined {
+  const typeNode = Node_Type(context.ast, parameter);
+  let base = contextualValueCarrier ?? resolveRustTargetTypeRef(typeNode ?? parameter, context, options);
+  const declaration = context.ast.as.AsParameterDeclaration(parameter);
+  if (base === undefined || declaration === undefined) return undefined;
+  const form = declaration.DotDotDotToken !== undefined ? "rest" as const
+    : Node_Initializer(context.ast, parameter) !== undefined ? "default" as const
+      : context.ast.questionToken(parameter) !== undefined ? "optional" as const : "required" as const;
+  if (form === "required" && (isRustJsValueCarrier(base) || rustTargetTypeRefEquals(base, rustTsValueTargetType()) ||
+    rustTargetTypeRefEquals(base, rustEmptyObjectTargetType()) || rustTargetTypeRefEquals(base, rustObjectIdentityTargetType())) &&
+    parameterOnlyForwardsThrownValue(parameter, context)) base = rustProgramErrorTargetType();
+  const native = validateRustSourceParameterMemberWrites(parameter, base, context, options);
+  if (native === undefined || native.kind === "rejected") return native;
+  const owned = parameterUsesFlowState(parameter, "moved", context) ? true
+    : parameterRetainsWholeValue(parameter, context, options);
+  if (owned === undefined) return undefined;
+  const lane = form !== "required" ? undefined : owned || typeNode === undefined
+    ? base : rustParameterLaneTargetType(base, typeNode, context, options);
+  const abi = selectRustSourceParameterAbi(form, base, lane);
+  if (abi === undefined) return undefined;
+  const owner = context.ast.parent(parameter);
+  const returned = owner !== undefined && context.sourceCallables.borrowedReturn(owner)?.parameter === parameter;
+  const borrowCarrier = owned || form !== "required" ? undefined
+    : returned && !isRustCopyCarrier(base) && rustSourceDataLoanCarrier(base)
+      ? { kind: "reference" as const, referent: base, mutable: false }
+      : selectRustSourceParameterBorrowCarrier(base, lane);
+  return { kind: "candidate", abi, borrowCarrier };
 }
 
 function validateRustSourceParameterMemberWrites(
@@ -324,7 +477,7 @@ export function resolveRustContextualParameterAbi(
     readonly selected: RustLifetimeBinder;
   },
   contextualValueCarrier?: TargetTypeRef,
-): RustSourceParameterAbiSelection | undefined {
+): RustContextualParameterAbiSelection | undefined {
   const declaration = context.ast.as.AsParameterDeclaration(parameter);
   if (declaration === undefined) {
     return undefined;
@@ -410,12 +563,19 @@ function finalizeRustSourceParameterStorage(
   options: RustTargetTypeResolutionOptions,
 ): RustSourceParameterAbiFact | undefined {
   const owner = context.ast.parent(parameter);
-  if (abi.form === "required" && abi.entryConversion === undefined && owner !== undefined &&
-    !isRustCopyCarrier(abi.valueCarrier) && context.sourceCallables.borrowedReturnParameter(owner) === parameter &&
+  if (abi.form === "required" && abi.mode === "ref" && abi.entryConversion === undefined && owner !== undefined &&
+    !isRustCopyCarrier(abi.valueCarrier) && context.sourceCallables.borrowedReturn(owner)?.parameter === parameter &&
     !parameterUsesFlowState(parameter, "moved", context)) {
-    const lifetime = rustSourceInputLifetime(parameter, context);
-    if (lifetime !== undefined) return { ...abi, mode: "ref", inputLifetime: lifetime,
-      parameterCarrier: { kind: "reference", referent: abi.valueCarrier, mutable: false, lifetime } };
+    const semantics = context.semanticsFor(owner);
+    const signature = semantics.types.declarationSignatureInfo(owner);
+    const returned = resolveRustTargetTypeRef(Node_Type(context.ast, owner) ?? signature?.returnType,
+      rustSourceStorageSubjectContext({ ...context, currentSemantics: semantics }, undefined), options);
+    if (returned === undefined) return undefined;
+    if (!isRustCopyCarrier(returned) && rustSourceDataLoanCarrier(returned)) {
+      const lifetime = rustSourceInputLifetime(parameter, context);
+      if (lifetime !== undefined) return { ...abi, mode: "ref", inputLifetime: lifetime,
+        parameterCarrier: { kind: "reference", referent: abi.valueCarrier, mutable: false, lifetime } };
+    }
   }
   const lifetime = abi.parameterCarrier.kind === "reference" && rustCallableInputProtocol(abi.parameterCarrier) !== undefined
     ? rustSourceInputLifetime(parameter, context) : undefined;
@@ -460,74 +620,150 @@ function parameterUsesFlowState(
     });
 }
 
-function parameterRetainsWholeValue(parameter: Node, context: RustTargetTypeResolutionContext): boolean {
+function parameterReturnsNativePayload(parameter: Node, reference: Node, context: RustTargetTypeResolutionContext,
+  options: RustTargetTypeResolutionOptions): boolean | undefined {
+  const refinement = context.source.semantics.selectValueTypeRefinement(reference);
+  if (refinement.kind !== "resolved" || refinement.reference.declaration !== parameter ||
+    refinement.refinement.kind === "ambiguous" || refinement.refinement.kind === "unrelated") return undefined;
+  if (refinement.selectedType === refinement.declaredType) return false;
+  const sourceFile = context.ast.getSourceFile(reference);
+  if (sourceFile === undefined) return undefined;
+  const current = { ...context, currentSourceFile: sourceFile, currentSemantics: context.semanticsFor(reference) };
+  const selected = resolveRustTargetTypeRef(refinement.selectedType, current, options);
+  const declared = resolveRustTargetTypeRef(Node_Type(context.ast, parameter) ?? parameter, context, options);
+  if (selected === undefined || declared === undefined) return undefined;
+  return !rustTargetTypeRefEquals(selected, declared) &&
+    (isRustCopyCarrier(selected) || isRustStringCarrier(selected));
+}
+
+function parameterRetainsWholeValue(parameter: Node, context: RustTargetTypeResolutionContext,
+  options: RustTargetTypeResolutionOptions): boolean | undefined {
   if (sourceParameterIsProperty(context.ast, parameter)) return true;
   const callable = enclosingCallable(context.ast.parent(parameter), context);
   if (callable !== undefined && (context.ast.hasModifierKind(callable, "async") ||
     context.semanticsFor(callable).operations.generator(callable) !== undefined)) return true;
   const summary = context.source.navigation.parameterUseSummary(parameter);
-  return summary === undefined || summary.uses.some(use => !use.throughMember &&
-    (use.captured || use.role === "return" || use.role === "yield" || use.role === "storage" &&
-      context.source.navigation.expressionValueFlow(use.reference).escapes));
+  const returned = callable !== undefined && context.sourceCallables.borrowedReturn(callable)?.parameter === parameter;
+  if (summary === undefined) return undefined;
+  for (const use of summary.uses) {
+    if (use.throughMember) continue;
+    if (use.role === "argument" && callable !== undefined && context.ast.is.IsConstructorDeclaration(callable)) {
+      const operand = rustUnparenthesizedExpression(context.ast, use.reference);
+      let argument = operand;
+      while (context.ast.is.IsParenthesizedExpression(context.ast.parent(argument))) argument = context.ast.parent(argument)!;
+      const call = context.ast.parent(argument);
+      const owner = context.ast.parent(callable);
+      if (call !== undefined && context.ast.is.IsCallExpression(call) &&
+        context.ast.kindName(Node_Expression(context.ast, call)) === "KindSuperKeyword") {
+        if (owner === undefined || enclosingCallable(call, context) !== callable) return undefined;
+        const heritage = context.source.navigation.declaredHeritage(owner);
+        if (heritage.kind !== "resolved") return undefined;
+        const bases = heritage.edges.flatMap(edge => {
+          const base = resolveRustExternalProjectBase(edge, options.sourceProfiles);
+          return base === undefined ? [] : [base];
+        });
+        if (bases.length > 1) return undefined;
+        const base = bases[0];
+        if (base !== undefined) {
+          const semantics = context.semanticsFor(call);
+          const selected = semantics.operations.call(call);
+          const declaration = selected === undefined ? undefined : semantics.declarations.signatureDeclaration(selected.selectedSignature);
+          const index = selected?.sourceArguments.findIndex(value => value.expression === argument) ?? -1;
+          if (selected === undefined || declaration === undefined || !base.constructorDeclarations.includes(declaration) || index < 0) return undefined;
+          const bindings = selected.sourceArgumentBindings.filter(value => value.sourceArgumentIndex === index &&
+            value.sourceForm === "value" && value.sourceParameterForm === "parameter");
+          if (bindings.length !== 1) return undefined;
+          const fields = base.fields.filter(field => field.initializer.kind === "message" &&
+            field.initializer.parameterIndex === bindings[0]!.sourceParameterIndex);
+          if (fields.length !== 1) return undefined;
+          const sourceFile = context.ast.getSourceFile(call);
+          if (sourceFile === undefined) return undefined;
+          const carrier = resolveRustTargetTypeRef(argument, { ...context, currentSemantics: semantics,
+            currentSourceFile: sourceFile }, options);
+          if (carrier === undefined || !rustTargetTypeRefEquals(carrier, fields[0]!.carrier) &&
+            !rustTargetTypeRefEquals(rustOptionElementCarrier(carrier), fields[0]!.carrier)) return undefined;
+          return true;
+        }
+      }
+    }
+    if (use.captured || use.role === "yield" || use.role === "storage" && !returned) return true;
+    if (use.role !== "return" || returned) continue;
+    const payload = parameterReturnsNativePayload(parameter, use.reference, context, options);
+    if (payload === undefined) return undefined;
+    if (!payload) return true;
+  }
+  return false;
 }
 
-function parameterCanUseSharedBorrow(
+function selectRustParameterBorrowRequirements(
   parameter: Node,
   context: RustTargetTypeResolutionContext,
   options: RustTargetTypeResolutionOptions,
   isNativeCallableExpression: (expression: Node) => boolean,
-): boolean {
+): RustParameterBorrowRequirements | undefined {
   const { ast } = context;
-  const pending = [parameter];
-  const visited = new Set<Node>();
-  while (pending.length > 0) {
-    const current = pending.pop()!;
-    if (visited.has(current)) continue;
-    visited.add(current);
+  const dependencies = new Set<Node>();
+  const owned = (): RustParameterBorrowRequirements => ({ shared: false, dependencies: Object.freeze([]) });
+  const current = parameter;
     const name = ast.name(current);
     if (name === undefined || context.source.navigation.sourceReferenceFor(name)?.declaration !== current ||
       ast.body(enclosingCallable(ast.parent(current), context)) === undefined ||
-      parameterUsesFlowState(current, "moved", context) || parameterRetainsWholeValue(current, context)) return false;
+      parameterUsesFlowState(current, "moved", context) || parameterUsesFlowState(current, "borrowed-mut", context)) return owned();
+    const retains = parameterRetainsWholeValue(current, context, options);
+    if (retains === undefined) return undefined;
+    if (retains) return owned();
     const summary = context.source.navigation.parameterUseSummary(current);
-    if (summary === undefined || summary.bindingWritten || summary.memberWritten || summary.captured) return false;
+    if (summary === undefined) return undefined;
+    if (summary.bindingWritten || summary.memberWritten || summary.captured) return owned();
     for (const { reference, role, throughMember } of summary.uses) {
+      if (role === "return") {
+        if (context.sourceCallables.borrowedReturn(ast.parent(parameter)!)?.parameter === parameter) continue;
+        const payload = parameterReturnsNativePayload(parameter, reference, context, options);
+        if (payload === undefined) return undefined;
+        if (payload) continue;
+      }
       const flow = context.source.sourceFacts.getFact(reference, flowStateFactKey);
       if (flow?.state === "borrowed-shared" || throughMember || role === "receiver" ||
         role === "comparison" || role === "condition" || role === "type-only") continue;
       let operand = reference;
       let call = ast.parent(operand);
+      if (call !== undefined && ast.is.IsTypeOfExpression(call) && Node_Expression(ast, call) === operand) continue;
       while (call !== undefined && rustSourceValueWrapperContains(call, operand, ast)) {
         const sourceFile = ast.getSourceFile(call);
         if (sourceFile === undefined || !isRustStringCarrier(resolveRustTargetTypeRef(call, {
           ...context,
           currentSourceFile: sourceFile,
           currentSemantics: context.semanticsFor(call),
-        }, options))) return false;
+        }, options))) return owned();
         operand = call;
         call = ast.parent(call);
       }
-      if (call === undefined || !ast.is.IsCallExpression(call) && !ast.is.IsNewExpression(call)) return false;
+      if (call === undefined || !ast.is.IsCallExpression(call) && !ast.is.IsNewExpression(call)) return owned();
       const semantics = context.semanticsFor(call);
       const selected = semantics.operations.call(call);
-      if (selected === undefined || selected.sourceArguments.some(argument =>
-        ast.is.IsSpreadElement(argument.expression))) return false;
+      if (selected === undefined) return undefined;
+      if (selected.sourceArguments.some(argument => ast.is.IsSpreadElement(argument.expression))) return owned();
       const argumentIndex = selected.sourceArguments.findIndex(argument => argument.expression === operand);
+      const referenceOperation = readRustReferenceOperation(context, call);
+      if (referenceOperation?.kind === "store" && referenceOperation.valueExpression === operand) return owned();
       const declaration = semantics.declarations.signatureDeclaration(selected.selectedSignature);
       const member = resolveSelectedSourceProfileMember(context, declaration, options.sourceProfiles);
-      const errorConstructor = selectRustSourceErrorConstructor(member, ast.is.IsNewExpression(call));
+      const errorConstructor = selectRustSourceErrorConstructor(member, ast.is.IsNewExpression(call) ||
+        ast.kindName(Node_Expression(ast, call)) === "KindSuperKeyword");
       if (argumentIndex >= 0 && errorConstructor !== undefined) {
         const sourceFile = ast.getSourceFile(call);
-        if (sourceFile === undefined) return false;
+        if (sourceFile === undefined) return undefined;
         const callContext = { ...context, currentSourceFile: sourceFile, currentSemantics: semantics };
         const operation = rustSourceErrorConstructorOperation(errorConstructor, selected.sourceArguments.map(argument =>
           resolveRustTargetTypeRef(argument.expression, callContext, options)));
-        if (operation === undefined || !rustProviderArgumentBorrowsString(operation, argumentIndex)) return false;
+        if (operation === undefined) return undefined;
+        if (!rustProviderArgumentBorrowsString(operation, argumentIndex)) return owned();
         continue;
       }
       if (argumentIndex >= 0 && member?.profile === "js") {
-        if (!options.jsEnabled) return false;
+        if (!options.jsEnabled) return owned();
         const sourceFile = ast.getSourceFile(call);
-        if (sourceFile === undefined) return false;
+        if (sourceFile === undefined) return undefined;
         const callContext = { ...context, currentSourceFile: sourceFile, currentSemantics: semantics };
         const argumentCarriers = selected.sourceArguments.map(argument =>
           resolveRustTargetTypeRef(argument.expression, callContext, options));
@@ -549,8 +785,8 @@ function parameterCanUseSharedBorrow(
           argumentMatchScore: (expected, actual) => actual !== undefined &&
             selectRustSourceValueConversion(actual, expected, context.typeDefinitions) !== undefined ? 1 : undefined,
         }, context.typeDefinitions);
-        if (operation?.fact.kind !== "provider-operation" ||
-          !rustProviderArgumentBorrowsString(operation.fact, argumentIndex)) return false;
+        if (operation?.fact.kind !== "provider-operation") return undefined;
+        if (!rustProviderArgumentBorrowsString(operation.fact, argumentIndex)) return owned();
         continue;
       }
       const provider = resolveSelectedProviderDeclaration(context, declaration, [
@@ -559,10 +795,11 @@ function parameterCanUseSharedBorrow(
       if (argumentIndex >= 0 && provider.kind === "selected") {
         const operation = selectRustProviderOperation(options.providerRows, provider.identity,
           ast.is.IsNewExpression(call) ? "constructor" : "method");
-        if (operation.kind !== "selected" || !rustProviderArgumentBorrowsString(operation.row, argumentIndex)) return false;
+        if (operation.kind !== "selected") return undefined;
+        if (!rustProviderArgumentBorrowsString(operation.row, argumentIndex)) return owned();
         continue;
       }
-      if (provider.kind === "conflict") return false;
+      if (provider.kind === "conflict") return undefined;
       const sourceFile = ast.getSourceFile(call);
       const callback = argumentIndex < 0 || sourceFile === undefined ? undefined : rustCallableInputProtocol(resolveRustTargetTypeRef(
         selected.sourceCallee.expression, rustSourceStorageSubjectContext({ ...context,
@@ -570,32 +807,25 @@ function parameterCanUseSharedBorrow(
       if (callback !== undefined) {
         const input = callback.parameters[argumentIndex];
         if (input?.kind !== "reference" || input.mutable ||
-          selectRustSourceParameterBorrowCarrier(input.referent, input.referent) === undefined) return false;
+          selectRustSourceParameterBorrowCarrier(input.referent, input.referent) === undefined) return owned();
         continue;
       }
       const implementation = declaration === undefined ? undefined : context.source.navigation.callableImplementation(declaration);
-      if (argumentIndex < 0 || implementation?.kind !== "resolved" ||
-        !(ast.is.IsFunctionDeclaration(implementation.implementation.declaration) ||
-          isNativeCallableExpression(implementation.implementation.declaration))) return false;
+      if (argumentIndex < 0 || implementation?.kind !== "resolved") return undefined;
+      if (!(ast.is.IsFunctionDeclaration(implementation.implementation.declaration) ||
+          isNativeCallableExpression(implementation.implementation.declaration))) return owned();
       const parameters = sourceCallableValueParameters(ast, implementation.implementation.declaration,
         context.semanticsFor(implementation.implementation.declaration));
-      if (parameters === undefined) return false;
-      const destination = parameters[argumentIndex];
+      if (parameters === undefined) return undefined;
+      const bindings = selected.sourceArgumentBindings.filter(binding => binding.sourceArgumentIndex === argumentIndex &&
+        binding.sourceForm === "value" && binding.sourceParameterForm === "parameter");
+      const destination = bindings.length === 1 ? parameters[bindings[0]!.sourceParameterIndex] : undefined;
       const parameterSyntax = destination === undefined ? undefined : ast.as.AsParameterDeclaration(destination);
       if (destination === undefined || parameterSyntax === undefined || parameterSyntax.DotDotDotToken !== undefined ||
-        ast.questionToken(destination) !== undefined || Node_Initializer(ast, destination) !== undefined) return false;
-      const destinationFile = ast.getSourceFile(destination);
-      if (destinationFile === undefined) return false;
-      const carrier = resolveRustTargetTypeRef(Node_Type(ast, destination) ?? destination, {
-        ...context,
-        currentSourceFile: destinationFile,
-        currentSemantics: context.semanticsFor(destination),
-      }, options);
-      if (carrier === undefined || selectRustSourceParameterBorrowCarrier(carrier, carrier) === undefined) return false;
-      pending.push(destination);
+        ast.questionToken(destination) !== undefined || Node_Initializer(ast, destination) !== undefined) return owned();
+      dependencies.add(destination);
     }
-  }
-  return true;
+  return { shared: true, dependencies: Object.freeze([...dependencies]) };
 }
 
 function parameterOnlyForwardsThrownValue(

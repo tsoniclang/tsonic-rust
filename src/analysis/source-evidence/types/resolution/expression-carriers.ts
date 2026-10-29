@@ -147,8 +147,10 @@ export function resolveExpressionCarrier(
         }
         operation = records.targetOperation.get(expression);
       }
-      recordSelectedOperationInputs(walk, expression, sourceFile, operation);
-      return finalize(existing.carrier);
+      if (operation !== undefined) {
+        recordSelectedOperationInputs(walk, expression, sourceFile, operation);
+        return finalize(existing.carrier);
+      }
     }
     const expressionKind = walk.context.ast.kindName(expression);
     if (expressionIsPlainAssignment(walk.context.ast, expression)) {
@@ -168,6 +170,7 @@ export function resolveExpressionCarrier(
       resolveExpressionOperationDependencies(walk, expression, sourceFile, contextualExpected);
       selectExpressionOperation(walk, expression, sourceFile);
     }
+    if (walk.rejectedExpressions.has(expression)) return undefined;
     const selectedCarrier = records.runtimeCarrier.get(expression);
     if (selectedCarrier !== undefined) {
       const operation = records.targetOperation.get(expression);

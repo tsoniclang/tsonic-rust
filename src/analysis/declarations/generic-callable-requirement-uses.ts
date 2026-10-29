@@ -24,7 +24,7 @@ import { rustTargetTypeParameterIdentities } from "../../target-model/types/carr
 
 import { createRustProjectProjectionRequirementCollector } from "./project-projection-requirements.js";
 
-import { ElementAccessExpression_ArgumentExpression, KindBinaryExpression, KindExpressionStatement, Node_Expression, sourceParameterIsProperty } from "@tsonic/target-api/source";
+import { ElementAccessExpression_ArgumentExpression, ForInOrOfStatement_Initializer, KindBinaryExpression, KindExpressionStatement, Node_Expression, sourceParameterIsProperty, VariableDeclarationList_Declarations } from "@tsonic/target-api/source";
 import { rustEffectiveValueCarrier, rustValueCarrierBeforeOptionProjection } from "../conversions/value-carrier-queries.js";
 import { isRustAssignmentOperator } from "../../target-model/syntax/tokens.js";
 
@@ -367,8 +367,15 @@ export function createRustCallableRequirementVisitor(input: RustCallableRequirem
     if (operation?.kind === "iteration" && operation.iterationKind !== "for-in") {
       const iterable = Node_Expression(ast, node);
       const iterableCarrier = iterable === undefined ? undefined : records.runtimeCarrier.get(iterable)?.carrier;
+      const borrowed = records.borrowedIterationBinding.get(node);
+      const initializer = ForInOrOfStatement_Initializer(ast, node);
+      const declarations = initializer === undefined ? undefined : VariableDeclarationList_Declarations(ast, initializer);
+      const sharedElements = operation.lowering.kind === "borrowed" && borrowed !== undefined &&
+        declarations?.length === 1 && declarations[0] === borrowed.declaration && borrowed.references.length !== 0 &&
+        borrowed.references.every(reference => records.sourceBinding.get(reference)?.sourceDeclaration === borrowed.declaration &&
+          rustTargetTypeRefEquals(records.runtimeCarrier.get(reference)?.carrier, operation.elementCarrier));
       if (operation.lowering.kind === "js-array" ||
-        operation.lowering.kind === "borrowed" && operation.lowering.style === "cloned" ||
+        operation.lowering.kind === "borrowed" && operation.lowering.style === "cloned" && !sharedElements ||
         operation.lowering.kind === "receiver-method" && rustJsArrayEntriesElementTargetType(iterableCarrier) !== undefined) {
         const error = addUse(node, operation.elementCarrier, ["clone"]);
         if (error !== undefined) return error;

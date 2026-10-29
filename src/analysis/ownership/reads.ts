@@ -18,6 +18,9 @@ import { rustBorrowedOperationArguments } from "../storage/provider-borrows.js";
 import { BinaryExpression_Left, BinaryExpression_Right } from "@tsonic/target-api/source";
 import { rustContextualRuntimeConversionContract } from "../../policy/conversions/contextual.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
+import { rustSourceCallBorrowedReturn } from "../callables/ownership/source-input-lifetimes.js";
+import { rustLifetimesEqual } from "../../target-model/lifetimes/index.js";
+import { rustParameterModeForCarriers } from "../../policy/ownership/source-parameter-contracts.js";
 
 export type RustPreparedReadSelection =
   | { readonly kind: "selected"; readonly carrier: RustReadOwnershipFact["carrier"]; readonly value: RustReadOwnershipFact["value"] }
@@ -51,15 +54,42 @@ export function prepareRustReadOwnership(input: {
     evidence: ["target.capability=rust.analysis.ownership"],
   }] });
   const storageReads = new Map<Node, boolean>();
+  const sharedParameters = new Set<Node>();
   for (let index = input.nativeNodes.length - 1; index >= 0; index -= 1) {
     if (!budget.node() || !budget.step() || !budget.row()) return rejectedBudget();
     const node = input.nativeNodes[index]!;
     const operation = records.targetOperation.get(node);
+    const returnedLoan = rustSourceCallBorrowedReturn(node, ast, records);
     const receiverAlias = operation?.kind === "source-field" && operation.valueSemantics.kind === "receiver-alias" &&
       operation.dispatch === undefined && rustTargetTypeRefEquals(operation.receiverCarrier, operation.resultCarrier);
     const operand = sourceTransparentExpressionOperand(ast, node) ?? (receiverAlias ? Node_Expression(ast, node) : undefined);
     const nativeOperand = operand !== undefined && input.borrowEffectsInput.isNativeNode(operand);
     const inherited = nativeOperand ? storageReads.get(operand) : undefined;
+    const binding = ast.is.IsIdentifier(node) ? records.sourceBinding.get(node) : undefined;
+    const parameter = binding?.scope === "lexical" && ast.is.IsParameterDeclaration(binding.sourceDeclaration) &&
+      sourceEnclosingCallable(binding.sourceDeclaration, ast) === sourceEnclosingCallable(node, ast)
+      ? binding.sourceDeclaration : undefined;
+    if (parameter !== undefined) {
+      const abi = records.sourceParameterAbi.get(parameter);
+      const carrier = records.runtimeCarrier.get(node)?.carrier;
+      if (abi === undefined || carrier === undefined || !rustTargetTypeRefEquals(abi.valueCarrier, carrier) ||
+        abi.entryConversion !== undefined && (!rustTargetTypeRefEquals(abi.entryConversion.contract.source, abi.parameterCarrier) ||
+          !rustTargetTypeRefEquals(abi.entryConversion.contract.target, abi.valueCarrier)) ||
+        abi.mode === "ref" && (abi.form !== "required" || abi.entryConversion !== undefined ||
+          abi.parameterCarrier.kind !== "reference" || abi.parameterCarrier.mutable ||
+          rustParameterModeForCarriers(abi.valueCarrier, abi.parameterCarrier) !== "ref" ||
+          abi.inputLifetime !== undefined && !rustLifetimesEqual(abi.inputLifetime, abi.parameterCarrier.lifetime))) {
+        return { kind: "rejected", diagnostics: [{
+          code: "RUST_VALUE_READ_OWNERSHIP_UNAVAILABLE", category: "error", source: "tsonic-rust", sourceNode: node,
+          message: "A source parameter read requires its exact completed physical input and entry-conversion contract.",
+          evidence: ["target.capability=rust.analysis.ownership"],
+        }] };
+      }
+      if (abi.mode === "ref") sharedParameters.add(node);
+    } else if (nativeOperand && sharedParameters.has(operand) &&
+      rustTargetTypeRefEquals(records.runtimeCarrier.get(node)?.carrier, records.runtimeCarrier.get(operand)?.carrier)) {
+      sharedParameters.add(node);
+    }
     if (receiverAlias && !nativeOperand || nativeOperand && inherited === undefined) {
       return { kind: "rejected", diagnostics: [{
         code: "RUST_OWNERSHIP_SOURCE_INVENTORY_INVALID", category: "error", source: "tsonic-rust", sourceNode: node,
@@ -70,7 +100,7 @@ export function prepareRustReadOwnership(input: {
     const borrowedElement = records.borrowedElement.get(node) !== undefined && uses.get(node)?.mode === "shared";
     const ownedProviderResult = operation?.kind === "provider-operation" && flow.movingReads.has(node) && !borrowedElement;
     const referenceLoad = operation?.kind === "reference-operation" && operation.operation === "load";
-    storageReads.set(node, inherited ?? (ast.is.IsIdentifier(node) || ast.is.IsElementAccessExpression(node) && !ownedProviderResult ||
+    storageReads.set(node, inherited ?? (returnedLoan !== undefined || ast.is.IsIdentifier(node) || ast.is.IsElementAccessExpression(node) && !ownedProviderResult ||
       ast.kindName(node) === "KindThisExpression" || ast.kindName(node) === "KindThisKeyword" ||
       referenceLoad || operation?.kind === "source-field" && operation.valueSemantics.kind === "stored"));
   }
@@ -153,7 +183,7 @@ export function prepareRustReadOwnership(input: {
       requirements.index.supportsClone(declaration, valueCarrier);
     const use = uses.get(node);
     const value = selectRustValueReadOwnership({ copy, clone, borrowed: borrowFor(node),
-      transfer: use?.mode === "move" || flow.movingReads.has(node) || !storageRead });
+      transfer: !sharedParameters.has(node) && (use?.mode === "move" || flow.movingReads.has(node) || !storageRead) });
     return { carrier, value };
   };
   const readFor = (node: Node, requirements: AnalyzeRustDeclarationGenericRequirementsResult): RustPreparedReadSelection | undefined => {
@@ -185,7 +215,8 @@ export function prepareRustReadOwnership(input: {
         const projectBorrows = records.projectDowncast.get(node) !== undefined;
         const constructsContainer = records.optionProjection.get(node)?.kind === "some";
         const sourceRead = selectRustValueReadOwnership({ copy: sourceCopy, clone: sourceClone,
-          transfer: flow.movingReads.has(node) || !storageRead, borrowed: conversionBorrows && borrowed !== undefined || projectBorrows || storageRead && projection !== undefined && value?.kind !== "move"
+          transfer: flow.movingReads.has(node) || !storageRead, borrowed: sharedParameters.has(node) ||
+            conversionBorrows && borrowed !== undefined || projectBorrows || storageRead && projection !== undefined && value?.kind !== "move"
             ? "shared" : constructsContainer ? undefined : borrowed });
         const operation = records.targetOperation.get(node);
         const binding = records.sourceBinding.get(node);
@@ -206,7 +237,9 @@ export function prepareRustReadOwnership(input: {
           stablePlace: borrowEffects.stableBindings.has(node),
           readsStorage: storageRead,
           pure: borrowEffects.pureValues.has(node),
-          sharedReference: staticStringView || sourceRead.kind === "borrow" && operation?.kind === "reference-operation" &&
+          sharedReference: staticStringView || value.kind === "borrow" && (sharedParameters.has(node) ||
+            rustSourceCallBorrowedReturn(node, ast, records) !== undefined) ||
+            sourceRead.kind === "borrow" && operation?.kind === "reference-operation" &&
             operation.operation === "load" && !operation.operandCarrier.mutable && !sourceCopy,
           borrowedAcross: borrowRelationships.get(node) ?? new Set<Node>(),
         }));

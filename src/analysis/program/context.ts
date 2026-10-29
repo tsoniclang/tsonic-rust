@@ -163,7 +163,7 @@ export function createRustAnalysisContext(
     sourceFiles,
     isNativeNode,
   });
-  const sourceCallables = createRustSourceCallableQueries(sourceStorage,
+  const sourceCallables = createRustSourceCallableQueries(input.source, sourceStorage.nodes,
     createRustExplicitUnsafeContexts(ast, sourceFiles, node => safetyApplications.operationForExpression(node)),
     runtimeValueUses.promiseCallAliasTarget);
   const sourceBoundaries = collectRustSourcePackageBoundaries({ ast, source: input.source,

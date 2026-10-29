@@ -32,6 +32,14 @@ export function planSelectedSourceCall(node: Node, callee: Node | undefined, arg
   fact: Extract<RustTargetOperationFact, { readonly kind: "source-call" }>, context: RustPlanContext): RustExpr | undefined {
   const selection = context.input.program.records.sourceCall.get(node)
     ?? failRustPlannerInvariant("An admitted source call requires its exact native target, parameters and invocation effects.", node);
+  const materialize = (value: RustExpr): RustExpr => {
+    switch (selection.resultMaterialization) {
+      case "direct": return value;
+      case "owned-string": return { kind: "owned-string-from-borrowed-str", expression: value };
+      case "copy-from-borrowed": return { kind: "dereference", pointer: value };
+    }
+    return failRustPlannerInvariant("An admitted source call requires its sealed result materialization.", node);
+  };
   const shaped = shapeRustSourceCallParameters(argumentPlan, fact, context);
   if (shaped === undefined) failRustPlannerInvariant("An admitted source call requires its native argument evaluation plan.", node);
   const targetArguments = (fact.targetGenericArguments ?? []).map(argument => substituteRustTargetGenericArgument(argument,
@@ -171,18 +179,18 @@ export function planSelectedSourceCall(node: Node, callee: Node | undefined, arg
   if (bindings.length !== 0) planned = rustValueBlock(bindings, planned);
   if (context.promiseBodyName !== undefined && selection.pinnedBodies.has(context.promiseBodyName))
     planned = { kind: "call", path: "std::boxed::Box::pin", args: [planned] };
-  if (fact.target.form === "union-method") return planned;
+  if (fact.target.form === "union-method") return materialize(planned);
   if (native !== undefined) {
     const result = planRustNativeInputPropagation(node, native, planned, context);
-    return result === undefined ? undefined : selection.never ? rustBottomAfterEffect(result, "fallible never call returned") : result;
+    return result === undefined ? undefined : selection.never ? rustBottomAfterEffect(result, "fallible never call returned") : materialize(result);
   }
   if (selection.eliminateInfallible) {
     const names = context.syntheticNames ?? failRustPlannerInvariant("An admitted native callable result requires its hygienic names.", node);
-    return rustEliminateInfallibleResult(planned, allocateRustSyntheticName(names, "call_value"), allocateRustSyntheticName(names, "call_error"));
+    return materialize(rustEliminateInfallibleResult(planned, allocateRustSyntheticName(names, "call_value"), allocateRustSyntheticName(names, "call_error")));
   }
   const effects = context.input.program.records.sourceCallEffects.get(node)
     ?? failRustPlannerInvariant("An admitted source call requires its exact sealed invocation effects.", node);
-  if (effects.invocation === "infallible") return selection.never ? rustBottomExpression(planned) : planned;
+  if (effects.invocation === "infallible") return selection.never ? rustBottomExpression(planned) : materialize(planned);
   const generic = context.input.program.records.genericCallableInvocation.get(node);
   let result: RustExpr | undefined;
   if (generic !== undefined) result = planRustGenericCallableErrorPropagation(node, generic, "invocation", planned, context);
@@ -201,5 +209,5 @@ export function planSelectedSourceCall(node: Node, callee: Node | undefined, arg
     result = rustPropagateLocalError(context.fallibleBoundary, rustErrorType(operand), planned);
   }
   if (result === undefined) failRustPlannerInvariant("An admitted source call requires its exact native error propagation.", node);
-  return selection.never ? rustBottomAfterEffect(result, "fallible never call returned") : result;
+  return selection.never ? rustBottomAfterEffect(result, "fallible never call returned") : materialize(result);
 }

@@ -4,7 +4,7 @@ import { rustProgramNodeIsOutsideNativeCode } from "../../control-flow/compile-t
 import { failTargetAnalysisInvariant, type TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustAnalysisProgram } from "../../program/model.js";
 import type { RustSourceCallArgumentProducer } from "../../program/records/calls/source-call-arguments.js";
-import { rustSliceElementCarrier, isRustJsArrayCarrier, isRustVecCarrier, rustFixedArrayCarrierValue } from "../../../target-model/types/index.js";
+import { rustSliceElementCarrier, isRustJsArrayCarrier, isRustStringCarrier, isRustVecCarrier, rustFixedArrayCarrierValue } from "../../../target-model/types/index.js";
 import { isRustCopyCarrier } from "../../../policy/constraints/native-traits.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { rustEffectiveValueCarrier } from "../../conversions/value-carrier-queries.js";
@@ -20,6 +20,8 @@ import { rustRetainedCallSubstitutions } from "../ownership/retained-call-lifeti
 import { rustArgumentPassingMode } from "../../../policy/ownership/argument-passing.js";
 import type { RustSourceCallInputEmission, RustSourceParameterEmission, RustSourceCallEvaluationEmission } from "../../../target-model/records/calls/source-call-arguments.js";
 import { rustTargetConstInteger } from "../../../target-model/types/generic-arguments.js";
+import type { RustBorrowedInitializer } from "../../../target-model/records/storage/borrowed-initializers.js";
+import { rustLifetimesEqual } from "../../../target-model/lifetimes/index.js";
 
 export function analyzeRustSourceCallArguments(program: Omit<RustAnalysisProgram, "reachability">,
   nodes: readonly Node[], producer: RustSourceCallArgumentProducer, source: TargetSourceProgram): readonly TargetDiagnostic[] {
@@ -28,6 +30,15 @@ export function analyzeRustSourceCallArguments(program: Omit<RustAnalysisProgram
     issues.push({ code: unsupported ? "RUST_UNSUPPORTED_AST" : "RUST_MISSING_TARGET_FACT", source: "tsonic-rust", category: "error", sourceNode: node,
       message: `${message} Node kind: ${program.source.ast.kindName(node)}.`, evidence: [`target.capability=${capability}`] });
   };
+  const retainedCalls = new Map<Node, RustBorrowedInitializer>();
+  for (const node of nodes) {
+    const selected = program.records.borrowedInitializer.get(node);
+    if (selected?.loan === undefined || selected.loan.initializer !== node) continue;
+    const previous = retainedCalls.get(selected.loan.guard);
+    if (previous !== undefined && previous !== selected)
+      failTargetAnalysisInvariant("tsonic-rust", "One retained call requires its exact enclosing initializer owner.", node);
+    retainedCalls.set(selected.loan.guard, selected);
+  }
   for (const call of nodes) {
     if (rustProgramNodeIsOutsideNativeCode(program, call)) continue;
     const fact = program.records.targetOperation.get(call);
@@ -57,13 +68,16 @@ export function analyzeRustSourceCallArguments(program: Omit<RustAnalysisProgram
     const evaluation = exact.map((source): RustSourceCallEvaluationEmission["arguments"][number] => {
       const expression = program.source.ast.is.IsSpreadElement(source) ? Node_Expression(program.source.ast, source) : source;
       if (expression === undefined) failTargetAnalysisInvariant("tsonic-rust", "An admitted spread argument requires its exact source operand.", source);
-      return { source, expression, destination: program.callableValues.nativeStorage.invocationArgumentWitnessFor(call, source), mutable: false, borrow: "value", elements: [] };
+      return { source, expression, destination: program.callableValues.nativeStorage.invocationArgumentWitnessFor(call, source), mutable: false,
+        borrow: "value", snapshot: undefined, retainedOwner: undefined, elements: [] };
     });
     const declaration = asSourceNode(selectedCall.sourceDeclaration, source.ast);
     const declarationParameters = selectedCall.nativeParameterDeclarations;
     const elements = new Map<number, Map<number, "value" | "ref" | "mut-ref">>();
     const mutable = new Set<number>();
+    const snapshots = new Set<number>();
     const borrowedRoots = new Map<number, "identity" | "ref" | "mut-ref">();
+    const retainedOwners = new Map<number, NonNullable<RustSourceCallEvaluationEmission["arguments"][number]["retainedOwner"]>>();
     const parameters = fact.parameters.map((parameter, parameterIndex): RustSourceParameterEmission => {
       if (parameter.form === "rest" ? parameter.mode !== "value" : parameter.inputs.length > 1 ||
         parameter.inputs.length === 0 && parameter.form !== "optional" && parameter.form !== "default")
@@ -134,12 +148,57 @@ export function analyzeRustSourceCallArguments(program: Omit<RustAnalysisProgram
           storageReason ?? `Project-source argument ${input.sourceArgumentIndex} conflicts with parameter ${parameterIndex}'s exact selected carrier.`,
           storageReason === undefined);
         const sourceAbi = program.records.sourceParameterAbi.get(argument);
-        const identity = sourceAbi?.mode === parameter.mode && rustTargetTypeRefEquals(sourceAbi.parameterCarrier, parameter.parameterCarrier);
+        let identity = sourceAbi?.mode === parameter.mode && rustTargetTypeRefEquals(sourceAbi.parameterCarrier, parameter.parameterCarrier);
+        const physical = program.records.valueProjection.get(argument);
+        if (valid && physical?.resultForm === "shared-reference" && parameter.mode === "ref" &&
+          input.sourceForm === "value" && input.projection.kind === "direct" &&
+          parameter.parameterCarrier.kind === "reference" && !parameter.parameterCarrier.mutable &&
+          rustTargetTypeRefEquals(parameter.parameterCarrier.referent, input.carrier) &&
+          rustTargetTypeRefEquals(program.records.valueRead.get(argument)?.value, input.carrier)) {
+          identity = true;
+          borrowedRoots.set(input.sourceArgumentIndex, "identity");
+        }
+        const binding = program.records.sourceBinding.get(argument)?.sourceDeclaration;
+        const local = binding === undefined ? undefined : program.records.localBinding.get(binding);
+        if (local?.kind === "value" && local.nativeCarrier.kind === "reference" &&
+          !rustTargetTypeRefEquals(local.nativeCarrier, sourceCarrier) && parameter.mode === "ref") {
+          const loan = local.initializer === undefined ? undefined : program.records.borrowedInitializer.get(local.initializer)?.loan;
+          const original = loan === undefined ? undefined : program.records.sourceParameterAbi.get(loan.parameter);
+          const exact = loan !== undefined && loan.declaration === binding && loan.initializer === local.initializer &&
+            !local.nativeCarrier.mutable && local.nativeCarrier.lifetime !== undefined &&
+            rustTargetTypeRefEquals(local.nativeCarrier, loan.resultCarrier) &&
+            rustTargetTypeRefEquals(local.nativeCarrier.referent, input.carrier) &&
+            parameter.parameterCarrier.kind === "reference" && !parameter.parameterCarrier.mutable &&
+            rustTargetTypeRefEquals(parameter.parameterCarrier.referent, input.carrier) &&
+            (parameter.parameterCarrier.lifetime === undefined ||
+              rustLifetimesEqual(parameter.parameterCarrier.lifetime, local.nativeCarrier.lifetime)) &&
+            original?.inputLifetime !== undefined && rustLifetimesEqual(original.inputLifetime, loan.returnCarrier.lifetime) &&
+            input.sourceForm === "value" && input.projection.kind === "direct";
+          if (!exact) refuse(argument, "rust.backend.source-call-argument-reference",
+            "A physical local data-loan argument requires its exact initializer, declared parameter, native referent and retained lifetime.");
+          identity ||= exact;
+        }
         if (parameter.mode !== "value" && (parameter.parameterCarrier.kind !== "reference" ||
           !rustTargetTypeRefEquals(parameter.parameterCarrier.referent, input.carrier) && !(isRustVecCarrier(input.carrier) &&
             rustTargetTypeRefEquals(rustSliceElementCarrier(parameter.parameterCarrier), input.carrier.element))))
           failTargetAnalysisInvariant("tsonic-rust", "An admitted reference parameter requires its exact native referent ABI.", argument);
         if (parameter.mode === "mut-ref") mutable.add(input.sourceArgumentIndex);
+        if (valid && parameter.mode === "ref" && parameter.parameterCarrier.kind === "reference" &&
+          isRustStringCarrier(parameter.parameterCarrier.referent) && input.sourceForm === "value" &&
+          input.projection.kind === "direct") borrowedRoots.set(input.sourceArgumentIndex, identity ? "identity" : "ref");
+        const retained = retainedCalls.get(call);
+        const owner = retained?.loan;
+        if (valid && parameter.mode === "ref" && input.sourceForm === "value" && input.projection.kind === "direct" &&
+          owner !== undefined && owner.guard === call && owner.parameter === declarationParameters[parameterIndex] &&
+          retained?.receiver === argument && retained.retained.some(value => value.expression === argument &&
+            rustTargetTypeRefEquals(value.carrier, input.carrier))) {
+          retainedOwners.set(input.sourceArgumentIndex, Object.freeze({ declaration: owner.declaration,
+            initializer: owner.initializer, guard: call, argument, parameter: owner.parameter }));
+          borrowedRoots.set(input.sourceArgumentIndex, "ref");
+        }
+        if (valid && parameter.mode === "ref" && input.sourceForm === "value" && sourceCarrier !== undefined &&
+          isRustStringCarrier(sourceCarrier) && isRustStringCarrier(input.carrier) &&
+          program.records.readOwnership.get(argument)?.source.kind === "clone") snapshots.add(input.sourceArgumentIndex);
         inputs.push(Object.freeze({ argumentIndex: input.sourceArgumentIndex, projection,
           passing: parameter.mode === "value" ? "value" : identity || projection?.kind === "element" && projection.conversion === null ? "identity" : parameter.mode,
           sequence: input.sourceForm !== "spread-sequence" ? "value" : isRustJsArrayCarrier(input.carrier) ? "js" : "native" }));
@@ -170,6 +229,8 @@ export function analyzeRustSourceCallArguments(program: Omit<RustAnalysisProgram
     });
     producer.call(call, fact, { spread: fact.parameters.some(parameter => parameter.inputs.some(input => input.sourceForm !== "value")),
       arguments: Object.freeze(evaluation.map((argument, index) => Object.freeze({ ...argument, mutable: mutable.has(index), borrow: borrowedRoots.get(index) ?? "value",
+        snapshot: snapshots.has(index) ? "owned-string" as const : undefined,
+        retainedOwner: retainedOwners.get(index),
         elements: Object.freeze([...(elements.get(index) ?? [])].sort(([left], [right]) => left - right).map(([index, mode]) => Object.freeze({ index, mode }))),
       }))) }, Object.freeze(parameters));
   }

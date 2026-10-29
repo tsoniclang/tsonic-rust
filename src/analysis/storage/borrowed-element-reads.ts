@@ -4,7 +4,7 @@ import type { RustProgramRecords } from "../../target-model/records/program.js";
 import { analyzeRustBorrowedElementLocals } from "./borrowed-element-locals.js";
 import { rustBorrowedElementRead, rustBorrowedStringAppend, rustBorrowPureOperation } from "./borrowed-element-purity.js";
 import { rustBorrowedStringInputs } from "./provider-borrows.js";
-import { analyzeRustBorrowedIterationBindings } from "./borrowed-iteration-bindings.js";
+import { analyzeRustBorrowedIterationBindings, type RustBorrowedIterationEvidence } from "./borrowed-iteration-bindings.js";
 import type { RustBorrowedElementRead, RustBorrowedElementLocal, RustBorrowedIterationBinding } from "../../target-model/records/storage/borrowed-element-reads.js";
 
 export interface RustBorrowedElementReads {
@@ -21,6 +21,7 @@ export function analyzeRustBorrowedElementReads(
   nativeNodes: readonly Node[],
   records: RustProgramRecords,
   navigation: SourceProgramNavigation,
+  iterationEvidence: RustBorrowedIterationEvidence,
 ): RustBorrowedElementReads {
   const reads = new WeakMap<Node, RustBorrowedElementRead>();
   const indexedReads = new WeakMap<Node, RustBorrowedElementRead>();
@@ -58,7 +59,7 @@ export function analyzeRustBorrowedElementReads(
     }
   };
   nativeNodes.forEach(visit);
-  const forIteration = analyzeRustBorrowedIterationBindings(ast, nativeNodes, records, navigation);
+  const forIteration = analyzeRustBorrowedIterationBindings(ast, nativeNodes, records, navigation, iterationEvidence);
   return Object.freeze({ isAppend: (node: Node) => appends.has(node), forExpression: (node: Node) => reads.get(node),
     forRead: (node: Node) => indexedReads.get(node), ...locals, forIteration });
 }

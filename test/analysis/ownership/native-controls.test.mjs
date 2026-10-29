@@ -48,7 +48,10 @@ fn handwritten<T: Clone>(value: T) -> (T, T) { (value.clone(), value) }
 
 #[test]
 fn exact_native_contracts_and_costs() {
-    assert_eq!(single(NoClone(7)).0, 7);
+    let original = NoClone(7);
+    let borrowed = single(&original);
+    assert_eq!(borrowed.0, 7);
+    assert!(std::ptr::eq(borrowed, &original));
     let _ = hash::<NoClone>(None);
     let clones = Cell::new(0);
     let drops = Cell::new(0);

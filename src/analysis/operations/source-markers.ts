@@ -34,7 +34,7 @@ export function isSharedSourceMarkerOperation(
   expression: Node,
 ): boolean {
   const sourceFacts = walk.context.source.sourceFacts;
-  return readRustReferenceOperation(walk, expression) !== undefined ||
+  return readRustReferenceOperation(walk.context, expression) !== undefined ||
     readRustNativeControl(walk, expression) !== undefined ||
     selectTsonicMemoryFieldBinding(walk.context.ast, sourceFacts, expression) !== undefined ||
     selectTsonicMemoryRecordBinding(walk.context.ast, sourceFacts, expression) !== undefined ||
@@ -84,7 +84,7 @@ export function resolveSharedSourceMarkerCarrier(
   if (rawAddress !== undefined) {
     return { handled: true, ...resolveRustRawAddressCarrier(walk, expression, sourceFile, rawAddress) };
   }
-  const referenceOperation = readRustReferenceOperation(walk, expression);
+  const referenceOperation = readRustReferenceOperation(walk.context, expression);
   if (referenceOperation !== undefined) {
     return {
       handled: true,

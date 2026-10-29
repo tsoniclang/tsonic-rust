@@ -21,7 +21,7 @@ export function planOptionalChainExpression(node: Node, context: RustPlanContext
   if (selected === undefined) return planInner(context);
   const { fact, structuralGuard } = selected;
   if (context.syntheticNames === undefined) failRustPlannerInvariant("An admitted optional chain requires its native name scope.", node);
-  const guard = structuralGuard === undefined ? planRawExpression(fact.guard, context, "value") : (() => {
+  const guard = structuralGuard === undefined ? planRawExpression(fact.guard, context, "value", selected.loan === undefined ? "value" : "shared-reference") : (() => {
     const receiver = planExpression(structuralGuard.receiverNode, context);
     return receiver === undefined ? undefined : readRustStructuralObjectMethodStorage(
       structuralGuard.receiverCarrier, receiver, structuralGuard.storageIndex, context);
@@ -39,6 +39,13 @@ export function planOptionalChainExpression(node: Node, context: RustPlanContext
     carrier: structuralGuard?.selectedStorageCarrier ?? fact.selectedGuardCarrier, valueForm: ownedGuard ? "value" : "shared-reference" });
   const body = planInner({ ...context, expressionOverrides: overrides });
   if (body === undefined) failRustPlannerInvariant("An admitted optional chain requires its selected native body.", node);
+  if (selected.loan !== undefined) {
+    const absentName = allocateRustSyntheticName(context.syntheticNames, "optional_absent");
+    return { kind: "match", expression: guard, arms: [
+      { pattern: { kind: "tuple-variant", path: "Some", elements: [{ kind: "binding", name: receiverName }] }, expression: body },
+      { pattern: { kind: "binding", name: absentName }, expression: { kind: "path", path: absentName } },
+    ] };
+  }
   let borrowedGuard: RustExpr = ownedGuard ? guard : { kind: "method-call", receiver: rustAutoBorrowedReceiver(guard), method: "as_ref", args: [] };
   for (let depth = 1; depth < fact.guardDepth; depth++) borrowedGuard = {
     kind: "method-call", receiver: borrowedGuard, method: "and_then",

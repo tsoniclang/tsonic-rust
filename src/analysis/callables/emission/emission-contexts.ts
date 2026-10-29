@@ -168,12 +168,12 @@ export function prepareRustCallableEmissionContexts(
       return;
     }
     const returnDestination: RustEmissionReturnDestination = physicalReturn !== undefined
-      ? Object.freeze({ kind: "value", carrier: physicalReturn, borrowedParameter: returned?.borrowedParameter })
-      : generator !== undefined ? Object.freeze({ kind: "value", carrier: generator.returnType, borrowedParameter: undefined })
+      ? Object.freeze({ kind: "value", carrier: physicalReturn, borrowedReturn: returned?.borrowedReturn })
+      : generator !== undefined ? Object.freeze({ kind: "value", carrier: generator.returnType, borrowedReturn: undefined })
       : bodiless && returned !== undefined
-        ? Object.freeze({ kind: "value", carrier: returned.returnCarrier, borrowedParameter: returned.borrowedParameter })
+        ? Object.freeze({ kind: "value", carrier: returned.returnCarrier, borrowedReturn: returned.borrowedReturn })
       : selected === undefined ? Object.freeze({ kind: "none" })
-      : Object.freeze({ kind: "value", carrier: selected.carrier, borrowedParameter: returned?.borrowedParameter });
+      : Object.freeze({ kind: "value", carrier: selected.carrier, borrowedReturn: returned?.borrowedReturn });
     const error: RustEmissionErrorContext = region === undefined ? Object.freeze({ kind: "none" })
       : Object.freeze({ kind: "region", owner: declaration, region });
     const requirements = input.declarationGenericRequirements.contractFor(declaration,

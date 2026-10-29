@@ -69,7 +69,12 @@ export function selectRustProviderReads(program: Omit<RustAnalysisProgram, "reac
         const physical = program.records.carrierRead.get(carrier);
         if (physical === undefined) failTargetAnalysisInvariant("tsonic-rust", "An admitted provider read requires its exact native carrier guarantees.", node);
         const clone = owner === undefined ? physical.clone : program.records.carrierClone.get(carrier, owner, body);
-        if (physical.copy) read = "copy";
+        const ownership = program.ownership.reads.get(node);
+        if (ownership?.source.kind === "borrow") {
+          read = !ownership.source.mutable ? "ref" : abi.targetReceiver.kind === "input" &&
+            abi.targetReceiver.input.mode === "mut-ref" ? "mut-ref" : "storage";
+        }
+        else if (physical.copy) read = "copy";
         else if (clone === true) read = "clone";
         else if (program.ownership.reads.get(node)?.source.kind !== "borrow") {
           issues.push({ code: "RUST_UNSUPPORTED_AST", source: "tsonic-rust", category: "error", sourceNode: node,

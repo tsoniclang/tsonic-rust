@@ -83,7 +83,9 @@ export function planExpressionInner(node: Node, context: RustPlanContext, result
     case "KindSatisfiesExpression": {
       const inner = Node_Expression(ast, node);
       if (inner === undefined) failRustPlannerInvariant("An admitted transparent expression requires its checked source operand.", node);
-      return planExpression(inner, context, resultUse, access === "value" ? "value" : "shared-place");
+      return planExpression(inner, context, resultUse,
+        context.input.program.records.valueProjection.get(node)?.resultForm === "shared-reference" ? "shared-reference"
+          : access === "value" ? "value" : "shared-place");
     }
     case "KindAsExpression":
     case "KindTypeAssertionExpression": {
@@ -103,7 +105,9 @@ export function planExpressionInner(node: Node, context: RustPlanContext, result
         if (inner === undefined) failRustPlannerInvariant("An admitted discarded non-null assertion requires its checked source operand.", node);
         return planExpression(inner, context, "discarded");
       }
-      const value = inner === undefined ? undefined : planExpression(inner, context);
+      const value = inner === undefined ? undefined : planExpression(inner, context, "value",
+        syntax?.kind === "non-null" && syntax.operation === "identity" &&
+        context.input.program.records.valueProjection.get(node)?.resultForm === "shared-reference" ? "shared-reference" : "value");
       if (syntax?.kind !== "non-null" || value === undefined) failRustPlannerInvariant("An admitted non-null read requires its exact native payload projection.", node);
       return syntax.operation === "identity" ? value : syntax.operation === "unwrap"
         ? { kind: "method-call", receiver: value, method: "unwrap", args: [] }
