@@ -107,3 +107,35 @@ export function run(): boolean {
     `\n#[test]\nfn readonly_native_identity() { ${initialization} assert!(run()); }\n`);
   runCargo(project, ["test", "--offline", "--", "--test-threads=1"]);
 });
+
+test("inferred generic readonly returns preserve native identity without a Clone bound", { timeout: 300_000 }, () => {
+  const { result } = compileRust({ surfaces: ["js"], files: { "index.ts": `
+class Counter { count = 1; }
+export function token<Payload extends object>(value: Payload) { return Object.freeze(value); }
+export function run(): boolean {
+  const original = new Counter();
+  const view = token(original);
+  original.count = 2;
+  return view === original && view.count === 2;
+}
+` } });
+  assert.equal(result.diagnostics.length, 0,
+    result.diagnostics.slice(0, 4).map(row => `${row.code}: ${row.message.slice(0, 256)}`).join("\n"));
+  const output = artifactText(result, "src/index.rs");
+  assert.equal(typeof output === "string" && output.length > 0, true, "actual generic native source");
+  assert.equal(/freeze_object|object_is_frozen|freeze_object_state|object_state_is_frozen|validate_data_write/u.test(output),
+    false, "generic identity has no runtime freeze wrapper or guard");
+  const project = writeGeneratedProject("compile-time-freeze-generic-identity", result.artifacts);
+  const initialization = artifactText(result, "src/lib.rs").includes("pub fn initialize()")
+    ? "crate::initialize();" : "";
+  appendFileSync(`${project}/src/index.rs`, `
+#[test]
+fn generic_readonly_native_identity() {
+    ${initialization}
+    assert!(run());
+    struct NativeOnlyValue(u32);
+    assert_eq!(token(NativeOnlyValue(7)).0, 7);
+}
+`);
+  runCargo(project, ["test", "--offline", "--", "--test-threads=1"]);
+});
