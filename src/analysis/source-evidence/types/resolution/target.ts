@@ -116,6 +116,12 @@ export function resolveRustTargetType(
     const semantics = context.currentSemantics;
     const conditional = resolveRustSemanticConditionalAlias(type, context, options, resolving);
     if (conditional !== undefined) return conditional.carrier;
+    if (authoredTypeRoot === undefined) {
+      const transformation = semantics.types.standardTransformation(undefined, type);
+      if (transformation !== undefined) return transformation.kind === "component"
+        ? resolveRustTypeComponentEvidence(transformation.component, context, options, resolving)
+        : undefined;
+    }
     const indexed = semantics.types.indexedAccessComponents(type);
     if (indexed !== undefined) return resolveRustIndexedField(indexed.objectType, indexed.indexType,
       context, options, resolving)?.result;
