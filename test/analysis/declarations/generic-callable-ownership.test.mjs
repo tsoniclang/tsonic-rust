@@ -196,7 +196,6 @@ closureCapture: { get: (node) => {
       () => "logical-callable-fixture", [], sourceTypes.structuralInstantiations(), new Map());
     const carrierHost = { sourceStorage, sourceTypes,
       projectFieldProjection() { assert.fail("logical carrier fixtures have no checked project-field projections"); },
-      types: { resolveNode: node => records.runtimeCarrier.get(node)?.carrier },
       semantics: currentSource.semantics.forFile };
     const nativeTasks = { lifecycleOwner: undefined, spawns: [], owners: [], parameterOwners: new Set(), calls: [], entries: [] };
     const retainedEnvironments = createRustRetainedEnvironmentQueries({ source: currentSource, sourceStorage,

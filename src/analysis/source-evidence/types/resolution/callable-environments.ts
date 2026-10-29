@@ -48,7 +48,6 @@ export function resolveRustCallableEnvironment(
       if (abi === undefined) return undefined;
       carrier = rustSourceStorageProjectedCarrier({ sourceStorage: context.sourceStorage,
         sourceTypes: options.sourceTypes, projectFieldProjection: options.projectFieldProjection,
-        types: { resolveNode: node => context.records.runtimeCarrier.get(node)?.carrier },
         semantics: context.semantics,
       }, { subject: selected.subject, bindings: scope.bindings }, abi.valueCarrier);
     } else {
