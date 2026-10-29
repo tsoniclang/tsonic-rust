@@ -4,6 +4,7 @@ import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustFlowReadEmissionProducer } from "../program/records/operations/flow-read-emission.js";
 import type { RustFlowReadProjectionFact } from "../../target-model/records/objects/value-projections.js";
+import type { RustOptionalChainFact } from "../../target-model/operations/model.js";
 import { rustFlowReadProjectionMatches } from "./flow-read-projections.js";
 import { selectRustUnionMappingEmission, selectRustUnionProjectionEmission } from "../../policy/conversions/union-mappings.js";
 import { rustOptionElementCarrier, isRustProgramErrorCarrier, rustJsErrorTargetType } from "../../target-model/types/index.js";
@@ -16,6 +17,13 @@ import { rustCaughtErrorReadCarrier, rustCaughtErrorPhysicalView } from "../erro
 
 export function analyzeRustFlowReadEmission(program: Omit<RustAnalysisProgram, "reachability">,
   nodes: readonly Node[], producer: RustFlowReadEmissionProducer): readonly TargetDiagnostic[] {
+  const guardStages = new Map<Node, RustOptionalChainFact | null>();
+  for (const operation of nodes) {
+    const chain = program.records.optionalChainEmission.get(operation)?.fact;
+    if (chain === undefined) continue;
+    const existing = guardStages.get(chain.guard);
+    guardStages.set(chain.guard, chain.expression !== operation || existing !== undefined && existing !== chain ? null : chain);
+  }
   const seen = new Set<RustFlowReadProjectionFact>();
   const issues: TargetDiagnostic[] = [];
   const refuse = (node: Node, capability: string, message: string): void => {
@@ -65,7 +73,11 @@ export function analyzeRustFlowReadEmission(program: Omit<RustAnalysisProgram, "
   for (const node of nodes) {
     if (rustProgramNodeIsOutsideNativeCode(program, node)) continue;
     const fact = program.records.flowReadProjection.get(node);
-    if (fact !== undefined && !rustTargetTypeRefEquals(program.records.runtimeCarrier.get(node)?.carrier, fact.sourceCarrier))
+    const raw = program.records.runtimeCarrier.get(node)?.carrier;
+    const guard = guardStages.get(node);
+    if (fact !== undefined && !rustTargetTypeRefEquals(raw, fact.sourceCarrier) &&
+      !(guard !== undefined && guard !== null && rustTargetTypeRefEquals(raw, guard.sourceGuardCarrier) &&
+        rustTargetTypeRefEquals(fact.sourceCarrier, guard.selectedGuardCarrier)))
       refuse(node, "rust.backend.flow-read-source", "The finalized flow-read projection conflicts with the expression's raw Rust carrier.");
     prepare(node, fact);
     const operation = program.records.targetOperation.get(node);
