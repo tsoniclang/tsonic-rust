@@ -165,6 +165,9 @@ export function planRustSharedReceiver(
   if (override?.valueForm === "shared-reference") {
     return value;
   }
+  if (override?.valueForm === "storage" && override.storageForm === "shared-reference") {
+    return override.reference;
+  }
   if (override?.valueForm === "storage" && override.storageForm === "borrow-guard" ||
     override === undefined && context.input.program.records.argumentView.get(node)?.borrowedStorage === "borrow-guard") {
     return { kind: "reference", expr: value };

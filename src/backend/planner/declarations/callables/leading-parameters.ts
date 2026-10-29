@@ -22,10 +22,12 @@ export function planRustCallableLeadingParameters(
   const expressionOverrides = new Map(context.expressionOverrides ?? []);
   if (nativeReceiver !== undefined) for (const parameter of selected) {
     if (parameter.kind !== "this") continue;
-    for (const node of parameter.reads) expressionOverrides.set(node, {
-      carrier: parameter.carrier, valueForm: "storage", storageForm: "plain",
-      expression: nativeReceiver.mode === "value" ? { kind: "path", path: nativeReceiver.name }
-        : { kind: "dereference", pointer: { kind: "path", path: nativeReceiver.name } },
+    const receiver = { kind: "path" as const, path: nativeReceiver.name };
+    for (const node of parameter.reads) expressionOverrides.set(node, nativeReceiver.mode === "value" ? {
+      carrier: parameter.carrier, valueForm: "storage", storageForm: "plain", expression: receiver,
+    } : {
+      carrier: parameter.carrier, valueForm: "storage", storageForm: "shared-reference", reference: receiver,
+      expression: { kind: "dereference", pointer: receiver },
     });
   }
   for (const parameter of parameters) {

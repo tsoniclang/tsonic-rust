@@ -30,6 +30,7 @@ export type RustEffectiveExpressionOverride = {
 } & (
   | { readonly valueForm: "value" | "shared-reference" }
   | { readonly valueForm: "storage"; readonly storageForm: "plain" | "borrow-guard" }
+  | { readonly valueForm: "storage"; readonly storageForm: "shared-reference"; readonly reference: RustExpr }
 );
 
 export interface RustFlowReadOverride {
