@@ -231,10 +231,6 @@ function resolveSelectedFlowReadCarrier(
   const sourceOptionalElement = rustSourceOptionalElementCarrier(sourceCarrier);
   const declaredPresentType = sourceOptionalElement === undefined || declaredReadType === undefined || includesAbsence
     ? undefined : semantics.types.nonNullableType(declaredReadType);
-  if (sourceOptionalElement !== undefined && declaredPresentType !== undefined &&
-    semantics.types.isIdentical(declaredPresentType, selectedType)) {
-    return sourceOptionalElement;
-  }
   if (declaredReadType !== undefined &&
     (semantics.types.isIdentical(declaredReadType, selectedType) ||
       presentReadType !== undefined && rustSourceOptionalElementCarrier(sourceCarrier) !== undefined &&
@@ -274,6 +270,10 @@ function resolveSelectedFlowReadCarrier(
         return hasAbsence ? rustSourceOptionalTargetType(payload) : payload;
       }
     }
+  }
+  if (sourceOptionalElement !== undefined && declaredPresentType !== undefined &&
+    semantics.types.isIdentical(declaredPresentType, selectedType)) {
+    return sourceOptionalElement;
   }
   if (guarded !== undefined && guarded.length > 1) {
     const selected = resolveRustNativeFlowCarrier(selectedType, guarded, resolution, walk.operationOptions);
