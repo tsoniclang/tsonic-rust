@@ -41,9 +41,10 @@ export function selectRustNativeFlowMembers(
   resolveNominal: (guard: Extract<SourceNativeValueGuard, { readonly kind: "nominal" }>) => TargetTypeRef | undefined,
 ): ReturnType<typeof rustUnionLeaves> {
   const members = nativeFlowInputMembers(sourceCarrier, definitions);
-  return selectSourceGuardedValueMembers(context, reference, members,
+  const selected = selectSourceGuardedValueMembers(context, reference, members,
     expression => selectNativeGuard(context, expression, selectGuard, resolveNominal),
     (member, predicate) => selectRustNativeCarrierPredicate(member.carrier, predicate, projectTypes, definitions));
+  return selected?.kind === "resolved" ? selected.members : undefined;
 }
 
 export function selectRustNativeGuardResult(
