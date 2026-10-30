@@ -157,7 +157,7 @@ export function createRustAnalysisContext(
   const isNativeNode = (node: Node): boolean => nativeNodeSet.has(node);
   const numericLiteralAdmission = analyzeRustNumericLiteralAdmission(ast, sourceFiles, literalValues, isNativeNode);
   const promiseResultUses = analyzeRustPromiseResultUses(ast, sourceStorage.nodes);
-  const receiverOccurrences = analyzeSourceReceiverOccurrences(sourceStorage);
+  const receiverOccurrences = analyzeSourceReceiverOccurrences(input.source, sourceFiles);
   const names = createRustNamePlan({
     ast,
     semanticsFor: input.source.semantics.forNode,
