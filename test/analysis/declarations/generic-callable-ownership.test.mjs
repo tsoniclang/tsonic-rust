@@ -50,13 +50,13 @@ function input() {
   const baseAst = fakeAstReader(files);
   const ast = {
     ...baseAst,
-    is: { ...baseAst.is,
+    is: Object.assign(Object.create(baseAst.is), {
       IsCallSignatureDeclaration: node => node.kindName === "KindCallSignature",
       IsConstructSignatureDeclaration: node => node.kindName === "KindConstructSignature",
       IsPropertySignatureDeclaration: node => node.kindName === "KindPropertySignature",
       IsVariableDeclarationList: node => node.kindName === "KindVariableDeclarationList",
       IsEnumMember: node => node.kindName === "KindEnumMember",
-    },
+    }),
     typeParameters: node => node.typeParameters ?? [],
     forEachChild: (node, visit) => { for (const child of node.nodes ?? []) visit(child); },
     getSourceFile: node => node.file ?? node,
@@ -125,7 +125,7 @@ closureCapture: { get: (node) => {
   });
   const navigation = { expressionValueFlow: node => ({ escapes: node === closures[1], identityCompared: false,
     hasUnclassifiedUse: false, captured: false }) };
-  const source = fakeCompileInput({ sourceFiles: files }).source;
+  const source = fakeCompileInput({ sourceFiles: files, ast }).source;
   const signatures = new Map(closures.map(declaration => [declaration, Object.freeze({ declaration })]));
   const semanticsForFile = file => ({ ...source.semantics.forFile(file), declarations: {
     declarationSignature(declaration) {
@@ -154,6 +154,9 @@ closureCapture: { get: (node) => {
         return undefined;
       } } };
   const materialize = () => {
+    const finalizedSource = fakeCompileInput({ sourceFiles: files, ast }).source;
+    currentSource.navigation = { ...finalizedSource.navigation, ...navigation };
+    planInput.navigation = currentSource.navigation;
     const sourceStorage = createSourceStorageQuery(currentSource, files);
     const builder = createRustProgramRecordBuilder();
     participationRecords = builder.nativeParticipations.records;

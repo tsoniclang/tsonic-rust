@@ -1,6 +1,8 @@
 // Canonical TargetCompileInput fixture for planner-only tests. It supplies a
 // closed empty semantic program rather than preserving the retired flat input.
 
+import { createSourceProgramNavigation } from "@tsonic/target-api/source";
+
 export function fakeSourceFile({ fileName = "src/index.ts", text = "", statements = [] } = {}) {
   return { fileName, text, statements };
 }
@@ -123,7 +125,9 @@ export function fakeAstReader(sourceFiles = []) {
     parent: (node) => parentByNode.get(node),
     getSourceText: (sourceFile) => sourceFile.text ?? "",
     isDeclarationFile: () => false,
-    forEachChild: () => {},
+    forEachChild: (node, visit) => {
+      for (const statement of node.statements ?? []) visit(statement);
+    },
     hasModifierKind: () => false,
     modifiers: () => [],
     name: () => undefined,
@@ -137,11 +141,16 @@ export function fakeAstReader(sourceFiles = []) {
 
 export function fakeCompileInput({
   sourceFiles = [],
+  ast = fakeAstReader(sourceFiles),
   target = { id: "rust", options: { outputType: "lib" } },
   runtimeReferences = [],
   runtimeActivatedCapabilityIds = [],
 } = {}) {
-  const ast = fakeAstReader(sourceFiles);
+  const inventory = createSourceProgramNavigation({
+    ast,
+    sourceFiles,
+    containsSourceFile: (sourceFile) => sourceFiles.includes(sourceFile),
+  });
   const sourceFacts = { getFact: () => undefined };
   const semanticsForFile = (sourceFile) => ({
     sourceFile,
@@ -156,6 +165,8 @@ export function fakeCompileInput({
     sourceFacts,
     navigation: {
       sourceFiles,
+      nodes: inventory.nodes,
+      nodesForFiles: inventory.nodesForFiles,
       sourceReferenceFor: () => undefined,
       referenceFor: () => undefined,
       declarationFor: () => undefined,
