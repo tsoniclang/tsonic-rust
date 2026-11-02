@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { TargetCompilerResourceLimitFailure } from "@tsonic/target-api/artifacts";
 import { stronglyConnectedSourceFiles, cyclicSourceFiles } from "../../../dist/analysis/program/module-graph.js";
 
 test("source module graphs preserve exact dependency identities and reject exhausted component accounting", () => {
@@ -21,8 +22,9 @@ test("source module graphs preserve exact dependency identities and reject exhau
   assert.equal(cyclic.sourceFiles.has(isolated), false);
   for (const query of [() => stronglyConnectedSourceFiles(navigation, new Set(files), 1),
     () => cyclicSourceFiles(navigation, files, 1)]) {
-    const selected = query();
-    assert.equal(selected.kind, "unresolved");
-    assert.equal("components" in selected || "sourceFiles" in selected, false);
+    assert.throws(query, failure => failure instanceof TargetCompilerResourceLimitFailure &&
+      failure.diagnostic.code === "TSONIC_COMPILER_RESOURCE_LIMIT" && failure.diagnostic.evidence?.[0] === "steps=1" &&
+      !("components" in failure) && !("sourceFiles" in failure),
+    "finite exhaustion is a named compiler resource failure with no partial component or cycle publication");
   }
 });
