@@ -1,7 +1,17 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { createRustSourceProfileRegistry } from "../../../dist/analysis/project/source-profiles.js";
-import { rustSourceProfileOwnerId } from "../../../dist/source/profiles/declarations.js";
+import { rustNativeSourceProfileContributions, rustJsSurfaceSourceProfileContributions, rustSourceProfileOwnerId } from "../../../dist/source/profiles/declarations.js";
+import { sourceNoLibBaseDeclarations, sourcePrimitiveProfileDeclarations } from "@tsonic/js-source-profile";
+
+test("Rust native and JS declarations consume the shared no-lib base with exact native argument lengths", () => {
+  for (const contributions of [rustNativeSourceProfileContributions(), rustJsSurfaceSourceProfileContributions()]) {
+    const text = contributions.declarations.map(declaration => declaration.text).join("\n");
+    assert.equal(text.split(sourceNoLibBaseDeclarations).length - 1, 1);
+    assert.equal(text.split(sourcePrimitiveProfileDeclarations).length - 1, 1);
+    assert.equal(text.includes("interface IArguments {\n  readonly length: int32;\n}"), true);
+  }
+});
 
 function sourceFile(fileName) {
   return { fileName };
