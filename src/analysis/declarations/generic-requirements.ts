@@ -19,7 +19,7 @@ import type { RustOwnershipFlow } from "../../target-model/records/storage/owner
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
 import { resolveTargetContractFixedPoint } from "@tsonic/target-api/analysis";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
-import { sourceExpressionResultDisposition, sourceNodeIdentity } from "@tsonic/target-api/source";
+import { sourceNodeIdentity } from "@tsonic/target-api/source";
 import type { TargetSourceProgram } from "@tsonic/target-api/source";
 import type { RustNamePlan } from "../../target-model/names/model.js";
 import type { RustAnalysisRecords } from "../../target-model/records/analysis.js";
@@ -128,7 +128,7 @@ export function analyzeRustDeclarationGenericRequirements(
     for (const node of nativeNodes) {
       const operation = records.targetOperation.get(node);
       if (operation?.kind === "source-call" && operation.asyncBody?.declaration === declaration &&
-        sourceExpressionResultDisposition(ast, node).kind === "stored") demands.add(node);
+        source.navigation.expressionResultDisposition(node).kind === "stored") demands.add(node);
     }
     return [...demands];
   };

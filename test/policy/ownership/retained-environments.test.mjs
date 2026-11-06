@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createTargetSourceProgram, sourceProjectFiles } from "@tsonic/target-api/source";
 import { createSourceStorageQuery } from "@tsonic/target-api/analysis";
-import { createRustSession, checkRustSession } from "../../helpers/rust-session.mjs";
+import { compileRust } from "../../helpers/rust-session.mjs";
+import { analyzeRustCheckedContext } from "../../helpers/rust-session-analysis-context.mjs";
 import { createRustRetainedEnvironmentQueries } from "../../../dist/analysis/callables/ownership/retained-environment-shapes.js";
 import { closeRustRetainedParameter, rustRetainedEnvironment, rustRetainedValueLifetime } from "../../../dist/analysis/callables/ownership/retained-values.js";
 import { rustHasOpenOwnedStorage, selectRustClassEnvironmentStorage,
@@ -78,13 +78,19 @@ test("complete source capture carriers preserve the canonical generic and frame 
 });
 
 function fixture(text, { source: configureSource = source => source, storage: configureStorage = storage => storage, maximumSteps } = {}) {
-  const checked = checkRustSession(createRustSession({ surfaces: ["js"], files: { "index.ts": text } }));
-  const source = configureSource(createTargetSourceProgram(checked));
-  const sourceStorage = configureStorage(createSourceStorageQuery(source, sourceProjectFiles(checked)), source);
+  let nativeContext;
+  compileRust({ surfaces: ["js"], files: { "index.ts": text }, compileTarget(request) {
+    nativeContext = analyzeRustCheckedContext(request);
+    return { kind: "resolved", value: { artifacts: [] }, diagnostics: [] };
+  } });
+  assert.equal(nativeContext !== undefined, true, "the same checked program publishes its actual native Promise-body ownership");
+  const source = configureSource(nativeContext.source);
+  const sourceStorage = configureStorage(createSourceStorageQuery(source, nativeContext.sourceStorage.sourceFiles), source);
   assert.equal(sourceStorage.source === source, true, "instrumentation and storage share the identical checked source program");
   assert.equal(sourceStorage.failureReason(), undefined);
   const input = { source, sourceStorage, sourceLifetimes: emptyRustLifetimeIndex,
-    nativeTasks: { lifecycleOwner: undefined, spawns: [], owners: [], parameterOwners: new Set(), calls: [], entries: [] } };
+    nativeTasks: { lifecycleOwner: undefined, spawns: [], owners: [], parameterOwners: new Set(), calls: [], entries: [] },
+    suspendedOwnershipFor: declaration => nativeContext.promiseBodies.inputOwnershipFor(nativeContext, declaration) };
   const queries = createRustRetainedEnvironmentQueries(input, maximumSteps);
   const declarations = new Map(sourceStorage.nodes.filter(node => source.ast.is.IsFunctionDeclaration(node))
     .map(node => [source.ast.text(source.ast.name(node)), node]));

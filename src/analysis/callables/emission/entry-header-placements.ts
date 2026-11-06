@@ -1,7 +1,7 @@
 import type { Node, SourceFile } from "@tsonic/tsts";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import { isSourceCallableBodyBoundary, Node_Initializer, sourceDeclarationIsModuleScoped, sourceEnclosingCallable } from "@tsonic/target-api/source";
-import type { SourceOwnershipUnresolved } from "@tsonic/target-api/analysis";
+import type { SourceDeclarationOwnershipUnresolved } from "@tsonic/target-api/analysis";
 import type { RustAnalysisProgram } from "../../program/model.js";
 import type { RustCallableEntryConstruction } from "./entry-parameters.js";
 import type { RustCallableEntryHeaderPlacement, RustCallableEntryHeaderSelection, RustCallableEntryHeaderVariant } from "../../../target-model/records/callables/callable-entry-headers.js";
@@ -74,10 +74,10 @@ export function createRustCallableEntryHeaderPlacements(input: {
       [], undefined, undefined, trailing, traverse);
   };
   const nativeBody = (declaration: Node, variant: RustCallableEntryHeaderVariant | undefined,
-    enter: () => boolean, active = new Set<Node>()): SourceOwnershipUnresolved | {
+    enter: () => boolean, active = new Set<Node>()): SourceDeclarationOwnershipUnresolved | {
       readonly kind: "resolved"; readonly entry: RustNativeCallableEntry; readonly header: RustCallableEntryHeaderSelection;
     } => {
-    const unresolved = (reason: string): SourceOwnershipUnresolved => ({ kind: "unresolved", at: declaration, reason });
+    const unresolved = (reason: string): SourceDeclarationOwnershipUnresolved => ({ kind: "unresolved", at: declaration, reason, cause: { kind: "required-fact" } });
     if (!enter() || active.has(declaration)) return unresolved("A native pending entry requires a finite complete original header placement.");
     if (program.sourceCallableSpecializations.requiresSpecialization(declaration) && variant === undefined ||
       variant !== undefined && (variant.declaration !== declaration ||

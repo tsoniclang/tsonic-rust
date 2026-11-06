@@ -1,10 +1,11 @@
 import type { AstReader, Node } from "@tsonic/tsts";
 import { failTargetAnalysisInvariant, type TargetDiagnostic } from "@tsonic/target-api/artifacts";
-import { analyzeSourceGenericAdoption, sourceGenericAdoptionDiagnosticCode, sourceGenericAdoptionDiagnosticMessage,
-  createSourceControlFlowDomain, createSourceOwnershipQuery, createSourceStorageBudget, defaultSourceStorageLimits,
-  type SourceOwnershipPremises, type SourceOwnershipUnresolved, type SourceRetentionSelection,
+import { analyzeSourceDeclarationGenericAdoption, sourceGenericAdoptionDiagnosticCode,
+  createSourceDeclarationOwnershipQuery, createSourceDeclarationOwnershipBudget, defaultSourceDeclarationOwnershipLimits,
+  createSourceStorageBudget, defaultSourceStorageLimits,
+  type SourceDeclarationOwnershipPremises, type SourceDeclarationOwnershipUnresolved,
   type SourceStorageBindings, type SourceStorageProjection, type SourceStorageQueries, type SourceStorageSubject } from "@tsonic/target-api/analysis";
-import { sourceEnclosingCallable, sourceExpressionResultDisposition, sourceCallableValueParameters, sourceDeclarationIsModuleScoped, type TargetSourceProgram } from "@tsonic/target-api/source";
+import { sourceEnclosingCallable, sourceCallableValueParameters, sourceDeclarationIsModuleScoped, type TargetSourceProgram } from "@tsonic/target-api/source";
 import type { RustProgramRecords } from "../../../target-model/records/program.js";
 import type { RustPreparedReadSelection } from "../../ownership/reads.js";
 import type { RustPromiseResult, RustPromiseResults, RustPromiseResultUses } from "../../../target-model/records/callables/promise-results.js";
@@ -45,26 +46,52 @@ import { selectRustNativePendingEnvironment } from "../ownership/retained-enviro
 import type { createRustCallableEntryHeaderPlacements } from "../emission/entry-header-placements.js";
 import type { RustNativeCallableProducerPlan } from "../../../target-model/records/native/native-producers.js";
 import type { RustSourceCallableSpecializationPlan } from "../generics/specializations.js";
+import type { RustSourceProfileRegistry } from "../../../policy/types/model/source-profile.js";
+import type { RustProviderSemantics } from "../../../target-model/metadata/provider-metadata.js";
+import { selectRustPublishedCompletion } from "./source-completion.js";
 
-export function analyzeRustPromiseResultUses(ast: AstReader, nodes: readonly Node[]): RustPromiseResultUses {
-  return new Map(nodes.filter(node => ast.is.IsCallExpression(node) || ast.is.IsNewExpression(node))
-    .map(node => [node, sourceExpressionResultDisposition(ast, node)]));
+export function analyzeRustPromiseResultUses(source: TargetSourceProgram, nodes: readonly Node[]): RustPromiseResultUses {
+  return new Map(nodes.filter(node => source.ast.is.IsCallExpression(node) || source.ast.is.IsNewExpression(node))
+    .map(node => [node, source.navigation.expressionResultDisposition(node)]));
+}
+
+function ownershipDiagnostic(selection: SourceDeclarationOwnershipUnresolved): TargetDiagnostic {
+  const cause = selection.cause;
+  return Object.freeze({ code: cause.kind === "resource-limit" ? "TSONIC_COMPILER_RESOURCE_LIMIT" : "RUST_ASYNC_RESULT_USE_NOT_PROVEN",
+    category: "error", source: "tsonic-rust", sourceNode: cause.kind === "resource-limit" ? cause.subject : selection.at,
+    message: selection.reason, evidence: Object.freeze(cause.kind === "resource-limit"
+      ? [`resource.category=${cause.category}`, `resource.limit=${cause.limit}`] : ["target.capability=rust.async.native-result-use"]) });
 }
 
 export function analyzeRustGenericAdoption(input: {
   readonly source: TargetSourceProgram;
   readonly projectRoot: string;
-  readonly storage: SourceStorageQueries;
+  readonly nodes: readonly Node[];
+  readonly sourceProfiles: RustSourceProfileRegistry;
+  readonly providerSemantics: Pick<RustProviderSemantics, "types">;
+  readonly jsEnabled: boolean;
   readonly sourceLifetimes: RustLifetimeIndex;
 }): readonly TargetDiagnostic[] {
-  const adoption = analyzeSourceGenericAdoption({ source: input.source, projectRoot: input.projectRoot,
-    nodes: input.storage.nodes, storage: input.storage, budget: createSourceStorageBudget(defaultSourceStorageLimits),
+  const root = input.nodes[0] ?? input.source.sourceFiles[0];
+  if (root === undefined) return Object.freeze([]);
+  const budget = createSourceDeclarationOwnershipBudget(root, defaultSourceDeclarationOwnershipLimits);
+  const adoption = analyzeSourceDeclarationGenericAdoption({ source: input.source, projectRoot: input.projectRoot,
+    nodes: input.nodes, budget, premises: { completionFor(call, selected) {
+      const completion = selectRustPublishedCompletion(call, input, budget);
+      if (completion.kind === "unresolved") return completion;
+      if (!completion.nativeFuture && !completion.jsPromise) return Object.freeze({ kind: "not-async" });
+      const declaration = input.source.semantics.forNode(call).declarations.signatureDeclaration(selected.selectedSignature);
+      return declaration === undefined ? Object.freeze({ kind: "unresolved", at: call,
+        reason: "Async adoption requires the same checked callable declaration.", cause: Object.freeze({ kind: "required-fact" }) })
+        : Object.freeze({ kind: "async", contract: Object.freeze({ kind: "declaration", declaration,
+            component: Object.freeze({ selectedType: selected.sourceResultType, contextualCall: selected }) }),
+          resultPolicy: completion.nativeFuture ? "must-observe" : "observe-rejection" });
+    } },
     exemptTypeParameter: parameter => input.sourceLifetimes.parameterFor(parameter)?.kind === "lifetime" });
-  return Object.freeze(adoption.kind === "unresolved" ? [Object.freeze({ code: "RUST_ASYNC_RESULT_USE_NOT_PROVEN",
-    category: "error" as const, source: "tsonic-rust", sourceNode: adoption.at, message: adoption.reason })]
+  return Object.freeze(adoption.kind === "unresolved" ? [ownershipDiagnostic(adoption)]
     : adoption.issues.map(issue => Object.freeze({ code: sourceGenericAdoptionDiagnosticCode,
       category: "error" as const, source: "tsonic-rust", sourceNode: issue.site, sourceSpan: issue.sourceSpan,
-      message: sourceGenericAdoptionDiagnosticMessage, evidence: issue.evidence })));
+      message: issue.message, evidence: issue.evidence })));
 }
 
 export function analyzeRustPromiseResults(input: {
@@ -79,7 +106,7 @@ export function analyzeRustPromiseResults(input: {
   readonly definitions: RustTypeDefinitions;
   readonly nativeStorage: RustNativeStoragePlan;
   readonly nativeProducers: RustNativeCallableProducerPlan;
-  readonly nativeHeaders: Pick<ReturnType<typeof createRustCallableEntryHeaderPlacements>, "nativeBody"> | SourceOwnershipUnresolved;
+  readonly nativeHeaders: Pick<ReturnType<typeof createRustCallableEntryHeaderPlacements>, "nativeBody"> | SourceDeclarationOwnershipUnresolved;
   readonly sourceSpecializations: RustSourceCallableSpecializationPlan;
   readonly promiseBodies: RustPromiseBodies;
   readonly nativeCaptures: RustNativeCapturePlan;
@@ -96,9 +123,16 @@ export function analyzeRustPromiseResults(input: {
 }): { readonly results: RustPromiseResults; readonly diagnostics: readonly TargetDiagnostic[] } {
   const results = new Map<Node, RustPromiseResult>();
   const diagnostics: TargetDiagnostic[] = [...input.genericAdoption];
+  if (input.ast !== input.source.ast || input.storage.source !== input.source) return Object.freeze({ results,
+    diagnostics: Object.freeze([{ code: "RUST_ASYNC_RESULT_USE_NOT_PROVEN", category: "error" as const, source: "tsonic-rust",
+      message: "Native result ownership requires its identical checked source, navigation and physical storage inventory." }]) });
   const budget = createSourceStorageBudget(defaultSourceStorageLimits);
-  const unresolved = (at: Node, reason: string): SourceOwnershipUnresolved => Object.freeze({ kind: "unresolved", at, reason });
-  const carrierFor = (subject: SourceStorageSubject, bindings: SourceStorageBindings): TargetTypeRef | SourceOwnershipUnresolved => {
+  const unresolved = (at: Node, reason: string): SourceDeclarationOwnershipUnresolved => {
+    const cause: SourceDeclarationOwnershipUnresolved["cause"] = budget.failure() === undefined ? { kind: "required-fact" }
+      : { kind: "resource-limit", subject: at, category: "step", limit: defaultSourceStorageLimits.maximumSteps };
+    return Object.freeze({ kind: "unresolved", at, reason, cause: Object.freeze(cause) });
+  };
+  const carrierFor = (subject: SourceStorageSubject, bindings: SourceStorageBindings): TargetTypeRef | SourceDeclarationOwnershipUnresolved => {
     const moduleDeclaration = input.ast.is.IsFunctionDeclaration(subject.node) && input.ast.body(subject.node) !== undefined &&
       sourceDeclarationIsModuleScoped(subject.node, input.ast);
     if (subject.kind === "value" && subject.projection.length === 0 && (moduleDeclaration || input.ast.is.IsMethodDeclaration(subject.node) &&
@@ -120,7 +154,7 @@ export function analyzeRustPromiseResults(input: {
   const methodCapturesFor = (subject: SourceStorageSubject, bindings: SourceStorageBindings,
     field: RustStructuralShapeField, storageIndex: number,
     nestedCaptures: (subject: SourceStorageSubject, bindings: SourceStorageBindings,
-      carrier: TargetTypeRef) => TargetTypeRef | SourceOwnershipUnresolved): TargetTypeRef | SourceOwnershipUnresolved => {
+      carrier: TargetTypeRef) => TargetTypeRef | SourceDeclarationOwnershipUnresolved): TargetTypeRef | SourceDeclarationOwnershipUnresolved => {
     const selected = input.storage.storageProducersFor(subject, bindings);
     if (selected.kind !== "complete") return unresolved(subject.node, selected.kind === "unresolved" ? selected.reason
       : "Native structural retention requires its complete same-activation method producer domain.");
@@ -190,7 +224,7 @@ export function analyzeRustPromiseResults(input: {
     return Object.freeze({ kind: "tuple", elements: Object.freeze(captures) });
   };
   const requiresRetainedSource = (carrier: TargetTypeRef, at: Node,
-    visited = new Set<TargetTypeRef>()): boolean | SourceOwnershipUnresolved => {
+    visited = new Set<TargetTypeRef>()): boolean | SourceDeclarationOwnershipUnresolved => {
     if (!budget.step()) return unresolved(at, budget.failure()!);
     if (visited.has(carrier)) return false;
     visited.add(carrier);
@@ -217,7 +251,7 @@ export function analyzeRustPromiseResults(input: {
   const captureQueries: { readonly subject: SourceStorageSubject; readonly bindings: SourceStorageBindings;
     readonly carrier: TargetTypeRef }[] = [];
   const captureStorageFor = (subject: SourceStorageSubject, bindings: SourceStorageBindings,
-    carrier: TargetTypeRef): TargetTypeRef | SourceOwnershipUnresolved => {
+    carrier: TargetTypeRef): TargetTypeRef | SourceDeclarationOwnershipUnresolved => {
     const needed = requiresRetainedSource(carrier, subject.node);
     if (needed !== true) return needed === false ? carrier : needed;
     if (captureQueries.some(current => current.subject === subject && current.bindings === bindings &&
@@ -229,7 +263,7 @@ export function analyzeRustPromiseResults(input: {
         records: input.records, nativeStorage: input.nativeStorage, producers: input.nativeProducers,
         specializations: input.sourceSpecializations, headers: input.nativeHeaders, step: () => budget.step(),
         retainDataFor: captureStorageFor }, subject, bindings, carrier);
-      if (pending !== undefined) return pending;
+      if (pending !== undefined) return pending.kind === "unresolved" ? unresolved(pending.at, pending.reason) : pending;
       const optional = rustOptionElementCarrier(carrier);
       if (optional !== undefined) {
         const present = captureStorageFor(subject, bindings, optional);
@@ -243,7 +277,7 @@ export function analyzeRustPromiseResults(input: {
         "Native aggregate retention requires its nonempty actual physical construction evidence.");
       const captures: TargetTypeRef[] = [];
       const project = (value: SourceStorageSubject, bindings: SourceStorageBindings, component: SourceStorageProjection,
-        carrier: TargetTypeRef): SourceOwnershipUnresolved | undefined => {
+        carrier: TargetTypeRef): SourceDeclarationOwnershipUnresolved | undefined => {
         if (!budget.step()) return unresolved(value.node, budget.failure()!);
         const selected = input.storage.subject(value.node, value.kind, [...value.projection, component]);
         if (selected.kind === "unresolved") return unresolved(value.node, selected.reason);
@@ -267,7 +301,7 @@ export function analyzeRustPromiseResults(input: {
           specializations: input.sourceSpecializations, headers: input.nativeHeaders, step: () => budget.step(),
           retainDataFor: captureStorageFor }, producer.subject, producer.bindings, actual);
         if (pending !== undefined) {
-          if (pending.kind === "unresolved") return pending;
+          if (pending.kind === "unresolved") return unresolved(pending.at, pending.reason);
           captures.push(pending);
           continue;
         }
@@ -370,7 +404,7 @@ export function analyzeRustPromiseResults(input: {
     }
   };
   const retainedCarrierFor = (subject: SourceStorageSubject, bindings: SourceStorageBindings,
-    carrier: TargetTypeRef): TargetTypeRef | SourceOwnershipUnresolved => captureStorageFor(subject, bindings, carrier);
+    carrier: TargetTypeRef): TargetTypeRef | SourceDeclarationOwnershipUnresolved => captureStorageFor(subject, bindings, carrier);
   const classify = (carrier: TargetTypeRef, owner: Node | undefined, at: Node,
     kind: "origin" | "read-value"): ReturnType<typeof classifyCarrierRequirements> => {
     if (kind === "origin" && owner !== undefined && input.promiseBodies.declarations.has(owner) &&
@@ -385,12 +419,17 @@ export function analyzeRustPromiseResults(input: {
     return contract === undefined ? { kind: "unresolved", reason: "Native generic retention requires its actual completed final contract." }
       : rustFinalContractSupportsStatic(contract, carrier, input.families, input.definitions, nativeEvidence);
   };
-  const retentionFor: SourceOwnershipPremises["retentionFor"] = request => {
-    const { value, bindings } = request;
+  const retentionFor: SourceDeclarationOwnershipPremises["retentionFor"] = request => {
+    const local = request.value;
+    const subject = input.storage.subjectFor(local.node);
+    if (subject.kind === "unresolved") return unresolved(local.node, subject.reason);
+    const execution = input.storage.bindingsForLexicalOwner(local.region.owner);
+    if (execution.kind === "unresolved") return unresolved(local.node, execution.reason);
+    const value = subject.subject;
+    const bindings = execution.bindings;
     if (!budget.step()) return unresolved(value.node, budget.failure()!);
-    const checked = input.storage.typeFor(value);
-    if (checked.kind === "unresolved") return unresolved(value.node, checked.reason);
-    const evidence = { value, contractDeclaration: value.node, checkedType: checked.type };
+    const evidence = { value: local, contract: Object.freeze({ kind: "expression" as const,
+      expression: local.node, component: local.component }) };
     if (request.kind === "read-value") {
       const operation = input.records.targetOperation.get(request.reference);
       const read = input.readFor(request.reference);
@@ -424,27 +463,28 @@ export function analyzeRustPromiseResults(input: {
     const operation = value.projection.length === 0 ? input.records.targetOperation.get(value.node) : undefined;
     if (operation?.kind === "reference-operation" &&
       (operation.operation === "shared-reference" || operation.operation === "mutable-reference")) {
-      const owner = input.storage.subjectFor(operation.operandExpression);
-      if (owner.kind === "unresolved") return unresolved(value.node, owner.reason);
-      const region = input.storage.enclosingRegionFor(owner.subject.node);
-      if (region === undefined) return unresolved(value.node, "A native source reference requires its actual owner's checked execution region.");
-      return Object.freeze({ kind: "resolved", premises: Object.freeze([input.ast.is.IsSourceFile(region)
-        ? Object.freeze({ ...evidence, kind: "retained", reason: "module-owner" })
-        : Object.freeze({ ...evidence, kind: "scoped-borrowed", owner: owner.subject, region,
+      const owner = request.valueFor(operation.operandExpression);
+      if ("kind" in owner) return owner;
+      return Object.freeze({ kind: "resolved", premises: Object.freeze([owner.region.role === "module"
+        ? Object.freeze({ ...evidence, kind: "retained", reason: "owned-value" })
+        : Object.freeze({ ...evidence, kind: "scoped-borrowed", owner, region: owner.region.root,
           mode: operation.operation === "shared-reference" ? "shared" : "mutable" })]) });
     }
     const carrier = carrierFor(value, bindings);
     if (carrier.kind === "unresolved") return carrier;
-    const owner = value.kind === "receiver" ? value.node : value.kind === "input"
-      ? input.ast.parent(value.node) : sourceEnclosingCallable(value.node, input.ast);
+    const declaration = local.component.declaration ?? input.source.navigation.sourceReferenceFor(local.node)?.declaration;
+    const formal = input.ast.is.IsParameterDeclaration(local.node) ? local.node
+      : declaration !== undefined && input.ast.is.IsParameterDeclaration(declaration) ? declaration : undefined;
+    const owner = formal !== undefined ? input.ast.parent(formal) : value.kind === "receiver" ? value.node
+      : sourceEnclosingCallable(local.node, input.ast);
     if (carrier.kind === "reference" && carrier.lifetime?.kind !== "static") {
       const lifetime = carrier.lifetime;
       if (lifetime === undefined) return unresolved(value.node, "A retained native reference requires its completed physical lifetime evidence.");
       if (owner === undefined || value.kind !== "receiver" &&
-        (value.kind !== "input" || sourceCallableValueParameters(input.ast, owner, input.source.semantics.forNode(owner))?.includes(value.node) !== true)) {
+        (formal === undefined || sourceCallableValueParameters(input.ast, owner, input.source.semantics.forNode(owner))?.includes(formal) !== true)) {
         return unresolved(value.node, "A retained native reference requires its concrete source owner or exact formal input contract.");
       }
-      const abi = value.kind === "input" ? input.records.sourceParameterAbi.get(value.node) : undefined;
+      const abi = formal === undefined ? undefined : input.records.sourceParameterAbi.get(formal);
       // A formal input borrowed for its own duration: either the ABI introduced the input lifetime, or the input is an
       // authored reference (`Ref<T, Region>`, a transparent alias with no type-argument bindings) whose region is a
       // lifetime parameter declared by its own owner.
@@ -454,15 +494,15 @@ export function analyzeRustPromiseResults(input: {
           const declared = parameter === undefined ? undefined : input.sourceLifetimes.parameterFor(parameter);
           return declared?.kind === "lifetime" && rustLifetimesEqual(declared.lifetime, lifetime);
         });
-      if (value.kind === "input" && abi?.parameterCarrier.kind === "reference" && (authoredRegion ||
+      if (formal !== undefined && abi?.parameterCarrier.kind === "reference" && (authoredRegion ||
         abi.inputLifetime !== undefined && rustLifetimesEqual(lifetime, abi.inputLifetime) &&
         rustLifetimesEqual(abi.parameterCarrier.lifetime, abi.inputLifetime))) {
         return Object.freeze({ kind: "resolved", premises: Object.freeze([Object.freeze({ ...evidence,
           kind: "formal-borrowed", executionOwner: owner, mode: carrier.mutable ? "mutable" : "shared",
-          region: Object.freeze({ kind: "input-duration", parameter: value.node }) })]) });
+          region: Object.freeze({ kind: "input-duration", parameter: formal }) })]) });
       }
       const semantics = input.source.semantics.forNode(value.node);
-      for (const binding of semantics.types.typeArgumentBindings(checked.type) ?? []) {
+      for (const binding of semantics.types.typeArgumentBindings(local.component.selectedType) ?? []) {
         const symbol = semantics.declarations.typeSymbol(binding.argumentType);
         for (const declaration of symbol === undefined ? [] : semantics.declarations.symbolDeclarations(symbol)) {
           const parameter = input.sourceLifetimes.parameterFor(declaration);
@@ -523,11 +563,10 @@ export function analyzeRustPromiseResults(input: {
     };
     const staticStorage = classifyExecution(value, bindings);
     if (staticStorage.kind !== "supported") return unresolved(value.node, staticStorage.reason);
-    const selection: SourceRetentionSelection = Object.freeze({ kind: "resolved",
+    return Object.freeze({ kind: "resolved",
       premises: Object.freeze([Object.freeze({ ...evidence, kind: "retained", reason: "owned-value" })]) });
-    return selection;
   };
-  const premises: SourceOwnershipPremises = {
+  const premises: SourceDeclarationOwnershipPremises = {
     retentionFor,
     completionFor(call, selected) {
       const declaration = input.source.semantics.forNode(call).declarations.signatureDeclaration(selected.selectedSignature);
@@ -536,51 +575,51 @@ export function analyzeRustPromiseResults(input: {
       const carrier = operation?.kind === "source-call" && operation.asyncBody !== undefined
         ? operation.asyncBody.logicalResultCarrier : rustEffectiveValueCarrier(input.records, call);
       const selection = rustAwaitSelection(carrier, input.definitions);
+      if (carrier?.kind === "type-parameter") return Object.freeze({ kind: "not-async" });
       if (selection === undefined) return unresolved(call, "Async result-use requires its completed native completion carrier.");
       const futures = rustAwaitSelectionLeaves(selection).flatMap(leaf => leaf.future === undefined ? [] : [leaf.future]);
-      // The async contract comes from this call's sealed native completion carrier. A provider declaration file is not
-      // part of the checked source program, so the contract is attached to the exact call, as suspensionFor does.
-      const declarationFile = input.ast.getSourceFile(declaration);
-      const contractDeclaration = declarationFile !== undefined && input.source.semantics.includes(declarationFile) ? declaration : call;
       return futures.length === 0 ? { kind: "not-async" }
-        : { kind: "async", contractDeclaration, checkedType: selected.sourceResultType,
+        : { kind: "async", contract: Object.freeze({ kind: "declaration", declaration,
+            component: Object.freeze({ selectedType: selected.sourceResultType, contextualCall: selected }) }),
           resultPolicy: futures.every(future => rustJsPromiseOutputTargetType(future.futureCarrier) !== undefined)
             ? "observe-rejection" : "must-observe" };
     },
-    suspensionFor(value, bindings) {
+    suspensionFor(value, use) {
+      if (use === "resource-cleanup") {
+        const resource = input.records.resourceManagement.get(value.node);
+        const checked = input.source.semantics.forNode(value.node).operations.resourceManagement(value.node);
+        if (resource === undefined || checked?.declaration !== value.node ||
+          resource.declarationKind !== checked.declarationKind)
+          return unresolved(value.node, "Cleanup suspension requires this declaration's completed native disposal registration.");
+        return Object.freeze({ kind: resource.disposal.kind === "async" ? "may-suspend" : "never", value,
+          contract: Object.freeze({ kind: "declaration", declaration: value.node, component: value.component }) });
+      }
       const isCall = input.ast.is.IsCallExpression(value.node) || input.ast.is.IsNewExpression(value.node);
       const operation = input.records.targetOperation.get(value.node);
       const selected = isCall ? input.source.semantics.forNode(value.node).operations.call(value.node) : undefined;
       const declaration = selected?.sourceSelectedSignatureKind === "resolved"
         ? input.source.semantics.forNode(value.node).declarations.signatureDeclaration(selected.selectedSignature) : undefined;
       if (isCall && declaration !== undefined && input.ast.body(declaration) !== undefined) return undefined;
-      const checked = input.storage.typeFor(value);
-      if (checked.kind === "unresolved") return unresolved(value.node, checked.reason);
-      const completion = value.kind === "return" && value.projection.length === 0
-        ? input.records.asyncFunction.get(value.node) : undefined;
-      if (completion?.kind === "js-promise") return Object.freeze({
-        kind: completion.lowering.kind === "settled" ? "never" : "may-suspend", value,
-        contractDeclaration: value.node, checkedType: checked.type });
-      const carrier = input.nativeStorage.logicalCarrierFor(value, bindings);
+      const subject = input.storage.subjectFor(value.node);
+      if (subject.kind === "unresolved") return unresolved(value.node, subject.reason);
+      const execution = input.storage.bindingsForLexicalOwner(value.region.owner);
+      if (execution.kind === "unresolved") return unresolved(value.node, execution.reason);
+      const carrier = input.nativeStorage.logicalCarrierFor(subject.subject, execution.bindings);
       if (carrier === undefined) return unresolved(value.node,
         "A native continuation requires its completed checked logical completion contract.");
       const awaited = rustAwaitSelection(carrier, input.definitions);
       // A value of a native type parameter is stored as that parameter, never as a pending native future: awaiting a
       // Promise of it does not adopt it, so it does not suspend.
       if (awaited === undefined && carrier.kind === "type-parameter") return Object.freeze({ kind: "never" as const, value,
-        contractDeclaration: value.node, checkedType: checked.type });
+        contract: Object.freeze({ kind: "expression", expression: value.node, component: value.component }) });
       if (awaited === undefined) return undefined;
       const future = rustAwaitSelectionLeaves(awaited).some(leaf => leaf.future !== undefined);
       const nativeCall = input.native.callFor(value.node);
       const nativeOperation = operation?.kind === "provider-operation" || operation?.kind === "reference-operation" ||
         operation?.kind === "flow-marker" || operation?.kind === "typed-location";
       if (isCall && nativeCall === undefined && !nativeOperation) return undefined;
-      // A provider declaration file is not part of the checked source program, so its suspension contract is attached to
-      // the exact value, as completionFor does for provider calls.
-      const declarationFile = declaration === undefined ? undefined : input.ast.getSourceFile(declaration);
-      const contractDeclaration = declaration !== undefined && declarationFile !== undefined &&
-        input.source.semantics.includes(declarationFile) ? declaration : value.node;
-      return Object.freeze({ kind: future ? "may-suspend" : "never", value, contractDeclaration, checkedType: checked.type });
+      return Object.freeze({ kind: future ? "may-suspend" : "never", value,
+        contract: Object.freeze({ kind: "expression", expression: value.node, component: value.component }) });
     },
   };
   const erasedCallees = new Set<Node>();
@@ -592,13 +631,13 @@ export function analyzeRustPromiseResults(input: {
     const callee = input.source.semantics.forNode(node).operations.call(node)?.sourceCallee.expression;
     if (callee !== undefined && input.ast.is.IsIdentifier(callee)) erasedCallees.add(callee);
   }
-  const domain = erasedCallees.size === 0 ? { kind: "resolved" as const, domain: { kind: "source" as const } }
-    : createSourceControlFlowDomain(input.source, input.nodes.filter(node => !erasedCallees.has(node)));
-  if (domain.kind === "unresolved") return { results, diagnostics: [...diagnostics, {
-    code: "RUST_ASYNC_RESULT_USE_NOT_PROVEN", category: "error", source: "tsonic-rust",
-    sourceNode: domain.source, message: domain.reason,
-  }] };
-  const ownership = createSourceOwnershipQuery({ source: input.source, storage: input.storage, budget, premises, domain: domain.domain });
+  const nodes = input.nodes.filter(node => !erasedCallees.has(node));
+  const root = nodes[0] ?? input.source.sourceFiles[0];
+  if (root === undefined) return Object.freeze({ results, diagnostics: Object.freeze(diagnostics) });
+  const ownershipBudget = createSourceDeclarationOwnershipBudget(root, defaultSourceDeclarationOwnershipLimits);
+  if (diagnostics.length !== 0) return Object.freeze({ results, diagnostics: Object.freeze(diagnostics) });
+  const ownership = createSourceDeclarationOwnershipQuery({ source: input.source, sourceNodes: input.storage.nodes,
+    nodes, budget: ownershipBudget, premises });
   for (const node of input.nodes) {
     if (!input.ast.is.IsCallExpression(node) && !input.ast.is.IsNewExpression(node)) continue;
     const selection = rustAwaitSelection(rustEffectiveValueCarrier(input.records, node), input.definitions);
@@ -627,8 +666,7 @@ export function analyzeRustPromiseResults(input: {
       const selected = ownership.forCall(node);
       if (selected.kind === "unresolved") {
         if (input.nativeStorageValidated)
-          diagnostics.push(Object.freeze({ code: "RUST_ASYNC_RESULT_USE_NOT_PROVEN", category: "error", source: "tsonic-rust",
-            sourceNode: node, message: selected.reason, evidence: ["target.capability=rust.async.native-result-use"] }));
+          diagnostics.push(ownershipDiagnostic(selected));
         continue;
       }
       if (selected.kind === "resolved" && selected.decision === "rejected") {

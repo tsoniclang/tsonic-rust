@@ -27,6 +27,10 @@ export function selectRustCheckedIteration(
   options: RustOperationsProviderOptions,
 ): RustPolicySelection<RustCheckedOperationSelectionResult> {
   const source = request.source;
+  if (source.iterationKind === undefined) {
+    return rejectSelectedOperation(request.statement, context, "RUST_ITERATION_MECHANISM_UNSUPPORTED",
+      "Statement iteration requires its exact checked for-in, for-of or for-await-of operation, not spread element evidence.");
+  }
   if (source.iterationKind === "for-in") {
     const iterable = rustEffectiveValueCarrier(context.records, request.expression) ??
       resolveRustTargetTypeRef(request.expression, context, options);

@@ -1,8 +1,8 @@
 import { requireRustRecord } from "../../program/records/objects/required-records.js";
 import type { Node, SourceFile, Symbol } from "@tsonic/tsts";
-import { Node_Expression, sourceBindingHasSingleCaptureOwner, sourceBindingScope, sourceBindingIterationScope } from "@tsonic/target-api/source";
+import { Node_Expression, Node_Initializer, isSourceCallableBodyBoundary, sourceBindingScope, sourceBindingIterationScope,
+  sourceLexicalEnvironment } from "@tsonic/target-api/source";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
-import type { SourceDeclarationUse } from "@tsonic/target-api/source";
 import type { RustFactWalk } from "../../program/walk.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { isRustCopyCarrier, rustCarrierSupportsClone } from "../../../policy/constraints/native-traits.js";
@@ -114,44 +114,66 @@ function singleOwnerDirectBinding(
     !summary.uses.some(use => use.reference === reference) ||
     summary.hasUnclassifiedValueUse !== summary.uses.some(use => use.role === "value")) return false;
   const roots = new Set(captureRoots);
+  if (roots.size !== captureRoots.length || !roots.has(owner)) return false;
+  const scope = sourceBindingScope(declaration, ast);
+  if (scope === undefined) return false;
+  const ancestors = new Set<Node>();
+  for (let current = ast.parent(owner); current !== scope; current = ast.parent(current)) {
+    if (current === undefined || ancestors.has(current) || isSourceCallableBodyBoundary(ast, current) || ast.is.IsForStatement(current) ||
+      ast.is.IsForOfStatement(current) || ast.is.IsForInStatement(current) || ast.is.IsWhileStatement(current) || ast.is.IsDoStatement(current))
+      return false;
+    ancestors.add(current);
+  }
+  const body = ast.body(owner);
+  if (body === undefined) return false;
+  const selected = sourceLexicalEnvironment(owner, ast.is.IsFunctionDeclaration(owner) ? [owner] : [body,
+    ...ast.parameters(owner).flatMap(parameter => {
+      const initializer = parameter === undefined ? undefined : Node_Initializer(ast, parameter);
+      return initializer === undefined ? [] : [initializer];
+    })], ast, source.navigation, "source");
+  if (selected.kind !== "resolved" || selected.callableRoots.length !== roots.size ||
+    selected.callableRoots.some(root => !roots.has(root))) return false;
+  for (const root of roots) if (root !== owner && source.navigation.declarationUseSummary(root).uses.some(use =>
+    use.kind === "first-class" && walk.context.records.compileTimeSource.get(use.reference) !== true)) return false;
   let steps = 0;
-  return sourceBindingHasSingleCaptureOwner(declaration, owner, captureRoots, ast, source.navigation,
-    (use: SourceDeclarationUse) => {
+  return !summary.exported && summary.uses.every(use => {
+    if (use.kind === "type-only" || use.kind === "source-linkage") return true;
+    if (++steps > 262_144) return false;
+    if (source.navigation.sourceReferenceFor(use.reference)?.declaration !== declaration) return false;
+    for (let current = ast.parent(use.reference); current === undefined || !roots.has(current); current = ast.parent(current)) {
       if (++steps > 262_144) return false;
-      for (let current = ast.parent(use.reference); current === undefined || !roots.has(current); current = ast.parent(current)) {
-        if (++steps > 262_144) return false;
-        if (current === undefined || ["KindArrowFunction", "KindFunctionExpression", "KindFunctionDeclaration",
-          "KindMethodDeclaration", "KindGetAccessor", "KindSetAccessor", "KindConstructor"].includes(ast.kindName(current))) return false;
-      }
-      let expression = use.reference;
-      let parent = ast.parent(expression);
-      while (parent !== undefined && rustSourceValueWrapperContains(parent, expression, ast)) {
-        if (++steps > 262_144) return false;
-        expression = parent;
-        parent = ast.parent(expression);
-      }
-      const receiverCall = parent !== undefined &&
-        (ast.is.IsPropertyAccessExpression(parent) || ast.is.IsElementAccessExpression(parent)) &&
-        Node_Expression(ast, parent) === expression ? ast.parent(parent) : undefined;
-      const operationNode = receiverCall !== undefined && ast.is.IsCallExpression(receiverCall) &&
-        Node_Expression(ast, receiverCall) === parent ? receiverCall : parent;
-      const operation = operationNode === undefined ? undefined : walk.context.records.targetOperation.get(operationNode);
-      if (operation?.kind === "provider-operation" && operation.abi.effects.evaluation === "pure" &&
-        operation.abi.effects.safety === "safe" && operation.abi.effects.invocation === "infallible" &&
-        operation.abi.result.kind === "sync" && isRustCopyCarrier(operation.abi.result.carrier) &&
-        rustBorrowedStringInputs(operationNode!, operation, ast).includes(expression)) return true;
-      if (parent !== undefined && (ast.is.IsCallExpression(parent) || ast.is.IsNewExpression(parent))) {
-        if (!rustCallArgumentIsOwned(expression, ast, walk.context.records)) return false;
-      } else if (parent !== undefined && ast.is.IsArrowFunction(parent) && ast.body(parent) === expression) {
-        return true;
-      } else if (parent === undefined || !["KindReturnStatement", "KindBinaryExpression", "KindPrefixUnaryExpression",
-        "KindPostfixUnaryExpression", "KindConditionalExpression", "KindVariableDeclaration", "KindArrayLiteralExpression",
-        "KindPropertyAssignment", "KindShorthandPropertyAssignment", "KindIfStatement", "KindWhileStatement",
-        "KindDoStatement", "KindForStatement", "KindSwitchStatement", "KindCaseClause", "KindExpressionStatement"].includes(ast.kindName(parent))) {
-        return false;
-      }
+      if (current === undefined || ["KindArrowFunction", "KindFunctionExpression", "KindFunctionDeclaration",
+        "KindMethodDeclaration", "KindGetAccessor", "KindSetAccessor", "KindConstructor"].includes(ast.kindName(current))) return false;
+    }
+    let expression = use.reference;
+    let parent = ast.parent(expression);
+    while (parent !== undefined && rustSourceValueWrapperContains(parent, expression, ast)) {
+      if (++steps > 262_144) return false;
+      expression = parent;
+      parent = ast.parent(expression);
+    }
+    const receiverCall = parent !== undefined &&
+      (ast.is.IsPropertyAccessExpression(parent) || ast.is.IsElementAccessExpression(parent)) &&
+      Node_Expression(ast, parent) === expression ? ast.parent(parent) : undefined;
+    const operationNode = receiverCall !== undefined && ast.is.IsCallExpression(receiverCall) &&
+      Node_Expression(ast, receiverCall) === parent ? receiverCall : parent;
+    const operation = operationNode === undefined ? undefined : walk.context.records.targetOperation.get(operationNode);
+    if (operation?.kind === "provider-operation" && operation.abi.effects.evaluation === "pure" &&
+      operation.abi.effects.safety === "safe" && operation.abi.effects.invocation === "infallible" &&
+      operation.abi.result.kind === "sync" && isRustCopyCarrier(operation.abi.result.carrier) &&
+      rustBorrowedStringInputs(operationNode!, operation, ast).includes(expression)) return true;
+    if (parent !== undefined && (ast.is.IsCallExpression(parent) || ast.is.IsNewExpression(parent))) {
+      if (!rustCallArgumentIsOwned(expression, ast, walk.context.records)) return false;
+    } else if (parent !== undefined && ast.is.IsArrowFunction(parent) && ast.body(parent) === expression) {
       return true;
-    });
+    } else if (parent === undefined || !["KindReturnStatement", "KindBinaryExpression", "KindPrefixUnaryExpression",
+      "KindPostfixUnaryExpression", "KindConditionalExpression", "KindVariableDeclaration", "KindArrayLiteralExpression",
+      "KindPropertyAssignment", "KindShorthandPropertyAssignment", "KindIfStatement", "KindWhileStatement",
+      "KindDoStatement", "KindForStatement", "KindSwitchStatement", "KindCaseClause", "KindExpressionStatement"].includes(ast.kindName(parent))) {
+      return false;
+    }
+    return true;
+  });
 }
 
 import type { RustCaptureStorage } from "../../../target-model/records/callables/capture-storage.js";

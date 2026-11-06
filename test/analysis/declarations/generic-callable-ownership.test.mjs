@@ -203,7 +203,8 @@ closureCapture: { get: (node) => {
       semantics: currentSource.semantics.forFile };
     const nativeTasks = { lifecycleOwner: undefined, spawns: [], owners: [], parameterOwners: new Set(), calls: [], entries: [] };
     const retainedEnvironments = createRustRetainedEnvironmentQueries({ source: currentSource, sourceStorage,
-      sourceLifetimes: emptyRustLifetimeIndex, nativeTasks });
+      sourceLifetimes: emptyRustLifetimeIndex, nativeTasks,
+      suspendedOwnershipFor() { assert.fail("the logical callable fixture has no suspended native bodies"); } });
     return { ...planInput, sourceStorage, nativeNodes: participation.nodes,
       isNativeNode, lexicalFunctions, typeDefinitions, sourceTypes, projectTypes, objectRepresentations,
       structuralShapes, carrierHost, retainedEnvironments, nativeTasks,

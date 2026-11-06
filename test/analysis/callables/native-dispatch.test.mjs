@@ -10,7 +10,7 @@ test("native dispatch preserves open and invoked protocols but omits closed forw
   const open = { ownerFileName: "/open.ts" };
   const plan = createRustNativeCallableDispatchPlan({ ast: { getFileName: file => file.fileName },
     closedSourceFiles: new Set([{ fileName: "/closed.ts" }]),
-    navigation: { declarationUses: () => [] },
+    navigation: { declarationUses: () => [], expressionResultDisposition() { assert.fail("unused protocols have no expression reads"); } },
     native: { protocols: [closed, invoked, open], inputs: [], calls: [{ input: { protocol: invoked } }] } });
   assert.equal(plan.requiredFor(closed), false, "exact closed forward-only protocol");
   assert.equal(plan.requiredFor(invoked), true, "exact invoked protocol");
@@ -45,7 +45,8 @@ test("native dispatch separates discarded and forwarded values from actual runti
       native: { protocols: [protocol], calls: [], inputs: [{ subject: { node: parameter }, protocol }] } };
     assert.equal(createRustNativeCallableDispatchPlan(input).requiredFor(protocol), required, body);
     const unresolved = createRustNativeCallableDispatchPlan({ ...input,
-      navigation: { declarationUses: () => [{ reference: file }] } });
+      navigation: { declarationUses: () => [{ reference: file }],
+        expressionResultDisposition: source.navigation.expressionResultDisposition } });
     assert.equal(unresolved.requiredFor(protocol), true, "an unresolved use retains the native ABI");
   }
 });

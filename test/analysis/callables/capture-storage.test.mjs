@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createRustProgramRecordBuilder } from "../../../dist/analysis/program/records/create.js";
 import { createCompilerSessionFromFiles, formatDiagnostics } from "@tsonic/tsts";
-import { createTargetSourceProgram, sourceBindingHasSingleCaptureOwner } from "@tsonic/target-api/source";
+import { createTargetSourceProgram } from "@tsonic/target-api/source";
 import { rustCapturedBindingStorage } from "../../../dist/analysis/callables/storage/capture-storage.js";
 
 
@@ -324,9 +324,9 @@ for (const [name, text, carrier, storage] of [
 ]) test(`exact native ${name} completes classification without changing the shared owner proof`, () => {
   const current = fixture(text, { carrier });
   assert.equal(current.summary.hasUnclassifiedValueUse, true, name);
-  assert.equal(sourceBindingHasSingleCaptureOwner(current.declaration, current.owner, [current.owner],
-    current.source.ast, current.source.navigation, use => use.role !== "value"), false,
-    "shared source classification remains conservative");
+  assert.equal(current.summary.uses.some(use => use.role === "value" &&
+    current.source.navigation.sourceReferenceFor(use.reference)?.declaration === current.declaration), true,
+    "canonical Source retains the exact unclassified value read, not a Native ownership decision");
   assert.deepEqual(current.select(), { storage });
   assert.equal(current.source.navigation.declarationUseSummary(current.declaration) === current.summary, true);
   assert.equal(current.summary.hasUnclassifiedValueUse, true, "native classification does not mutate shared evidence");

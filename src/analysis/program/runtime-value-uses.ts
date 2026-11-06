@@ -1,6 +1,6 @@
 import type { AstReader, Node } from "@tsonic/tsts";
 import type { SourceProgramNavigation } from "@tsonic/target-api/source";
-import { Node_Expression, Node_Initializer, sourceExpressionResultDisposition, sourceMayReadBeforeInitialization } from "@tsonic/target-api/source";
+import { Node_Expression, Node_Initializer, sourceMayReadBeforeInitialization } from "@tsonic/target-api/source";
 import type { RustSafetyApplicationFactIndex } from "../safety/application-index.js";
 import { rustUnparenthesizedExpression } from "../../target-model/syntax/expressions.js";
 
@@ -57,7 +57,7 @@ export function createRustRuntimeValueUsePlan(input: {
       const call = ast.parent(callee);
       if (call === undefined || !ast.is.IsCallExpression(call) || ast.as.AsCallExpression(call)?.QuestionDotToken !== undefined ||
         Node_Expression(ast, call) !== callee) return false;
-      const result = sourceExpressionResultDisposition(ast, call);
+      const result = navigation.expressionResultDisposition(call);
       const awaited = result.kind === "awaited-in-scope" ? Node_Expression(ast, result.use) : undefined;
       return awaited !== undefined && rustUnparenthesizedExpression(ast, awaited) === call;
     }) ? target : undefined;

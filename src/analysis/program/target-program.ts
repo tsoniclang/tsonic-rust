@@ -123,7 +123,8 @@ export function analyzeRustAnalysisProgram(
   const context = contextResult.value;
   if (context.diagnostics.length > 0) return rejectedTargetStage(context.diagnostics);
   const genericAdoption = analyzeRustGenericAdoption({ source: context.source, projectRoot: input.paths.projectRoot,
-    storage: context.sourceStorage, sourceLifetimes: context.sourceLifetimes });
+    nodes: context.nativeNodes, sourceLifetimes: context.sourceLifetimes, sourceProfiles: context.sourceProfiles,
+    providerSemantics: context.providerSemantics, jsEnabled: context.jsEnabled });
   if (genericAdoption.length !== 0) return rejectedTargetStage(genericAdoption);
   const sourceOutputIdentities = analyzeRustSourceOutputIdentities({ ast: context.ast,
     sourceFiles: context.sourceFiles, paths: input.paths, sourcePackages: input.sourcePackages });
@@ -391,7 +392,7 @@ export function analyzeRustAnalysisProgram(
       projectFieldStorage: context.callableValues.selected.projectFieldStorage } });
   if (declarationGenericRequirements.kind === "rejected") {
     const promiseResults = promiseResultsFor(false, { kind: "unresolved", at: context.sourceFiles[0]!,
-      reason: "Native pending storage requires its completed original generic entry contracts." });
+      reason: "Native pending storage requires its completed original generic entry contracts.", cause: { kind: "required-fact" } });
     return rejectedTargetStage([...declarationGenericRequirements.diagnostics, ...promiseResults.diagnostics]);
   }
   const ownership = preparedOwnership.complete(declarationGenericRequirements.index);

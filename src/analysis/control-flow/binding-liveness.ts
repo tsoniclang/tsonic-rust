@@ -1,5 +1,5 @@
 import type { AstReader, Node } from "@tsonic/tsts";
-import { analyzeSourceWrites, createSourceControlFlow, solveSourceFlow, type SourceControlFlowGraph, type SourceFlowWork } from "@tsonic/target-api/analysis";
+import { analyzeSourceWrites, createSourceDeclarationControlFlow, solveSourceFlow, type SourceControlFlowGraph, type SourceFlowWork } from "@tsonic/target-api/analysis";
 import { ForStatement_Condition, ForStatement_Incrementor, Node_Expression, Node_Initializer, sourceEnclosingCallable, sourceParameterIsProperty, type TargetSourceProgram } from "@tsonic/target-api/source";
 import { failTargetAnalysisInvariant, type TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustOwnershipFlow } from "../../target-model/records/storage/ownership-flow.js";
@@ -134,7 +134,7 @@ function collectRustConstructionWriteLiveness(
           if (field.externallyInitialized || field.initializer === undefined) continue;
           if (!source.ast.is.IsPropertyDeclaration(field.declaration) || Node_Initializer(source.ast, field.declaration) !== field.initializer)
             failTargetAnalysisInvariant("tsonic-rust", "An implicit native layer requires its identical checked field initializer.", field.declaration);
-          const selected = createSourceControlFlow(source, field.declaration, { domain: { kind: "source" } });
+          const selected = createSourceDeclarationControlFlow(source, field.declaration, { domain: { kind: "source" } });
           if (selected.kind === "unresolved") return flowIssues(selected.reason, selected.source ?? field.declaration);
           const analyzed = analyzeGraph(plan, layer, selected.graph, continuation);
           if (analyzed.kind === "unresolved") return flowIssues(analyzed.reason, analyzed.source ?? field.declaration);

@@ -93,7 +93,7 @@ export function rustIterableTargetPolicy(iterable: TargetTypeRef | undefined, de
 }
 
 export function selectRustIterationLowering(
-  source: Exclude<import("@tsonic/tsts").ResolvedSourceIterationInfo, { readonly iterationKind: "for-in" }>,
+  source: Extract<import("@tsonic/tsts").ResolvedSourceIterationInfo, { readonly iterationKind: "for-of" | "for-await-of" }>,
   target: RustIterableTargetPolicy,
   consumeResult: boolean,
 ): Extract<

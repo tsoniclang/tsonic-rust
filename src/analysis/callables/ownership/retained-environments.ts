@@ -1,5 +1,5 @@
 import type { Node } from "@tsonic/tsts";
-import type { SourceOwnershipUnresolved, SourceStorageBindings, SourceStorageQueries, SourceStorageSubject } from "@tsonic/target-api/analysis";
+import type { SourceDeclarationOwnershipUnresolved, SourceStorageBindings, SourceStorageQueries, SourceStorageSubject } from "@tsonic/target-api/analysis";
 import { sourceEnclosingCallable, sourceNodeIdentity, sourceCallableValueParameters, type TargetSourceProgram } from "@tsonic/target-api/source";
 import type { RustFactWalk } from "../../program/walk.js";
 
@@ -29,16 +29,16 @@ export function selectRustNativePendingEnvironment(input: {
   readonly nativeStorage: Pick<RustNativeStoragePlan, "boundInvocationFor" | "genericBindingsFor">;
   readonly producers: Pick<RustNativeCallableProducerPlan, "bodyResultFor">;
   readonly specializations: RustSourceCallableSpecializationPlan;
-  readonly headers: Pick<ReturnType<typeof createRustCallableEntryHeaderPlacements>, "nativeBody"> | SourceOwnershipUnresolved;
+  readonly headers: Pick<ReturnType<typeof createRustCallableEntryHeaderPlacements>, "nativeBody"> | SourceDeclarationOwnershipUnresolved;
   readonly step: () => boolean;
   readonly retainDataFor: (subject: SourceStorageSubject, bindings: SourceStorageBindings,
-    carrier: TargetTypeRef) => TargetTypeRef | SourceOwnershipUnresolved;
+    carrier: TargetTypeRef) => TargetTypeRef | SourceDeclarationOwnershipUnresolved;
 }, subject: SourceStorageSubject, bindings: SourceStorageBindings,
-carrier: TargetTypeRef): TargetTypeRef | SourceOwnershipUnresolved | undefined {
+carrier: TargetTypeRef): TargetTypeRef | SourceDeclarationOwnershipUnresolved | undefined {
   if (subject.kind !== "value" || subject.projection.length !== 0) return undefined;
   const operation = input.records.targetOperation.get(subject.node);
   if (operation?.kind !== "source-call" || operation.asyncBody === undefined) return undefined;
-  const unresolved = (reason: string): SourceOwnershipUnresolved => Object.freeze({ kind: "unresolved", at: subject.node, reason });
+  const unresolved = (reason: string): SourceDeclarationOwnershipUnresolved => Object.freeze({ kind: "unresolved", at: subject.node, reason, cause: Object.freeze({ kind: "required-fact" }) });
   if (!input.step()) return unresolved("Native pending storage exceeds its shared retained-data work budget.");
   if ("kind" in input.headers) return input.headers;
   const declaration = operation.asyncBody.declaration;
@@ -66,7 +66,7 @@ carrier: TargetTypeRef): TargetTypeRef | SourceOwnershipUnresolved | undefined {
       selected.header.bindings.lifetimes, selected.header.bindings.consts), bound.targetBindings.types,
     bound.targetBindings.lifetimes, bound.targetBindings.consts);
   const obligations: TargetTypeRef[] = [];
-  const retain = (subject: SourceStorageSubject, carrier: TargetTypeRef): SourceOwnershipUnresolved | undefined => {
+  const retain = (subject: SourceStorageSubject, carrier: TargetTypeRef): SourceDeclarationOwnershipUnresolved | undefined => {
     const value = input.retainDataFor(subject, bound.storageBindings, carrier);
     if (value.kind === "unresolved") return value;
     obligations.push(value);

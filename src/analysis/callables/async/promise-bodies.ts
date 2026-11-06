@@ -1,6 +1,6 @@
 import { createRustPromiseBodyProducer } from "../../program/records/callables/promise-bodies.js";
 import type { Node } from "@tsonic/tsts";
-import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
+import { failTargetAnalysisInvariant, failTargetCompilerResourceLimit } from "@tsonic/target-api/artifacts";
 import { createSourceStorageBudget, defaultSourceStorageLimits } from "@tsonic/target-api/analysis";
 import { Node_Expression, sourceDeclarationIsModuleScoped, sourceImmediatelyAwaitedLocal } from "@tsonic/target-api/source";
 import type { RustAnalysisContext } from "../../program/context.js";
@@ -23,6 +23,9 @@ export interface RustPromiseBodySelection {
   initializeNames(context: RustAnalysisContext, modules: RustModuleBindingAnalysis): void;
   nativeNameForDeclaration(declaration: Node | undefined): string | undefined;
   nativeFormForDeclaration(declaration: Node): "function" | "method" | "static-method" | undefined;
+  inputOwnershipFor(context: RustAnalysisContext, declaration: Node):
+    | { readonly kind: "resolved"; readonly ownership: "owned" | "borrowed" }
+    | { readonly kind: "unresolved"; readonly reason: string };
   namesForScope(scope: Node): ReadonlySet<string>;
   expose(declaration: Node, demand: Node): void;
   invocation(context: RustAnalysisContext, call: Node, declaration: Node, target: SourceCall["target"],
@@ -46,6 +49,47 @@ export function createRustPromiseBodySelection(): RustPromiseBodySelection {
     const selected = demands.get(declaration) ?? new Set<Node>();
     selected.add(demand);
     demands.set(declaration, selected);
+  };
+  const objectDemandsFor = (context: RustAnalysisContext, declaration: Node): ReadonlySet<Node> => {
+    const selected = new Set(demands.get(declaration));
+    const binding = rustCallableExpressionValueDeclaration(declaration, context.ast);
+    const methodOwner = context.ast.is.IsMethodDeclaration(declaration)
+      ? context.projectTypes.definitionContainingDeclaration(declaration) : undefined;
+    const exportedMethod = methodOwner?.kind === "class" &&
+      !context.ast.hasModifierKind(declaration, "private") && !context.ast.hasModifierKind(declaration, "protected") &&
+      sourceDeclarationIsModuleScoped(methodOwner.declaration, context.ast) &&
+      context.source.navigation.declarationUseSummary(methodOwner.declaration).exported;
+    if (!nativeDeclarations.has(declaration) || context.sourceBoundaries.publishedDeclarations.has(declaration) || exportedMethod ||
+      binding !== undefined && sourceDeclarationIsModuleScoped(binding, context.ast) &&
+      context.source.navigation.declarationUseSummary(binding).exported ||
+      context.ast.is.IsFunctionDeclaration(declaration) && context.ast.hasModifierKind(declaration, "export") &&
+      sourceDeclarationIsModuleScoped(declaration, context.ast)) selected.add(declaration);
+    const owner = binding ?? declaration;
+    let steps = 0;
+    for (const use of context.source.navigation.declarationUseSummary(owner).uses) {
+      if (++steps > defaultSourceStorageLimits.maximumSteps)
+        failTargetCompilerResourceLimit("tsonic-rust", "Native Promise input ownership", "steps", defaultSourceStorageLimits.maximumSteps, declaration);
+      if (use.kind === "type-only" || use.kind === "source-linkage" || !context.isNativeNode(use.reference) ||
+        !context.runtimeValueUses.isRuntimeReference(owner, use.reference)) continue;
+      let value = rustUnparenthesizedExpression(context.ast, use.reference);
+      const member = context.ast.parent(value);
+      if (use.memberReceiver !== undefined && member !== undefined &&
+        (context.ast.is.IsPropertyAccessExpression(member) || context.ast.is.IsElementAccessExpression(member)) &&
+        Node_Expression(context.ast, member) === use.memberReceiver) value = member;
+      for (let parent = context.ast.parent(value); parent !== undefined && context.ast.is.IsParenthesizedExpression(parent);
+        parent = context.ast.parent(value)) {
+        if (++steps > defaultSourceStorageLimits.maximumSteps)
+          failTargetCompilerResourceLimit("tsonic-rust", "Native Promise input ownership", "steps", defaultSourceStorageLimits.maximumSteps, declaration);
+        value = parent;
+      }
+      const parent = context.ast.parent(value);
+      if (parent !== undefined && context.ast.is.IsVariableDeclaration(parent) &&
+        context.runtimeValueUses.promiseCallAliasTarget(parent) === declaration) continue;
+      const call = use.kind === "direct-call" && parent !== undefined && context.ast.is.IsCallExpression(parent) &&
+        Node_Expression(context.ast, parent) === value ? parent : undefined;
+      if (call === undefined || rustSelectedPromiseBodyCallee(context, call) !== declaration) selected.add(use.reference);
+    }
+    return selected;
   };
   return Object.freeze({
     plan: producer.records,
@@ -98,6 +142,15 @@ export function createRustPromiseBodySelection(): RustPromiseBodySelection {
     },
     nativeNameForDeclaration: (declaration: Node | undefined) => declaration === undefined ? undefined : nativeDeclarations.get(declaration)?.name,
     nativeFormForDeclaration: (declaration: Node) => nativeDeclarations.get(declaration)?.form,
+    inputOwnershipFor(context, declaration) {
+      if (!context.isNativeNode(declaration) || !context.source.navigation.isProjectDeclaration(declaration))
+        return Object.freeze({ kind: "unresolved", reason: "Suspended input ownership requires its identical materialized project declaration." });
+      if (!context.jsEnabled || context.source.semantics.forNode(declaration).operations.generator(declaration) !== undefined)
+        return Object.freeze({ kind: "resolved", ownership: "borrowed" });
+      if (!namesReady) return Object.freeze({ kind: "unresolved",
+        reason: "Suspended input ownership requires its completed native Promise body preparation." });
+      return Object.freeze({ kind: "resolved", ownership: objectDemandsFor(context, declaration).size === 0 ? "borrowed" : "owned" });
+    },
     namesForScope: (scope: Node) => scopeNames.get(scope) ?? emptyScopeNames,
     expose(declaration: Node, demand: Node): void {
       assertOpen();
@@ -134,21 +187,7 @@ export function createRustPromiseBodySelection(): RustPromiseBodySelection {
         const asynchronous = context.records.asyncFunction.get(declaration);
         if (asynchronous?.kind !== "js-promise") continue;
         const name = rustPromiseBodyNativeName(context, declaration);
-        const selectedDemands = new Set(demands.get(declaration));
-        const binding = rustCallableExpressionValueDeclaration(declaration, context.ast);
-        const methodOwner = context.ast.is.IsMethodDeclaration(declaration)
-          ? context.projectTypes.definitionContainingDeclaration(declaration) : undefined;
-        const exportedMethod = methodOwner?.kind === "class" &&
-          !context.ast.hasModifierKind(declaration, "private") && !context.ast.hasModifierKind(declaration, "protected") &&
-          sourceDeclarationIsModuleScoped(methodOwner.declaration, context.ast) &&
-          context.source.navigation.declarationUseSummary(methodOwner.declaration).exported;
-        if (name === undefined || context.runtimeValueUses.hasFirstClassUse(binding ?? declaration) ||
-          context.sourceBoundaries.publishedDeclarations.has(declaration) || exportedMethod ||
-          binding !== undefined && sourceDeclarationIsModuleScoped(binding, context.ast) &&
-          context.source.navigation.declarationUseSummary(binding).exported ||
-          context.ast.is.IsFunctionDeclaration(declaration) && context.ast.hasModifierKind(declaration, "export") &&
-          sourceDeclarationIsModuleScoped(declaration, context.ast))
-          selectedDemands.add(declaration);
+        const selectedDemands = objectDemandsFor(context, declaration);
         if (selectedDemands.size > 0) producer.object(declaration, Object.freeze([...selectedDemands].sort((left, right) => {
           const leftFile = context.ast.getSourceFile(left);
           const rightFile = context.ast.getSourceFile(right);
@@ -170,6 +209,10 @@ const emptyScopeNames: ReadonlySet<string> = new Set();
 
 export function rustDirectPromiseBodyCallee(context: RustAnalysisContext, operand: Node, resultCarrier: TargetTypeRef): Node | undefined {
   if (rustJsPromiseOutputTargetType(resultCarrier) === undefined) return undefined;
+  return rustSelectedPromiseBodyCallee(context, operand);
+}
+
+function rustSelectedPromiseBodyCallee(context: RustAnalysisContext, operand: Node): Node | undefined {
   const { ast } = context;
   const call = rustUnparenthesizedExpression(ast, operand);
   if (!ast.is.IsCallExpression(call) || ast.as.AsCallExpression(call)?.QuestionDotToken !== undefined) return undefined;

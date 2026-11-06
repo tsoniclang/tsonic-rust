@@ -1,5 +1,6 @@
 import type { Node } from "@tsonic/tsts";
-import { createSourceSingleInvocationQuery, forEachSourceImmediateEvaluationChild, Node_Initializer, sourceDeclarationIsModuleScoped, sourceLexicalEnvironment, sourceLexicalFunctionValueCreation, sourceLexicalFunctionValueOrder, type TargetSourceProgram } from "@tsonic/target-api/source";
+import { createSourceSingleInvocationQuery, forEachSourceImmediateEvaluationChild, Node_Initializer, sourceDeclarationIsModuleScoped, sourceLexicalEnvironment, sourceLexicalFunctionValueOrder, type TargetSourceProgram } from "@tsonic/target-api/source";
+import { selectRustLexicalValuePlacement } from "./lexical-value-placement.js";
 import type { RustProgramRecords } from "../../../target-model/records/program.js";
 
 import { rustTypedLocationStorageRootReference } from "../../operations/typed-locations.js";
@@ -118,10 +119,11 @@ export function createRustLexicalFunctionEnvironmentPlan(
   const selections = new Map<Node, RustLexicalFunctionEnvironmentSelection>();
   const valueDeclarations = new Map<Node, Node[]>();
   const singleInvocation = createSourceSingleInvocationQuery(ast, navigation);
+  const nativeNodeSet = new Set(nativeNodes);
   for (const declaration of declarations) {
-    const creation = sourceLexicalFunctionValueCreation(declaration, ast, navigation,
-      (use, referencedDeclaration) => records.compileTimeSource.get(use.reference) !== true &&
-        runtimeValueUses.isRuntimeReference(referencedDeclaration, use.reference));
+    const creation = selectRustLexicalValuePlacement({ source, declaration, nativeNodes: nativeNodeSet,
+      runtimeUses: runtimeValueUses, records, step: () => ++steps <= maximumLexicalCaptureSteps,
+      maximumSteps: maximumLexicalCaptureSteps });
     if (creation.kind === "unresolved") {
       selections.set(declaration, Object.freeze({ kind: "unresolved", reason: creation.reason }));
       continue;

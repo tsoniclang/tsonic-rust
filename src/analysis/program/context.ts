@@ -156,7 +156,7 @@ export function createRustAnalysisContext(
   const nativeNodeSet = new Set(nativeNodes);
   const isNativeNode = (node: Node): boolean => nativeNodeSet.has(node);
   const numericLiteralAdmission = analyzeRustNumericLiteralAdmission(ast, sourceFiles, literalValues, isNativeNode);
-  const promiseResultUses = analyzeRustPromiseResultUses(ast, sourceStorage.nodes);
+  const promiseResultUses = analyzeRustPromiseResultUses(input.source, sourceStorage.nodes);
   const receiverOccurrences = analyzeSourceReceiverOccurrences(sourceStorage);
   const names = createRustNamePlan({
     ast,
@@ -178,7 +178,7 @@ export function createRustAnalysisContext(
     lexicalBindingFor: sourceCallables.directLexicalBinding, callAliasFor: sourceCallables.promiseCallAliasTarget });
   const nativeTaskGraph = analyzeRustNativeTaskGraph({ context: { ast, source: input.source, sourceStorage,
     nativeNodes, isNativeNode, promiseResultUses, sourceProfiles, providerSemantics, jsEnabled, runtimeValueUses,
-    sourceCallables, moduleCallables: moduleCallables.value, callableInvocationReferences }, publishedDeclarations: sourceBoundaries.publishedDeclarations,
+    sourceCallables, moduleCallables: moduleCallables.value }, publishedDeclarations: sourceBoundaries.publishedDeclarations,
     lifecycleOwner: sourceFiles.find(file => sourcePackageComponentIdentities.identities.componentIdForFile(ast.getFileName(file)) ===
       sourcePackageComponentIdentities.identities.rootComponentId) });
   if (nativeTaskGraph.kind === "rejected") return nativeTaskGraph;
@@ -196,7 +196,8 @@ export function createRustAnalysisContext(
     semanticsFor: input.source.semantics.forNode,
   });
   const memoryBindings = createTsonicMemoryBindingIndex(input.source);
-  return resolvedTargetStage<RustAnalysisContext>(Object.freeze({
+  const promiseBodies = createRustPromiseBodySelection();
+  const context: RustAnalysisContext = Object.freeze({
     callableRepresentation: "storage" as const,
     literalValues,
     integerRanges: createRustIntegerRangeIndex(input.source, sourceStorage.nodes),
@@ -211,7 +212,8 @@ export function createRustAnalysisContext(
     callableInvocationReferences,
     nativeTaskGraph: nativeTaskGraph.value,
     retainedEnvironments: createRustRetainedEnvironmentQueries({ source: input.source, sourceStorage,
-      sourceLifetimes: lifetimes.index ?? emptyRustLifetimeIndex, nativeTasks: nativeTaskGraph.value }),
+      sourceLifetimes: lifetimes.index ?? emptyRustLifetimeIndex, nativeTasks: nativeTaskGraph.value,
+      suspendedOwnershipFor: declaration => promiseBodies.inputOwnershipFor(context, declaration) }),
     callableOwnership: createRustCallableOwnershipRegistry(),
     errorStorageDemands: createRustErrorStorageDemandQuery(input.source,
       sourceProfiles, sourceStorage,
@@ -230,7 +232,7 @@ export function createRustAnalysisContext(
     sourcePackages: input.sourcePackages,
     sourcePackageComponentIdentities,
     promiseResultUses,
-    promiseBodies: createRustPromiseBodySelection(),
+    promiseBodies,
     rootPublishesLibrary,
     records,
     requiredRecords,
@@ -261,5 +263,6 @@ export function createRustAnalysisContext(
     }))],
     semantics: input.source.semantics.forFile,
     semanticsFor: input.source.semantics.forNode,
-  }));
+  });
+  return resolvedTargetStage(context);
 }

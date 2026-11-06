@@ -2,11 +2,11 @@ import type { AstReader, SourceFile } from "@tsonic/tsts";
 import type { RustNativeCallableInputPlan } from "./native-inputs.js";
 import type { RustNativeCallableDispatchPlan } from "../../../target-model/records/native/native-dispatch.js";
 import { sealRustNativeCallableDispatch } from "../../program/records/native/native-dispatch.js";
-import { sourceExpressionResultDisposition, type SourceProgramNavigation } from "@tsonic/target-api/source";
+import type { SourceProgramNavigation } from "@tsonic/target-api/source";
 
 export function createRustNativeCallableDispatchPlan(input: {
   readonly ast: AstReader;
-  readonly navigation: Pick<SourceProgramNavigation, "declarationUses">;
+  readonly navigation: Pick<SourceProgramNavigation, "declarationUses" | "expressionResultDisposition">;
   readonly closedSourceFiles: ReadonlySet<SourceFile>;
   readonly native: RustNativeCallableInputPlan;
 }): RustNativeCallableDispatchPlan {
@@ -14,7 +14,7 @@ export function createRustNativeCallableDispatchPlan(input: {
   const invoked = new Set(input.native.calls.map(call => call.input.protocol));
   for (const selected of input.native.inputs) {
     if (input.navigation.declarationUses(selected.subject.node).some(use => {
-      const disposition = sourceExpressionResultDisposition(input.ast, use.reference);
+      const disposition = input.navigation.expressionResultDisposition(use.reference);
       return disposition.kind !== "returned" && disposition.kind !== "discarded";
     })) invoked.add(selected.protocol);
   }

@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import { rustProgramNodeIsOutsideNativeCode } from "../control-flow/compile-time-statements.js";
-import { BinaryExpression_Left, BinaryExpression_Right, Node_Expression, sourceTransparentExpressionOperand, sourceExpressionResultDisposition } from "@tsonic/target-api/source";
+import { BinaryExpression_Left, BinaryExpression_Right, Node_Expression, sourceTransparentExpressionOperand } from "@tsonic/target-api/source";
 import { failTargetAnalysisInvariant, type TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import { isRustStringCarrier, rustStructuralObjectCarrierValue } from "../../target-model/types/index.js";
 import { isRustCopyCarrier } from "../../policy/constraints/native-traits.js";
@@ -88,7 +88,7 @@ export function analyzeRustAssignmentWrites(input: {
     const assignment = records.assignmentCompletion.get(node) ?? (selected?.kind === "nullish-assignment" ? selected.assignment : undefined);
     // A runtime setter used as a value (`return values[0] = 43`) writes through its setter statement and yields the
     // right-hand value, like any value assignment.
-    if (assignment === undefined && selected?.kind === "runtime-set" && sourceExpressionResultDisposition(ast, node).kind !== "discarded") {
+    if (assignment === undefined && selected?.kind === "runtime-set" && program.source.navigation.expressionResultDisposition(node).kind !== "discarded") {
       const target = BinaryExpression_Left(ast, node);
       const value = BinaryExpression_Right(ast, node);
       const carrier = value === undefined ? undefined : rustValueCarrierBeforeContextualConversion(records, value);
@@ -158,7 +158,7 @@ export function analyzeRustAssignmentWrites(input: {
       (receiverKind === "KindThisExpression" || receiverKind === "KindThisKeyword");
     requireRustRecord(input.required, "assignmentWrite", node, "native assignment write", "analyzeRustAssignmentWrites");
     let valueResult: import("../../target-model/records/storage/assignment-writes.js").RustAssignmentWriteCompletion["valueResult"];
-    if (selected?.kind !== "nullish-assignment" && assignment.operator === "=" && sourceExpressionResultDisposition(ast, node).kind !== "discarded") {
+    if (selected?.kind !== "nullish-assignment" && assignment.operator === "=" && program.source.navigation.expressionResultDisposition(node).kind !== "discarded") {
       const carrier = rustValueCarrierBeforeContextualConversion(records, value);
       if (carrier === undefined || !rustTargetTypeRefEquals(carrier, records.runtimeCarrier.get(node)?.carrier)) {
         issues.push({ code: "RUST_MISSING_TARGET_FACT", category: "error", source: "tsonic-rust", sourceNode: node,

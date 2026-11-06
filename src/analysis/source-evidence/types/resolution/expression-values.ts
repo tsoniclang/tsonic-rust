@@ -1,5 +1,5 @@
 import { requireRustRecord } from "../../../program/records/objects/required-records.js";
-import { ConditionalExpression_Condition, ConditionalExpression_WhenFalse, ConditionalExpression_WhenTrue, KindBinaryExpression, KindCallExpression, KindConditionalExpression, KindElementAccessExpression, KindFalseKeyword, KindFunctionExpression, KindIdentifier, KindArrayLiteralExpression, KindBigIntLiteral, KindNewExpression, KindNoSubstitutionTemplateLiteral, KindNonNullExpression, KindNumericLiteral, KindParenthesizedExpression, KindPostfixUnaryExpression, KindPrefixUnaryExpression, KindPropertyAccessExpression, KindStringLiteral, KindSatisfiesExpression, KindSpreadElement, KindTemplateExpression, KindTrueKeyword, KindTypeOfExpression, KindVoidExpression, Node_Expression, sourceIntegerLiteralValue, sourceExpressionResultDisposition } from "@tsonic/target-api/source";
+import { ConditionalExpression_Condition, ConditionalExpression_WhenFalse, ConditionalExpression_WhenTrue, KindBinaryExpression, KindCallExpression, KindConditionalExpression, KindElementAccessExpression, KindFalseKeyword, KindFunctionExpression, KindIdentifier, KindArrayLiteralExpression, KindBigIntLiteral, KindNewExpression, KindNoSubstitutionTemplateLiteral, KindNonNullExpression, KindNumericLiteral, KindParenthesizedExpression, KindPostfixUnaryExpression, KindPrefixUnaryExpression, KindPropertyAccessExpression, KindStringLiteral, KindSatisfiesExpression, KindSpreadElement, KindTemplateExpression, KindTrueKeyword, KindTypeOfExpression, KindVoidExpression, Node_Expression, sourceIntegerLiteralValue } from "@tsonic/target-api/source";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import { rustNumericLiteralIsFinite } from "../../../numeric/literal-admission.js";
 import { rustRuntimeUnionProjection } from "../../../../target-model/types/carriers/runtime-unions.js";
@@ -384,7 +384,7 @@ export function resolveExpressionCarrierUncached(
           !isRustNumericCarrier(rustOptionElementCarrier(right) ?? right);
         if (left !== undefined && right !== undefined &&
           (!isRustNumericCarrier(rustOptionElementCarrier(semanticCarrier) ?? semanticCarrier) || nonnumericBranches)) {
-          semanticCarrier = sourceExpressionResultDisposition(walk.context.ast, expression).kind === "discarded" &&
+          semanticCarrier = walk.context.source.navigation.expressionResultDisposition(expression).kind === "discarded" &&
               rustTargetTypeRefEquals(left, right)
             ? left
             : resolveRustBranchUnion(expression, [

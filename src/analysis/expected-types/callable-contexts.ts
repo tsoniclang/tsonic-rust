@@ -1,6 +1,5 @@
-import { sourceClosedCallableArguments } from "@tsonic/target-api/source";
 import type { Node } from "@tsonic/tsts";
-import { sourceCallableValueParameters } from "@tsonic/target-api/source";
+import { sourceCallableValueParameters, sourceExpressionCallArgument, sourceMayReadBeforeInitialization } from "@tsonic/target-api/source";
 import type { RustFactWalk } from "../program/walk.js";
 import { rustOperationContext } from "../program/walk.js";
 import { rustCallableProtocol, rustClosureProtocol, rustOptionElementCarrier } from "../../target-model/types/index.js";
@@ -17,8 +16,27 @@ import { rustAwaitSelection } from "../../policy/operations/flow/await.js";
 function checkedCallableInputs(walk: RustFactWalk, expression: Node): readonly {
   readonly parameters: readonly TargetTypeRef[]; readonly result: TargetTypeRef; readonly carrier: TargetTypeRef;
 }[] | undefined {
-  const arguments_ = sourceClosedCallableArguments(expression, walk.context.source);
-  if (arguments_ === undefined) return undefined;
+  const { source, ast } = walk.context;
+  const flow = source.navigation.expressionValueFlow(expression);
+  if (flow.expression !== expression || flow.exported || flow.returned || flow.yielded || flow.identityCompared || flow.captured ||
+    flow.memberWritten || flow.receiverUsed || flow.storedOutsideBinding || flow.hasUnclassifiedUse ||
+    ast.is.IsFunctionExpression(expression) && ast.name(expression) !== undefined) return undefined;
+  for (const declaration of flow.aliasDeclarations) {
+    const summary = source.navigation.declarationUseSummary(declaration);
+    if (!ast.is.IsVariableDeclaration(declaration) || ast.variableDeclarationKind(declaration) !== "const" ||
+      summary.declaration !== declaration || summary.bindingWritten || sourceMayReadBeforeInitialization(declaration, ast, source.navigation))
+      return undefined;
+  }
+  const arguments_: NonNullable<ReturnType<typeof sourceExpressionCallArgument>>[] = [];
+  for (const use of flow.uses) {
+    if (use.kind === "type-only" || use.kind === "source-linkage" || use.role === "storage" && !use.throughMember) continue;
+    if (use.kind !== "first-class" || use.role !== "argument" || use.throughMember) return undefined;
+    const argument = sourceExpressionCallArgument(use.reference, source);
+    if (argument === undefined) return undefined;
+    if (!arguments_.some(previous => previous.call === argument.call && previous.argumentIndex === argument.argumentIndex))
+      arguments_.push(argument);
+  }
+  if (arguments_.length === 0) return undefined;
   const contexts: { readonly parameters: readonly TargetTypeRef[]; readonly result: TargetTypeRef; readonly carrier: TargetTypeRef }[] = [];
   for (const argument of arguments_) {
     const semantics = walk.context.semanticsFor(argument.call);

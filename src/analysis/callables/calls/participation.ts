@@ -11,7 +11,7 @@ export function analyzeRustNativeParticipation(input: {
   readonly ast: AstReader;
   readonly storage: Pick<SourceStorageQueries, "nodes" | "failureReason">;
   readonly navigation: Pick<SourceProgramNavigation, "declarationUseSummary" | "declarationSymbol" |
-    "sourceReferenceFor" | "callableImplementation" | "referencesWithin" | "sourceFiles" | "expressionValueFlow">;
+    "sourceReferenceFor" | "callableImplementation" | "referencesWithin" | "sourceFiles" | "expressionValueFlow" | "expressionResultDisposition">;
   readonly producer: RustNativeParticipationProducer;
   readonly requiredRecords: RustRequiredRecord[];
 }): SourceSubtreeParticipation {

@@ -4,7 +4,7 @@ import type { Node } from "@tsonic/tsts";
 import type { RustSourcePolicyContext } from "../../../policy/model/context.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
-import { sourceEnclosingCallable, sourceNodeIdentity, sourceCallableValueParameters, sourceExpressionResultDisposition } from "@tsonic/target-api/source";
+import { sourceEnclosingCallable, sourceNodeIdentity, sourceCallableValueParameters } from "@tsonic/target-api/source";
 import { rustCallScopedElisionLifetime, type RustLifetimeRef } from "../../../target-model/lifetimes/index.js";
 import { selectRustSuspendedStorageLifetime } from "../../../policy/ownership/suspended-storage.js";
 import { rustEnclosingStorageContract } from "../storage/storage-contracts.js";
@@ -45,7 +45,7 @@ export function rustRetainedValueLifetime(
   if (selected.kind === "selected") return selected.environment.lifetime;
   if (native.kind === "construction" && capturedLifetime?.kind === "static" &&
     (context.ast.is.IsArrowFunction(declaration) || context.ast.is.IsFunctionExpression(declaration))) {
-    const disposition = sourceExpressionResultDisposition(context.ast, declaration);
+    const disposition = context.source.navigation.expressionResultDisposition(declaration);
     const field = disposition.kind === "stored" && context.ast.is.IsPropertyDeclaration(disposition.use)
       ? rustProjectObjectField(disposition.use, native.projectTypes) : undefined;
     const definition = field === undefined ? undefined : native.projectTypes.definitionContainingDeclaration(field.declaration);

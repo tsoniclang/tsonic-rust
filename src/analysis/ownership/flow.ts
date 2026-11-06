@@ -1,8 +1,8 @@
 import type { RustOwnershipFlow } from "../../target-model/records/storage/ownership-flow.js";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { Node } from "@tsonic/tsts";
-import { analyzeSourceLiveness, createSourceControlFlow, type SourceControlFlowGraph, type SourceFlowLivenessSelection, type SourceFlowLimits, type SourceStorageQueries } from "@tsonic/target-api/analysis";
-import { Node_Expression, isSourceCallableBodyBoundary, sourceEnclosingCallable, sourceExpressionResultDisposition, sourceNodesEqual, sourceParameterIsProperty, sourceTransparentExpressionOperand, type TargetSourceProgram } from "@tsonic/target-api/source";
+import { analyzeSourceLiveness, createSourceDeclarationControlFlow, type SourceControlFlowGraph, type SourceFlowLivenessSelection, type SourceFlowLimits, type SourceStorageQueries } from "@tsonic/target-api/analysis";
+import { Node_Expression, isSourceCallableBodyBoundary, sourceEnclosingCallable, sourceNodesEqual, sourceParameterIsProperty, sourceTransparentExpressionOperand, type TargetSourceProgram } from "@tsonic/target-api/source";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustClosureCaptureFact } from "../../target-model/records/operations/operation-selections.js";
 import type { RustLexicalFunctionCapture, RustLexicalFunctionQueries } from "../../target-model/records/callables/lexical-functions.js";
@@ -45,7 +45,7 @@ export function analyzeRustOwnershipFlow(input: RustOwnershipFlowInput):
     readonly liveness: Extract<SourceFlowLivenessSelection, { readonly kind: "resolved" }> }[] = [];
   for (const declaration of input.nativeNodes) {
     if (!isSourceCallableBodyBoundary(ast, declaration) || ast.body(declaration) === undefined) continue;
-    const selected = createSourceControlFlow(source, declaration, { domain: { kind: "source" }, limits: input.limits });
+    const selected = createSourceDeclarationControlFlow(source, declaration, { domain: { kind: "source" }, limits: input.limits });
     const additionalReads = new Map<number, readonly Node[]>();
     const nativeInvocations = new Map<number, { readonly declaration: Node;
       readonly captures: readonly RustLexicalFunctionCapture[]; readonly singleInvocation: boolean }>();
@@ -73,7 +73,7 @@ export function analyzeRustOwnershipFlow(input: RustOwnershipFlowInput):
     const awaitedReads = new Set<Node>();
     for (const point of graph.points) if (point.operation.kind === "read" && point.source !== undefined &&
       liveness.reachable.has(point.id) && sourceEnclosingCallable(point.source, ast) === declaration &&
-      sourceExpressionResultDisposition(ast, point.source).kind === "awaited-in-scope") awaitedReads.add(point.source);
+      source.navigation.expressionResultDisposition(point.source).kind === "awaited-in-scope") awaitedReads.add(point.source);
     const lexicalOwner = input.lexicalFunctions?.forDeclaration(declaration);
     const ownedCaptures = new Set((input.capturesFor(declaration)?.captures ?? [])
       .filter(capture => capture.storage === "value" && !(lexicalOwner?.kind === "resolved" && !lexicalOwner.valueObserved &&
@@ -187,7 +187,7 @@ function bindingCanTransfer(binding: Node, callable: Node, input: RustOwnershipF
     if (owner !== undefined && owner !== callable) return input.capturesFor(owner)?.captures.some(capture =>
       capture.storage === "value" && sourceNodesEqual(ast, capture.declaration, binding)) === true;
     if (use.role !== "value" || awaitedReads.has(use.reference) || input.uses.has(use.reference)) return true;
-    const disposition = sourceExpressionResultDisposition(ast, use.reference);
+    const disposition = input.source.navigation.expressionResultDisposition(use.reference);
     return disposition.kind === "consumed" && ast.is.IsThrowStatement(disposition.use);
   }));
 }

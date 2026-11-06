@@ -5,7 +5,7 @@ import { rustGeneratorSourceInvocationKind } from "../../policy/operations/sourc
 import {
   Node_Expression, Node_Operand, BinaryExpression_Left, BinaryExpression_Right,
   sourceControlTransferTarget, sourceEnclosingCallable, sourceTransparentExpressionOperand,
-  sourceLabeledStatementTarget, type SourceLabeledStatementTarget, sourceExpressionResultDisposition,
+  sourceLabeledStatementTarget, type SourceLabeledStatementTarget,
   TryStatement_TryBlock,
   IterationStatement_Statement, LabeledStatement_Statement,
   type TargetSourceProgram,
@@ -260,7 +260,7 @@ export function analyzeRustStatementCompletions(input: RustStatementCompletionIn
       if (inputCarrier === undefined)
         failTargetAnalysisInvariant("tsonic-rust", "An admitted catch binding requires its completed protected error region.", node);
       const observes = uses.some(use => {
-        const disposition = sourceExpressionResultDisposition(ast, use.reference);
+        const disposition = source.navigation.expressionResultDisposition(use.reference);
         if (disposition.kind === "discarded") return false;
         let value = use.reference;
         for (let parent = ast.parent(value); parent !== undefined && sourceTransparentExpressionOperand(ast, parent) === value;

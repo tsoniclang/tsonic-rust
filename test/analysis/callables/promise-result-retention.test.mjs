@@ -60,16 +60,16 @@ for (const [name, expected] of [
         return context.records.flowReadProjection.get(node);
       } } };
       selected = analyzeRustPromiseResults({
-        ast: context.ast, source: context.source, genericAdoption: [], storage, nodes: [call], records,
+        ast: context.ast, source: context.source, genericAdoption: [], storage, nodes: context.nativeNodes, records,
         readFor(node) {
           if (node !== reference) return undefined;
           reachedRead = true;
           return { kind: "selected", carrier, value: { kind: "move" } };
         },
-        uses: analyzeRustPromiseResultUses(context.ast, [call]), definitions: context.typeDefinitions,
+        uses: analyzeRustPromiseResultUses(context.source, [call]), definitions: context.typeDefinitions,
         nativeStorage: context.callableValues.nativeStorage, native: context.callableValues.native,
         nativeProducers: context.callableValues.nativeProducers,
-        nativeHeaders: { kind: "unresolved", at: reference, reason: "This focused read refusal precedes native entry selection." },
+        nativeHeaders: { kind: "unresolved", at: reference, reason: "This focused read refusal precedes native entry selection.", cause: { kind: "required-fact" } },
         sourceSpecializations: context.sourceCallableSpecializations,
         promiseBodies: context.promiseBodies.plan, nativeCaptures: undefined, errorTypes: undefined,
         sourceTypes: { structuralObjectForCarrier() { assert.fail("an unresolved read cannot inspect structural captures"); } },
